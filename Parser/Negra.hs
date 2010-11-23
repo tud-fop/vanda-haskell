@@ -2,6 +2,7 @@ module Parser.Negra where
 
 import ApplicativeParsec
 import Control.Monad
+import Data.Char(ord)
 
 data Sentence = Sentence
     { sId :: Int
@@ -9,7 +10,7 @@ data Sentence = Sentence
     , sDate :: String
     , sOriginId :: Int
     , sComment :: Maybe String
-    , sData :: [String]
+    , sData :: [SentenceData]
     }
     deriving Show
 
@@ -29,33 +30,48 @@ data Edge = Edge
     }
     deriving Show
 
+
 p_Sentence =
-    string "#BOS" >>
-    Sentence
-    <$> (spaces1 *> p_Int)
-    <*> (spaces1 *> p_Int)
-    <*> (spaces1 *> p_date)
-    <*> (spaces1 *> p_Int)
-    <*> optionMaybe (spaces1 *> string "%%" *> spaces *> many (noneOf "\n"))
-    <*  spaces
-    <*  newline
-    <*> (many undefined)
-    <*  string "#EOS"
-    <*  newline
+    (p_ignoreLines *> string "#BOS")
+    >>  Sentence
+    <$> (negraSpaces1 *> p_Int)
+    <*> (negraSpaces1 *> p_Int)
+    <*> (negraSpaces1 *> p_date)
+    <*> (negraSpaces1 *> p_Int)
+    <*> optionMaybe (negraSpaces1 *> p_comment)
+    <*  negraNewline
+    <*> manyTill p_SentenceData (try (p_ignoreLines *> string "#EOS"))
+    <*  (negraSpaces1 *> p_Int)
+    <*  negraNewline
+
 
 p_SentenceData =
-    SentenceData
-    <$> manyTill anyChar space
-    <*> (spaces >> nonSpaces)
-    <*> (spaces >> nonSpaces)
+    p_ignoreLines
+    >>  SentenceData
+    <$> p_word
+    <*> (negraSpaces1 *> p_word)
+    <*> (negraSpaces1 *> p_word)
     <*> p_Edge
-    <*> many p_Edge
-    -- <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+    <*> manyTill p_Edge (try $ lookAhead $ (negraSpaces *> negraNewline <|> negraSpaces1 *> string "%%" *> negraSpace))
+    <*> optionMaybe (negraSpaces1 *> p_comment)
+    <*  negraNewline
+
 
 p_Edge = Edge
-    <$> (spaces >> nonSpaces)
-    <*> (spaces >> p_Int)
+    <$> (negraSpaces >> p_word)
+    <*> (negraSpaces >> p_Int)
 
+
+p_comment = string "%%" *> negraSpaces1 *> many (noneOf "\n")
+
+p_emptyLine = negraSpaces *> negraNewline
+
+p_ignoreLines = many p_ignoreLine
+
+p_ignoreLine = try p_emptyLine *> return ()
+           <|> try p_comment   *> return ()
+
+p_word = many1 negraNonSpace
 
 p_Int :: GenParser Char st Int
 p_Int = many1 digit >>= return . read
@@ -63,8 +79,15 @@ p_Int = many1 digit >>= return . read
 
 p_date = many1 $ oneOf "/0123456789"
 
-spaces1 = skipMany1 space
+negraSpace   = oneOf " \t"
+negraSpaces  = skipMany negraSpace
+negraSpaces1 = skipMany1 negraSpace
 
-nonSpaces = manyTill anyChar space
+negraNonSpace = satisfy $ (<) 32 . ord
+
+-- negraNonSpace = satisfy $
+--     \c -> let o = ord c in o >= 33 && o <= 127 || o >= 160 && o <= 255
+
+negraNewline = char '\n'
 
 -- loadHGraph file = parseFromFile p_WTA file
