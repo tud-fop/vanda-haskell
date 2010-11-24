@@ -1,5 +1,7 @@
+-- code from real world haskell
+
 {-- snippet ApplicativeParsec --}
-module ApplicativeParsec
+module Parser.ApplicativeParsec
     (
       module Control.Applicative
     , module Text.ParserCombinators.Parsec
