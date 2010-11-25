@@ -30,53 +30,79 @@ data Edge = Edge
     deriving Show
 
 
+p_negra =
+        p_ignoreLines
+     *> p_format
+     *> many p_table
+     *> many p_Sentence
+    <*  eof
+
+
+p_format =  -- TODO stub
+        try (string "#FORMAT")
+     *> manyTill anyChar newline
+    <*  p_ignoreLines
+
+
+p_table =  -- TODO stub
+        try (string "#BOT")
+     *> manyTill anyChar (try (string "#EOT"))
+    <*  manyTill anyChar newline
+    <*  p_ignoreLines
+
+
 p_Sentence =
-    (p_ignoreLines *> string "#BOS")
-    >>  Sentence
-    <$> (negraSpaces1 *> p_Int)
-    <*> (negraSpaces1 *> p_Int)
-    <*> (negraSpaces1 *> p_date)
-    <*> (negraSpaces1 *> p_Int)
-    <*> optionMaybe (negraSpaces1 *> p_comment)
-    <*  negraNewline
-    <*> manyTill p_SentenceData (try (p_ignoreLines *> string "#EOS"))
-    <*  (negraSpaces1 *> p_Int)
-    <*  negraNewline
+        try (string "#BOS")
+     *> negraSpaces1
+     *> (p_Int >>= \num ->
+            Sentence num
+        <$> p_Int
+        <*> p_date
+        <*> p_Int
+        <*> optionMaybe p_comment
+        <*  negraNewline
+        <*> manyTill p_SentenceData (try (string "#EOS"))
+        <*  negraSpaces1
+        <*  string (show num)
+        <*  negraNewline
+        )
+    <*  p_ignoreLines
 
 
 p_SentenceData =
-    p_ignoreLines
-    >>  SentenceData
+        SentenceData
     <$> p_word
-    <*> (negraSpaces1 *> p_word)
-    <*> (negraSpaces1 *> p_word)
+    <*  p_word  -- TODO: #FORMAT 4 seems to contain the lemma here
+    <*> p_word
+    <*> p_word
     <*> p_Edge
-    <*> manyTill p_Edge (try $ lookAhead $ (negraSpaces *> negraNewline <|> negraSpaces1 *> string "%%" *> negraSpace))
-    <*> optionMaybe (negraSpaces1 *> p_comment)
+    <*> manyTill p_Edge (lookAhead (negraNewline <|> string "%%" *> return '%'))
+    <*> optionMaybe p_comment
     <*  negraNewline
+    <*  p_ignoreLines
 
 
-p_Edge = Edge
-    <$> (negraSpaces >> p_word)
-    <*> (negraSpaces >> p_Int)
+p_Edge = Edge <$> p_word <*> p_Int
 
 
-p_comment = string "%%" *> negraSpaces1 *> many (noneOf "\n")
+p_comment = string "%%" *> negraSpaces *> many (noneOf "\n")
 
 p_emptyLine = negraSpaces *> negraNewline
 
 p_ignoreLines = many p_ignoreLine
 
 p_ignoreLine = try p_emptyLine *> return ()
-           <|> try p_comment   *> return ()
+           <|> try p_comment *> negraNewline *> return ()
 
-p_word = many1 negraNonSpace
+p_word = many1 negraNonSpace <* tokenCleanup
 
 p_Int :: GenParser Char st Int
-p_Int = many1 digit >>= return . read
+p_Int = (many1 digit >>= return . read) <* tokenCleanup
 
 
-p_date = many1 $ oneOf "/0123456789"
+p_date = many1 (oneOf "/0123456789") <* tokenCleanup
+
+tokenCleanup = negraSpaces1 *> return () <|> lookAhead newline *> return ()
 
 negraSpace   = oneOf " \t"
 negraSpaces  = skipMany negraSpace
