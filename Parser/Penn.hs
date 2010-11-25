@@ -1,7 +1,6 @@
 module Parser.Penn where
 
 import Parser.ApplicativeParsec
-import Data.Char(ord)
 
 data Sentence = Node String [Sentence] | Leaf String String deriving Show
 

@@ -1,7 +1,6 @@
 module Parser.Negra where
 
 import Parser.ApplicativeParsec
-import Control.Monad
 import Data.Char(ord)
 
 data Sentence = Sentence
