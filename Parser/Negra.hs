@@ -1,6 +1,6 @@
 module Parser.Negra where
 
-import ApplicativeParsec
+import Parser.ApplicativeParsec
 import Control.Monad
 import Data.Char(ord)
 
