@@ -1,3 +1,5 @@
+-- Copyright (c) 2010, Toni Dietze
+
 module Parser.Penn where
 
 import Parser.ApplicativeParsec

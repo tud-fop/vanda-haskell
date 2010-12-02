@@ -10,11 +10,17 @@ profiling:
 
 module Main where
 
+import RuleExtraction
 import Parser.Negra
 import Parser.Penn
-import Text.ParserCombinators.Parsec
 import Tools.PrettyPrint
 
-main = parseFromFile p_negra "Parser/tiger_release_aug07_part.export" >>= print . fmap length
+import Parser.ApplicativeParsec
+
+testdata = parseFromFile p_negra "Parser/tiger_release_aug07_part.export"
+
+main = testdata >>= print . fmap length
+
+main2 = fmap (extract . map negraTreeToTree . concatMap negraToForest . map sData) <$> testdata
 
 -- main = parseFromFile p_negra "/var/local/share/gdp/nlp/resources/tigercorpus2.1/corpus/tiger_release_aug07.export" >>= print . fmap length

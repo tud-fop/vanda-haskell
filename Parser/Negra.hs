@@ -1,3 +1,5 @@
+-- Copyright (c) 2010, Toni Dietze
+
 module Parser.Negra where
 
 import Parser.ApplicativeParsec
@@ -141,7 +143,7 @@ negraNewline = char '\n'
 -- converts a list of SentenceData to a forest of not-crossing trees
 negraToForest
   :: [SentenceData]
-  -> T.Forest (Maybe SentenceData, (Position, Position))
+  -> T.Forest ((Maybe SentenceData, Span), Span)
 negraToForest
   = splitCrossedTree
   . updateInnerSpans
@@ -158,6 +160,7 @@ negraToForest
 type PointerTree a = IntMap.IntMap ([a], [Either Pointer (a, Position)])
 type Pointer = IntMap.Key
 type Position = Int
+type Span = (Position, Position)
 
 
 -- Insert a leaf in a PointerTree.
@@ -210,7 +213,7 @@ negraToPointerTree = ins 0
 -- located at the node contains the leafs 2, 3, 4, 7, 8 and 9 of the whole tree.
 pointerTreeToCrossedTree
   :: PointerTree SentenceData
-  -> T.Tree (Maybe SentenceData, [(Position, Position)])
+  -> T.Tree (Maybe SentenceData, [Span])
 pointerTreeToCrossedTree = f 0
   where
     f num pt
@@ -224,8 +227,8 @@ pointerTreeToCrossedTree = f 0
 
 -- Calculate the correct span lists of inner nodes by propagating the span lists of leaf nodes.
 updateInnerSpans
-  :: T.Tree (a, [(Position, Position)])
-  -> T.Tree (a, [(Position, Position)])
+  :: T.Tree (a, [Span])
+  -> T.Tree (a, [Span])
 updateInnerSpans (T.Node (label, _) forest@(_:_))
   = let forest' = map updateInnerSpans forest
         spans = mergeSpans $ concatMap (snd . T.rootLabel) forest' in
@@ -235,7 +238,7 @@ updateInnerSpans node = node
 
 -- Merge adjacent or overlapping spans in a span list.
 -- The resulting span list is sorted.
-mergeSpans :: [(Position, Position)] -> [(Position, Position)]
+mergeSpans :: [Span] -> [Span]
 mergeSpans = m . L.sort
   where
     m (a:ys@(b:xs))
@@ -254,18 +257,29 @@ test_mergeSpans
 -- The resulting tree contains spans (no span lists anymore).
 -- Child nodes are sorted by the spans.
 splitCrossedTree
-  :: T.Tree   (a, [(Position, Position)])
-  -> T.Forest (a,  (Position, Position) )
+  :: T.Tree   (a, [Span])
+  -> T.Forest ((a, Span), Span)
 splitCrossedTree (T.Node (label, spans) forest)
-  = foldr f
-          (map (\s -> T.Node (label, s) []) spans)
+  = relabel 1
+  $ foldr f
+          (map ((,) []) spans)
           (concatMap splitCrossedTree forest)
     where
-      f t@(T.Node (_, sChild) _) (node@(T.Node (label, sParent) children):forest)
+      f t@(T.Node (_, sChild) _) (current@(children, sParent):forest)
         = if fst sChild >= fst sParent && snd sChild <= snd sParent
-          then (T.Node (label, sParent) (L.insertBy (compare `on` (snd . T.rootLabel)) t children)):forest
-          else node:(f t forest)
+          then (L.insertBy (compare `on` (snd . T.rootLabel)) t children, sParent):forest
+          else current:(f t forest)
       f _ [] = error "spans malformed"
+      relabel i ((f, s):xs)
+        = let i' = i + length f in
+          (T.Node ((label, (i, i' - 1)), s) f):(relabel i' xs)
+      relabel _ _ = []
+
+
+negraTreeToTree
+  :: T.Tree ((Maybe SentenceData, Span), Span)
+  -> T.Tree (String             , Span)
+negraTreeToTree = fmap (liftFst (maybe "" showSentenceData) . fst)
 
 
 isSentenceNode (SentenceNode {}) = True
@@ -275,6 +289,6 @@ showSentenceData SentenceWord{sdWord = w} = w
 showSentenceData SentenceNode{sdPostag = t} = t
 
 -- printSDTree = putStrLn . T.drawTree . (fmap show . fmap (fmap showSentenceData)) . toTree . sData
-printSDTree = putStrLn . T.drawTree . fmap show . fmap (liftFst (fmap showSentenceData)) . head . negraToForest . sData
+-- printSDTree = putStrLn . T.drawTree . fmap show . fmap (liftFst (fmap showSentenceData)) . head . negraToForest . sData
 
-test = parseFromFile p_negra "Parser/corpus-sample.export" >>= \(Right x) -> printSDTree ( x !! 10)
+-- test = parseFromFile p_negra "Parser/corpus-sample.export" >>= \(Right x) -> printSDTree ( x !! 10)
