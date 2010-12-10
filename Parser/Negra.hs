@@ -198,6 +198,7 @@ negraToPointerTree :: [SentenceData] -> PointerTree SentenceData
 negraToPointerTree = ins 0
   where
     ins _ [] = IntMap.empty
+    -- ins i (x@SentenceWord{sdEdge = Edge{eParent = 0}}:xs) = ins i xs
     ins i (x@SentenceWord{}:xs) = insertLeaf (x, i) (eParent $ sdEdge x) (ins (i+1) xs)
     ins i (x@SentenceNode{sdNum = n}:xs) = insertNode x n (eParent $ sdEdge x) (ins i xs)
 
@@ -212,15 +213,16 @@ negraToPointerTree = ins 0
 -- E.g. a node has the span [(2, 4), (7, 9)]. Then the yield of the sub tree
 -- located at the node contains the leafs 2, 3, 4, 7, 8 and 9 of the whole tree.
 pointerTreeToCrossedTree
-  :: PointerTree SentenceData
-  -> T.Tree (Maybe SentenceData, [Span])
-pointerTreeToCrossedTree = f 0
+  :: (Show a)
+  => PointerTree a
+  -> T.Tree (Maybe a, [Span])
+pointerTreeToCrossedTree ptrTree = f 0 ptrTree
   where
     f num pt
       = case IntMap.lookup num pt of
             Just ([label], children) -> T.Node (Just label, []) (map (g pt) children)
             Just ([], children) -> T.Node (Nothing, []) (map (g pt) children)
-            Nothing -> error "PointerTree malformed"
+            Nothing -> error ("PointerTree malformed: pointer " ++ show pt ++ " does not exists:\n" ++ show ptrTree)
     g pt (Left num) = f num pt
     g _ (Right (leaf, pos)) = T.Node (Just leaf, [(pos, pos)]) []
 
@@ -254,8 +256,10 @@ test_mergeSpans
 
 -- Takes a tree containing correct span lists and splits nodes to remove
 -- crossing edges.
--- The resulting tree contains spans (no span lists anymore).
--- Child nodes are sorted by the spans.
+-- The resulting tree contains "local spans" over the former (before the split)
+-- direct children and "global spans", i.e. spans over the yield.
+-- There are no span lists anymore.
+-- Child nodes are sorted by the (global) spans.
 splitCrossedTree
   :: T.Tree   (a, [Span])
   -> T.Forest ((a, Span), Span)
@@ -276,10 +280,22 @@ splitCrossedTree (T.Node (label, spans) forest)
       relabel _ _ = []
 
 
-negraTreeToTree
+{-negraTreeToTree
   :: T.Tree ((Maybe SentenceData, Span), Span)
-  -> T.Tree (String             , Span)
-negraTreeToTree = fmap (liftFst (maybe "" showSentenceData) . fst)
+  -> T.Tree (String             , Span)-}
+-- negraTreeToTree = fmap (liftFst (liftFst (maybe "" showSentenceData)))
+negraTreeToTree (T.Node ((Nothing, sl), sg) f)
+  = T.Node ("", "", sl, sg) (fmap negraTreeToTree f)
+negraTreeToTree (T.Node ((Just dat@(SentenceNode{}), sl), sg) f)
+  = T.Node (sdPostag dat, eLabel $ sdEdge dat, sl, sg) (fmap negraTreeToTree f)
+negraTreeToTree (T.Node ((Just dat@(SentenceWord{}), sl), sg) [])
+  = T.Node (sdPostag dat, eLabel $ sdEdge dat, sl, sg) [
+      T.Node (sdMorphtag dat, "", sl, sg) [
+        T.Node (sdWord dat, "", sl, sg) []
+      ]
+    ]
+negraTreeToTree _
+  = error "malformed negra tree: a SentenceWord has children"
 
 
 isSentenceNode (SentenceNode {}) = True
@@ -291,4 +307,7 @@ showSentenceData SentenceNode{sdPostag = t} = t
 -- printSDTree = putStrLn . T.drawTree . (fmap show . fmap (fmap showSentenceData)) . toTree . sData
 -- printSDTree = putStrLn . T.drawTree . fmap show . fmap (liftFst (fmap showSentenceData)) . head . negraToForest . sData
 
--- test = parseFromFile p_negra "Parser/corpus-sample.export" >>= \(Right x) -> printSDTree ( x !! 10)
+test
+  = parseFromFile p_negra "Parser/corpus-sample.export"
+    >>= \(Right x)
+    ->  putStrLn $ T.drawForest $ fmap (fmap show) $ fmap negraTreeToTree $ negraToForest $ sData ( x !! 10)

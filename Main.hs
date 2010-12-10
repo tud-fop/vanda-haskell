@@ -11,16 +11,56 @@ profiling:
 module Main where
 
 import RuleExtraction
+import Parser.ApplicativeParsec
 import Parser.Negra
 import Parser.Penn
 import Tools.PrettyPrint
 
-import Parser.ApplicativeParsec
+import Data.Function(on)
+import qualified Data.List as L
+import qualified Data.Map  as M
+import qualified Data.Set  as S
+import qualified Data.Tree as T
+
+
+main = mainExtract
+
 
 testdata = parseFromFile p_negra "Parser/tiger_release_aug07_part.export"
+-- testdata = parseFromFile p_negra "/var/local/share/gdp/nlp/resources/tigercorpus2.1/corpus/tiger_release_aug07.export"
 
-main = testdata >>= print . fmap length
 
-main2 = fmap (extract . map negraTreeToTree . concatMap negraToForest . map sData) <$> testdata
+withTestdata f = testdata >>= \x ->
+    case x of
+      Left  _ -> print x
+      Right r -> putStrLn (f r)
 
--- main = parseFromFile p_negra "/var/local/share/gdp/nlp/resources/tigercorpus2.1/corpus/tiger_release_aug07.export" >>= print . fmap length
+
+mainExtract = withTestdata
+    $ unlines
+    . fmap show
+    . L.sortBy (compare `on` snd)
+    . M.toList
+    . extract
+    . fmap (fmap (\(x, y, _, _) -> (x, y)))
+    . map negraTreeToTree
+    . concatMap negraToForest
+    . map sData
+
+
+mainGetFlatTrees = withTestdata
+    $ unlines
+    . fmap (T.drawTree . fmap show)
+    . filter ((>) 5 . length . T.levels)
+    . map negraTreeToTree
+    . concatMap negraToForest
+    . map sData
+
+
+mainPrintTree i = withTestdata
+    $ T.drawTree
+    . fmap show
+    . (!! i)
+    . map negraTreeToTree
+    . concatMap negraToForest
+    . map sData

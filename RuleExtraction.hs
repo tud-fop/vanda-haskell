@@ -2,11 +2,12 @@
 
 module RuleExtraction where
 
+import qualified Data.Map  as M
 import qualified Data.Set  as S
 import qualified Data.Tree as T
 
 
-extract forest = S.fromList . extractF $ forest
+extract forest = M.fromListWith (+) . map (flip (,) 1) . extractF $ forest
 
 extractF forest = concatMap extractT forest
 
