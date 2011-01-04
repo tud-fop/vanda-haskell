@@ -36,6 +36,15 @@ withTestdata f = testdata >>= \x ->
       Right r -> putStrLn (f r)
 
 
+mainExtractWTA = withTestdata
+    $ show
+    . extractWTA
+    . fmap (fmap (\(x, y, _, _) -> (x, y)))
+    . map negraTreeToTree
+    . concatMap negraToForest
+    . map sData
+
+
 mainExtract = withTestdata
     $ unlines
     . fmap show

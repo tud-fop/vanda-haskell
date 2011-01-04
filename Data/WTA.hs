@@ -2,7 +2,8 @@
 {-- snippet types --}
 module Data.WTA(Transition(Transition), transTerminal, transState, transStates,
     transWeight, WTA, states, transitions, finalWeights, create,
-    transIsLeaf, binarize, properize, mapStates, showTransition, showWTA) where
+    transIsLeaf, binarize, properize, mapStates, showTransition,
+    printTransition, showWTA, printWTA) where
 
 import Tools.FastNub(nub)
 import Tools.Miscellaneous(mapFst)
@@ -99,6 +100,7 @@ showTransition t
   ++  show (transWeight t)
   ++  ")"
 
+printTransition t = putStrLn . showTransition $ t
 
 showWTA wta
   =   "Transitions:\n"
@@ -107,3 +109,5 @@ showWTA wta
   ++  (unlines $ map show $ states wta)
   ++  "\nFinal Weights:\n"
   ++  (unlines $ map show $ finalWeights wta)
+
+printWTA wta = putStr . showWTA $ wta
