@@ -1,5 +1,17 @@
 -- Copyright (c) 2010, Toni Dietze
 
+-- | Implementation of state-split grammars based on
+--
+-- * Min Zhang, Hongfei Jiang, Aiti Aw, Haizhou Li, Chew Lim Tan, Sheng Li.
+--   /A Tree Sequence Alignment-based Tree-to-Tree Translation Model./
+--   Proc. of ACL-HLT 2008
+--   <http://www.aclweb.org/anthology/P/P08/P08-1064.pdf>
+--
+-- * Slav Petrov, Leon Barrett, Romain Thibaux, Dan Klein.
+--   /Learning Accurate, Compact, and Interpretable Tree Annotation./
+--   Proc. COLING/ACL 2006 (Main Conference)
+--   <http://www.petrovi.de/data/acl06.pdf>
+
 module StateSplit where
 
 -- import EM -- TODO
@@ -11,6 +23,8 @@ import qualified Data.List as L
 import qualified Data.Map as M
 
 
+-- | Makes the states of a 'WTA.WTA' splitable without changing the semantics
+-- of the 'WTA.WTA'.
 initialize
   :: (Num n, Ord q, Ord n)
   => WTA.WTA  q     t w
@@ -18,9 +32,10 @@ initialize
 initialize wta = WTA.mapStates (flip (,) 0) wta
 
 
+-- | Do a state-splitting step.
 split
   :: (Fractional w, Ord q, Ord n, Num n)
-  => n
+  => n  -- ^ Must be larger than 'maxSplit' of the input 'WTA.WTA'.
   -> WTA.WTA (q, n) t w
   -> WTA.WTA (q, n) t w
 split offset wta
@@ -51,10 +66,11 @@ split offset wta
           ]
 
 
+-- | Do a state-merging step.
 merge
-  :: (Fractional w, Eq a, Ord t, Ord k)
-  => (a -> k)
-  -> WTA.WTA a t w
+  :: (Fractional w, Eq q, Ord t, Ord k)
+  => (q -> k)       -- ^ Maps a state to its representation after merging.
+  -> WTA.WTA q t w
   -> WTA.WTA k t w
 merge mergeState wta
   = WTA.create
@@ -82,7 +98,8 @@ merge mergeState wta
 maxSplit :: (Ord n) => WTA.WTA (q, n) t w -> n
 maxSplit = maximum . map snd . WTA.states
 
---------------------------------------------------------------------------------
+-- -----------------------------------------------------------------------------
+
 {-
 merge offset qmerge wta
   = foldr f (WTA.transitions wta)
@@ -96,6 +113,10 @@ merge offset qmerge wta
 --mapState
 
 
+-- | Partition a list with respect to a function; e.g.
+--
+-- > partition (flip mod 3) [0 .. 9] 
+-- > == fromList [(0,[0,3,6,9]), (1,[1,4,7]), (2,[2,5,8])]
 partition :: (Ord k) => (a -> k) -> [a] -> M.Map k [a]
 partition f = foldr step M.empty
     where step x = M.insertWith (++) (f x) [x]
@@ -108,14 +129,28 @@ mergeList toWeight toCount xs
   = let counts = map toCount xs
     in sum (zipWith (*) counts (map toWeight xs)) / sum counts
 -}
---------------------------------------------------------------------------------
-variation :: (Num n) => n -> [a] -> [[a]]
+
+-- -----------------------------------------------------------------------------
+
+-- | Create a list of lists of all possible combinations of the given elements
+-- of the given length respectively.
+--
+-- > variation 2 [0 .. 1] == [[0,0],[1,0],[0,1],[1,1]]
+variation
+  :: (Num n)
+  => n      -- ^ Length of the combinations.
+  -> [a]    -- ^ Given elements.
+  -> [[a]]
 variation 0 _  = [[]]
 variation k xs = concatMap (\ys -> map (:ys) xs) (variation (k-1) xs)
 
+
+-- | Sum the elements of a list after mapping them to a 'Num'; i.e.
+-- @sumWith f == sum . map f@
 sumWith :: (Num b) => (a -> b) -> [a] -> b
 sumWith f = L.foldl' (flip ((+) . f)) 0
---------------------------------------------------------------------------------
+
+-- -----------------------------------------------------------------------------
 
 testWTA =
   WTA.create
@@ -131,7 +166,10 @@ testWTA =
     ]
 
 
--- The following is a bit complicated due to potential numerical imprecisions.
+-- | Checks, if a given 'WTA.WTA' is equivalent to the 'WTA.WTA' after
+-- splitting and a merging everything back.
+--
+-- The function takes numerical imprecisions into account.
 prop_splitMerge
   :: (Fractional w, Ord q, Integral n, Ord t, Ord w)
   => WTA.WTA (q, n) t w

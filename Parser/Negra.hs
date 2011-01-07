@@ -140,7 +140,7 @@ negraNewline = char '\n'
 
 --------------------------------------------------------------------------------
 
--- converts a list of SentenceData to a forest of not-crossing trees
+-- | converts a list of SentenceData to a forest of not-crossing trees
 negraToForest
   :: [SentenceData]
   -> T.Forest ((Maybe SentenceData, Span), Span)
@@ -151,7 +151,7 @@ negraToForest
   . negraToPointerTree
 
 
--- represents a tree by using "pointers"
+-- | represents a tree by using "pointers"
 -- A pointer is an Int.
 -- The map maps a pointer to a node.
 -- A node contains a list of labels and a list of children.
@@ -163,7 +163,7 @@ type Position = Int
 type Span = (Position, Position)
 
 
--- Insert a leaf in a PointerTree.
+-- | Insert a leaf in a PointerTree.
 insertLeaf
   :: (label, Position)
   -> Pointer
@@ -173,7 +173,7 @@ insertLeaf leaf parent
   = IntMap.insertWith (liftSnd . (:) . head . snd) parent ([], [Right leaf])
 
 
--- Insert an inner node in a PointerTree.
+-- | Insert an inner node in a PointerTree.
 insertNode
   :: label
   -> Pointer
@@ -193,7 +193,7 @@ liftSnd :: (b -> c) -> (a, b) -> (a, c)
 liftSnd f (x, y) = (x, f y)
 
 
--- Extract the PointerTree from a list of SentenceData.
+-- | Extract the PointerTree from a list of SentenceData.
 negraToPointerTree :: [SentenceData] -> PointerTree SentenceData
 negraToPointerTree = ins 0
   where
@@ -204,7 +204,7 @@ negraToPointerTree = ins 0
 
 
 
--- Convert a PointerTree to a Data.Tree.Tree.
+-- | Convert a PointerTree to a Data.Tree.Tree.
 -- Span lists are used to represent crossing edges.
 -- Every node of the resulting tree contains a span list.
 -- Only leaf nodes will contain correct span lists!
@@ -227,7 +227,7 @@ pointerTreeToCrossedTree ptrTree = f 0 ptrTree
     g _ (Right (leaf, pos)) = T.Node (Just leaf, [(pos, pos)]) []
 
 
--- Calculate the correct span lists of inner nodes by propagating the span lists of leaf nodes.
+-- | Calculate the correct span lists of inner nodes by propagating the span lists of leaf nodes.
 updateInnerSpans
   :: T.Tree (a, [Span])
   -> T.Tree (a, [Span])
@@ -238,7 +238,7 @@ updateInnerSpans (T.Node (label, _) forest@(_:_))
 updateInnerSpans node = node
 
 
--- Merge adjacent or overlapping spans in a span list.
+-- | Merge adjacent or overlapping spans in a span list.
 -- The resulting span list is sorted.
 mergeSpans :: [Span] -> [Span]
 mergeSpans = m . L.sort
@@ -254,7 +254,7 @@ test_mergeSpans
     == [(1,4), (6,12)]
 
 
--- Takes a tree containing correct span lists and splits nodes to remove
+-- | Takes a tree containing correct span lists and splits nodes to remove
 -- crossing edges.
 -- The resulting tree contains "local spans" over the former (before the split)
 -- direct children and "global spans", i.e. spans over the yield.

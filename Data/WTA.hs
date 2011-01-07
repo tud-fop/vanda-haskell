@@ -1,7 +1,6 @@
 -- Copyright (c) 2010, Toni Dietze
 {-- snippet types --}
-module Data.WTA(Transition(Transition), transTerminal, transState, transStates,
-    transWeight, WTA, states, transitions, finalWeights, create,
+module Data.WTA(Transition(..), WTA, states, transitions, finalWeights, create,
     transIsLeaf, binarize, properize, mapStates, showTransition,
     printTransition, showWTA, printWTA) where
 
