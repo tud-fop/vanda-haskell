@@ -8,6 +8,7 @@ import qualified Data.IntMap as IntMap
 import Data.Function(on)
 import qualified Data.List as L
 import qualified Data.Tree as T
+import Tools.Miscellaneous(mapFst, mapSnd)
 
 data Sentence = Sentence
     { sId :: Int
@@ -140,7 +141,8 @@ negraNewline = char '\n'
 
 --------------------------------------------------------------------------------
 
--- | converts a list of SentenceData to a forest of not-crossing trees
+-- | Converts a list of 'SentenceData' to a 'Data.Tree.Forest' of
+-- not-crossing trees.
 negraToForest
   :: [SentenceData]
   -> T.Forest ((Maybe SentenceData, Span), Span)
@@ -151,49 +153,42 @@ negraToForest
   . negraToPointerTree
 
 
--- | represents a tree by using "pointers"
--- A pointer is an Int.
--- The map maps a pointer to a node.
+-- | Represents a tree by using 'Pointer's.
+--
+-- The map maps a 'Pointer' to a node.
 -- A node contains a list of labels and a list of children.
--- A child is either a pointer to a child node or a leaf.
--- A leaf contains a label and the position of the child in the yield of the tree.
+-- A child is either a 'Pointer' to a child node or a leaf.
+-- A leaf contains a label and the position of the child in the yield of the
+-- tree.
 type PointerTree a = IntMap.IntMap ([a], [Either Pointer (a, Position)])
 type Pointer = IntMap.Key
 type Position = Int
 type Span = (Position, Position)
 
 
--- | Insert a leaf in a PointerTree.
+-- | Insert a leaf in a 'PointerTree'.
 insertLeaf
-  :: (label, Position)
-  -> Pointer
+  :: (label, Position)  -- ^ leaf to insert
+  -> Pointer            -- ^ 'Pointer' to parent node
   -> PointerTree label
   -> PointerTree label
 insertLeaf leaf parent
-  = IntMap.insertWith (liftSnd . (:) . head . snd) parent ([], [Right leaf])
+  = IntMap.insertWith (mapSnd . (:) . head . snd) parent ([], [Right leaf])
 
 
--- | Insert an inner node in a PointerTree.
+-- | Insert an inner node in a 'PointerTree'.
 insertNode
-  :: label
-  -> Pointer
-  -> Pointer
+  :: label    -- ^ node to insert
+  -> Pointer  -- ^ 'Pointer' to new node
+  -> Pointer  -- ^ 'Pointer' to parent node
   -> PointerTree label
   -> PointerTree label
 insertNode node ptr parent
-  = IntMap.insertWith (liftSnd . (:) . head . snd) parent ([], [Left ptr])
-  . IntMap.insertWith (liftFst . (:) . head . fst) ptr ([node], [])
+  = IntMap.insertWith (mapSnd . (:) . head . snd) parent ([], [Left ptr])
+  . IntMap.insertWith (mapFst . (:) . head . fst) ptr ([node], [])
 
 
-liftFst :: (a -> c) -> (a, b) -> (c, b)
-liftFst f (x, y) = (f x, y)
-
-
-liftSnd :: (b -> c) -> (a, b) -> (a, c)
-liftSnd f (x, y) = (x, f y)
-
-
--- | Extract the PointerTree from a list of SentenceData.
+-- | Extract the 'PointerTree' from a list of 'SentenceData'.
 negraToPointerTree :: [SentenceData] -> PointerTree SentenceData
 negraToPointerTree = ins 0
   where
@@ -204,14 +199,17 @@ negraToPointerTree = ins 0
 
 
 
--- | Convert a PointerTree to a Data.Tree.Tree.
--- Span lists are used to represent crossing edges.
--- Every node of the resulting tree contains a span list.
--- Only leaf nodes will contain correct span lists!
--- A span list is a list of spans.
--- A span is a pair of yield positions of the whole tree.
--- E.g. a node has the span [(2, 4), (7, 9)]. Then the yield of the sub tree
--- located at the node contains the leafs 2, 3, 4, 7, 8 and 9 of the whole tree.
+-- | Convert a 'PointerTree' to a 'Data.Tree.Tree'.
+--
+-- 'Span' lists are used to represent crossing edges.
+-- Every node of the resulting tree contains a 'Span' list.
+-- Only leaf nodes will contain correct 'Span' lists!
+-- A 'Span' list is a list of 'Span's.
+-- A 'Span' is a pair of yield positions of the whole tree.
+--
+-- E.g. a node has the 'Span' list [(2, 4), (7, 9)]. Then the yield of the
+-- sub tree located at the node contains the leafs 2, 3, 4, 7, 8 and 9 of the
+-- whole tree.
 pointerTreeToCrossedTree
   :: (Show a)
   => PointerTree a
@@ -227,7 +225,8 @@ pointerTreeToCrossedTree ptrTree = f 0 ptrTree
     g _ (Right (leaf, pos)) = T.Node (Just leaf, [(pos, pos)]) []
 
 
--- | Calculate the correct span lists of inner nodes by propagating the span lists of leaf nodes.
+-- | Calculate the correct 'Span' lists of inner nodes by propagating the
+-- 'Span' lists of leaf nodes.
 updateInnerSpans
   :: T.Tree (a, [Span])
   -> T.Tree (a, [Span])
@@ -238,8 +237,8 @@ updateInnerSpans (T.Node (label, _) forest@(_:_))
 updateInnerSpans node = node
 
 
--- | Merge adjacent or overlapping spans in a span list.
--- The resulting span list is sorted.
+-- | Merge adjacent or overlapping 'Span's in a 'Span' list.
+-- The resulting 'Span' list is sorted.
 mergeSpans :: [Span] -> [Span]
 mergeSpans = m . L.sort
   where
@@ -254,12 +253,13 @@ test_mergeSpans
     == [(1,4), (6,12)]
 
 
--- | Takes a tree containing correct span lists and splits nodes to remove
+-- | Takes a tree containing correct 'Span' lists and splits nodes to remove
 -- crossing edges.
--- The resulting tree contains "local spans" over the former (before the split)
--- direct children and "global spans", i.e. spans over the yield.
--- There are no span lists anymore.
--- Child nodes are sorted by the (global) spans.
+--
+-- The resulting tree contains \"local 'Span's\" over the former (before the
+-- split) direct children and \"global 'Span's\", i.e. 'Span's over the yield.
+-- There are no 'Span' lists anymore.
+-- Child nodes are sorted by the (global) 'Span's.
 splitCrossedTree
   :: T.Tree   (a, [Span])
   -> T.Forest ((a, Span), Span)
