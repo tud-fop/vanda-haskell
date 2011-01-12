@@ -2,12 +2,14 @@
 {-- snippet types --}
 module Data.WTA(Transition(..), WTA, states, transitions, finalWeights, create,
     transIsLeaf, binarize, properize, mapStates, showTransition,
-    printTransition, showWTA, printWTA) where
+    printTransition, showWTA, printWTA, weightTree, generate) where
 
 import Tools.FastNub(nub)
 import Tools.Miscellaneous(mapFst)
 
+import qualified Data.List as L
 import qualified Data.Map as M
+import qualified Data.Tree as T
 import Data.Maybe(fromJust)
 
 data Transition state terminal weight = Transition
@@ -110,3 +112,108 @@ showWTA wta
   ++  (unlines $ map show $ finalWeights wta)
 
 printWTA wta = putStr . showWTA $ wta
+
+
+weightTree :: (Eq q, Eq t, Num w) => WTA q t w -> T.Tree t -> w
+weightTree wta tree
+  = sum
+  . map (\(q, w) -> weightTree' wta q tree * w)
+  $ finalWeights wta
+
+
+weightTree' :: (Eq q, Eq t, Num w) => WTA q t w -> q -> T.Tree t -> w
+weightTree' wta q tree
+  = sum
+      [ product (zipWith (weightTree' wta) qs trees) * (transWeight t)
+      | let root = T.rootLabel tree
+      , let trees = T.subForest tree
+      , let lTrees = length trees
+      , t <- transitions wta
+      , transState    t == q
+      , transTerminal t == root
+      , let qs = transStates t
+      , lTrees == length qs
+      ]
+
+
+generate :: (Ord q) => WTA q t w -> [T.Tree (t, q, w)]
+generate wta = map fst $ generateHeight wta 0 M.empty
+
+
+generateHeight
+  :: (Num h, Ord h, Ord q)
+  => WTA q t w
+  -> h
+  -> M.Map q [(T.Tree (t, q, w), h)]
+  -> [(T.Tree (t, q, w), h)]
+generateHeight wta h m
+  = let trees
+          = [ ( T.Node (transTerminal t, transState t, transWeight t) trees'
+              , h + 1 )
+            | t <- transitions wta
+            , (trees', h') <- generateSubs (transStates t) m
+            , h' == h
+            ]
+    in if null trees
+    then []
+    else trees
+      ++ generateHeight
+          wta
+          (h + 1)
+          (foldr
+            (\x@(t, _) ->
+              M.insertWith
+                (++)
+                (let (_, q, _) = T.rootLabel t in q)
+                [x]
+            )
+            m
+            trees
+          )
+
+
+generateSubs :: (Num h, Ord h, Ord q) => [q] -> M.Map q [(t, h)] -> [([t], h)]
+generateSubs (q:qs) m
+  = let tss = generateSubs qs m
+    in maybe
+        []
+        (\ts' -> [(t':ts, max h' h) | (ts, h) <- tss, (t', h') <- ts'])
+        (M.lookup q m)
+generateSubs [] _ = [([], 0)]
+
+
+{-
+generate wta q
+  = [ T.Node (transTerminal t, q, transWeight t) subs
+    | t <- transitions wta
+    , transState t == q
+    , subs <- combinations (map (generate wta) (transStates t))
+    ]
+
+
+generateH wta 1 q
+  = [ T.Node (transTerminal t, q, transWeight t) []
+    | t <- transitions wta
+    , transState t == q
+    , transStates t == []
+    ]
+generateH wta n q
+  = [ T.Node (transTerminal t, q, transWeight t) subs
+    | t <- transitions wta
+    , transState t == q
+    , subs <- combinations (map (generateH wta (n-1)) (transStates t))
+    ]
+
+
+combinations (xs:xss) = [ x:ys | ys <- combinations xss, x <- xs ]
+combinations [] = [[]]
+
+
+split [] = []
+split (x:xs) = it [] x xs
+  where
+    it fxs y zs = (fxs, y, zs):
+      case zs of
+        (z:zs') -> it (fxs ++ [y]) z zs'
+        _ -> []
+-}
