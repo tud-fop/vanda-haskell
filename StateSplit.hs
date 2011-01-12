@@ -15,7 +15,7 @@
 module StateSplit where
 
 -- import EM -- TODO
-import Tools.Miscellaneous(mapFst, mapSnd)
+import Tools.Miscellaneous(mapFst, mapSnd, sumWith)
 
 import qualified Data.WTA as WTA
 
@@ -143,12 +143,6 @@ variation
   -> [[a]]
 variation 0 _  = [[]]
 variation k xs = concatMap (\ys -> map (:ys) xs) (variation (k-1) xs)
-
-
--- | Sum the elements of a list after mapping them to a 'Num'; i.e.
--- @sumWith f == sum . map f@
-sumWith :: (Num b) => (a -> b) -> [a] -> b
-sumWith f = L.foldl' (flip ((+) . f)) 0
 
 -- -----------------------------------------------------------------------------
 
