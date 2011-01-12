@@ -12,17 +12,17 @@ import qualified Data.Map as M
 import qualified Data.Tree as T
 import Data.Maybe(fromJust)
 
-data Transition state terminal weight = Transition
-    { transTerminal :: terminal
-    , transState    :: state
-    , transStates   :: [state]
-    , transWeight   :: weight
+data Transition q t w = Transition
+    { transTerminal :: t
+    , transState    :: q
+    , transStates   :: [q]
+    , transWeight   :: w
     } deriving (Eq, Ord, Show)
 
-data WTA state terminal weight = WTA
-    { states       :: [state]
-    , transitions  :: [Transition state terminal weight]
-    , finalWeights :: [(state, weight)]
+data WTA q t w = WTA
+    { states       :: [q]
+    , transitions  :: [Transition q t w]
+    , finalWeights :: [(q, w)]
     } deriving Show
 
 create :: (Ord q) => [Transition q t w] -> [(q, w)] -> WTA q t w
@@ -66,6 +66,7 @@ tailsNonempty []         =  []
 tailsNonempty xxs@(_:xs) =  xxs : tailsNonempty xs
 
 
+properize :: (Ord q, Fractional w) => WTA q t w -> WTA q t w
 properize wta@WTA{transitions = ts}
   = let counts =
               M.fromListWith (+)
@@ -78,6 +79,7 @@ properize wta@WTA{transitions = ts}
     in wta{transitions = map normalize ts}
 
 
+mapStates :: (Ord q) => (p -> q) -> WTA p t w -> WTA q t w
 mapStates f wta
   = create
     (map
@@ -91,6 +93,7 @@ mapStates f wta
     (map (mapFst f) (finalWeights wta))
 
 
+showTransition :: (Show q, Show t, Show w) => Transition q t w -> [Char]
 showTransition t
   =   show (transState t)
   ++  " -> "
@@ -101,8 +104,12 @@ showTransition t
   ++  show (transWeight t)
   ++  ")"
 
+
+printTransition :: (Show q, Show t, Show w) => Transition q t w -> IO ()
 printTransition t = putStrLn . showTransition $ t
 
+
+showWTA :: (Show q, Show t, Show w) => WTA q t w -> [Char]
 showWTA wta
   =   "Transitions:\n"
   ++  (unlines $ map showTransition $ transitions wta)
@@ -111,6 +118,8 @@ showWTA wta
   ++  "\nFinal Weights:\n"
   ++  (unlines $ map show $ finalWeights wta)
 
+
+printWTA :: (Show q, Show t, Show w) => WTA q t w -> IO ()
 printWTA wta = putStr . showWTA $ wta
 
 
