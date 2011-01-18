@@ -87,4 +87,11 @@ testWTAs =
         , Transition 'd' '3' "12" 1
         ]
         [('f', 1)]
+    , create  -- 10
+        [ Transition 'l' 'f' ""   2
+        , Transition 'l' 'q' ""   3
+        , Transition 'n' 'f' "qf" 1
+        , Transition 'n' 'f' "qq" 1
+        ]
+        [('f', 1)]
     ]
