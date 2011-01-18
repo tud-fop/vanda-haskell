@@ -2,7 +2,7 @@
 {-- snippet types --}
 module Data.WTA(Transition(..), WTA, states, transitions, finalWeights, create,
     transIsLeaf, binarize, properize, mapStates, showTransition,
-    printTransition, showWTA, printWTA, weightTree, generate) where
+    printTransition, showWTA, printWTA, weightTree, generate, generate') where
 
 import Tools.FastNub(nub)
 import Tools.Miscellaneous(mapFst)
@@ -145,19 +145,23 @@ weightTree' wta q tree
       ]
 
 
-generate :: (Ord q) => WTA q t w -> [T.Tree (t, q, w)]
-generate wta = map fst $ generateHeight wta 0 M.empty
+generate :: (Ord q) => WTA q t w -> [T.Tree t]
+generate = fmap (fmap (\(_, t, _) -> t)) . generate'
+
+
+generate' :: (Ord q) => WTA q t w -> [T.Tree (q, t, w)]
+generate' wta = map fst $ generateHeight wta 0 M.empty
 
 
 generateHeight
   :: (Num h, Ord h, Ord q)
   => WTA q t w
   -> h
-  -> M.Map q [(T.Tree (t, q, w), h)]
-  -> [(T.Tree (t, q, w), h)]
+  -> M.Map q [(T.Tree (q, t, w), h)]
+  -> [(T.Tree (q, t, w), h)]
 generateHeight wta h m
   = let trees
-          = [ ( T.Node (transTerminal t, transState t, transWeight t) trees'
+          = [ ( T.Node (transState t, transTerminal t, transWeight t) trees'
               , h + 1 )
             | t <- transitions wta
             , (trees', h') <- generateSubs (transStates t) m
@@ -173,7 +177,7 @@ generateHeight wta h m
             (\x@(t, _) ->
               M.insertWith
                 (++)
-                (let (_, q, _) = T.rootLabel t in q)
+                (let (q, _, _) = T.rootLabel t in q)
                 [x]
             )
             m
