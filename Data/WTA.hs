@@ -1,14 +1,32 @@
 -- Copyright (c) 2010, Toni Dietze
 {-- snippet types --}
-module Data.WTA(Transition(..), WTA, states, transitions, finalWeights, create,
-    transIsLeaf, binarize, properize, mapStates, showTransition,
-    printTransition, showWTA, printWTA, weightTree, generate, generate') where
+module Data.WTA(
+  Transition(..)
+, WTA
+, states
+, transitions
+, finalWeights
+, create
+, transIsLeaf
+, binarize
+, properize
+, randomizeWeights
+, mapStates
+, showTransition
+, printTransition
+, showWTA
+, printWTA
+, weightTree
+, generate
+, generate'
+) where
 
 import Tools.FastNub(nub)
-import Tools.Miscellaneous(mapFst)
+import Tools.Miscellaneous(mapFst, mapRandomR)
 
 import qualified Data.List as L
 import qualified Data.Map as M
+import qualified Random as R
 import qualified Data.Tree as T
 import Data.Maybe(fromJust)
 
@@ -77,6 +95,35 @@ properize wta@WTA{transitions = ts}
               transWeight t / fromJust (M.lookup (transState t) counts)
             }
     in wta{transitions = map normalize ts}
+
+
+-- | @randomizeWeights r wta g@ multiplies every weight of @wta@ by a
+-- random number in the range @(1-r, 1+r)@.
+randomizeWeights
+  :: (Num w, R.Random w, R.RandomGen g)
+  => w -> WTA q t w -> g -> (WTA q t w, g)
+randomizeWeights r wta g = mapWeightsRandomR (1-r, 1+r) (*) wta g
+
+
+-- | 'mapRandomR' for the weights of a 'WTA'.
+mapWeightsRandomR
+  :: (R.Random r, R.RandomGen g)
+  => (r, r) -> (w -> r -> w') -> WTA q t w -> g -> (WTA q t w', g)
+mapWeightsRandomR r f wta g
+  = let (ts, g' ) = mapRandomR
+                      r
+                      (\t r -> t{transWeight = f (transWeight t) r})
+                      (transitions wta)
+                      g
+        (fs, g'') = mapRandomR
+                      r
+                      (\(q, w) r -> (q, f w r))
+                      (finalWeights wta)
+                      g'
+    in (wta{transitions = ts, finalWeights = fs}, g'')
+  where
+    h :: (a -> b) -> (b -> c -> (d, e)) -> (a -> d -> f) -> a -> c -> (f, e)
+    h unpack f pack x g = let (y, g') = f (unpack x) g in (pack x y, g')
 
 
 mapStates :: (Ord q) => (p -> q) -> WTA p t w -> WTA q t w
