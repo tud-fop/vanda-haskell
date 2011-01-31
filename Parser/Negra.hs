@@ -3,12 +3,17 @@
 module Parser.Negra where
 
 import Parser.ApplicativeParsec
-import Data.Char(isDigit, ord)
-import qualified Data.IntMap as IntMap
-import Data.Function(on)
-import qualified Data.List as L
-import qualified Data.Tree as T
 import Tools.Miscellaneous(mapFst, mapSnd)
+
+import qualified Data.Binary   as B
+import           Data.Char     (isDigit, ord)
+import           Data.Function (on)
+import qualified Data.IntMap   as IntMap
+import qualified Data.List     as L
+import qualified Data.Tree     as T
+import           Data.Word     (Word8)
+
+-- import Debug.Trace
 
 data Sentence = Sentence
     { sId :: Int
@@ -72,9 +77,10 @@ p_table =  -- TODO stub
 
 
 p_Sentence lemma =
-        try (string "#BOS")
+        {-fmap B.encode
+     $-}  try (string "#BOS")
      *> negraSpaces1
-     *> (p_Int >>= \num ->
+     *> (p_Int >>= \num -> {-traceShow num $-}
             Sentence num
         <$> p_Int
         <*> p_date
@@ -307,7 +313,49 @@ showSentenceData SentenceNode{sdPostag = t} = t
 -- printSDTree = putStrLn . T.drawTree . (fmap show . fmap (fmap showSentenceData)) . toTree . sData
 -- printSDTree = putStrLn . T.drawTree . fmap show . fmap (liftFst (fmap showSentenceData)) . head . negraToForest . sData
 
-test
-  = parseFromFile p_negra "Parser/corpus-sample.export"
-    >>= \(Right x)
-    ->  putStrLn $ T.drawForest $ fmap (fmap show) $ fmap negraTreeToTree $ negraToForest $ sData ( x !! 10)
+-- test
+--   = parseFromFile p_negra "Parser/corpus-sample.export"
+--     >>= \(Right x)
+--     ->  putStrLn $ T.drawForest $ fmap (fmap show) $ fmap negraTreeToTree $ negraToForest $ sData ( x !! 10)
+
+
+corpusSmall = "/home/gdp/dietze/Documents/vanda/Parser/tiger_release_aug07_part.export"
+corpusBig = "/var/local/share/gdp/nlp/resources/tigercorpus2.1/corpus/tiger_release_aug07.export"
+
+
+instance B.Binary Sentence where
+  put s = do
+    B.put $ sId s
+    B.put $ sEditorId s
+    B.put $ sDate s
+    B.put $ sOriginId s
+    B.put $ sComment s
+    B.put $ sData s
+  get = Sentence <$> B.get <*> B.get <*> B.get <*> B.get <*> B.get <*> B.get
+
+instance B.Binary SentenceData where
+  put sd@SentenceWord{} = do
+    B.put (0 :: Word8)
+    B.put $ sdWord sd
+    B.put $ sdPostag sd
+    B.put $ sdMorphtag sd
+    B.put $ sdEdge sd
+    B.put $ sdSecEdges sd
+    B.put $ sdComment sd
+  put sd@SentenceNode{} = do
+    B.put (1 :: Word8)
+    B.put $ sdNum sd
+    B.put $ sdPostag sd
+    B.put $ sdMorphtag sd
+    B.put $ sdEdge sd
+    B.put $ sdSecEdges sd
+    B.put $ sdComment sd
+  get = B.get >>= \t -> case (t :: Word8) of
+    0 -> SentenceWord <$> B.get <*> B.get <*> B.get <*> B.get <*> B.get <*> B.get
+    1 -> SentenceNode <$> B.get <*> B.get <*> B.get <*> B.get <*> B.get <*> B.get
+
+instance B.Binary Edge where
+  put e = do
+    B.put $ eLabel e
+    B.put $ eParent e
+  get = Edge <$> B.get <*> B.get
