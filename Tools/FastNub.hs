@@ -11,7 +11,7 @@ nub xs = f xs Set.empty
   where
     f (x:xs) s = if Set.member x s
                  then f xs s
-                 else x:(f xs (Set.insert x s))
+                 else x : f xs (Set.insert x s)
     f []     _ = []
 
 

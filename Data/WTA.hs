@@ -88,7 +88,7 @@ properize :: (Ord q, Fractional w) => WTA q t w -> WTA q t w
 properize wta@WTA{transitions = ts}
   = let counts =
               M.fromListWith (+)
-            $ map (\t -> (transState t, transWeight t))
+            . map (\t -> (transState t, transWeight t))
             $ ts
         normalize t =
             t{transWeight =
@@ -140,7 +140,7 @@ mapStates f wta
     (map (mapFst f) (finalWeights wta))
 
 
-showTransition :: (Show q, Show t, Show w) => Transition q t w -> [Char]
+showTransition :: (Show q, Show t, Show w) => Transition q t w -> String
 showTransition t
   =   show (transState t)
   ++  " -> "
@@ -156,14 +156,14 @@ printTransition :: (Show q, Show t, Show w) => Transition q t w -> IO ()
 printTransition t = putStrLn . showTransition $ t
 
 
-showWTA :: (Show q, Show t, Show w) => WTA q t w -> [Char]
+showWTA :: (Show q, Show t, Show w) => WTA q t w -> String
 showWTA wta
   =   "Transitions:\n"
-  ++  (unlines $ map showTransition $ transitions wta)
+  ++  (unlines . map showTransition . transitions $ wta)
   ++  "\nStates:\n"
-  ++  (unlines $ map show $ states wta)
+  ++  (unlines . map show . states $ wta)
   ++  "\nFinal Weights:\n"
-  ++  (unlines $ map show $ finalWeights wta)
+  ++  (unlines . map show . finalWeights $ wta)
 
 
 printWTA :: (Show q, Show t, Show w) => WTA q t w -> IO ()
@@ -180,7 +180,7 @@ weightTree wta tree
 weightTree' :: (Eq q, Eq t, Num w) => WTA q t w -> q -> T.Tree t -> w
 weightTree' wta q tree
   = sum
-      [ product (zipWith (weightTree' wta) qs trees) * (transWeight t)
+      [ product (zipWith (weightTree' wta) qs trees) * transWeight t
       | let root = T.rootLabel tree
       , let trees = T.subForest tree
       , let lTrees = length trees

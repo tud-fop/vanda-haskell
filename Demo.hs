@@ -23,7 +23,7 @@ demoWTA1 = testWTAs !! 10
 -- | Print an example WTA.
 demo1_1
   = WTA.printWTA
-  $ demoWTA1
+    demoWTA1
 
 
 -- | Generate some trees with the example WTA.

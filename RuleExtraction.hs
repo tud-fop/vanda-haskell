@@ -21,5 +21,5 @@ extract forest = M.fromListWith (+) . map (flip (,) 1) . extractF $ forest
 extractF forest = concatMap extractT forest
 
 extractT (T.Node {T.rootLabel = r, T.subForest = f@(_:_)})
-  = (r, map T.rootLabel f):(extractF f)
+  = (r, map T.rootLabel f) : extractF f
 extractT _ = []

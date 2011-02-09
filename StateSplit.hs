@@ -43,9 +43,9 @@ split offset wta
       (splitTranss (WTA.transitions wta))
       (splitFinals (WTA.finalWeights wta))
     where
-      splitters = [id, mapSnd ((+) offset)]
+      splitters = [id, mapSnd (offset +)]
       -- splitters = [(*) 2, (+) 1 . (*) 2]
-      factor    = 1 / (fromIntegral (length splitters))
+      factor    = 1 / fromIntegral (length splitters)
       splitTranss ts
         = [ t{WTA.transState = q', WTA.transStates = qs', WTA.transWeight = w'}
           | t   <- ts
@@ -77,7 +77,7 @@ merge mergeState wta
       (   map (\((t, q, qs), ts') ->
               WTA.Transition t q qs
             $ sumWith WTA.transWeight ts'
-              / (fromIntegral $ length $ L.nub $ map WTA.transState ts')
+              / (fromIntegral . length . L.nub . map WTA.transState $ ts')
           )
         . M.toList
         . partition
