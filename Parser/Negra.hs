@@ -5,15 +5,17 @@ module Parser.Negra where
 import Parser.ApplicativeParsec
 import Tools.Miscellaneous(mapFst, mapSnd)
 
+import           Control.DeepSeq
 import qualified Data.Binary   as B
+import           Data.ByteString.Lazy (ByteString)
 import           Data.Char     (isDigit, ord)
-import           Data.Function (on)
 import qualified Data.IntMap   as IntMap
 import qualified Data.List     as L
+import           Data.Ord      (comparing)
 import qualified Data.Tree     as T
 import           Data.Word     (Word8)
 
--- import Debug.Trace
+import Debug.Trace
 
 data Sentence = Sentence
     { sId :: Int
@@ -51,11 +53,11 @@ data Edge = Edge
     deriving Show
 
 
-p_negra =
+p_negra = {-fmap (safeEncode . LazyBinaryList) $-}
         p_ignoreLines
      *> (p_format >>= \format ->
               many p_table
-          *> many (p_Sentence (format == 4))
+           *> many (p_Sentence (format == 4))
         )
     <*  eof
 
@@ -124,7 +126,7 @@ p_ignoreLine = try p_emptyLine *> return ()
 p_word = many1 negraNonSpace <* tokenCleanup
 
 p_Int :: GenParser Char st Int
-p_Int = (many1 digit >>= return . read) <* tokenCleanup
+p_Int = fmap read (many1 digit) <* tokenCleanup
 
 
 p_date = many1 (oneOf "/0123456789") <* tokenCleanup
@@ -251,7 +253,7 @@ mergeSpans = m . L.sort
     m (a:ys@(b:xs))
       = if snd a + 1 >= fst b
         then m ((fst a, max (snd a) (snd b)):xs)
-        else a:(m ys)
+        else a : m ys
     m xs = xs
 
 test_mergeSpans
@@ -277,12 +279,12 @@ splitCrossedTree (T.Node (label, spans) forest)
     where
       f t@(T.Node (_, sChild) _) (current@(children, sParent):forest)
         = if fst sChild >= fst sParent && snd sChild <= snd sParent
-          then (L.insertBy (compare `on` (snd . T.rootLabel)) t children, sParent):forest
-          else current:(f t forest)
+          then (L.insertBy (comparing (snd . T.rootLabel)) t children, sParent):forest
+          else current : f t forest
       f _ [] = error "spans malformed"
       relabel i ((f, s):xs)
         = let i' = i + length f in
-          (T.Node ((label, (i, i' - 1)), s) f):(relabel i' xs)
+          T.Node ((label, (i, i' - 1)), s) f : relabel i' xs
       relabel _ _ = []
 
 
@@ -323,6 +325,35 @@ corpusSmall = "/home/gdp/dietze/Documents/vanda/Parser/tiger_release_aug07_part.
 corpusBig = "/var/local/share/gdp/nlp/resources/tigercorpus2.1/corpus/tiger_release_aug07.export"
 
 
+data BinaryContainer a = BinaryContainer a ByteString
+
+instance Show (BinaryContainer a) where
+  show (BinaryContainer _ x) = show x
+
+safeEncode :: (B.Binary a) => a -> BinaryContainer a
+safeEncode x = BinaryContainer undefined (B.encode x)
+
+safeDecode :: (B.Binary a) => BinaryContainer a -> a
+safeDecode (BinaryContainer _ x) = B.decode x
+
+newtype LazyBinaryList a = LazyBinaryList {unLazyBinaryList :: [a]} deriving Show
+
+instance (B.Binary a) => B.Binary (LazyBinaryList a) where
+  put (LazyBinaryList xs) = go xs
+    where
+      go xs
+        = let maxL = 1
+              (ys, zs) = splitAt maxL xs
+              l        = fromIntegral (if null zs then length ys else maxL) :: Word8
+              putChunk = B.put l >> mapM_ B.put ys
+          in if l /= 0
+          then putChunk >> go zs
+          else putChunk
+  get = fmap LazyBinaryList (go 0)
+    where
+      go 0 = B.get >>= \ l -> if (l :: Word8) /= 0 then go l else return []
+      go l = (:) <$> B.get  <*> go (l - 1)
+
 instance B.Binary Sentence where
   put s = do
     B.put $ sId s
@@ -359,3 +390,39 @@ instance B.Binary Edge where
     B.put $ eLabel e
     B.put $ eParent e
   get = Edge <$> B.get <*> B.get
+
+
+instance NFData Sentence where
+  rnf s = rnf (sId s)
+    `seq` rnf (sEditorId s)
+    `seq` rnf (sDate s)
+    `seq` rnf (sOriginId s)
+    `seq` rnf (sComment s)
+    `seq` rnf (sData s)
+
+instance NFData SentenceData where
+  rnf sd@SentenceWord{} =
+          rnf (sdWord sd)
+    `seq` rnf (sdPostag sd)
+    `seq` rnf (sdMorphtag sd)
+    `seq` rnf (sdEdge sd)
+    `seq` rnf (sdSecEdges sd)
+    `seq` rnf (sdComment sd)
+  rnf sd@SentenceNode{} =
+          rnf (sdNum sd)
+    `seq` rnf (sdPostag sd)
+    `seq` rnf (sdMorphtag sd)
+    `seq` rnf (sdEdge sd)
+    `seq` rnf (sdSecEdges sd)
+    `seq` rnf (sdComment sd)
+
+instance NFData Edge where
+  rnf e = rnf (eLabel e)
+    `seq` rnf (eParent e)
+
+-- !!! This violates DeepSeq properties  !!!
+instance NFData ParseError where
+  rnf _ = ()
+
+instance NFData ByteString where
+  rnf _ = ()
