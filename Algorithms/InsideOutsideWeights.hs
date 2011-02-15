@@ -1,6 +1,8 @@
-module Algorithms.InsideOutsideWeights
-  ( insideOutside
-  ) where
+module Algorithms.InsideOutsideWeights (
+  insideOutside
+, inside
+, outside
+) where
 
 -- fixpunkt
 -- newton
@@ -15,21 +17,27 @@ import Data.Maybe (fromMaybe)
 
 -- import Debug.Trace
 
-zero = 0
-one = 1
+
+insideOutside target g
+  = let mIn = inside g
+    in M.unionWith
+      (\ (i, _) (_, o) -> (i, o))
+      (M.map (\ i -> (i, 0)) mIn)
+      (M.map (\ o -> (0, o)) (outside mIn target g))
 
 
-insideOutside g
-  = go $ M.map (\ es -> (es, 0, 0)) (edgesM g)
+inside g
+  = M.map fst $ go $ M.map (\ es -> (0, es)) (edgesM g)
   where
     go m
       = {-trace "Ding!" $-}
-        let m' = step m
-        in if maxDiffWith snd3 m m' < 0.000000000000001
+        let m' = insideStep m
+        in if maxDiffWith fst m m' < 0.000000000000001
         then m'
         else go m'
-    m = M.map (\ es -> (es, 0, 0)) (edgesM g)
-    step m = M.map (\ (es, i, o) -> (es, insideHead m es, o)) m
+
+
+insideStep m = M.map (\ (_, es) -> (insideHead m es, es)) m
 
 
 insideHead m es
@@ -38,10 +46,55 @@ insideHead m es
 
 
 insideTail m vs
-  = let fromJust' = fromMaybe
-          $ error "Algorithms.InsideOutsideWeights.insideTail: Malformed map."
-        step p v = p * (snd3 . fromJust' . M.lookup v $ m)
+  = let step p v = p * (maybe 0 fst (M.lookup v m))
     in L.foldl' step 1 vs
+
+
+outside m target g
+  = M.map fst $ go $ initOutsideMap m target g
+  where
+    go m
+      = {-trace "Dong!" $-}
+        let m' = outsideStep m
+        in if maxDiffWith fst m m' < 0.000000000000001
+        then m'
+        else go m'
+
+
+outsideStep m
+  = M.map
+      (\ (_, xs) ->
+        ( L.foldl' (\ s (v, w) -> s + maybe 0 fst (M.lookup v m) * w) 0 xs
+        , xs)
+      )
+      m
+
+
+{-initOutsideMap
+  :: (Num t, Num s, Ord v)
+  => M.Map v (t1, s, t2)    -- ^ contains the inside weights
+  -> HyperGraph v l s
+  -> M.Map v (t, [(v, s)])-}
+initOutsideMap m target
+  = M.insert target (1, [(target, 1)])
+  . M.map ((,) 0 . M.toList . M.map sum . M.fromListWith (++))
+  . M.fromListWith (++)
+  . concatMap
+      (\ e ->
+        map
+          (\ (xs, y, zs) ->
+            (y, [(eHead e, [eWeight e * insideList xs * insideList zs])])
+          )
+          (splits3 (eTail e))
+      )
+  . edges
+  where
+    insideList vs
+      = let step p v = p * (fromMaybe 0 (M.lookup v m))
+        in L.foldl' step 1 vs
+
+
+-- outside v 
 
 
 maxDiffWith f m1 m2
@@ -52,11 +105,17 @@ maxDiffWith f m1 m2
     go _ _ _ = error "Algorithms.InsideOutsideWeights.maxDiff: Malformed maps."
 
 
-fst3 (x, _, _) = x
-snd3 (_, x, _) = x
-trd3 (_, _, x) = x
+splits3 []     = []
+splits3 [x]    = [([], x, [])]
+splits3 (x:xs) = ([], x, xs) : map (mapFst3 (x :)) (splits3 xs)
 
-mapSnd3 f (x, y, z) = (x, f y, z)
+fst3 (x, _, _) = x
+snd3 (_, y, _) = y
+trd3 (_, _, z) = z
+
+mapFst3 f (x, y, z) = (f x,   y,   z)
+mapSnd3 f (x, y, z) = (  x, f y,   z)
+mapTrd3 f (x, y, z) = (  x,   y, f z)
 
 
 hg
@@ -66,5 +125,8 @@ hg
       , hyperEdge 'A' ""   'a' 0.5
       , hyperEdge 'B' "AA" 's' 0.9
       , hyperEdge 'B' ""   'b' 0.1
+      , hyperEdge 'C' "A"  'b' 1    -- C not reachable
+      , hyperEdge 'A' "D"  'b' 1    -- D not terminating
+      , hyperEdge 'E' "E"  'b' 1    -- E not reachable and not terminating
       ]
 
