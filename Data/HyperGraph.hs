@@ -12,16 +12,16 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 
 
-data HyperEdge v l s = HyperEdge
+data HyperEdge v l w = HyperEdge
   { eHead   :: v
   , eTail   :: [v]
   , eLabel  :: l
-  , eWeight :: s
+  , eWeight :: w
   }
 
-data HyperGraph v l s = HyperGraph
+data HyperGraph v l w = HyperGraph
   { verticesS :: S.Set v
-  , edgesM    :: M.Map v [HyperEdge v l s]
+  , edgesM    :: M.Map v [HyperEdge v l w]
   }
 
 
@@ -34,11 +34,11 @@ hyperGraph es
 hyperEdge = HyperEdge
 
 
-vertices :: HyperGraph v l s -> [v]
+vertices :: HyperGraph v l w -> [v]
 vertices = S.toList . verticesS
 
 
-edges :: HyperGraph v l s -> [HyperEdge v l s]
+edges :: HyperGraph v l w -> [HyperEdge v l w]
 edges = concat . M.elems . edgesM
 
 
