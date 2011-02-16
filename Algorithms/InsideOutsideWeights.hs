@@ -49,7 +49,7 @@ inside g
     go m
       = {-trace "Ding!" $-}
         let m' = insideStep m
-        in if maxDiffWith fst m m' < 0.000000000000001
+        in if checkMapsOn fst m m'
         then m'
         else go m'
 
@@ -95,7 +95,7 @@ outside m target g
     go m
       = {-trace "Dong!" $-}
         let m' = outsideStep m
-        in if maxDiffWith fst m m' < 0.000000000000001
+        in if checkMapsOn fst m m'
         then m'
         else go m'
 
@@ -140,22 +140,22 @@ initOutsideMap m target
         in L.foldl' step 1 vs
 
 
--- | Compute the maximum difference between corresponding Elements of two maps.
+-- ? Compute the maximum difference between corresponding Elements of two maps.
 -- /Both maps must contain exactly the same keys for this function to work!/
 -- The given function is used to extract the values to compare from values of
 -- the maps.
-maxDiffWith
-  :: (Ord b, Num b)
+checkMapsOn
+  :: (Ord b, Fractional b)
   => (a -> b)
   -> M.Map k1 a
   -> M.Map k2 a
-  -> b
-maxDiffWith f m1 m2
-  = go (M.elems m1) (M.elems m2) 0
+  -> Bool
+checkMapsOn f m1 m2
+  = go (M.elems m1) (M.elems m2)
   where
-    go (x:xs) (y:ys) maxi = go xs ys $ max maxi $ abs (f x - f y)
-    go [] [] maxi = maxi
-    go _ _ _ = error "Algorithms.InsideOutsideWeights.maxDiff: Malformed maps."
+    go (x:xs) (y:ys) = abs (f x - f y) < 0.000000000000001 && go xs ys
+    go [] [] = True
+    go _ _ = error "Algorithms.InsideOutsideWeights.checkMapsOn: Malformed maps."
 
 
 -- | Build a list of all possible splits @(xs, y, ys)@ of a list @zs@, such
