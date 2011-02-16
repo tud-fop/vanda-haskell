@@ -29,7 +29,7 @@ insideOutside
   :: (Fractional w, Ord v, Ord w)
   => v                 -- ^ target node
   -> HyperGraph v l w
-  -> M.Map v (w, w)
+  -> M.Map v (w, w)    -- ^ maps a vertex to (inside weight, outside weight)
 insideOutside target g
   = let mIn = inside g
     in M.unionWith
@@ -54,6 +54,7 @@ inside g
         else go m'
 
 
+-- | Do one iteration step for the fixpoint computation of the inside weights.
 insideStep
   :: (Num w, Ord v)
   => M.Map v (w, [HyperEdge v l w])
@@ -99,6 +100,7 @@ outside m target g
         else go m'
 
 
+-- | Do one iteration step for the fixpoint computation of the outside weights.
 outsideStep
   :: (Num w, Ord v)
   => M.Map v (w, [(v, w)])
@@ -112,6 +114,7 @@ outsideStep m
       m
 
 
+-- | Initialize the data structure used for computing the outside weights.
 initOutsideMap ::
   (Num w, Ord v)
   => M.Map v w
@@ -137,6 +140,10 @@ initOutsideMap m target
         in L.foldl' step 1 vs
 
 
+-- | Compute the maximum difference between corresponding Elements of two maps.
+-- /Both maps must contain exactly the same keys for this function to work!/
+-- The given function is used to extract the values to compare from values of
+-- the maps.
 maxDiffWith
   :: (Ord b, Num b)
   => (a -> b)
@@ -151,6 +158,9 @@ maxDiffWith f m1 m2
     go _ _ _ = error "Algorithms.InsideOutsideWeights.maxDiff: Malformed maps."
 
 
+-- | Build a list of all possible splits @(xs, y, ys)@ of a list @zs@, such
+-- that @zs == xs ++ [y] ++ ys@. For example
+-- @splits3 [1, 2, 3] == [([], 1, [2, 3]), ([1], 2, [3]), ([1, 2], 3, [])]@.
 splits3 :: [a] -> [([a], a, [a])]
 splits3 []     = []
 splits3 [x]    = [([], x, [])]
