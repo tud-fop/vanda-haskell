@@ -4,15 +4,14 @@
 -- Alternative approaches for future implementations could be Newton's method
 -- or hill climbing.
 module Algorithms.InsideOutsideWeights (
-  insideOutside
-, inside
-, outside
+-- * Inside and outside weights
+  insideOutside, insideOutside'
+, inside, inside'
+, outside, outside'
+-- * Fixpoint convergence
+, Converging(..)
+, convergedRatio
 ) where
-
-
--- fixpunkt
--- newton
--- hill-climbing
 
 
 import Data.HyperGraph
@@ -26,30 +25,45 @@ import Data.Maybe (fromMaybe)
 
 -- | Computes the inside and outside weights for a given 'HyperGraph'.
 insideOutside
-  :: (Fractional w, Ord v, Ord w)
+  :: (Ord v, Converging w, Num w)
   => v                 -- ^ target node
   -> HyperGraph v l w
-  -> M.Map v (w, w)    -- ^ maps a vertex to (inside weight, outside weight)
-insideOutside target g
-  = let mIn = inside g
+  -> M.Map v (w, w)    -- ^ maps a vertex to its inside and outside weight
+insideOutside v g = insideOutside' converged v g
+
+
+-- | The same as 'insideOutside', but a property to check if the fixpoint
+-- iteration can be finished using two consecutive values in the fixpoint
+-- iteration must be given.
+insideOutside'
+  :: (Ord v, Num w)
+  => (w -> w -> Bool) -> v -> HyperGraph v l w -> M.Map v (w, w)
+insideOutside' c target g
+  = let mIn = inside' c g
     in M.unionWith
       (\ (i, _) (_, o) -> (i, o))
       (M.map (\ i -> (i, 0)) mIn)
-      (M.map (\ o -> (0, o)) (outside mIn target g))
+      (M.map (\ o -> (0, o)) (outside' c mIn target g))
 
+
+-- Inside Weights ------------------------------------------------------------
 
 -- | Computes the inside weights for a given 'HyperGraph'.
-inside
-  :: (Fractional w, Ord v, Ord w)
-  => HyperGraph v l w
-  -> M.Map v w
-inside g
-  = M.map fst $ go $ M.map (\ es -> (0, es)) (edgesM g)
+inside :: (Ord v, Converging w, Num w) => HyperGraph v l w -> M.Map v w
+inside g = inside' converged g
+
+
+-- | The same as 'inside', but a property to check if the fixpoint
+-- iteration can be finished using two consecutive values in the fixpoint
+-- iteration must be given.
+inside' :: (Ord v, Num w) => (w -> w -> Bool) -> HyperGraph v l w -> M.Map v w
+inside' c g
+  = M.map fst $ go $ M.map ((,) 0) $ edgesM g
   where
     go m
       = {-trace "Ding!" $-}
         let m' = insideStep m
-        in if checkMapsOn fst m m'
+        in if checkMapsOn fst c m m'
         then m'
         else go m'
 
@@ -62,45 +76,49 @@ insideStep
 insideStep m = M.map (\ (_, es) -> (insideHead m es, es)) m
 
 
-insideHead
-  :: (Num w, Ord v)
-  => M.Map v (w, a)
-  -> [HyperEdge v l w]
-  -> w
+insideHead :: (Num w, Ord v) => M.Map v (w, a) -> [HyperEdge v l w] -> w
 insideHead m es
   = let step s e = s + eWeight e * insideTail m (eTail e)
     in L.foldl' step 0 es
 
 
-insideTail
-  :: (Num w, Ord v)
-  => M.Map v (w, a)
-  -> [v]
-  -> w
+insideTail :: (Num w, Ord v) => M.Map v (w, a) -> [v] -> w
 insideTail m vs
-  = let step p v = p * (maybe 0 fst (M.lookup v m))
+  = let step p v = p * maybe 0 fst (M.lookup v m)
     in L.foldl' step 1 vs
 
 
--- | Computes the outside weights of a given 'Data.HyperGraph'.
+-- Outside Weights -----------------------------------------------------------
+
+-- | Computes the outside weights of a given 'HyperGraph'.
 outside
-  :: (Fractional w, Ord v, Ord w)
+  :: (Ord v, Converging w, Num w)
   => M.Map v w         -- ^ inside weights
   -> v                 -- ^ target node
   -> HyperGraph v l w
   -> M.Map v w
-outside m target g
+outside g = outside' converged g
+
+
+-- | The same as 'outside', but a property to check if the fixpoint
+-- iteration can be finished using two consecutive values in the fixpoint
+-- iteration must be given.
+outside'
+  :: (Ord v, Num w)
+  => (w -> w -> Bool) -> M.Map v w -> v -> HyperGraph v l w -> M.Map v w
+outside' c m target g
   = M.map fst $ go $ initOutsideMap m target g
   where
     go m
       = {-trace "Dong!" $-}
         let m' = outsideStep m
-        in if checkMapsOn fst m m'
+        in if checkMapsOn fst c m m'
         then m'
         else go m'
 
 
--- | Do one iteration step for the fixpoint computation of the outside weights.
+-- | Do one iteration step for the fixpoint computation of the outside
+-- weights.
 outsideStep
   :: (Num w, Ord v)
   => M.Map v (w, [(v, w)])
@@ -136,27 +154,69 @@ initOutsideMap m target
   . edges
   where
     insideList vs
-      = let step p v = p * (fromMaybe 0 (M.lookup v m))
+      = let step p v = p * fromMaybe 0 (M.lookup v m)
         in L.foldl' step 1 vs
 
 
--- ? Compute the maximum difference between corresponding Elements of two maps.
+-- Convergence ---------------------------------------------------------------
+
+-- | Check a property for a component of all elements of two maps with the
+-- same keys, respectively.
 -- /Both maps must contain exactly the same keys for this function to work!/
--- The given function is used to extract the values to compare from values of
--- the maps.
 checkMapsOn
-  :: (Ord b, Fractional b)
-  => (a -> b)
+  :: (a -> b)          -- ^ maps an element to the relevant component
+  -> (b -> b -> Bool)  -- ^ property
   -> M.Map k1 a
   -> M.Map k2 a
   -> Bool
-checkMapsOn f m1 m2
+checkMapsOn f c m1 m2
   = go (M.elems m1) (M.elems m2)
   where
-    go (x:xs) (y:ys) = abs (f x - f y) < 0.000000000000001 && go xs ys
-    go [] [] = True
-    go _ _ = error "Algorithms.InsideOutsideWeights.checkMapsOn: Malformed maps."
+    go (x:xs) (y:ys) = c (f x) (f y) && go xs ys
+    go []     []     = True
+    go _      _
+      = error "Algorithms.InsideOutsideWeights.checkMapsOn: Malformed maps."
 
+
+-- | The property @convergedRatio epsilon x y@ holds, iff the ratio between
+-- @x@ and @y@ differs at most @epsilon@ from @1@.
+convergedRatio :: (Ord a, Num a) => a -> a -> a -> Bool
+convergedRatio epsilon x y
+  = let (mi, ma) = if x < y then (x, y) else (y, x)
+    in ma - mi <= ma * epsilon
+
+
+-- | @True@, iff both arguments are equal or both are @NaN@.
+convergedRealFloat :: (RealFloat a) => a -> a -> Bool
+convergedRealFloat x y = x == y || (isNaN x && isNaN y)
+
+{-
+convergedRealFloat x y
+  = let (mi, ma) = if x < y then (x, y) else (y, x)
+    in (uncurry encodeFloat $ mapFst (1 +) $ decodeFloat mi) >= ma
+
+
+convergedRealFloat
+  = convergedRatio (encodeFloat 1 (negate (floatDigits undefined) + 1))
+-}
+
+-- | The class contains types whose elements can converge against a fixpoint
+-- of a function.
+class Converging a where
+  -- | The property @converged x y@ holds, iff @x@ and @y@ are values of
+  -- consecutive steps in a fixpoint iteration and @x@ and @y@ are close
+  -- enough such that another iteration step would probably not improve
+  -- the result significantly.
+  converged :: a -> a -> Bool
+
+instance Converging Float where
+  converged = convergedRealFloat
+
+instance Converging Double where
+  converged = convergedRealFloat
+
+
+-- Miscellaneous--------------------------------------------------------------
 
 -- | Build a list of all possible splits @(xs, y, ys)@ of a list @zs@, such
 -- that @zs == xs ++ [y] ++ ys@. For example
@@ -166,14 +226,11 @@ splits3 []     = []
 splits3 [x]    = [([], x, [])]
 splits3 (x:xs) = ([], x, xs) : map (mapFst3 (x :)) (splits3 xs)
 
-fst3 (x, _, _) = x
-snd3 (_, y, _) = y
-trd3 (_, _, z) = z
 
 mapFst3 f (x, y, z) = (f x,   y,   z)
-mapSnd3 f (x, y, z) = (  x, f y,   z)
-mapTrd3 f (x, y, z) = (  x,   y, f z)
 
+
+-- Examples ------------------------------------------------------------------
 
 hg
   = hyperGraph
@@ -187,3 +244,23 @@ hg
       , hyperEdge 'E' "E"  'b' 1    -- E not reachable and not terminating
       ]
 
+hg2
+  = hyperGraph
+      [ hyperEdge 'S' "SDS" ' ' 0.6
+      , hyperEdge 'S' "SA"  ' ' 0.3
+      , hyperEdge 'S' "BA"  ' ' 0.1
+      , hyperEdge 'A' "ABC" ' ' 0.1
+      , hyperEdge 'A' "CBA" ' ' 0.599
+      , hyperEdge 'A' "S"   ' ' 0.3
+      , hyperEdge 'A' ""    ' ' 0.001
+      , hyperEdge 'B' "CBC" ' ' 0.99
+      , hyperEdge 'B' "CBC" ' ' 0.001
+      , hyperEdge 'B' "SAB" ' ' 0.002
+      , hyperEdge 'B' ""    ' ' 0.007
+      , hyperEdge 'C' "CCC" ' ' 0.6
+      , hyperEdge 'C' "ASA" ' ' 0.2
+      , hyperEdge 'C' "BAS" ' ' 0.199
+      , hyperEdge 'C' ""    ' ' 0.001
+      , hyperEdge 'D' "DA"  ' ' 0.999
+      , hyperEdge 'D' ""    ' ' 0.001
+      ]
