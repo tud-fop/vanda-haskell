@@ -1,10 +1,13 @@
+{-# LANGUAGE FlexibleContexts #-}  -- for 'Stream'
+
 -- Copyright (c) 2010, Toni Dietze
 
 module Parser.Negra where
 
-import Parser.ApplicativeParsec
+
 import Tools.Miscellaneous(mapFst, mapSnd)
 
+import           Control.Applicative
 import           Control.DeepSeq
 import qualified Data.Binary   as B
 import           Data.ByteString.Lazy (ByteString)
@@ -14,6 +17,7 @@ import qualified Data.List     as L
 import           Data.Ord      (comparing)
 import qualified Data.Tree     as T
 import           Data.Word     (Word8)
+import           Text.Parsec   hiding (many, (<|>))
 
 import Debug.Trace
 
@@ -53,6 +57,7 @@ data Edge = Edge
     deriving Show
 
 
+p_negra :: (Stream s m Char) => ParsecT s u m [Sentence]
 p_negra = {-fmap (safeEncode . LazyBinaryList) $-}
         p_ignoreLines
      *> (p_format >>= \format ->
@@ -62,6 +67,7 @@ p_negra = {-fmap (safeEncode . LazyBinaryList) $-}
     <*  eof
 
 
+p_format :: (Stream s m Char) => ParsecT s u m Int
 p_format =  -- TODO stub
         try (string "#FORMAT")
      *> negraSpaces1
@@ -71,6 +77,7 @@ p_format =  -- TODO stub
     <*  p_ignoreLines
 
 
+p_table :: (Stream s m Char) => ParsecT s u m String
 p_table =  -- TODO stub
         try (string "#BOT")
      *> manyTill anyChar (try (string "#EOT"))
@@ -78,6 +85,7 @@ p_table =  -- TODO stub
     <*  p_ignoreLines
 
 
+p_Sentence :: (Stream s m Char) => Bool -> ParsecT s u m Sentence
 p_Sentence lemma =
         {-fmap B.encode
      $-}  try (string "#BOS")
@@ -97,6 +105,7 @@ p_Sentence lemma =
     <*  p_ignoreLines
 
 
+p_SentenceData :: (Stream s m Char) => Bool -> ParsecT s u m SentenceData
 p_SentenceData lemma =
     (       SentenceNode <$> (char '#' *> p_Int)
         <|> SentenceWord <$> p_word
@@ -111,37 +120,63 @@ p_SentenceData lemma =
     <*  p_ignoreLines
 
 
+p_Edge :: (Stream s m Char) => ParsecT s u m Edge
 p_Edge = Edge <$> p_word <*> p_Int
 
 
+p_comment :: (Stream s m Char) => ParsecT s u m String
 p_comment = string "%%" *> negraSpaces *> many (noneOf "\n")
 
-p_emptyLine = negraSpaces *> negraNewline
 
-p_ignoreLines = many p_ignoreLine
+p_emptyLine :: (Stream s m Char) => ParsecT s u m ()
+p_emptyLine = negraSpaces *> negraNewline *> return ()
 
+
+p_ignoreLines :: (Stream s m Char) => ParsecT s u m ()
+p_ignoreLines = many p_ignoreLine *> return ()
+
+
+p_ignoreLine :: (Stream s m Char) => ParsecT s u m ()
 p_ignoreLine = try p_emptyLine *> return ()
            <|> try p_comment *> negraNewline *> return ()
 
+
+p_word :: (Stream s m Char) => ParsecT s u m String
 p_word = many1 negraNonSpace <* tokenCleanup
 
-p_Int :: GenParser Char st Int
+
+p_Int :: (Stream s m Char) => ParsecT s u m Int
 p_Int = fmap read (many1 digit) <* tokenCleanup
 
 
+p_date :: (Stream s m Char) => ParsecT s u m String
 p_date = many1 (oneOf "/0123456789") <* tokenCleanup
 
-tokenCleanup = negraSpaces1 *> return () <|> lookAhead newline *> return ()
 
+tokenCleanup :: (Stream s m Char) => ParsecT s u m ()
+tokenCleanup = negraSpaces1 <|> lookAhead newline *> return ()
+
+
+negraSpace :: (Stream s m Char) => ParsecT s u m Char
 negraSpace   = oneOf " \t"
+
+
+negraSpaces :: (Stream s m Char) => ParsecT s u m ()
 negraSpaces  = skipMany negraSpace
+
+
+negraSpaces1 :: (Stream s m Char) => ParsecT s u m ()
 negraSpaces1 = skipMany1 negraSpace
 
+
+negraNonSpace :: (Stream s m Char) => ParsecT s u m Char
 negraNonSpace = satisfy $ (<) 32 . ord
 
 -- negraNonSpace = satisfy $
 --     \c -> let o = ord c in o >= 33 && o <= 127 || o >= 160 && o <= 255
 
+
+negraNewline :: (Stream s m Char) => ParsecT s u m Char
 negraNewline = char '\n'
 
 -- loadHGraph file = parseFromFile p_WTA file

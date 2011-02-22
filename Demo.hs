@@ -9,9 +9,8 @@ import qualified StateSplit as SPG
 
 import TestData.TestWTA
 
-import Parser.ApplicativeParsec
-
 import qualified Data.Tree as T
+import           Text.Parsec.String (parseFromFile)
 
 -- -------------------------------------------------------------------
 -- WTA related

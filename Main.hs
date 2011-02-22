@@ -12,7 +12,6 @@ profiling:
 module Main where
 
 import RuleExtraction
-import Parser.ApplicativeParsec
 import Parser.Negra
 import Parser.Penn
 import Tools.PrettyPrint
@@ -23,6 +22,7 @@ import qualified Data.List as L
 import qualified Data.Map  as M
 import qualified Data.Set  as S
 import qualified Data.Tree as T
+import Text.Parsec.String (parseFromFile)
 
 
 -- main = testdata >>= \x -> print $ fmap (length {-. unLazyBinaryList . safeDecode-}) x
