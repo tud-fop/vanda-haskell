@@ -140,9 +140,9 @@ outsideStep m
 -- | Initialize the data structure used for computing the outside weights.
 initOutsideMap ::
   (Num w, Ord v)
-  => M.Map v w
+  => M.Map v w              -- ^ inside weights
   -> v                      -- ^ target node
-  -> Hypergraph v l w i     -- ^ inside weights
+  -> Hypergraph v l w i
   -> M.Map v (w, [(v, w)])
 initOutsideMap m target
   = M.insert target (1, [(target, 1)])
