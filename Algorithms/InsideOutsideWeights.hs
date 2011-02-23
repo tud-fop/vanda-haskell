@@ -1,4 +1,4 @@
--- | Computation of inside and outside weights for 'HyperGraph's.
+-- | Computation of inside and outside weights for 'Hypergraph's.
 --
 -- The weights are computed by a fixpoint approximation.
 -- Alternative approaches for future implementations could be Newton's method
@@ -14,7 +14,7 @@ module Algorithms.InsideOutsideWeights (
 ) where
 
 
-import Data.HyperGraph
+import Data.Hypergraph
 
 import qualified Data.List as L
 import qualified Data.Map  as M
@@ -23,11 +23,11 @@ import Data.Maybe (fromMaybe)
 -- import Debug.Trace
 
 
--- | Computes the inside and outside weights for a given 'HyperGraph'.
+-- | Computes the inside and outside weights for a given 'Hypergraph'.
 insideOutside
   :: (Ord v, Converging w, Num w)
   => v                 -- ^ target node
-  -> HyperGraph v l w
+  -> Hypergraph v l w i
   -> M.Map v (w, w)    -- ^ maps a vertex to its inside and outside weight
 insideOutside v g = insideOutside' converged v g
 
@@ -37,7 +37,7 @@ insideOutside v g = insideOutside' converged v g
 -- iteration must be given.
 insideOutside'
   :: (Ord v, Num w)
-  => (w -> w -> Bool) -> v -> HyperGraph v l w -> M.Map v (w, w)
+  => (w -> w -> Bool) -> v -> Hypergraph v l w i -> M.Map v (w, w)
 insideOutside' c target g
   = let mIn = inside' c g
     in M.unionWith
@@ -48,15 +48,17 @@ insideOutside' c target g
 
 -- Inside Weights ------------------------------------------------------------
 
--- | Computes the inside weights for a given 'HyperGraph'.
-inside :: (Ord v, Converging w, Num w) => HyperGraph v l w -> M.Map v w
+-- | Computes the inside weights for a given 'Hypergraph'.
+inside :: (Ord v, Converging w, Num w) => Hypergraph v l w i -> M.Map v w
 inside g = inside' converged g
 
 
 -- | The same as 'inside', but a property to check if the fixpoint
 -- iteration can be finished using two consecutive values in the fixpoint
 -- iteration must be given.
-inside' :: (Ord v, Num w) => (w -> w -> Bool) -> HyperGraph v l w -> M.Map v w
+inside'
+  :: (Ord v, Num w)
+  => (w -> w -> Bool) -> Hypergraph v l w i -> M.Map v w
 inside' c g
   = M.map fst $ go $ M.map ((,) 0) $ edgesM g
   where
@@ -71,12 +73,12 @@ inside' c g
 -- | Do one iteration step for the fixpoint computation of the inside weights.
 insideStep
   :: (Num w, Ord v)
-  => M.Map v (w, [HyperEdge v l w])
-  -> M.Map v (w, [HyperEdge v l w])
+  => M.Map v (w, [Hyperedge v l w i])
+  -> M.Map v (w, [Hyperedge v l w i])
 insideStep m = M.map (\ (_, es) -> (insideHead m es, es)) m
 
 
-insideHead :: (Num w, Ord v) => M.Map v (w, a) -> [HyperEdge v l w] -> w
+insideHead :: (Num w, Ord v) => M.Map v (w, a) -> [Hyperedge v l w i] -> w
 insideHead m es
   = let step s e = s + eWeight e * insideTail m (eTail e)
     in L.foldl' step 0 es
@@ -90,12 +92,12 @@ insideTail m vs
 
 -- Outside Weights -----------------------------------------------------------
 
--- | Computes the outside weights of a given 'HyperGraph'.
+-- | Computes the outside weights of a given 'Hypergraph'.
 outside
   :: (Ord v, Converging w, Num w)
   => M.Map v w         -- ^ inside weights
   -> v                 -- ^ target node
-  -> HyperGraph v l w
+  -> Hypergraph v l w i
   -> M.Map v w
 outside g = outside' converged g
 
@@ -105,7 +107,7 @@ outside g = outside' converged g
 -- iteration must be given.
 outside'
   :: (Ord v, Num w)
-  => (w -> w -> Bool) -> M.Map v w -> v -> HyperGraph v l w -> M.Map v w
+  => (w -> w -> Bool) -> M.Map v w -> v -> Hypergraph v l w i -> M.Map v w
 outside' c m target g
   = M.map fst $ go $ initOutsideMap m target g
   where
@@ -137,7 +139,7 @@ initOutsideMap ::
   (Num w, Ord v)
   => M.Map v w
   -> v                      -- ^ target node
-  -> HyperGraph v l w       -- ^ inside weights
+  -> Hypergraph v l w i     -- ^ inside weights
   -> M.Map v (w, [(v, w)])
 initOutsideMap m target
   = M.insert target (1, [(target, 1)])
@@ -233,34 +235,34 @@ mapFst3 f (x, y, z) = (f x,   y,   z)
 -- Examples ------------------------------------------------------------------
 
 hg
-  = hyperGraph
-      [ hyperEdge 'A' "AB" 's' 0.2
-      , hyperEdge 'A' "BA" 's' 0.3
-      , hyperEdge 'A' ""   'a' 0.5
-      , hyperEdge 'B' "AA" 's' 0.9
-      , hyperEdge 'B' ""   'b' 0.1
-      , hyperEdge 'C' "A"  'b' 1    -- C not reachable
-      , hyperEdge 'A' "D"  'b' 1    -- D not terminating
-      , hyperEdge 'E' "E"  'b' 1    -- E not reachable and not terminating
+  = hypergraph
+      [ hyperedge 'A' "AB" 's' 0.2 ()
+      , hyperedge 'A' "BA" 's' 0.3 ()
+      , hyperedge 'A' ""   'a' 0.5 ()
+      , hyperedge 'B' "AA" 's' 0.9 ()
+      , hyperedge 'B' ""   'b' 0.1 ()
+      , hyperedge 'C' "A"  'b' 1   () -- C not reachable
+      , hyperedge 'A' "D"  'b' 1   () -- D not terminating
+      , hyperedge 'E' "E"  'b' 1   () -- E not reachable and not terminating
       ]
 
 hg2
-  = hyperGraph
-      [ hyperEdge 'S' "SDS" ' ' 0.6
-      , hyperEdge 'S' "SA"  ' ' 0.3
-      , hyperEdge 'S' "BA"  ' ' 0.1
-      , hyperEdge 'A' "ABC" ' ' 0.1
-      , hyperEdge 'A' "CBA" ' ' 0.599
-      , hyperEdge 'A' "S"   ' ' 0.3
-      , hyperEdge 'A' ""    ' ' 0.001
-      , hyperEdge 'B' "CBC" ' ' 0.99
-      , hyperEdge 'B' "CBC" ' ' 0.001
-      , hyperEdge 'B' "SAB" ' ' 0.002
-      , hyperEdge 'B' ""    ' ' 0.007
-      , hyperEdge 'C' "CCC" ' ' 0.6
-      , hyperEdge 'C' "ASA" ' ' 0.2
-      , hyperEdge 'C' "BAS" ' ' 0.199
-      , hyperEdge 'C' ""    ' ' 0.001
-      , hyperEdge 'D' "DA"  ' ' 0.999
-      , hyperEdge 'D' ""    ' ' 0.001
+  = hypergraph
+      [ hyperedge 'S' "SDS" ' ' 0.6   ()
+      , hyperedge 'S' "SA"  ' ' 0.3   ()
+      , hyperedge 'S' "BA"  ' ' 0.1   ()
+      , hyperedge 'A' "ABC" ' ' 0.1   ()
+      , hyperedge 'A' "CBA" ' ' 0.599 ()
+      , hyperedge 'A' "S"   ' ' 0.3   ()
+      , hyperedge 'A' ""    ' ' 0.001 ()
+      , hyperedge 'B' "CBC" ' ' 0.99  ()
+      , hyperedge 'B' "CBC" ' ' 0.001 ()
+      , hyperedge 'B' "SAB" ' ' 0.002 ()
+      , hyperedge 'B' ""    ' ' 0.007 ()
+      , hyperedge 'C' "CCC" ' ' 0.6   ()
+      , hyperedge 'C' "ASA" ' ' 0.2   ()
+      , hyperedge 'C' "BAS" ' ' 0.199 ()
+      , hyperedge 'C' ""    ' ' 0.001 ()
+      , hyperedge 'D' "DA"  ' ' 0.999 ()
+      , hyperedge 'D' ""    ' ' 0.001 ()
       ]

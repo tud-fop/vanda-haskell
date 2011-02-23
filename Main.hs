@@ -12,13 +12,11 @@ profiling:
 module Main where
 
 import RuleExtraction
-import Parser.ApplicativeParsec
-import Parser.Negra
-import Parser.Penn
 import Tools.PrettyPrint
 
-import Control.DeepSeq
 import Data.Function(on)
+import Algorithms.InsideOutsideWeights
+import Algorithms.ExpectationMaximization
 import qualified Data.List as L
 import qualified Data.Map  as M
 import qualified Data.Set  as S
@@ -30,11 +28,12 @@ import qualified Data.Tree as T
 -- main = testdata >>= print
 
 main = do
-  Right x <- testdata
-  w 0
-  print x
-  w 1
-  print x
+	print "Yes, baby"
+  -- Right x <- testdata
+  -- w 0
+  -- print x
+  -- w 1
+  -- print x
 
 w n = print (wait (1000000 + n))
 
@@ -44,7 +43,7 @@ wait i = wait (i - 1)
 -- main = mainExtract
 
 
-testdata = parseFromFile p_negra "Parser/tiger_release_aug07_part_notable.export"
+--testdata = parseFromFile p_negra "Parser/tiger_release_aug07_part_notable.export"
 -- testdata = parseFromFile p_negra "Parser/tiger_release_aug07_part.export"
 -- testdata = parseFromFile p_negra "/var/local/share/gdp/nlp/resources/tigercorpus2.1/corpus/tiger_release_aug07.export"
 
