@@ -8,10 +8,11 @@ import Data.Hypergraph
 import qualified Data.Map as M
 
 -- | Canonical iter function.
-iter :: (a -> a) -- ^ function to be iterated
-     -> (a -> a -> Int -> Bool) -- ^ stopping condition
-     -> a        -- ^ initial value
-     -> a        -- ^ value after iteration
+iter
+  :: (a -> a) -- ^ function to be iterated
+  -> (a -> a -> Int -> Bool) -- ^ stopping condition
+  -> a        -- ^ initial value
+  -> a        -- ^ value after iteration
 iter = iter' 0 where
   iter' i f p a
     = let fa = f a
