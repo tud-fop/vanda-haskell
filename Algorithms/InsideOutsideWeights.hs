@@ -26,10 +26,12 @@ import Data.Maybe (fromMaybe)
 -- | Computes the inside and outside weights for a given 'Hypergraph'.
 insideOutside
   :: (Ord v, Converging w, Num w)
-  => v                 -- ^ target node
-  -> Hypergraph v l w i
-  -> M.Map v (w, w)    -- ^ maps a vertex to its inside and outside weight
-insideOutside v g = insideOutside' converged v g
+  => (Hyperedge v l w' i -> w)
+                -- ^ this function is used do get the weight of an 'Hyperedge'
+  -> v          -- ^ target node
+  -> Hypergraph v l w' i
+  -> M.Map v (w, w)        -- ^ maps a vertex to its inside and outside weight
+insideOutside w v g = insideOutside' converged w v g
 
 
 -- | The same as 'insideOutside', but a property to check if the fixpoint
@@ -37,20 +39,26 @@ insideOutside v g = insideOutside' converged v g
 -- iteration must be given.
 insideOutside'
   :: (Ord v, Num w)
-  => (w -> w -> Bool) -> v -> Hypergraph v l w i -> M.Map v (w, w)
-insideOutside' c target g
-  = let mIn = inside' c g
+  => (w -> w -> Bool)
+  -> (Hyperedge v l w' i -> w)
+  -> v
+  -> Hypergraph v l w' i
+  -> M.Map v (w, w)
+insideOutside' c w target g
+  = let mIn = inside' c w g
     in M.unionWith
       (\ (i, _) (_, o) -> (i, o))
       (M.map (\ i -> (i, 0)) mIn)
-      (M.map (\ o -> (0, o)) (outside' c mIn target g))
+      (M.map (\ o -> (0, o)) (outside' c w mIn target g))
 
 
 -- Inside Weights ------------------------------------------------------------
 
 -- | Computes the inside weights for a given 'Hypergraph'.
-inside :: (Ord v, Converging w, Num w) => Hypergraph v l w i -> M.Map v w
-inside g = inside' converged g
+inside
+  :: (Ord v, Converging w, Num w)
+  => (Hyperedge v l w' i -> w) -> Hypergraph v l w' i -> M.Map v w
+inside w g = inside' converged w g
 
 
 -- | The same as 'inside', but a property to check if the fixpoint
@@ -58,13 +66,16 @@ inside g = inside' converged g
 -- iteration must be given.
 inside'
   :: (Ord v, Num w)
-  => (w -> w -> Bool) -> Hypergraph v l w i -> M.Map v w
-inside' c g
+  => (w -> w -> Bool)
+  -> (Hyperedge v l w' i -> w)
+  -> Hypergraph v l w' i
+  -> M.Map v w
+inside' c w g
   = M.map fst $ go $ M.map ((,) 0) $ edgesM g
   where
     go m
       = {-trace "Ding!" $-}
-        let m' = insideStep m
+        let m' = insideStep w m
         in if checkMapsOn fst c m m'
         then m'
         else go m'
@@ -73,15 +84,18 @@ inside' c g
 -- | Do one iteration step for the fixpoint computation of the inside weights.
 insideStep
   :: (Num w, Ord v)
-  => M.Map v (w, [Hyperedge v l w i])
-  -> M.Map v (w, [Hyperedge v l w i])
-insideStep m = M.map (\ (_, es) -> (insideHead m es, es)) m
+  => (Hyperedge v l w' i -> w)
+  -> M.Map v (w, [Hyperedge v l w' i])
+  -> M.Map v (w, [Hyperedge v l w' i])
+insideStep w m = M.map (\ (_, es) -> (insideHead w m es, es)) m
 
 
-insideHead :: (Num w, Ord v) => M.Map v (w, a) -> [Hyperedge v l w i] -> w
-insideHead m es
-  = sum [ eWeight e * insideTail m (eTail e) | e <- es ]
-  -- = let step s e = s + eWeight e * insideTail m (eTail e)
+insideHead
+  :: (Num w, Ord v)
+  => (Hyperedge v l w' i -> w) -> M.Map v (w, a) -> [Hyperedge v l w' i] -> w
+insideHead w m es
+  = sum [ w e * insideTail m (eTail e) | e <- es ]
+  -- = let step s e = s + w e * insideTail m (eTail e)
   --   in L.foldl' step 0 es
 
 
@@ -97,11 +111,12 @@ insideTail m vs
 -- | Computes the outside weights of a given 'Hypergraph'.
 outside
   :: (Ord v, Converging w, Num w)
-  => M.Map v w         -- ^ inside weights
+  => (Hyperedge v l w' i -> w)
+  -> M.Map v w         -- ^ inside weights
   -> v                 -- ^ target node
-  -> Hypergraph v l w i
+  -> Hypergraph v l w' i
   -> M.Map v w
-outside g = outside' converged g
+outside w g = outside' converged w g
 
 
 -- | The same as 'outside', but a property to check if the fixpoint
@@ -109,9 +124,14 @@ outside g = outside' converged g
 -- iteration must be given.
 outside'
   :: (Ord v, Num w)
-  => (w -> w -> Bool) -> M.Map v w -> v -> Hypergraph v l w i -> M.Map v w
-outside' c m target g
-  = M.map fst $ go $ initOutsideMap m target g
+  => (w -> w -> Bool)
+  -> (Hyperedge v l w' i -> w)
+  -> M.Map v w
+  -> v
+  -> Hypergraph v l w' i
+  -> M.Map v w
+outside' c w m target g
+  = M.map fst $ go $ initOutsideMap w m target g
   where
     go m
       = {-trace "Dong!" $-}
@@ -140,11 +160,12 @@ outsideStep m
 -- | Initialize the data structure used for computing the outside weights.
 initOutsideMap ::
   (Num w, Ord v)
-  => M.Map v w              -- ^ inside weights
+  => (Hyperedge v l w' i -> w)
+  -> M.Map v w              -- ^ inside weights
   -> v                      -- ^ target node
-  -> Hypergraph v l w i
+  -> Hypergraph v l w' i
   -> M.Map v (w, [(v, w)])
-initOutsideMap m target
+initOutsideMap w m target
   = M.insert target (1, [(target, 1)])
   . M.map ((,) 0 . M.toList . M.map sum . M.fromListWith (++))
   . M.fromListWith (++)
@@ -152,7 +173,7 @@ initOutsideMap m target
       (\ e ->
         map
           (\ (xs, y, zs) ->
-            (y, [(eHead e, [eWeight e * insideList xs * insideList zs])])
+            (y, [(eHead e, [w e * insideList xs * insideList zs])])
           )
           (splits3 (eTail e))
       )
