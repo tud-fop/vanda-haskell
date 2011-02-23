@@ -80,14 +80,16 @@ insideStep m = M.map (\ (_, es) -> (insideHead m es, es)) m
 
 insideHead :: (Num w, Ord v) => M.Map v (w, a) -> [Hyperedge v l w i] -> w
 insideHead m es
-  = let step s e = s + eWeight e * insideTail m (eTail e)
-    in L.foldl' step 0 es
+  = sum [ eWeight e * insideTail m (eTail e) | e <- es ]
+  -- = let step s e = s + eWeight e * insideTail m (eTail e)
+  --   in L.foldl' step 0 es
 
 
 insideTail :: (Num w, Ord v) => M.Map v (w, a) -> [v] -> w
 insideTail m vs
-  = let step p v = p * maybe 0 fst (M.lookup v m)
-    in L.foldl' step 1 vs
+  = product [ maybe 0 fst (M.lookup v m) | v <- vs ]
+  -- = let step p v = p * maybe 0 fst (M.lookup v m)
+  --   in L.foldl' step 1 vs
 
 
 -- Outside Weights -----------------------------------------------------------
@@ -128,7 +130,8 @@ outsideStep
 outsideStep m
   = M.map
       (\ (_, xs) ->
-        ( L.foldl' (\ s (v, w) -> s + maybe 0 fst (M.lookup v m) * w) 0 xs
+        ( sum [ maybe 0 fst (M.lookup v m) * w | (v, w) <- xs ]
+          -- L.foldl' (\ s (v, w) -> s + maybe 0 fst (M.lookup v m) * w) 0 xs
         , xs)
       )
       m
