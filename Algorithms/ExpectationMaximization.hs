@@ -9,6 +9,7 @@ module Algorithms.ExpectationMaximization (
 import Algorithms.InsideOutsideWeights
 import Data.Hypergraph
 import Tools.Miscellaneous (mapSnd)
+import Data.Maybe (fromJust)
 
 import qualified Data.List as L
 import qualified Data.Map as M
@@ -126,7 +127,7 @@ forestEMstepList gs exId part (l1,theta)
     | (v0, g, w) <- gs -- for each forest
     , let inner = inside exweight g -- compute inside weights
     , let outer = outside exweight inner v0 g -- compute outside weights
-    , let innerv0 = maybe 0 id $ M.lookup v0 inner -- inner of target node
+    , let innerv0 = fromJust $ M.lookup v0 inner -- inner of target node
     , let factor = w/innerv0 -- example-specific factor for id significance
     ] where
-    exweight e = maybe 0 id $ M.lookup (exId e) theta
+    exweight e = M.findWithDefault 0 (exId e) theta
