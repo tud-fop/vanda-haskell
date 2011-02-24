@@ -1,6 +1,9 @@
 module Algorithms.ExpectationMaximization (
   forestEM,
-  forestEMstep
+  forestEMlist,
+  forestEMstep,
+  forestEMstepList,
+  normalize
 ) where
 
 import Algorithms.InsideOutsideWeights
@@ -24,7 +27,7 @@ iter = iter' 0 where
         then fa
         else iter' (i+1) f p fa
 
--- | Execute the forest EM algorithm, i.e., iterate the EM step.
+-- | Execute the forest-EM algorithm, i.e., iterate the EM step.
 forestEM
   :: (Converging w, Floating w, Ord i, Ord v)
   => [(v, Hypergraph v l w j, w)]
@@ -39,9 +42,23 @@ forestEM gs exId part p i
   = snd $ iter (forestEMstep gs exId part) p' (0,i) where
     p' (l1,m1) (l2,m2) it = p (abs (l2-l1)) it
 
--- | Normalizes a map according to a partition
--- i.e., do relative-frequency estimation on the corpora described by
--- the map and the partition
+-- | Compute the list of EM estimates for a given corpus.
+-- Use 'take' or '!!' to access a prefix or an element, respectively.
+forestEMlist
+  :: (Converging w, Floating w, Ord i, Ord v)
+  => [(v, Hypergraph v l w j, w)]
+                          -- ^ a list of training example derivation forests
+  -> (Hyperedge v l w j -> i)
+                          -- ^ function extracting the id from a 'Hyperedge'
+  -> [[i]]                -- ^ partition of the ids for normalization
+  -> M.Map i w            -- ^ initial weight vector
+  -> [(w, M.Map i w)]     -- ^ list of (log-likelihood, estimate) pairs
+forestEMlist gs exId part i
+  = (0,i) : map (forestEMstep gs exId part) (forestEMlist gs exId part i)
+
+-- | Normalize a map according to a partition. Very similar to
+-- relative-frequency estimation, only that the corpus is partitioned,
+-- that is, it actually represents a bunch of corpora.
 normalize
   :: (Floating w, Ord i)
   => [[i]]
@@ -64,36 +81,52 @@ forestEMstep
   -> (w, M.Map i w)       -- ^ ... and after the step
 forestEMstep gs exId part (l1,theta)
   = mapSnd (normalize part)
-  . foldl'Pair
+  . foldl'Special
       (+)
       (L.foldl' (\ m (k, v) -> M.insertWith' (+) k v m))
       (0, M.empty)
-  $ list
-    -- ( sum.fst.unzip $ list
-    -- , normalize part $ M.fromListWith (+) (concat.snd.unzip $ list)
+  $ forestEMstepList gs exId part (l1, theta) where
+    foldl'Special f g
+      = L.foldl'
+        (\ (x, y) (x', y', _, _) -> x `seq` y `seq` (f x x', g y y'))
+    -- ( sum . fst . unzip $ list
+    -- , normalize part $ M.fromListWith (+) (concat . snd . unzip $ list)
     -- )
-  where
-    list =
-      [
-        ( w*(log innerv0) -- contribution to log-likelihood
-        , [ -- a list of id/weight pairs for upcoming id-specific summation
-            ( exId e
-            , factor
-              * (maybe 0 id $ M.lookup (eHead e) outer)
-              * exweight e
-              * (product [ maybe 0 id $ M.lookup v inner | v <- eTail e ])
-            )
-          | e <- edges g -- for each hyperedge in the forest
-          ]
-        )
-      | (v0, g, w) <- gs -- for each forest
-      , let inner = inside exweight g -- compute inside weights
-      , let outer = outside exweight inner v0 g -- compute outside weights
-      , let innerv0 = maybe 0 id $ M.lookup v0 inner -- inner of target node
-      , let factor = w/innerv0 -- example-specific factor for id significance
-      ]
+
+-- | Compile a list of everything that is necessary to complete an EM step.
+-- Each entry corresponds to a training example (a forest), and it consists of
+-- the log-likelihood contribution of that forest, a list of id-weight pairs
+-- for later id-specific summation, and the inner and outer vectors for
+-- that forest (not strictly necessary for further processing, but nice for
+-- documentation).
+forestEMstepList
+  :: (Converging w, Floating w, Ord i, Ord v)
+  => [(v, Hypergraph v l w j, w)]
+                          -- ^ a list of training-example derivation forests
+  -> (Hyperedge v l w j -> i)
+                          -- ^ function extracting the id from a 'Hyperedge'
+  -> [[i]]                -- ^ partition of the ids for normalization
+  -> (w, M.Map i w)       -- ^ log-likelihood and weight vector prior to step
+  -> [(w, [(i, w)], M.Map v w, M.Map v w)] -- ^ (see general info)
+forestEMstepList gs exId part (l1,theta)
+  = [
+      ( w * log innerv0 -- contribution to log-likelihood
+      , [ -- a list of id/weight pairs for upcoming id-specific summation
+          ( exId e
+          , factor
+            * M.findWithDefault 0 (eHead e) outer
+            * exweight e
+            * (product [ M.findWithDefault 0 v inner | v <- eTail e ])
+          )
+        | e <- edges g -- for each hyperedge in the forest
+        ]
+      , inner -- for debug/documentation purposes (teaching)
+      , outer -- for debug/documentation purposes (teaching)
+      )
+    | (v0, g, w) <- gs -- for each forest
+    , let inner = inside exweight g -- compute inside weights
+    , let outer = outside exweight inner v0 g -- compute outside weights
+    , let innerv0 = maybe 0 id $ M.lookup v0 inner -- inner of target node
+    , let factor = w/innerv0 -- example-specific factor for id significance
+    ] where
     exweight e = maybe 0 id $ M.lookup (exId e) theta
-
-
-foldl'Pair f g
-  = L.foldl' (\ (x, y) (x', y') -> x `seq` y `seq` (f x x', g y y'))
