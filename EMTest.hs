@@ -47,9 +47,9 @@ doEM
   -> [(Double, M.Map i Double)]
 doEM g@(l1,l2) n0 es
   = take 10 $ forestEMlist
+    part
     [((0,n0,length e), makeHyper (cyk g e), 1) | e <- es]
     eId
-    part
     -- (\dl it -> it > 10)
     (normalize part init) where
       init = M.fromList [(_id, 1.0) | _id <- concat part ]

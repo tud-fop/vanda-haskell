@@ -31,31 +31,31 @@ iter = iter' 0 where
 -- | Execute the forest-EM algorithm, i.e., iterate the EM step.
 forestEM
   :: (Converging w, Floating w, Ord i, Ord v)
-  => [(v, Hypergraph v l w j, w)]
+  => [[i]]                -- ^ partition of the ids for normalization
+  -> [(v, Hypergraph v l w j, w)]
                           -- ^ a list of training example derivation forests
   -> (Hyperedge v l w j -> i)
                           -- ^ function extracting the id from a 'Hyperedge'
-  -> [[i]]                -- ^ partition of the ids for normalization
   -> (w -> Int -> Bool)   -- ^ stopping cond. (delta-likelihood, no. of iter.)
   -> M.Map i w            -- ^ initial weight vector
   -> M.Map i w
-forestEM gs exId part p i
-  = snd $ iter (forestEMstep gs exId part) p' (0,i) where
+forestEM part gs exId p i
+  = snd $ iter (forestEMstep part gs exId) p' (0,i) where
     p' (l1,m1) (l2,m2) it = p (abs (l2-l1)) it
 
 -- | Compute the list of EM estimates for a given corpus.
 -- Use 'take' or '!!' to access a prefix or an element, respectively.
 forestEMlist
   :: (Converging w, Floating w, Ord i, Ord v)
-  => [(v, Hypergraph v l w j, w)]
+  => [[i]]                -- ^ partition of the ids for normalization
+  -> [(v, Hypergraph v l w j, w)]
                           -- ^ a list of training example derivation forests
   -> (Hyperedge v l w j -> i)
                           -- ^ function extracting the id from a 'Hyperedge'
-  -> [[i]]                -- ^ partition of the ids for normalization
   -> M.Map i w            -- ^ initial weight vector
   -> [(w, M.Map i w)]     -- ^ list of (log-likelihood, estimate) pairs
-forestEMlist gs exId part i
-  = (0,i) : map (forestEMstep gs exId part) (forestEMlist gs exId part i)
+forestEMlist part gs exId i
+  = (0,i) : map (forestEMstep part gs exId) (forestEMlist part gs exId i)
 
 -- | Normalize a map according to a partition. Very similar to
 -- relative-frequency estimation, only that the corpus is partitioned,
@@ -73,20 +73,20 @@ normalize part m = M.fromList (concatMap handleClass part) where
 -- stopping condition.
 forestEMstep
   :: (Converging w, Floating w, Ord i, Ord v)
-  => [(v, Hypergraph v l w j, w)]
+  => [[i]]                -- ^ partition of the ids for normalization
+  -> [(v, Hypergraph v l w j, w)]
                           -- ^ a list of training-example derivation forests
   -> (Hyperedge v l w j -> i)
                           -- ^ function extracting the id from a 'Hyperedge'
-  -> [[i]]                -- ^ partition of the ids for normalization
   -> (w, M.Map i w)       -- ^ log-likelihood and weight vector before...
   -> (w, M.Map i w)       -- ^ ... and after the step
-forestEMstep gs exId part (l1,theta)
+forestEMstep part gs exId theta
   = mapSnd (normalize part)
   . foldl'Special
       (+)
       (L.foldl' (\ m (k, v) -> M.insertWith' (+) k v m))
       (0, M.empty)
-  $ forestEMstepList gs exId part (l1, theta) where
+  $ forestEMstepList gs exId theta where
     foldl'Special f g
       = L.foldl'
         (\ (x, y) (x', y', _, _) -> x `seq` y `seq` (f x x', g y y'))
@@ -106,10 +106,9 @@ forestEMstepList
                           -- ^ a list of training-example derivation forests
   -> (Hyperedge v l w j -> i)
                           -- ^ function extracting the id from a 'Hyperedge'
-  -> [[i]]                -- ^ partition of the ids for normalization
   -> (w, M.Map i w)       -- ^ log-likelihood and weight vector prior to step
   -> [(w, [(i, w)], M.Map v w, M.Map v w)] -- ^ (see general info)
-forestEMstepList gs exId part (l1,theta)
+forestEMstepList gs exId (l1,theta)
   = [
       ( w * log innerv0 -- contribution to log-likelihood
       , [ -- a list of id/weight pairs for upcoming id-specific summation
