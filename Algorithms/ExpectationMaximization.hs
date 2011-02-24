@@ -5,6 +5,9 @@ module Algorithms.ExpectationMaximization (
 
 import Algorithms.InsideOutsideWeights
 import Data.Hypergraph
+import Tools.Miscellaneous (mapSnd)
+
+import qualified Data.List as L
 import qualified Data.Map as M
 
 -- | Canonical iter function.
@@ -60,9 +63,16 @@ forestEMstep
   -> (w, M.Map i w)       -- ^ log-likelihood and weight vector before...
   -> (w, M.Map i w)       -- ^ ... and after the step
 forestEMstep gs exId part (l1,theta)
-  = ( sum.fst.unzip $ list
-    , normalize part $ M.fromListWith (+) (concat.snd.unzip $ list)
-    ) where
+  = mapSnd (normalize part)
+  . foldl'Pair
+      (+)
+      (L.foldl' (\ m (k, v) -> M.insertWith' (+) k v m))
+      (0, M.empty)
+  $ list
+    -- ( sum.fst.unzip $ list
+    -- , normalize part $ M.fromListWith (+) (concat.snd.unzip $ list)
+    -- )
+  where
     list =
       [
         ( w*(log innerv0) -- contribution to log-likelihood
@@ -83,3 +93,7 @@ forestEMstep gs exId part (l1,theta)
       , let factor = w/innerv0 -- example-specific factor for id significance
       ]
     exweight e = maybe 0 id $ M.lookup (exId e) theta
+
+
+foldl'Pair f g
+  = L.foldl' (\ (x, y) (x', y') -> x `seq` y `seq` (f x x', g y y'))
