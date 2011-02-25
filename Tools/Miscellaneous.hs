@@ -18,13 +18,15 @@ import qualified Random as R
 
 -- -----------------------------------------------------------------------------
 -- | Apply a function to the first component of a pair.
+{-# INLINE mapFst #-}
 mapFst :: (a -> c) -> (a, b) -> (c, b)
-mapFst f (x, y) = (f x, y)
+mapFst f = \ (x, y) -> (f x, y)
 
 
 -- | Apply a function to the second component of a pair.
+{-# INLINE mapSnd #-}
 mapSnd :: (b -> c) -> (a, b) -> (a, c)
-mapSnd f (x, y) = (x, f y)
+mapSnd f = \ (x, y) -> (x, f y)
 
 -- -----------------------------------------------------------------------------
 -- | @mapRandomR r f xs g == (ys, g')@, where @ys@ is the list obtained by
