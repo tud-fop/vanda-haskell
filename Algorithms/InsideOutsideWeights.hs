@@ -158,6 +158,15 @@ outsideStep m
 
 
 -- | Initialize the data structure used for computing the outside weights.
+--
+-- > outer(A)
+-- >   = sum_{B, v, w} outer(B) *            p(B -> vAw) * innerList(v ++ w)
+-- >   = sum_{B}       outer(B) * sum_{v, w} p(B -> vAw) * innerList(v ++ w)
+-- >                 -- constant: ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+-- >   where
+-- >     innerList w = prod_{1 <= i <= |w|} inner(w_i)
+--
+-- The constant part is precomuted for every combination of @A@ and @B@.
 initOutsideMap ::
   (Num w, Ord v)
   => (Hyperedge v l w' i -> w)
