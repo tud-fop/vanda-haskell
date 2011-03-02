@@ -17,6 +17,10 @@ module Data.Hypergraph (
 , edgesM
 , vertices
 , verticesS
+-- * Map
+, eMapVertices
+, mapVertices
+, mapVerticesMonotonic
 -- * Pretty Printing
 , drawHypergraph
 , drawHyperedge
@@ -73,6 +77,38 @@ vertices = S.toList . verticesS
 -- | Get a list of all 'Hyperedge's of a 'Hypergraph'.
 edges :: Hypergraph v l w i -> [Hyperedge v l w i]
 edges = concat . M.elems . edgesM
+
+
+-- | Apply a function to an edge's head and tail vertices.
+eMapVertices :: (v -> v') -> Hyperedge v l w i -> Hyperedge v' l w i
+eMapVertices f e = e{eHead = f (eHead e), eTail = map f (eTail e)}
+
+
+-- | Apply a function to all vertices in a 'Hypergraph'.
+mapVertices
+  :: (Ord v') => (v -> v') -> Hypergraph v l w i -> Hypergraph v' l w i
+mapVertices f
+  = hypergraph
+  . map (eMapVertices f)
+  . edges
+
+
+-- | Apply a function @f@ to all vertices in a 'Hypergraph'.
+-- The function must preserve Ordering with respect to 'compare', i.e.
+-- @compare x y == compare (f x) (f y)@.
+-- /The precondition is not checked./
+-- Note that this precondition is a bit stricter than the precondition of
+-- 'S.mapMonotonic' for 'S.Set's.
+mapVerticesMonotonic
+  :: (Ord v') => (v -> v') -> Hypergraph v l w i -> Hypergraph v' l w i
+mapVerticesMonotonic f (Hypergraph vs es)
+  = Hypergraph
+      (S.mapMonotonic f vs)
+      ( M.fromAscList
+      . map (\ (k, v) -> (f k, map (eMapVertices f) v))
+      . M.toAscList
+      $ es
+      )
 
 
 -- | Pretty print a 'Hyperedge'.
