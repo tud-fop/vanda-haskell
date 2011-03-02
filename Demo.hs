@@ -97,7 +97,7 @@ demo3_1
 
 -- -------------------------------------------------------------------
 -- State Split Grammars
-
+{-
 demoWTA2 = WTA.create
         [ WTA.Transition 'l' 'f' ""   1
         , WTA.Transition 'l' 'q' ""   1
@@ -131,3 +131,4 @@ demo4_3
   where
     m ('q', 1) = ('q', 0)
     m x        = x
+-}

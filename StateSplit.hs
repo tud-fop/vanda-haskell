@@ -17,101 +17,78 @@ module StateSplit where
 -- import EM -- TODO
 import Tools.Miscellaneous(mapFst, mapSnd, sumWith)
 
-import qualified Data.WTA as WTA
+import Data.Hypergraph
 
 import qualified Data.List as L
 import qualified Data.Map as M
+import qualified Data.Set as S
 
 
--- | Makes the states of a 'WTA.WTA' splitable without changing the semantics
--- of the 'WTA.WTA'.
+-- | Make a single vertex splitable.
+initializeVertex :: (Num n) => v -> (v, n)
+initializeVertex v = (v, 0)
+
+
+-- | Makes the vertices of a 'Hypergraph' splitable without changing the
+-- semantics of the 'Hypergraph'.
 initialize
-  :: (Num n, Ord q, Ord n)
-  => WTA.WTA  q     t w
-  -> WTA.WTA (q, n) t w
-initialize wta = WTA.mapStates (flip (,) 0) wta
+  :: (Num n, Ord n, Ord v)
+  => Hypergraph  v     l w i
+  -> Hypergraph (v, n) l w i
+initialize g = mapVerticesMonotonic initializeVertex g
 
 
 -- | Do a state-splitting step.
 split
-  :: (Fractional w, Ord q, Ord n, Num n)
-  => n  -- ^ Must be larger than 'maxSplit' of the input 'WTA.WTA'.
-  -> WTA.WTA (q, n) t w
-  -> WTA.WTA (q, n) t w
-split offset wta
-  = WTA.create
-      (splitTranss (WTA.transitions wta))
-      (splitFinals (WTA.finalWeights wta))
-    where
-      splitters = [id, mapSnd (offset +)]
-      -- splitters = [(*) 2, (+) 1 . (*) 2]
-      factor    = 1 / fromIntegral (length splitters)
-      splitTranss ts
-        = [ t{WTA.transState = q', WTA.transStates = qs', WTA.transWeight = w'}
-          | t   <- ts
-          , let q    = WTA.transState  t
-          , let qs   = WTA.transStates t
-          , let l    = length qs
-          , let qs's = map (flip (zipWith id) qs) (variation l splitters)
-          , let q's  = map ($ q) splitters
-          , let w'   = (factor ^ l) * WTA.transWeight t
-          , q'  <- q's
-          , qs' <- qs's
-          ]
-      splitFinals fs
-        = [ (q', w')
-          | (q, w) <- fs
-          , let w'  = factor * w
-          , q'     <- map ($ q) splitters
-          ]
+  :: (Fractional w, Num n, Ord v, Ord n)
+  => n
+  -> ((v, n) -> Bool)
+  -> Hypergraph (v, n) l w i
+  -> Hypergraph (v, n) l w i
+split offset dontSplit g
+  = hypergraph
+      [ hyperedge hd tl (eLabel e) w (eId e)
+      | e <- edges g
+      , let tls = combinations . map split $ eTail e
+      , let w   = eWeight e / fromIntegral (length tls)
+      , hd <- split (eHead e)
+      , tl <- tls
+      ]
+  where
+    split v@(x, n) | dontSplit v = [v]
+                   | otherwise   = [v, (x, n + offset)]
 
 
 -- | Do a state-merging step.
 merge
-  :: (Fractional w, Eq q, Ord t, Ord k)
-  => (q -> k)       -- ^ Maps a state to its representation after merging.
-  -> WTA.WTA q t w
-  -> WTA.WTA k t w
-merge mergeState wta
-  = WTA.create
-      (   map (\((t, q, qs), ts') ->
-              WTA.Transition t q qs
-            $ sumWith WTA.transWeight ts'
-              / (fromIntegral . length . L.nub . map WTA.transState $ ts')
-          )
-        . M.toList
-        . partition
-            (\t ->
-              ( WTA.transTerminal t
-              , mergeState (WTA.transState t)
-              , map mergeState (WTA.transStates t)
-            ) )
-        $ WTA.transitions  wta
+  :: (Fractional w, Ord v, Ord k, Ord l, Ord i)
+  => (v -> k)
+  -> Data.Hypergraph.Hypergraph v l w i
+  -> Data.Hypergraph.Hypergraph k l w i
+merge mergeState
+  = hypergraph
+  . map
+      (\ ((hd, tl, l, i), es) ->
+        let w = sumWith eWeight es
+                / (fromIntegral . S.size . S.fromList . map eHead $ es)
+        in hyperedge hd tl l w i
       )
-      (   map (mapSnd $ sumWith snd)
-        . M.toList
-        . partition (mergeState . fst)
-        $ WTA.finalWeights wta
+  . M.toList
+  . partition
+      (\ e ->
+        ( mergeState (eHead e)
+        , map mergeState (eTail e)
+        , eLabel e
+        , eId e
+        )
       )
+  . edges
 
 
-maxSplit :: (Ord n) => WTA.WTA (q, n) t w -> n
-maxSplit = maximum . map snd . WTA.states
+maxSplit :: (Ord n) => Hypergraph (v, n) l w i -> n
+maxSplit = maximum . map snd . vertices
 
--- -----------------------------------------------------------------------------
-
-{-
-merge offset qmerge wta
-  = foldr f (WTA.transitions wta)
-  
-  tmerge t =  ( WTA.transTerminal t
-              , qmerge $ WTA.transState t
-              , map qmerge $ WTA.transStates t
-              )
--}
-
---mapState
-
+-- ---------------------------------------------------------------------------
 
 -- | Partition a list with respect to a function; e.g.
 --
@@ -121,16 +98,7 @@ partition :: (Ord k) => (a -> k) -> [a] -> M.Map k [a]
 partition f = foldr step M.empty
     where step x = M.insertWith (++) (f x) [x]
 
-{-
-mergeList :: (Fractional b) => (a -> b) -> (a -> b) -> [a] -> b
-mergeList toWeight _       [x] = toWeight x
-mergeList _        _       []  = 0
-mergeList toWeight toCount xs
-  = let counts = map toCount xs
-    in sum (zipWith (*) counts (map toWeight xs)) / sum counts
--}
-
--- -----------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
 
 -- | Create a list of lists of all possible combinations of the given elements
 -- of the given length respectively.
@@ -144,44 +112,41 @@ variation
 variation 0 _  = [[]]
 variation k xs = concatMap (\ys -> map (:ys) xs) (variation (k-1) xs)
 
--- -----------------------------------------------------------------------------
 
-testWTA =
-  WTA.create
-    [ WTA.Transition 'a' 'b' "b"   0.1
-    , WTA.Transition 'a' 'b' "bb"  0.2
-    , WTA.Transition 'a' 'b' "bc"  0.3
-    , WTA.Transition 'a' 'b' "bd"  0.4
-    , WTA.Transition 'd' 'e' "fg"  1
-    , WTA.Transition 'h' 'i' "jkl" 1
-    ]
-    [ ('b', 0.25)
-    , ('e', 0.75)
+-- | Build a list of all possible combinations of sublist elements by taking
+-- an element of each sublist, respectively; e.g.
+-- @combinations [[-1, -2], [1, 2]] == [[-1, 1], [-2, 1], [-1, 2], [-2, 2]]@.
+combinations :: [[a]] -> [[a]]
+combinations []
+  = [[]]
+combinations (x : xs)
+  = [ y : ys
+    | ys <- combinations xs
+    , y  <- x
     ]
 
+-- ---------------------------------------------------------------------------
 
--- | Checks, if a given 'WTA.WTA' is equivalent to the 'WTA.WTA' after
+-- | Checks, if a given 'Hypergraph' is equivalent to the 'Hypergraph' after
 -- splitting and a merging everything back.
 --
 -- The function takes numerical imprecisions into account.
 prop_splitMerge
-  :: (Fractional w, Ord q, Integral n, Ord t, Ord w)
-  => WTA.WTA (q, n) t w
-  -> Bool
-prop_splitMerge wta
-  = let offset = 1 + maxSplit wta
+  :: (Ord v, Integral n, Ord l, Ord i, Fractional w, Ord w)
+  => Hypergraph (v, n) l w i -> Bool
+prop_splitMerge g
+  = let offset = 1 + maxSplit g
         mergeState (q, n) = (q, n `mod` offset)
-        wta' = merge mergeState . split offset $ wta
-    in eqListWith eqTrans (WTA.transitions wta) (WTA.transitions  wta')
-    && eqListWith eqFin   (WTA.finalWeights wta) (WTA.finalWeights wta')
+        g' = merge mergeState . split offset (const False) $ g
+    in eqListWith eqEdge (edges g) (edges g')
     where
       x ~~ y = abs (x - y) < 0.0000001
-      eqTrans t1 t2
-        =  t1{WTA.transWeight = 0} == t2{WTA.transWeight = 0}
-        && WTA.transWeight t1 ~~ WTA.transWeight t2
-      eqFin f1 f2
-        =  fst f1 == fst f2
-        && snd f1 ~~ snd f2
-      eqListWith f (x:xs) (y:ys) = f x y && eqListWith f xs ys
-      eqListWith _ []     []     = True
-      eqListWith _ _      _      = False
+      eqEdge e1 e2
+        =  eHead  e1 == eHead  e2
+        && eTail  e1 == eTail  e2
+        && eLabel e1 == eLabel e2
+        && eId    e1 == eId    e2
+        && eWeight e1 ~~ eWeight e2
+      eqListWith f xs ys
+        =  and (map (\ x -> any (f x) ys) xs)
+        && and (map (\ y -> any (f y) xs) ys)
