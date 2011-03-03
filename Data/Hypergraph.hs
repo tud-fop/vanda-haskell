@@ -21,17 +21,21 @@ module Data.Hypergraph (
 , eMapVertices
 , mapVertices
 , mapVerticesMonotonic
+, eMapWeight
+, mapWeights
 -- * Weight Manipulation
 , properize
+, randomizeWeights
 -- * Pretty Printing
 , drawHypergraph
 , drawHyperedge
 ) where
 
 
-import Tools.Miscellaneous (sumWith)
+import Tools.Miscellaneous (sumWith, mapRandomR)
 
 import qualified Data.Map as M
+import qualified Random as R
 import qualified Data.Set as S
 
 
@@ -83,7 +87,7 @@ edges :: Hypergraph v l w i -> [Hyperedge v l w i]
 edges = concat . M.elems . edgesM
 
 
--- | Apply a function to an edge's head and tail vertices.
+-- | Apply a function to an 'Hyperedge''s head and tail vertices.
 eMapVertices :: (v -> v') -> Hyperedge v l w i -> Hyperedge v' l w i
 eMapVertices f e = e{eHead = f (eHead e), eTail = map f (eTail e)}
 
@@ -115,14 +119,51 @@ mapVerticesMonotonic f (Hypergraph vs es)
       )
 
 
--- | Make a Hypergraph proper, i.e. the sum of the weights of edges with the
--- same head vertex is one.
+-- | Apply a function to the weight of a 'Hyperedge'.
+eMapWeight :: (w -> w') -> Hyperedge v l w i -> Hyperedge v l w' i
+eMapWeight f e = e{eWeight = f (eWeight e)}
+
+
+-- | Apply a funciton to the weights of all 'Hyperedge's.
+mapWeights :: (w -> w') -> Hypergraph v l w i -> Hypergraph v l w' i
+mapWeights f g = g{edgesM = M.map (map (eMapWeight f)) (edgesM g)}
+
+
+-- | Make a 'Hypergraph' proper, i.e. the sum of the weights of 'Hyperedge's
+-- with the same head vertex is one.
 properize :: (Fractional w) => Hypergraph v l w i -> Hypergraph v l w i
 properize g
   = let normalize es
           = let s = sumWith eWeight es
             in map (\ e -> e{eWeight = eWeight e / s}) es
     in g{edgesM = M.map normalize (edgesM g)}
+
+
+-- | @randomizeWeights r g gen@ multiplies every weight of 'Hypergraph' by a
+-- random number in the range @(1-r, 1+r)@.
+randomizeWeights
+  :: (Num w, R.Random w, R.RandomGen gen)
+  => w -> Hypergraph v l w i -> gen -> (Hypergraph v l w i, gen)
+randomizeWeights r g gen = mapWeightsRandomR (1-r, 1+r) (*) g gen
+
+
+-- | 'mapRandomR' for the weights of the edges in a 'Hypergraph'.
+mapWeightsRandomR
+  :: (R.Random r, R.RandomGen gen)
+  => (r, r)
+  -> (w -> r -> w')
+  -> Hypergraph v l w i
+  -> gen
+  -> (Hypergraph v l w' i, gen)
+mapWeightsRandomR range f g gen
+  = let (gen', eM) = M.mapAccum h gen (edgesM g)
+    in (g{edgesM = eM}, gen')
+  where
+    h = flipSwap
+      $ mapRandomR
+          range
+          (\e r -> e{eWeight = f (eWeight e) r})
+    flipSwap f x y = let (y', x') = f y x in (x', y')
 
 
 -- | Pretty print a 'Hyperedge'.
