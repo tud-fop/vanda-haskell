@@ -21,11 +21,15 @@ module Data.Hypergraph (
 , eMapVertices
 , mapVertices
 , mapVerticesMonotonic
+-- * Weight Manipulation
+, properize
 -- * Pretty Printing
 , drawHypergraph
 , drawHyperedge
 ) where
 
+
+import Tools.Miscellaneous (sumWith)
 
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -109,6 +113,16 @@ mapVerticesMonotonic f (Hypergraph vs es)
       . M.toAscList
       $ es
       )
+
+
+-- | Make a Hypergraph proper, i.e. the sum of the weights of edges with the
+-- same head vertex is one.
+properize :: (Fractional w) => Hypergraph v l w i -> Hypergraph v l w i
+properize g
+  = let normalize es
+          = let s = sumWith eWeight es
+            in map (\ e -> e{eWeight = eWeight e / s}) es
+    in g{edgesM = M.map normalize (edgesM g)}
 
 
 -- | Pretty print a 'Hyperedge'.
