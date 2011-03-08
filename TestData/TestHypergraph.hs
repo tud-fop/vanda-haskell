@@ -42,4 +42,11 @@ testHypergraphs
         , hyperedge 'D' "DA"  ' ' 0.999 ()
         , hyperedge 'D' ""    ' ' 0.001 ()
         ]
+    , hypergraph
+        [ hyperedge 'q' ""   'a' 0.2 ()
+        , hyperedge 'r' ""   'b' 0.3 ()
+        , hyperedge 's' ""   'a' 0.5 ()
+        , hyperedge 'r' "qr" 's' 0.9 ()
+        , hyperedge 'r' "sr" 's' 0.1 ()
+        ]
     ]

@@ -18,6 +18,9 @@ module Data.Hypergraph (
 , vertices
 , verticesS
 -- * Map
+, eMapHead
+, eMapTail
+, eMapHeadTail
 , eMapVertices
 , mapVertices
 , mapVerticesMonotonic
@@ -26,6 +29,8 @@ module Data.Hypergraph (
 -- * Weight Manipulation
 , properize
 , randomizeWeights
+-- * Parsing
+, parseTree
 -- * Pretty Printing
 , drawHypergraph
 , drawHyperedge
@@ -34,10 +39,14 @@ module Data.Hypergraph (
 
 import Tools.Miscellaneous (sumWith, mapRandomR)
 
+import qualified Data.List as L
 import qualified Data.Map as M
-import qualified Random as R
+import Data.Maybe
 import qualified Data.Set as S
+import qualified Data.Tree as T
+import qualified Random as R
 
+-- ---------------------------------------------------------------------------
 
 data Hyperedge v l w i = Hyperedge
   { eHead   :: v
@@ -56,6 +65,7 @@ data Hypergraph v l w i = Hypergraph
     edgesM    :: M.Map v [Hyperedge v l w i]
   }
 
+-- ---------------------------------------------------------------------------
 
 -- | Create a 'Hypergraph' from a list of 'Hyperedge's.
 hypergraph :: (Ord v) => [Hyperedge v l w i] -> Hypergraph v l w i
@@ -75,6 +85,7 @@ hyperedge
   -> Hyperedge v l w i
 hyperedge = Hyperedge
 
+-- ---------------------------------------------------------------------------
 
 -- | Get a list of all vertices of a 'Hypergraph'. The list contains only one
 -- instance of equal vertices, respectively.
@@ -86,11 +97,37 @@ vertices = S.toList . verticesS
 edges :: Hypergraph v l w i -> [Hyperedge v l w i]
 edges = concat . M.elems . edgesM
 
+-- ---------------------------------------------------------------------------
 
--- | Apply a function to an 'Hyperedge''s head and tail vertices.
+-- | Apply a function to a 'Hyperedge''s head.
+eMapHead :: (v -> v) -> Hyperedge v l w i -> Hyperedge v l w i
+eMapHead f = \ e -> e{eHead = f (eHead e)}
+
+
+-- | Apply a function to a 'Hyperedge''s tail.
+eMapTail :: ([v] -> [v]) -> Hyperedge v l w i -> Hyperedge v l w i
+eMapTail f = \ e -> e{eTail = f (eTail e)}
+
+
+-- | Apply two functions to a 'Hyperedge''s head and tail, respectively.
+eMapHeadTail
+  :: ( v  ->  v' )
+  -> ([v] -> [v'])
+  -> Hyperedge v  l w i
+  -> Hyperedge v' l w i
+eMapHeadTail f g = \ e -> e{eHead = f (eHead e), eTail = g (eTail e)}
+
+
+-- | Apply a function to a 'Hyperedge''s head and tail vertices.
 eMapVertices :: (v -> v') -> Hyperedge v l w i -> Hyperedge v' l w i
 eMapVertices f e = e{eHead = f (eHead e), eTail = map f (eTail e)}
 
+{-
+eMapAccumLVertices f acc
+  = \ e ->
+    let (acc', hd : tl) = L.mapAccumL f acc (eHead e : eTail e)
+    in (acc', e{eHead = hd, eTail = tl})
+-}
 
 -- | Apply a function to all vertices in a 'Hypergraph'.
 mapVertices
@@ -128,6 +165,7 @@ eMapWeight f e = e{eWeight = f (eWeight e)}
 mapWeights :: (w -> w') -> Hypergraph v l w i -> Hypergraph v l w' i
 mapWeights f g = g{edgesM = M.map (map (eMapWeight f)) (edgesM g)}
 
+-- ---------------------------------------------------------------------------
 
 -- | Make a 'Hypergraph' proper, i.e. the sum of the weights of 'Hyperedge's
 -- with the same head vertex is one.
@@ -165,6 +203,81 @@ mapWeightsRandomR range f g gen
           (\e r -> e{eWeight = f (eWeight e) r})
     flipSwap f x y = let (y', x') = f y x in (x', y')
 
+-- ---------------------------------------------------------------------------
+
+-- | Creates a 'Hypergraph' which represents the given 'T.Tree' based on the
+-- given 'Hypergraph'. The resulting 'Hypergraph' is empty, iff no execution
+-- of the given 'Hypergraph' represents the given 'T.Tree'.
+parseTree
+  :: (Ord v, Eq l)
+  => v -> T.Tree l -> Hypergraph v l w i -> Hypergraph (v, [Int]) l w i
+parseTree target t g
+  = let eM = parseTree' [] target look t
+    in Hypergraph
+        ( S.fromList
+          . concatMap (\ e ->  eHead e : eTail e)
+          . concat
+          . M.elems
+          $ eM
+        )
+        eM
+  where
+    look v l n
+      = maybe [] (filter $ \ e -> eLabel e == l && length (eTail e) == n)
+      . M.lookup v
+      $ edgesM g
+
+
+-- This implementation is terrible. If anyone has a better idea, feel free to
+-- improve it.
+-- Things to keep in mind (things which make the implementation ugly):
+--    * calculate stuff for subtrees only once
+--    * output edges only once
+--    * don't calculate unused stuff (be lazy)
+parseTree'
+  :: (Ord v)
+  => [Int]
+  -> v
+  -> (v -> l -> Int -> [Hyperedge v l w i])
+  -> T.Tree l
+  -> M.Map (v, [Int]) [Hyperedge (v, [Int]) l w i]
+parseTree' pos target look (T.Node l [])
+  = let target' = (target, pos)
+    in case look target l 0 of
+      [] -> M.empty
+      xs -> M.singleton target'
+            $ map (eMapHeadTail (const target') (const [])) xs
+parseTree' pos target look (T.Node l ts)
+  = (\ (accEs, accM) -> M.fold M.union (M.singleton target' accEs) accM)
+  $ L.foldl'
+      (\ acc@(accEs, accM) e ->
+        let xs = map (\ (m, n, v) -> ((n, v), fromJust $ M.lookup v m))
+               $ zip3 ms [1 ..] (eTail e)
+        in if any (M.null . snd) xs
+        then acc
+        else
+          ( eMapHeadTail
+              (const target')
+              (flip zip $ map (: pos) [1 ..]) e
+            : accEs
+          , L.foldl' (flip $ uncurry M.insert) accM xs
+          )
+      )
+      ([], M.empty)
+      es
+  where
+    target' = (target, pos)
+    es = look target l (length ts)
+    ms = map
+           (\ (n, t, vs) ->
+               M.fromList
+             $ map (\ v -> (v, parseTree' (n : pos) v look t)) vs
+           )
+       $ zip3 [1 ..] ts
+       $ L.transpose
+       $ map eTail es
+
+-- ---------------------------------------------------------------------------
 
 -- | Pretty print a 'Hyperedge'.
 drawHyperedge :: (Show v, Show l, Show w) => Hyperedge v l w i -> String
