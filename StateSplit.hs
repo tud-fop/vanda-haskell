@@ -2,15 +2,15 @@
 
 -- | Implementation of state-split grammars based on
 --
--- * Min Zhang, Hongfei Jiang, Aiti Aw, Haizhou Li, Chew Lim Tan, Sheng Li.
---   /A Tree Sequence Alignment-based Tree-to-Tree Translation Model./
---   Proc. of ACL-HLT 2008
---   <http://www.aclweb.org/anthology/P/P08/P08-1064.pdf>
---
 -- * Slav Petrov, Leon Barrett, Romain Thibaux, Dan Klein.
 --   /Learning Accurate, Compact, and Interpretable Tree Annotation./
 --   Proc. COLING/ACL 2006 (Main Conference)
 --   <http://www.petrovi.de/data/acl06.pdf>
+--
+-- * Slav Petrov, Dan Klein.
+--   /Learning and Inference for Hierarchically Split PCFGs./
+--   AAAI 2007 (Nectar Track)
+--   <http://www.petrovi.de/data/aaai07.pdf>
 
 module StateSplit where
 
