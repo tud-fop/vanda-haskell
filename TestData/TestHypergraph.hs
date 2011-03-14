@@ -5,6 +5,7 @@ module TestData.TestHypergraph where
 
 import Data.Hypergraph
 
+import Data.Tree
 
 testHypergraphs
   = [ --      in     out A  out B
@@ -43,10 +44,25 @@ testHypergraphs
         , hyperedge 'D' ""    ' ' 0.001 ()
         ]
     , hypergraph
-        [ hyperedge 'q' ""   'a' 0.2 ()
+        [ hyperedge 't' "r"  't' 1.0 ()
+        , hyperedge 'q' ""   'a' 0.2 ()
         , hyperedge 'r' ""   'b' 0.3 ()
         , hyperedge 's' ""   'a' 0.5 ()
         , hyperedge 'r' "qr" 's' 0.9 ()
         , hyperedge 'r' "sr" 's' 0.1 ()
         ]
+    , hypergraph
+        [ hyperedge 't' "q"  't' 1.0 ()
+        , hyperedge 'q' ""   'b' 0.1 ()
+        , hyperedge 'q' "rq" 's' 0.9 ()
+        , hyperedge 'r' ""   'a' 1.0 ()
+        ]
+    ]
+
+testTreess
+  = [ []
+    , []
+    , let f = Node 's' [Node 'a' [], Node 'b' []]
+            : map (\ t -> Node 's' [Node 'a' [], Node 's' [Node 'a' [], t]]) f
+      in (take 4 $ map (Node 't' . (: [])) f) {-++ [Node 't' [Node 's' [Node 'a' [], Node 's' [Node 'a' [], Node 'b' []]]]]-}
     ]
