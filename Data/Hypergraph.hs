@@ -22,10 +22,14 @@ module Data.Hypergraph (
 , eMapTail
 , eMapHeadTail
 , eMapVertices
+, eMapId
 , mapVertices
 , mapVerticesMonotonic
 , eMapWeight
 , mapWeights
+, mapWeights'
+, mapIds
+, mapAccumIds
 -- * Weight Manipulation
 , properize
 , randomizeWeights
@@ -161,9 +165,41 @@ eMapWeight :: (w -> w') -> Hyperedge v l w i -> Hyperedge v l w' i
 eMapWeight f e = e{eWeight = f (eWeight e)}
 
 
--- | Apply a funciton to the weights of all 'Hyperedge's.
+-- | Apply a function to the weights of all 'Hyperedge's.
 mapWeights :: (w -> w') -> Hypergraph v l w i -> Hypergraph v l w' i
 mapWeights f g = g{edgesM = M.map (map (eMapWeight f)) (edgesM g)}
+
+
+-- | Apply a function to all 'Hyperedge's resulting in a new weight,
+-- respectively.
+mapWeights'
+  :: (Hyperedge v l w i -> w') -> Hypergraph v l w i -> Hypergraph v l w' i
+mapWeights' f g = g{edgesM = M.map (map (\ e -> e{eWeight = f e})) (edgesM g)}
+
+
+-- | Apply a function to a 'Hyperedge''s id.
+eMapId :: (i -> i') -> Hyperedge v l w i -> Hyperedge v l w i'
+eMapId f = \ e -> e{eId = f (eId e)}
+
+
+-- | Apply a function to the ids of all 'Hyperedge's.
+mapIds :: (i -> i') -> Hypergraph v l w i -> Hypergraph v l w i'
+mapIds f g = g{edgesM = M.map (map (eMapId f)) (edgesM g)}
+
+
+-- | Alter 'Hyperedge' ids while accumulating a value.
+-- The traversal order is undefined.
+mapAccumIds
+  :: (a -> i -> (a, i'))
+  -> a
+  -> Hypergraph v l w i
+  -> (a, Hypergraph v l w i')
+mapAccumIds f acc g
+  = (acc', g{edgesM = eM'})
+  where
+    (acc', eM') = M.mapAccum (L.mapAccumL f') acc (edgesM g)
+    f'  acc e = let (acc', i) = f acc (eId e)
+                in (acc', e{eId = i})
 
 -- ---------------------------------------------------------------------------
 
@@ -178,11 +214,11 @@ properize g
 
 
 -- | @randomizeWeights r g gen@ multiplies every weight of 'Hypergraph' by a
--- random number in the range @(1-r, 1+r)@.
+-- random number in the range @(1, 1+r)@.
 randomizeWeights
   :: (Num w, R.Random w, R.RandomGen gen)
   => w -> Hypergraph v l w i -> gen -> (Hypergraph v l w i, gen)
-randomizeWeights r g gen = mapWeightsRandomR (1-r, 1+r) (*) g gen
+randomizeWeights r g gen = mapWeightsRandomR (1, 1+r) (*) g gen
 
 
 -- | 'mapRandomR' for the weights of the edges in a 'Hypergraph'.
@@ -280,11 +316,15 @@ parseTree' pos target look (T.Node l ts)
 -- ---------------------------------------------------------------------------
 
 -- | Pretty print a 'Hyperedge'.
-drawHyperedge :: (Show v, Show l, Show w) => Hyperedge v l w i -> String
-drawHyperedge (Hyperedge h t l w i)
-  = show h ++ " -- " ++ show t ++ " | " ++ show l ++ " | " ++ show w
+drawHyperedge :: (Show v, Show l, Show w, Show i) => Hyperedge v l w i -> String
+drawHyperedge (Hyperedge hd tl l w i)
+  = show hd
+  ++ " -- " ++ show tl
+  ++ " | "  ++ show l
+  ++ " | "  ++ show w
+  ++ " | "  ++ show i
 
 
 -- | Pretty print a 'Hypergraph'.
-drawHypergraph :: (Show v, Show l, Show w) => Hypergraph v l w i -> String
+drawHypergraph :: (Show v, Show l, Show w, Show i) => Hypergraph v l w i -> String
 drawHypergraph g = unlines . map drawHyperedge . edges $ g
