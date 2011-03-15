@@ -14,15 +14,139 @@
 
 module StateSplit where
 
--- import EM -- TODO
+import Algorithms.ExpectationMaximization
+import Algorithms.InsideOutsideWeights
 import Tools.Miscellaneous(mapFst, mapSnd, sumWith)
 
 import Data.Hypergraph
 
+import Data.Function (on)
 import qualified Data.List as L
 import qualified Data.Map as M
+import Data.Maybe (fromJust, fromMaybe)
 import qualified Data.Set as S
+import Data.Tree as T
+import qualified Random as R
 
+import Debug.Trace
+
+-- ---------------------------------------------------------------------------
+
+-- | Train the weights of a 'Hypergraph' by refining the states and weights
+-- by splitting and merging vertices, and by using the EM algorithm.
+train
+  :: ( Ord v
+     , Ord l
+     , Converging w, Floating w, Ord w, R.Random w
+     , Num i, Ord i
+     , Num n, Ord n
+     , R.RandomGen gen
+     )
+  => Int                  -- ^ maximum number of iterations
+  -> [Tree l]             -- ^ training 'T.Tree's
+  -> v                    -- ^ target vertex
+  -> Hypergraph v l w i'  -- ^ initial 'Hypergraph'
+  -> gen                  -- ^ random number generator
+  -> (Hypergraph (v, n) l w [i], gen)
+train n ts target g gen
+  = go 1 (mapIds (const []) $ initialize g) gen 0 n
+  where
+    target' = initializeVertex target
+    go offset g gen lastCount n
+      = let (g', gen') = splitMergeStep offset ts target' g gen
+            count = S.size $ verticesS g'
+        in if count == lastCount || n >= 0
+           then (g', gen')
+           else go (2 * offset) g' gen' count (n - 1)
+
+
+-- | Perform a split, the EM algorithm an a merge.
+splitMergeStep
+  :: ( Ord v
+     , Ord l
+     , Converging w, Floating w, Ord w, R.Random w
+     , Num i, Ord i
+     , Num n, Ord n
+     , R.RandomGen gen
+     )
+  => n                        -- ^ split offset
+  -> [T.Tree l]               -- ^ training 'T.Tree's
+  -> (v, n)                   -- ^ target vertex
+  -> Hypergraph (v, n) l w i' -- ^ initial 'Hypergraph'
+  -> gen                      -- ^ random number generator
+  -> (Hypergraph (v, n) l w [i], gen)
+splitMergeStep offset ts target g gen
+  = let
+    (i, (g', gen'))
+      = mapSnd (mapFst properize)
+      $ mapSnd (flip (randomizeWeights 10) gen)
+      $ mapAccumIds (\ i _ -> {-i `seq`-} (i + 1, i)) 0
+      $ split offset (target ==) g
+    training
+      = map (\ t -> ((target, []), parseTree target t g', 1)) ts
+    wM
+      = forestEM
+          (map (map eId) . M.elems $ edgesM g')
+          training
+          eId
+          (\ w n -> w < 0.0001 || n > 100)
+          (M.fromList . map (\ e -> (eId e, eWeight e)) $ edges g')
+    getWeight
+      = fromJust . flip M.lookup wM . eId
+    ios
+      = map (\ (target, g, _) -> insideOutside getWeight target g) training
+    toMerge
+      = S.fromList
+      $ map fst
+      $ filter ((0.99 <) . snd)
+      $ M.toList
+      $ deltasLikelihood offset target ios
+--       = let vs = map (mapSnd (offset +) . fst)
+--                 . L.sortBy (compare `on` snd)
+--                 $ M.toList
+--                 $ deltasLikelihood offset target ios
+--         in S.fromList $ drop (length vs `div` 2) vs
+    mergeVertex v@(v', n)
+      = if S.member v toMerge then (v', n - offset) else v
+    g''
+      = merge mergeVertex
+      $ mapWeights' getWeight g'
+  in seq i
+  -- - $ trace (unlines $ map (\ (_, g, _) -> drawHypergraph g) training)
+  -- - $ trace (drawHypergraph $ mapIds (\ i -> (fromJust $ M.lookup i wM, i)) g')
+  -- - $ trace (unlines $ map show $ M.toList $ deltasLikelihood offset target ios)
+  -- - $ trace (unlines $ map show $ S.toList $ toMerge)
+  -- - $ traceShow toMerge $ trace ""
+  $ (g'', gen')
+
+
+deltasLikelihood
+  :: (Ord v, Fractional w, Num n, Ord n, Ord p)
+  => n -> (v, n) -> [M.Map ((v, n), p) (w, w)] -> M.Map (v, n) w
+deltasLikelihood offset target ios
+  = for M.empty ios $ \ m io ->
+      for m (M.keys io) $ \ m v1 ->
+        if snd (fst v1) >= offset || fst v1 == target
+        then m
+        else
+          let v2 = mapFst (mapSnd (offset +)) v1
+              s = sum
+                    [ i * o
+                    | v <- M.keys io
+                    , snd v == snd v1
+                    , v /= v1
+                    , v /= v2
+                    , let (i, o) = fromMaybe (0, 0) $ M.lookup v io
+                    ]
+              (i1, o1) = M.findWithDefault (0, 0) v1 io
+              (i2, o2) = M.findWithDefault (0, 0) v2 io
+              p = (s + 0.5 * (i1 + i2) * (o1 + o2)) / (s + i1 * o1 + i2 * o2)
+                      -- in the paper special factors are used instead of 0.5
+          in M.insertWith' (*) (fst v2) p m
+  where
+    for x ys f = L.foldl' f x ys
+
+-- ---------------------------------------------------------------------------
 
 -- | Make a single vertex splitable.
 initializeVertex :: (Num n) => v -> (v, n)
@@ -63,15 +187,15 @@ split offset dontSplit g
 merge
   :: (Fractional w, Ord v, Ord k, Ord l, Ord i)
   => (v -> k)
-  -> Data.Hypergraph.Hypergraph v l w i
-  -> Data.Hypergraph.Hypergraph k l w i
+  -> Data.Hypergraph.Hypergraph v l w  i
+  -> Data.Hypergraph.Hypergraph k l w [i]
 merge mergeState
   = hypergraph
   . map
-      (\ ((hd, tl, l, i), es) ->
+      (\ ((hd, tl, l), es) ->
         let w = sumWith eWeight es
                 / (fromIntegral . S.size . S.fromList . map eHead $ es)
-        in hyperedge hd tl l w i
+        in hyperedge hd tl l w (map eId es)
       )
   . M.toList
   . partition
@@ -79,7 +203,6 @@ merge mergeState
         ( mergeState (eHead e)
         , map mergeState (eTail e)
         , eLabel e
-        , eId e
         )
       )
   . edges
@@ -138,15 +261,14 @@ prop_splitMerge g
   = let offset = 1 + maxSplit g
         mergeState (q, n) = (q, n `mod` offset)
         g' = merge mergeState . split offset (const False) $ g
-    in eqListWith eqEdge (edges g) (edges g')
+    in eqEdges (edges g) (edges g')
     where
       x ~~ y = abs (x - y) < 0.0000001
       eqEdge e1 e2
         =  eHead  e1 == eHead  e2
         && eTail  e1 == eTail  e2
         && eLabel e1 == eLabel e2
-        && eId    e1 == eId    e2
         && eWeight e1 ~~ eWeight e2
-      eqListWith f xs ys
-        =  and (map (\ x -> any (f x) ys) xs)
-        && and (map (\ y -> any (f y) xs) ys)
+      eqEdges xs ys
+        =  and (map (\ x -> any (eqEdge x) ys) xs)
+        && and (map (\ y -> any (eqEdge y) xs) ys)
