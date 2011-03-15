@@ -33,6 +33,8 @@ module Data.Hypergraph (
 -- * Weight Manipulation
 , properize
 , randomizeWeights
+-- * Simplification
+, dropUnreachables
 -- * Parsing
 , parseTree
 -- * Pretty Printing
@@ -41,7 +43,8 @@ module Data.Hypergraph (
 ) where
 
 
-import Tools.Miscellaneous (sumWith, mapRandomR)
+import qualified Data.Queue as Q
+import Tools.Miscellaneous (mapFst, sumWith, mapRandomR)
 
 import qualified Data.List as L
 import qualified Data.Map as M
@@ -77,6 +80,20 @@ hypergraph es
   = Hypergraph
       (S.fromList . concatMap (\ e ->  eHead e : eTail e) $ es)
       (M.fromListWith (++) . map (\ e -> (eHead e, [e]))  $ es)
+
+
+-- | Create a 'Hypergraph' from a 'M.Map' mapping a vertex to all
+-- 'Hyperedge's which have this vertex as head.
+-- /The precondition is not checked!/
+hypergraphM :: (Ord v) => M.Map v [Hyperedge v l w i] -> Hypergraph v l w i
+hypergraphM eM
+  = Hypergraph
+      ( S.fromList
+      . concatMap (\ e ->  eHead e : eTail e)
+      . concat
+      $ M.elems eM
+      )
+      eM
 
 
 -- | Create a 'Hyperedge'.
@@ -241,77 +258,77 @@ mapWeightsRandomR range f g gen
 
 -- ---------------------------------------------------------------------------
 
+-- | Remove all unreachable vertices and 'Hyperedge's which use unreachable
+-- vertices.
+dropUnreachables target g
+  = hypergraphM
+  . M.mapMaybe (\ (b, val) -> if b then Just val else Nothing)
+  $ go (Q.singleton target) (M.map ((,) False) $ edgesM g)
+  where
+    go q m
+      | Q.null q = m
+      | otherwise =
+        let (v, q') = Q.deq q
+        in case M.lookup v m of
+          Nothing -> go q' m
+          Just (True, _) -> go q' m
+          Just (_, es) ->
+            go
+              (Q.enqList (concatMap eTail es) q')
+              (M.adjust (mapFst $ const True) v m)
+
+-- ---------------------------------------------------------------------------
+
 -- | Creates a 'Hypergraph' which represents the given 'T.Tree' based on the
 -- given 'Hypergraph'. The resulting 'Hypergraph' is empty, iff no execution
 -- of the given 'Hypergraph' represents the given 'T.Tree'.
 parseTree
-  :: (Ord v, Eq l)
+  :: (Ord v, Ord l)
   => v -> T.Tree l -> Hypergraph v l w i -> Hypergraph (v, [Int]) l w i
 parseTree target t g
-  = let eM = parseTree' [] target look t
-    in Hypergraph
-        ( S.fromList
-          . concatMap (\ e ->  eHead e : eTail e)
-          . concat
-          . M.elems
-          $ eM
+  = let (m, _) = parseTree' [] target look t M.empty
+    in dropUnreachables (target, [])
+    $ hypergraphM
+        ( M.fromAscList
+        . map (\ ((v, pos, _), val) -> ((v, pos), val))
+        . filter (not . null . snd)
+        $ M.toAscList m
         )
-        eM
   where
     look v l n
       = maybe [] (filter $ \ e -> eLabel e == l && length (eTail e) == n)
       . M.lookup v
       $ edgesM g
 
-
--- This implementation is terrible. If anyone has a better idea, feel free to
--- improve it.
--- Things to keep in mind (things which make the implementation ugly):
---    * calculate stuff for subtrees only once
---    * output edges only once
---    * don't calculate unused stuff (be lazy)
 parseTree'
-  :: (Ord v)
+  :: (Ord v, Ord t)
   => [Int]
   -> v
-  -> (v -> l -> Int -> [Hyperedge v l w i])
-  -> T.Tree l
-  -> M.Map (v, [Int]) [Hyperedge (v, [Int]) l w i]
-parseTree' pos target look (T.Node l [])
-  = let target' = (target, pos)
-    in case look target l 0 of
-      [] -> M.empty
-      xs -> M.singleton target'
-            $ map (eMapHeadTail (const target') (const [])) xs
-parseTree' pos target look (T.Node l ts)
-  = (\ (accEs, accM) -> M.fold M.union (M.singleton target' accEs) accM)
-  $ L.foldl'
-      (\ acc@(accEs, accM) e ->
-        let xs = map (\ (m, n, v) -> ((n, v), fromJust $ M.lookup v m))
-               $ zip3 ms [1 ..] (eTail e)
-        in if any (M.null . snd) xs
-        then acc
-        else
-          ( eMapHeadTail
-              (const target')
-              (flip zip $ map (: pos) [1 ..]) e
-            : accEs
-          , L.foldl' (flip $ uncurry M.insert) accM xs
-          )
-      )
-      ([], M.empty)
-      es
+  -> (v -> t -> Int -> [Hyperedge v l w i])
+  -> T.Tree t
+  ->  M.Map (v, [Int], t) [Hyperedge (v, [Int]) l w i]
+  -> (M.Map (v, [Int], t) [Hyperedge (v, [Int]) l w i], Bool)
+parseTree' pos target look (T.Node l ts) m
+  = maybe
+      ((,) mNext . null . fromJust $ M.lookup key mNext)
+      ((,) m . null)
+      (M.lookup key m)
   where
+    key = (target, pos, l)
     target' = (target, pos)
-    es = look target l (length ts)
-    ms = map
-           (\ (n, t, vs) ->
-               M.fromList
-             $ map (\ v -> (v, parseTree' (n : pos) v look t)) vs
-           )
-       $ zip3 [1 ..] ts
-       $ L.transpose
-       $ map eTail es
+    mNext
+      = for (M.insert key [] m) (look target l (length ts)) $ \ m e ->
+          let (m', b) = checkChildren m (zip3 (eTail e) [(1 :: Int) ..] ts)
+              e' = eMapHeadTail
+                      (const target')
+                      (flip zip $ map (: pos) [1 ..])
+                      e
+          in if b then m' else M.insertWith (++) key [e'] m'
+    checkChildren m [] = (m, False)
+    checkChildren m ((v, n, t) : xs)
+      = let (m', isNull) = parseTree' (n : pos) v look t m
+        in if isNull then (m', True) else checkChildren m' xs
+    for x ys f = L.foldl' f x ys
 
 -- ---------------------------------------------------------------------------
 
