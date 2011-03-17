@@ -182,7 +182,18 @@ negraNewline = char '\n'
 -- loadHGraph file = parseFromFile p_WTA file
 
 
---------------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
+
+-- | Remove 'SentenceWord's which represent punctuation from a list of
+-- 'SentenceData'.
+filterPunctuation :: [SentenceData] -> [SentenceData]
+filterPunctuation
+  = filter fltr
+  where
+    fltr SentenceWord{sdWord = w} = notElem w [",", ".", ";", "\"", "-"]
+    fltr SentenceNode{} = True
+
+-- ---------------------------------------------------------------------------
 
 -- | Converts a list of 'SentenceData' to a 'T.Forest' of
 -- not-crossing trees.
