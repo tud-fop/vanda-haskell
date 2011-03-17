@@ -35,6 +35,7 @@ module Data.Hypergraph (
 , randomizeWeights
 -- * Simplification
 , dropUnreachables
+, dropZeroWeighted
 -- * Parsing
 , parseTree
 -- * Pretty Printing
@@ -277,6 +278,20 @@ dropUnreachables target g
             go
               (Q.enqList (concatMap eTail es) q')
               (M.adjust (mapFst $ const True) v m)
+
+
+-- | Remove all zero weighted 'Hyperedge's from a 'Hypergraph'.
+dropZeroWeighted :: (Ord v, Num w) => Hypergraph v l w i -> Hypergraph v l w i
+dropZeroWeighted g
+  = hypergraphM
+  . M.mapMaybe
+      ( \es ->
+        let es' = filter ((0 /=) . eWeight) es
+        in if null es'
+          then Nothing
+          else Just es'
+      )
+  $ edgesM g
 
 -- ---------------------------------------------------------------------------
 
