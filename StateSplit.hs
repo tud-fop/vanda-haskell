@@ -55,7 +55,7 @@ train n ts target g gen
     go offset g gen lastCount n
       = let (g', gen') = splitMergeStep offset ts target' g gen
             count = S.size $ verticesS g'
-        in if count == lastCount || n >= 0
+        in if count == lastCount || n <= 1
            then (g', gen')
            else go (2 * offset) g' gen' count (n - 1)
 
