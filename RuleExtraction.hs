@@ -41,6 +41,5 @@ extractF forest = concatMap extractT forest
 
 
 extractT :: T.Tree a -> [(a, [a])]
-extractT (T.Node {T.rootLabel = r, T.subForest = f@(_:_)})
+extractT (T.Node {T.rootLabel = r, T.subForest = f})
   = (r, map T.rootLabel f) : extractF f
-extractT _ = []
