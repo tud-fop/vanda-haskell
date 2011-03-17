@@ -184,7 +184,7 @@ negraNewline = char '\n'
 
 --------------------------------------------------------------------------------
 
--- | Converts a list of 'SentenceData' to a 'Data.Tree.Forest' of
+-- | Converts a list of 'SentenceData' to a 'T.Forest' of
 -- not-crossing trees.
 negraToForest
   :: [SentenceData]
@@ -242,7 +242,7 @@ negraToPointerTree = ins 0
 
 
 
--- | Convert a 'PointerTree' to a 'Data.Tree.Tree'.
+-- | Convert a 'PointerTree' to a 'T.Tree'.
 --
 -- 'Span' lists are used to represent crossing edges.
 -- Every node of the resulting tree contains a 'Span' list.
