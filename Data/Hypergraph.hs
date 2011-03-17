@@ -260,6 +260,7 @@ mapWeightsRandomR range f g gen
 
 -- | Remove all unreachable vertices and 'Hyperedge's which use unreachable
 -- vertices.
+dropUnreachables :: (Ord v) => v -> Hypergraph v l w i -> Hypergraph v l w i
 dropUnreachables target g
   = hypergraphM
   . M.mapMaybe (\ (b, val) -> if b then Just val else Nothing)
