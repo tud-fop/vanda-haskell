@@ -11,6 +11,7 @@ profiling:
 
 module Main where
 
+import Demo
 import RuleExtraction
 import Tools.PrettyPrint
 
@@ -24,12 +25,14 @@ import qualified Data.Tree as T
 import Text.Parsec.String (parseFromFile)
 
 
+main = demo4_4
+
 -- main = testdata >>= \x -> print $ fmap (length {-. unLazyBinaryList . safeDecode-}) x
 
 -- main = testdata >>= print
 
-main = do
-	print "Yes, baby"
+-- main = do
+-- 	print "Yes, baby"
   -- Right x <- testdata
   -- w 0
   -- print x
