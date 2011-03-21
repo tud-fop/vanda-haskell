@@ -3,6 +3,7 @@
 module Demo where
 
 import qualified Data.WTA as WTA
+import Data.Hypergraph
 import qualified Parser.Negra as Negra
 import qualified RuleExtraction as RE
 import qualified StateSplit as SPG
@@ -11,6 +12,7 @@ import TestData.TestWTA
 
 import qualified Data.Tree as T
 import           Text.Parsec.String (parseFromFile)
+import qualified Random as R
 
 -- -------------------------------------------------------------------
 -- WTA related
@@ -132,3 +134,23 @@ demo4_3
     m ('q', 1) = ('q', 0)
     m x        = x
 -}
+
+demo4_4
+  = demo2_help
+  $ \ dta ->
+    let ts = concatMap
+              ( fmap (fmap (maybe "ROOT" Negra.showSentenceData . fst . fst))
+              . Negra.negraToForest
+              . Negra.filterPunctuation
+              . Negra.sData
+              )
+              dta
+    in putStrLn
+    . drawHypergraph
+    . fst
+    $ SPG.train
+        333
+        ts
+        "ROOT"
+        (RE.extractHypergraph ts :: Hypergraph String String Double ())
+        (R.mkStdGen 0)
