@@ -48,16 +48,19 @@ train
   -> Hypergraph v l w i'  -- ^ initial 'Hypergraph'
   -> gen                  -- ^ random number generator
   -> (Hypergraph (v, n) l w [i], gen)
-train n ts target g gen
-  = go 1 (mapIds (const []) $ initialize g) gen 0 n
+train maxIt ts target g gen
+  = go 0 0 1 (mapIds (const []) $ initialize g) gen
   where
     target' = initializeVertex target
-    go offset g gen lastCount n
+    go n count offset g gen
       = let (g', gen') = splitMergeStep offset ts target' g gen
-            count = S.size $ verticesS g'
-        in if count == lastCount || n <= 1
+            count' = S.size $ verticesS g'
+            offset' = 2 * offset
+        in if n >= maxIt || offset' <= offset  -- < check for overflow
+           then (g, gen)
+           else if count' == count
            then (g', gen')
-           else go (2 * offset) g' gen' count (n - 1)
+           else go (n + 1) count' offset' g' gen'
 
 
 -- | Perform a split, the EM algorithm an a merge.
@@ -75,22 +78,22 @@ splitMergeStep
   -> Hypergraph (v, n) l w i' -- ^ initial 'Hypergraph'
   -> gen                      -- ^ random number generator
   -> (Hypergraph (v, n) l w [i], gen)
-splitMergeStep offset ts target g gen
+splitMergeStep offset ts target g0 gen
   = let
-    (i, (g', gen'))
+    (i, (g1, gen'))
       = mapSnd (mapFst properize)
       $ mapSnd (flip (randomizeWeights 10) gen)
       $ mapAccumIds (\ i _ -> {-i `seq`-} (i + 1, i)) 0
-      $ split offset (target ==) g
+      $ split offset (target ==) g0
     training
-      = map (\ t -> ((target, []), parseTree target t g', 1)) ts
+      = map (\ t -> ((target, []), parseTree target t g1, 1)) ts
     wM
       = forestEM
-          (map (map eId) . M.elems $ edgesM g')
+          (map (map eId) . M.elems $ edgesM g1)
           training
           eId
           (\ w n -> w < 0.0001 || n > 100)
-          (M.fromList . map (\ e -> (eId e, eWeight e)) $ edges g')
+          (M.fromList . map (\ e -> (eId e, eWeight e)) $ edges g1)
     getWeight
       = fromJust . flip M.lookup wM . eId
     ios
@@ -108,16 +111,24 @@ splitMergeStep offset ts target g gen
 --         in S.fromList $ drop (length vs `div` 2) vs
     mergeVertex v@(v', n)
       = if S.member v toMerge then (v', n - offset) else v
-    g''
-      = merge mergeVertex
-      $ mapWeights' getWeight g'
-  in seq i
-  -- - $ trace (unlines $ map (\ (_, g, _) -> drawHypergraph g) training)
-  -- - $ trace (drawHypergraph $ mapIds (\ i -> (fromJust $ M.lookup i wM, i)) g')
-  -- - $ trace (unlines $ map show $ M.toList $ deltasLikelihood offset target ios)
-  -- - $ trace (unlines $ map show $ S.toList $ toMerge)
-  -- - $ traceShow toMerge $ trace ""
-  $ (g'', gen')
+    g2 = dropUnreachables target $ dropZeroWeighted $ mapWeights' getWeight g1
+              -- < this is not mentioned in the paper, but it seems reasonable
+    g3 = merge mergeVertex g2
+  in {-seq i
+  $ trace "=== Training Hypergraphs ========================================="
+  $ trace (unlines $ map (\ (_, g, _) -> drawHypergraph g) training)
+  $ trace "=== Split Hypergraph ============================================="
+  $ trace (drawHypergraph $ mapIds (\ i -> (fromJust $ M.lookup i wM, i)) g1)
+  $ trace "=== Zero-free Hypergraph ========================================="
+  $ trace (drawHypergraph $ g2)
+  $ trace "=== Deltas Likelihood ============================================"
+  $ trace (unlines $ map show $ M.toList $ deltasLikelihood offset target ios)
+  $ trace "=== Vertices to Merge ============================================"
+  $ trace (unlines $ map show $ S.toList $ toMerge)
+  $ trace "=== Merged Hypergraph ============================================"
+  $ trace (drawHypergraph $ g3)
+  $ trace "=================================================================="
+  $ -}(g3, gen')
 
 
 deltasLikelihood
