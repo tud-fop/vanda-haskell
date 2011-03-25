@@ -360,4 +360,7 @@ drawHyperedge (Hyperedge hd tl l w i)
 
 -- | Pretty print a 'Hypergraph'.
 drawHypergraph :: (Show v, Show l, Show w, Show i) => Hypergraph v l w i -> String
-drawHypergraph g = unlines . map drawHyperedge . edges $ g
+drawHypergraph g
+  =   (unlines . map drawHyperedge . edges $ g)
+  ++  show (length $ vertices g) ++ " vertices; "
+  ++  show (length $ edges g) ++ " edges\n"
