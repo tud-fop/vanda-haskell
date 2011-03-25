@@ -48,19 +48,42 @@ train
   -> Hypergraph v l w i'  -- ^ initial 'Hypergraph'
   -> gen                  -- ^ random number generator
   -> (Hypergraph (v, n) l w [i], gen)
-train maxIt ts target g gen
-  = go 0 0 1 (mapIds (const []) $ initialize g) gen
+train maxIt ts target g gen = go maxIt $ train' ts target g gen
+  where
+    go 0 (x:_)  = x
+    go _ [x]    = x
+    go n (_:xs) = go (n - 1) xs
+
+
+-- | Train the weights of a 'Hypergraph' by refining the states and weights
+-- by splitting and merging vertices, and by using the EM algorithm.
+-- All intermediate results are accumulated in a list.
+train'
+  :: ( Ord v
+     , Ord l
+     , Converging w, Floating w, Ord w, R.Random w
+     , Num i, Ord i
+     , Num n, Ord n
+     , R.RandomGen gen
+     )
+  => [Tree l]             -- ^ training 'T.Tree's
+  -> v                    -- ^ target vertex
+  -> Hypergraph v l w i'  -- ^ initial 'Hypergraph'
+  -> gen                  -- ^ random number generator
+  -> [(Hypergraph (v, n) l w [i], gen)]
+train' ts target g gen
+  = go 0 1 (mapIds (const []) $ initialize g) gen
   where
     target' = initializeVertex target
-    go n count offset g gen
+    go count offset g gen
       = let (g', gen') = splitMergeStep offset ts target' g gen
             count' = S.size $ verticesS g'
             offset' = 2 * offset
-        in if n >= maxIt || offset' <= offset  -- < check for overflow
-           then (g, gen)
+        in if offset' <= offset  -- check for overflow
+           then [(g, gen)]
            else if count' == count
-           then (g', gen')
-           else go (n + 1) count' offset' g' gen'
+           then [(g, gen), (g', gen')]
+           else (g, gen) : go count' offset' g' gen'
 
 
 -- | Perform a split, the EM algorithm an a merge.
@@ -117,6 +140,12 @@ splitMergeStep offset ts target g0 gen
   in {-seq i
   $ trace "=== Training Hypergraphs ========================================="
   $ trace (unlines $ map (\ (_, g, _) -> drawHypergraph g) training)
+  $ trace ( "Could not parse "
+            ++ show (length $ filter (\ (_, g, _) -> null $ edges g) training)
+            ++ " from "
+            ++ show (length training)
+            ++ " trees."
+          )
   $ trace "=== Split Hypergraph ============================================="
   $ trace (drawHypergraph $ mapIds (\ i -> (fromJust $ M.lookup i wM, i)) g1)
   $ trace "=== Zero-free Hypergraph ========================================="
