@@ -190,7 +190,8 @@ filterPunctuation :: [SentenceData] -> [SentenceData]
 filterPunctuation
   = filter fltr
   where
-    fltr SentenceWord{sdWord = w} = notElem w [",", ".", ";", "\"", "-"]
+    fltr SentenceWord{sdWord = w}
+      = notElem w ["\"","''","(",")",",","-",".","/",":",";","?","``"]
     fltr SentenceNode{} = True
 
 -- ---------------------------------------------------------------------------
@@ -338,6 +339,7 @@ splitCrossedTree (T.Node (label, spans) forest)
   :: T.Tree ((Maybe SentenceData, Span), Span)
   -> T.Tree (String             , Span)-}
 -- negraTreeToTree = fmap (liftFst (liftFst (maybe "" showSentenceData)))
+{-
 negraTreeToTree (T.Node ((Nothing, sl), sg) f)
   = T.Node ("", "", sl, sg) (fmap negraTreeToTree f)
 negraTreeToTree (T.Node ((Just dat@(SentenceNode{}), sl), sg) f)
@@ -350,13 +352,28 @@ negraTreeToTree (T.Node ((Just dat@(SentenceWord{}), sl), sg) [])
     ]
 negraTreeToTree _
   = error "malformed negra tree: a SentenceWord has children"
+-}
+
+negraTreeToTree :: T.Tree ((Maybe SentenceData, Span), Span) -> T.Tree String
+negraTreeToTree (T.Node ((Nothing, sl), sg) f)
+  = T.Node "ROOT" (fmap negraTreeToTree f)
+negraTreeToTree (T.Node ((Just dat@(SentenceNode{}), sl), sg) f)
+  = T.Node (sdPostag dat) (fmap negraTreeToTree f)
+negraTreeToTree (T.Node ((Just dat@(SentenceWord{}), sl), sg) [])
+  = T.Node (sdPostag dat) [T.Node (sdWord dat) []]
+negraTreeToTree _
+  = error "malformed negra tree: a SentenceWord has children"
 
 
+isSentenceNode :: SentenceData -> Bool
 isSentenceNode (SentenceNode {}) = True
 isSentenceNode _ = False
 
+
+showSentenceData :: SentenceData -> String
 showSentenceData SentenceWord{sdWord = w} = w
 showSentenceData SentenceNode{sdPostag = t} = t
+
 
 -- printSDTree = putStrLn . T.drawTree . (fmap show . fmap (fmap showSentenceData)) . toTree . sData
 -- printSDTree = putStrLn . T.drawTree . fmap show . fmap (liftFst (fmap showSentenceData)) . head . negraToForest . sData
