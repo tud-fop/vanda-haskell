@@ -1,4 +1,4 @@
--- Copyright (c) 2010, Toni Dietze
+-- Copyright (c) 2010-2011, Toni Dietze
 {-- snippet types --}
 module Data.WTA(
   Transition(..)
@@ -7,6 +7,8 @@ module Data.WTA(
 , transitions
 , finalWeights
 , create
+, fromHypergraph
+, toHypergraph
 , transIsLeaf
 , binarize
 , properize
@@ -21,6 +23,7 @@ module Data.WTA(
 , generate'
 ) where
 
+import Data.Hypergraph hiding (properize, randomizeWeights)
 import Tools.FastNub(nub)
 import Tools.Miscellaneous(mapFst, mapRandomR)
 
@@ -50,6 +53,21 @@ create ts fs
              concatMap (\t -> transState t : transStates t) ts
     in WTA ss ts fs
 {-- /snippet types --}
+
+
+fromHypergraph target g
+  = WTA
+      (vertices g)
+      ( map (\ e -> Transition (eLabel e) (eHead e) (eTail e) (eWeight e))
+      $ edges g
+      )
+      [(target, 1)]
+
+toHypergraph wta
+  = hypergraph
+  . map (\ t -> hyperedge (transState t) (transStates t) (transTerminal t) (transWeight t) ())
+  . transitions
+  $ wta
 
 
 transIsLeaf :: Transition q t w -> Bool
