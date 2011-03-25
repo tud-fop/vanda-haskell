@@ -62,7 +62,7 @@ data Hyperedge v l w i = Hyperedge
   , eLabel  :: l
   , eWeight :: w
   , eId     :: i
-  }
+  } deriving (Read, Show)
 
 data Hypergraph v l w i = Hypergraph
   { -- | Get a 'S.Set' of all vertices of a 'Hypergraph'.
@@ -71,7 +71,7 @@ data Hypergraph v l w i = Hypergraph
     -- The 'M.Map' maps a vertex to a list of 'Hyperedge's which have this
     -- vertex as head vertex.
     edgesM    :: M.Map v [Hyperedge v l w i]
-  }
+  } deriving (Read, Show)
 
 -- ---------------------------------------------------------------------------
 
