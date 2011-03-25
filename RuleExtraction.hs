@@ -11,11 +11,11 @@ import qualified Data.Tree as T
 
 
 extractHypergraph
-  :: (Fractional w, Ord v) => T.Forest v -> Hypergraph v v w i
+  :: (Fractional w, Ord v) => T.Forest v -> Hypergraph v v w ()
 extractHypergraph forest
   = properize
   . hypergraph
-  . map (\((hd, tl), c) -> hyperedge hd tl hd c undefined)
+  . map (\((hd, tl), c) -> hyperedge hd tl hd c ())
   . M.toList
   . extract
   $ forest
