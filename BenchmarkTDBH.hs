@@ -26,11 +26,12 @@ main = do
     "print" -> printFileHG (tail args)
     "train" -> train (tail args)
     "test" -> test (tail args)
+    "convert" -> convert (tail args)
 
 
 printFileHG [hgFile]
   = readFile hgFile
-  >>= putStrLn . drawHypergraph . (read :: String -> Hypergraph (String, Int) String Double [Int])
+  >>= putStrLn . drawHypergraph . (read :: String -> Hypergraph (String, Int) String Double ())
 
 getData
   = parseFromFile
@@ -53,16 +54,15 @@ train args = do
             (RE.extractHypergraph trains :: Hypergraph String String Double ())
             (R.mkStdGen 0)
   flip mapM_ (zip [0 ..] gsgens) $ \ (n, (g, _)) -> do
-    writeFile ("hg_" ++ show exs ++ "_" ++ show n ++ ".txt") (show g)
+    writeFile ("hg_" ++ show exs ++ "_" ++ show n ++ ".txt") (show $ mapIds (const ()) g)
     writeFile ("hg_" ++ show exs ++ "_" ++ show n ++ "_withTerminals.txt")
       $ show
+      $ mapIds (const ())
       $ hypergraph
           (  filter (null . eTail) (edges exPretermToTerm)
           ++ concatMap (extendEdge (edgesM exPretermToTerm)) (edges g)
           )
   where
-    onlyPreterminals (T.Node x [T.Node _ []]) = T.Node x []
-    onlyPreterminals (T.Node x ts) = T.Node x (map onlyPreterminals ts)
     terminalBranches t@(T.Node _ [T.Node _ []]) = [t]
     terminalBranches (T.Node _ ts) = concatMap terminalBranches ts
     extendEdge eM e
@@ -76,10 +76,12 @@ train args = do
 
 test args = do
   let hgFile = args !! 0
-  g <- fmap read $ readFile hgFile :: IO (Hypergraph (String, Int) String Double [Int])
-  putStrLn $ drawHypergraph g
+  let treeIndex = read $ args !! 1 :: Int
+  let f = if args !! 2 == "p" then onlyPreterminals else id
+  g <- fmap read $ readFile hgFile :: IO (Hypergraph (String, Int) String Double ())
+  -- putStrLn $ drawHypergraph g
   Right dta <- getData
-  let ts = {-filter ((< 15) . length . yield) $-} {-drop 200 $-} negrasToTrees dta
+  let ts = {-filter ((< 15) . length . yield) $-} drop treeIndex $ map f (negrasToTrees dta)
   let wta = WTA.fromHypergraph ("ROOT", 0) g
   flip mapM_ ts $ \ t -> do
     let wta'  = WTA.fromHypergraph (0, ("ROOT", 0), length $ yield t)
@@ -105,6 +107,16 @@ test args = do
     putStrLn (replicate 80 '=')
 
 
+convert args = do
+  let hgFile = args !! 0
+  g <-  fmap (mapIds (const ()) . (read :: String -> Hypergraph (String, Int) String Double [Int]))
+    $   readFile hgFile
+  let gRev = mapTails reverse g
+  let hgFile' = reverse . drop 4  . reverse $ hgFile
+  writeFile ("noId/" ++ hgFile) (show g)
+  writeFile ("noId/" ++ hgFile' ++ "_reverse.txt") (show gRev)
+
+
 negrasToTrees
   = concatMap
       ( fmap Negra.negraTreeToTree
@@ -112,6 +124,10 @@ negrasToTrees
       . Negra.filterPunctuation
       . Negra.sData
       )
+
+
+onlyPreterminals (T.Node x [T.Node _ []]) = T.Node x []
+onlyPreterminals (T.Node x ts) = T.Node x (map onlyPreterminals ts)
 
 
 yield (T.Node r []) = [r]
