@@ -15,10 +15,7 @@
 
 
 
-module Algorithms.NBest (
-
-
-) where
+module Algorithms.NBest where
 
 import Data.List
 import Data.Set ( Set )

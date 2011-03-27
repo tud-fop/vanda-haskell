@@ -2,6 +2,7 @@
 
 module Main where
 
+import qualified Algorithms.NBest as NB
 import qualified Data.WTA as WTA
 import qualified Data.WSA as WSA
 import Data.Hypergraph
@@ -9,6 +10,7 @@ import qualified Parser.Negra as Negra
 import qualified RuleExtraction as RE
 import qualified StateSplit as SPG
 import qualified WTABarHillelTopDown as BH
+import Tools.Miscellaneous (mapFst)
 import Data.List (nub)
 
 import TestData.TestWTA
@@ -78,16 +80,19 @@ test args = do
   let hgFile = args !! 0
   let treeIndex = read $ args !! 1 :: Int
   let f = if args !! 2 == "p" then onlyPreterminals else id
-  g <- fmap read $ readFile hgFile :: IO (Hypergraph (String, Int) String Double ())
+  g <-  fmap (read :: String -> Hypergraph (String, Int) String Double ())
+    $   readFile hgFile
   -- putStrLn $ drawHypergraph g
   Right dta <- getData
   let ts = {-filter ((< 15) . length . yield) $-} drop treeIndex $ map f (negrasToTrees dta)
   let wta = WTA.fromHypergraph ("ROOT", 0) g
   flip mapM_ ts $ \ t -> do
-    let wta'  = WTA.fromHypergraph (0, ("ROOT", 0), length $ yield t)
-              $ dropUnreachables (0, ("ROOT", 0), length $ yield t)
-              $ WTA.toHypergraph
-              $ BH.intersect (WSA.fromList 1 $ yield t) wta
+    let target' = (0, ("ROOT", 0), length $ yield t)
+    let (_, g') = mapAccumIds (\ i _ -> {-i `seq`-} (i + 1, i)) (0 :: Int)
+                $ dropUnreachables target'
+                $ WTA.toHypergraph
+                $ BH.intersect (WSA.fromList 1 $ yield t) wta
+    let wta' = WTA.fromHypergraph target' g'
     let ts' = take 3
             $ filter ((t ==) . fst)
             $ filter ((0 /= ) . snd)
@@ -97,13 +102,19 @@ test args = do
             $ take 10000
             $ WTA.generate
             $ wta'
-    -- putStrLn $ T.drawTree t
+    let nbHg = hgToNBestHg g'
+    let ts''  = map (mapFst (idTreeToLabelTree g' . hPathToTree) . pairToTuple)
+              $ NB.best' nbHg target' 3
     print $ yield t
     -- putStrLn $ WTA.showWTA $ wta'
-    flip mapM_ ts' $ \ (t', w) -> do
-      putStr "Weight: "
-      print $ w
-      putStrLn $ T.drawTree t'
+    if null (vertices g')
+      then putStrLn "---!!! no parse !!!---"
+      else do
+        putStrLn $ T.drawTree t
+        flip mapM_ ts'' $ \ (t', w) -> do
+          putStr "Weight: "
+          print $ w
+          putStrLn $ T.drawTree t'
     putStrLn (replicate 80 '=')
 
 
@@ -136,3 +147,26 @@ yield (T.Node _ ts) = concatMap yield ts
 
 traceFile file x y
   = unsafePerformIO (writeFile file (show x) >> return y)
+
+
+hgToNBestHg g
+  = ( vertices g
+    , \ v -> map (\ e -> (eId e, eTail e)) $ M.findWithDefault [] v eM
+    , \ i _ -> M.findWithDefault 0 i iM
+    )
+  where
+    eM = edgesM g
+    iM = M.fromList $ map (\ e -> (eId e, eWeight e)) $ edges g
+
+
+hPathToTree (NB.B i bs)
+  = T.Node i (map hPathToTree bs)
+
+
+idTreeToLabelTree g
+  = fmap (\ i -> M.findWithDefault (error "unknown eId") i iM)
+  where
+    iM = M.fromList $ map (\ e -> (eId e, eLabel e)) $ edges g
+
+
+pairToTuple (NB.P x y) = (x, y)
