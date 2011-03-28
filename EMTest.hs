@@ -1,8 +1,11 @@
-import qualified Data.Set as S -- (Set, member, insert, fromList)
+module EMTest where
+
+import qualified Data.Set as S
 import qualified Data.Map as M
 import Data.Hypergraph
 import Algorithms.ExpectationMaximization
 import Tools.Miscellaneous (mapSnd)
+import Tools.PrettyPrint (prettyIndentBracktes)
 
 type Grammar n t i = ([(n, n, n, i)], [(n, t, i)])
 
@@ -62,10 +65,11 @@ doEM g@(l1,l2) n0 es
 
 main = do
 	--print (cyk ([('Z','Z','Z',1)],[('Z','a',2)]) "aaaaa")
-	print g
-	print es
-	print $ map (cyk g) es
-	print . map (mapSnd M.assocs) $ doEM g 'S' es where
+	putStr . prettyIndentBracktes . show $ g
+	-- putStr . prettyIndentBracktes . show $ es
+	putStr . prettyIndentBracktes . show $ zip es $ map (cyk g) es
+	putStr . prettyIndentBracktes . show $ map (mapSnd M.assocs) $ doEM g 'S' es
+	putStr "\n" where
 	  -- g = ([('Z','Z','Z',1)],[('Z','a',2)])
 	  -- g = ([('Z','A','Z',1),('Z','Z','A',2),('Z','A','A',3)],[('A','a',4)])
     g = (
