@@ -10,12 +10,14 @@ import qualified Parser.Negra as Negra
 import qualified RuleExtraction as RE
 import qualified StateSplit as SPG
 import qualified WTABarHillelTopDown as BH
+import qualified WTABarHillelComplete as BHC
 import Tools.Miscellaneous (mapFst)
 import Data.List (nub)
 
 import TestData.TestWTA
 
 import qualified Data.Map as M
+import Data.Maybe (fromMaybe)
 import qualified Data.Tree as T
 import Text.Parsec.String (parseFromFile)
 import qualified Random as R
@@ -26,19 +28,32 @@ main = do
   args <- getArgs
   case head args of
     "print" -> printFileHG (tail args)
+    "printYields" -> printYields (tail args)
     "train" -> train (tail args)
     "test" -> test (tail args)
     "convert" -> convert (tail args)
+    "convert2" -> convert2 (tail args)
+    "binarize" -> binarize (tail args)
+    "tdbh" ->  tdbh (tail args)
+    "tdbhStats" ->  tdbhStats (tail args)
+    "printWTA" -> printWTA (tail args)
 
 
 printFileHG [hgFile]
   = readFile hgFile
-  >>= putStrLn . drawHypergraph . (read :: String -> Hypergraph (String, Int) String Double ())
+  >>= putStrLn
+    . drawHypergraph
+    . (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
 
 getData
   = parseFromFile
       Negra.p_negra
       "Parser/tiger_release_aug07_notable_2000_utf-8.export"
+
+
+printYields _ = do
+  Right dta <- getData
+  putStr $ unlines $ map (show . reverse . yield . onlyPreterminals) $ negrasToTrees dta
 
 
 train args = do
@@ -80,14 +95,14 @@ test args = do
   let hgFile = args !! 0
   let treeIndex = read $ args !! 1 :: Int
   let f = if args !! 2 == "p" then onlyPreterminals else id
-  g <-  fmap (read :: String -> Hypergraph (String, Int) String Double ())
+  g <-  fmap (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
     $   readFile hgFile
   -- putStrLn $ drawHypergraph g
   Right dta <- getData
   let ts = {-filter ((< 15) . length . yield) $-} drop treeIndex $ map f (negrasToTrees dta)
-  let wta = WTA.fromHypergraph ("ROOT", 0) g
+  let wta = WTA.fromHypergraph {-("ROOT", 0)-}0 g
   flip mapM_ ts $ \ t -> do
-    let target' = (0, ("ROOT", 0), length $ yield t)
+    let target' = (0, {-("ROOT", 0)-}0, length $ yield t)
     let (_, g') = mapAccumIds (\ i _ -> {-i `seq`-} (i + 1, i)) (0 :: Int)
                 $ dropUnreachables target'
                 $ WTA.toHypergraph
@@ -114,6 +129,8 @@ test args = do
         flip mapM_ ts'' $ \ (t', w) -> do
           putStr "Weight: "
           print $ w
+          print $ WTA.weightTree wta t'
+          print $ WTA.weightTree wta' t'
           putStrLn $ T.drawTree t'
     putStrLn (replicate 80 '=')
 
@@ -126,6 +143,73 @@ convert args = do
   let hgFile' = reverse . drop 4  . reverse $ hgFile
   writeFile ("noId/" ++ hgFile) (show g)
   writeFile ("noId/" ++ hgFile' ++ "_reverse.txt") (show gRev)
+
+
+convert2 args = do
+  let hgFile = args !! 0
+  g <-  fmap (read :: String -> Hypergraph (String, Int) String Double ())
+    $   readFile hgFile
+  writeFile ("IntVertices/" ++ hgFile) (show $ snd $ verticesToInt ("ROOT", 0) g)
+
+
+binarize args = do
+  let hgFile = args !! 0
+  g <-  fmap (read :: String -> Hypergraph (String, Int) String Double ())
+    $   readFile hgFile
+  let g'  = snd
+          $ verticesToInt [("ROOT", 0)] -- mapVertices (flip (,) 0 . show)
+          $ mapLabels (fromMaybe "@")
+          $ WTA.toHypergraph
+          $ WTA.binarize
+          $ WTA.fromHypergraph ("ROOT", 0) g
+  let hgFile' = reverse . drop 4  . reverse $ hgFile
+  writeFile ("binarized/" ++ hgFile' ++ "_binarized.txt") (show g')
+--   putStrLn $ drawHypergraph g'
+
+
+tdbh args
+  = tdbhHelper args
+      ( \ wsa wta -> do
+        let wta' = BH.intersect wsa wta
+        WTA.printWTA wta'
+        -- printWTAStatistic wta'
+      )
+
+
+tdbhStats args
+  = tdbhHelper args
+      ( \ wsa wta -> do
+        let wta' = BH.intersect wsa wta
+        let target' = (fst $ head $ WTA.finalWeights wta')
+        let wta'' = WTA.fromHypergraph target'
+                  $ dropUnreachables target'
+                  $ WTA.toHypergraph
+                  $ wta'
+        putStr "yield-length:              "
+        putStrLn $ show $ length $ (read (args !! 1) :: [String])
+        putStr "tdbh-trans-states-finals:  "
+        printWTAStatistic wta'
+        putStr "tdbh-unreachables-dropped: "
+        printWTAStatistic wta''
+        putStr "item-count:                "
+        putStrLn
+          $ show
+          $ length
+          $ BH.getIntersectItems (const False) wsa wta
+        putStr "complete-Bar-Hillel-trans: "
+        putStrLn $ show $ BHC.intersectTransitionCount wsa wta
+      )
+
+
+printWTA args
+  = tdbhHelper args (const WTA.printWTA)
+
+
+tdbhHelper args f = do
+  g <-  fmap (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
+    $   readFile (args !! 0)
+  let yld = read (args !! 1) :: [String]
+  f (WSA.fromList 1 yld) (WTA.fromHypergraph {-("ROOT", 0)-}0 g)
 
 
 negrasToTrees
@@ -170,3 +254,11 @@ idTreeToLabelTree g
 
 
 pairToTuple (NB.P x y) = (x, y)
+
+
+printWTAStatistic wta = do
+  putStr   $ show $ length $ WTA.transitions  wta
+  putStr "\t"
+  putStr   $ show $ length $ WTA.states       wta
+  putStr "\t"
+  putStrLn $ show $ length $ WTA.finalWeights wta
