@@ -20,11 +20,14 @@ module Data.Hypergraph (
 -- * Map
 , eMapHead
 , eMapTail
+, mapTails
 , eMapHeadTail
 , eMapVertices
 , eMapId
 , mapVertices
 , mapVerticesMonotonic
+, eMapLabel
+, mapLabels
 , eMapWeight
 , mapWeights
 , mapWeights'
@@ -36,6 +39,7 @@ module Data.Hypergraph (
 -- * Simplification
 , dropUnreachables
 , dropZeroWeighted
+, verticesToInt
 -- * Parsing
 , parseTree
 -- * Pretty Printing
@@ -45,7 +49,7 @@ module Data.Hypergraph (
 
 
 import qualified Data.Queue as Q
-import Tools.Miscellaneous (mapFst, sumWith, mapRandomR)
+import Tools.Miscellaneous (mapFst, mapSnd, sumWith, mapRandomR)
 
 import qualified Data.List as L
 import qualified Data.Map as M
@@ -131,6 +135,13 @@ eMapTail :: ([v] -> [v]) -> Hyperedge v l w i -> Hyperedge v l w i
 eMapTail f = \ e -> e{eTail = f (eTail e)}
 
 
+-- | Apply a function to the tails of the 'Hyperedge's of a 'Hypergraph'.
+mapTails
+  :: (Ord v)
+  => ([v] -> [v]) -> Hypergraph v l w i -> Hypergraph v l w i
+mapTails f = hypergraphM . M.map (map (eMapTail f)) . edgesM
+
+
 -- | Apply two functions to a 'Hyperedge''s head and tail, respectively.
 eMapHeadTail
   :: ( v  ->  v' )
@@ -176,6 +187,19 @@ mapVerticesMonotonic f (Hypergraph vs es)
       . M.toAscList
       $ es
       )
+
+
+ -- | Apply a function to the label of a 'Hyperedge'.
+eMapLabel :: (l -> l') -> Hyperedge v l w i -> Hyperedge v l' w i
+eMapLabel f = \ e -> e{eLabel = f (eLabel e)}
+
+
+-- | Apply a function to the labels of all 'Hyperedge's.
+mapLabels :: (Ord v) => (l -> l') -> Hypergraph v l w i -> Hypergraph v l' w i
+mapLabels f
+  = hypergraphM
+  . fmap (map (eMapLabel f))
+  . edgesM
 
 
 -- | Apply a function to the weight of a 'Hyperedge'.
@@ -292,6 +316,29 @@ dropZeroWeighted g
           else Just es'
       )
   $ edgesM g
+
+
+-- | Map the vertices of a 'Hypergraph' to distinct 'Int's where the given
+-- vertex is mapped to 0.
+-- Returns a pair of the vertex mapping and the new 'Hypergraph'.
+verticesToInt
+  :: (Ord v) => v -> Hypergraph v l w i -> (M.Map v Int, Hypergraph Int l w i)
+verticesToInt target g
+  = let (i, vM) = mapSnd (M.insert target 0)
+                $ mapSnd M.fromDistinctAscList
+                $ L.mapAccumL (\ i v -> {-i `seq`-} (i + 1, (v, i))) 1
+                $ S.toAscList
+                $ verticesS g
+    in {-i `seq`-}
+    ( vM
+    , mapVertices  -- mapVerticesMonotonic  -- TODO: optimize
+        ( \ v -> M.findWithDefault
+          (error "Data.Hypergraph.verticesToInt: This should not happen ...")
+          v
+          vM
+        )
+        g
+    )
 
 -- ---------------------------------------------------------------------------
 
