@@ -27,6 +27,7 @@ import Data.Hypergraph hiding (properize, randomizeWeights)
 import Tools.FastNub(nub)
 import Tools.Miscellaneous(mapFst, mapRandomR)
 
+import Control.DeepSeq
 import qualified Data.List as L
 import qualified Data.Map as M
 import qualified Random as R
@@ -295,3 +296,11 @@ split (x:xs) = it [] x xs
         (z:zs') -> it (fxs ++ [y]) z zs'
         _ -> []
 -}
+
+-- ---------------------------------------------------------------------------
+
+instance (NFData q, NFData t, NFData w) => NFData (Transition q t w) where
+  rnf (Transition l hd tl w) = rnf l `seq` rnf hd `seq` rnf tl `seq` rnf w
+
+instance (NFData q, NFData t, NFData w) => NFData (WTA q t w) where
+  rnf (WTA s t f) = rnf s `seq` rnf t `seq` rnf f
