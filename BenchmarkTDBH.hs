@@ -190,9 +190,9 @@ tdbhStats args
         putStr "tdbh-trans-states-finals:  "
         printWTAStatistic wta'
         putStr "tdbh-unreachables-dropped: "
-        printWTAStatistic wta''
+        printWTAStatistic wta''  -- putStrLn "-1\t-1\t-1"
         putStr "item-count:                "
-        putStrLn
+        putStrLn  -- "-1"
           $ show
           $ length
           $ BH.getIntersectItems (const False) wsa wta
@@ -214,6 +214,8 @@ tdbhHelper args f = do
     $   readFile (args !! 0)
   let yld = read (args !! 1) :: [String]
   f (WSA.fromList 1 yld) (WTA.fromHypergraph {-("ROOT", 0)-}0 g)
+
+
 example _ = do
   let wta' = BHC.intersect wsa wta
   let ts = WTA.transitions wta'
