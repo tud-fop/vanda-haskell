@@ -6,32 +6,33 @@ module WTABarHillelTopDownBin where
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Data.WSA as WSA
-import qualified Data.WTA as WTA
+import qualified Data.WTAid as WTA
 import Data.Maybe (fromMaybe)
 import Debug.Trace
 
 {-- /snippet head --}
 ----- Queue --------------------------------------------------------------------
 {-- snippet queue --}
-data Queue a = Queue [a] [a] (Set.Set a) deriving (Show)
+data Queue a = Queue [a] [a] (Set.Set a) Integer deriving (Show)
 
 emptyq :: Queue a
-emptyq = Queue [] [] Set.empty
+emptyq = Queue [] [] Set.empty 0
 
 isEmpty :: Queue a -> Bool
-isEmpty (Queue [] [] _) = True
-isEmpty _               = False
+isEmpty (Queue [] [] _ _) = True
+isEmpty _                 = False
 
 enq :: (Show a, Ord a) => a -> Queue a -> Queue a
-enq y q@(Queue xs ys s) =
-  if (not $ Set.member y s) then -- trace (show y) $
-    Queue xs (y:ys) (Set.insert y s)
-  else q
+enq y q@(Queue xs ys s n) = Queue xs (y:ys) s n
+  {--if (Set.member y s) then q else -- trace (show y) $
+   Queue xs (y:ys) (Set.insert y s) n -- $! (n+1)
+   -- Queue xs ys s $! (n+1)
+   --}
 
 deq :: Queue a -> (a, Queue a)
-deq (Queue (x:xs) ys       s) = (x, Queue xs ys s)
-deq (Queue []     ys@(_:_) s) = deq (Queue (reverse ys) [] s)
-deq (Queue []     []       _) = error "Cannot dequeue from empty queue."
+deq (Queue (x:xs) ys       s n) = (x, Queue xs ys s n)
+deq (Queue []     ys@(_:_) s n) = deq (Queue (reverse ys) [] s n)
+deq (Queue []     []       _ _) = error "Cannot dequeue from empty queue."
 
 enqList :: (Show a, Ord a) => [a] -> Queue a -> Queue a
 enqList xs q = foldr enq q xs
@@ -40,48 +41,84 @@ enqListWith :: (Show a, Ord a) => (b -> a) -> [b] -> Queue a -> Queue a
 enqListWith f xs q = foldr (enq . f) q xs
 
 toList :: Queue a -> [a]
-toList (Queue xs ys _) = xs ++ (reverse ys)
+toList (Queue xs ys _ _) = xs ++ (reverse ys)
+
+getCount (Queue _ _ _ n) = n 
 {-- /snippet queue --}
 
 ----- Main ---------------------------------------------------------------------
 {-- snippet Item --}
 -- Item wsaState wtaState terminal weight
-data Item p q t w = Item
+data Item p q t w i = Item
     { wsaStateFst  :: p
     , wsaStateSnd  :: p
-    , wtaTrans     :: WTA.Transition q t w
+    , wtaTrans     :: WTA.Transition q t w i
+    , bullet       :: Int -- redundant: bullet == length wtaTransSt
     , wtaTransSt   :: [q]
     , wtaTransRest :: [q]
     , weight       :: w
     }
-    deriving (Eq, Ord)
-instance (Show p, Show q, Show t, Show w) => Show (Item p q t w) where
+    -- deriving (Eq, Ord)
+
+
+{--instance (Eq p, Eq i) => Eq (Item p q t w i) where
+  i1 == i2 =    wsaStateFst i1 == wsaStateFst i2
+             && wsaStateSnd i1 == wsaStateSnd i2
+             && WTA.transId (wtaTrans i1) == WTA.transId (wtaTrans i2)
+             && bullet i1 == bullet i2--}
+
+{--instance (Eq p, Eq i) => Eq (Item p q t w i) where
+  i1 == i2 = (==)
+    (wsaStateFst i1, wsaStateSnd i1, WTA.transId (wtaTrans i1), bullet i1)
+    (wsaStateFst i2, wsaStateSnd i2, WTA.transId (wtaTrans i2), bullet i2) --}
+instance (Eq p, Eq i) => Eq (Item p q t w i) where
+  Item sf1 ss1 t1 b1 _ _ _ == Item sf2 ss2 t2 b2 _ _ _ =
+    (sf1, ss1, WTA.transId t1, b1) == (sf2, ss2, WTA.transId t2, b2)
+    -- (wsaStateFst i1, wsaStateSnd i1, WTA.transId (wtaTrans i1), bullet i1)
+    -- (wsaStateFst i2, wsaStateSnd i2, WTA.transId (wtaTrans i2), bullet i2)
+{--
+instance (Ord p, Ord i) => Ord (Item p q t w i) where
+  i1 `compare` i2 = compare
+    (wsaStateFst i1, wsaStateSnd i1, WTA.transId (wtaTrans i1), bullet i1)
+    (wsaStateFst i2, wsaStateSnd i2, WTA.transId (wtaTrans i2), bullet i2) --}
+    {--   wsaStateFst i1 <= wsaStateFst i2
+    && wsaStateSnd i1 <= wsaStateSnd i2
+    && WTA.transId (wtaTrans i1) <= WTA.transId (wtaTrans i2)
+    && bullet i1 <= bullet i2--}
+instance (Ord p, Ord i) => Ord (Item p q t w i) where
+  Item sf1 ss1 WTA.Transition{ WTA.transId = i1 } b1 _ _ _ `compare` Item sf2 ss2 WTA.Transition{ WTA.transId = i2 } b2 _ _ _ =
+    (sf1, ss1, i1, b1) `compare` (sf2, ss2, i2, b2)
+
+instance (Show p, Show q, Show t, Show w) => Show (Item p q t w i) where
   show = showItem
+
 {-- /snippet Item --}
 {-- snippet State --}
 -- State wsaState wtaState terminal weight
-data State p q t w = State
-    { itemq :: Queue (Item p q t w)
-    , pmap  :: Map.Map q ([WTA.Transition q t w], Set.Set p)
+data State p q t w i = State
+    { itemq :: Queue (Item p q t w i)
+    , pmap  :: Map.Map q ([WTA.Transition q t w i], Set.Set p)
     , smap  :: Map.Map (p, t) [(p, w)]
-    , cmap  :: Map.Map (p, q) (Set.Set p, [Item p q t w])
+    , cmap  :: Map.Map (p, q) (Set.Set p, [Item p q t w i])
     , epsilonTest :: t -> Bool
-    , _trans :: [WTA.Transition (p,[q],p) (Maybe t) w]
+    , _trans :: [WTA.Transition (p,[q],p) (Maybe t) w ()]
     }
 {-- /snippet State --}
 {-- snippet intersect --}
 {-- snippet head --}
 intersect
-  :: (Show p, Show q, Show t, Show w, Ord p, Ord q, Ord t, Ord w, Num w)
-  => WSA.WSA p t w -> WTA.WTA q t w -> WTA.WTA (p, [q], p) (Maybe t) w
+  :: (Show p, Show q, Show t, Show w,
+      Ord p, Ord i, Ord q, Ord t, Ord w, Num w)
+  => WSA.WSA p t w -> WTA.WTA q t w i -> WTA.WTA (p, [q], p) (Maybe t) w ()
 intersect wsa wta = intersect' (const False) wsa wta
 
 intersect'
-  :: (Show p, Show q, Show t, Show w, Ord p, Ord q, Ord t, Ord w, Num w)
+  :: (Show p, Show q, Show t, Show w,
+      Ord p, Ord i, Ord q, Ord t, Ord w, Num w)
   => (t -> Bool)
   -> WSA.WSA p t w
-  -> WTA.WTA q t w
-  -> WTA.WTA (p, [q], p) (Maybe t) w
+  -> WTA.WTA q t w i
+  -> WTA.WTA (p, [q], p) (Maybe t) w ()
 {-- /snippet head --}
 intersect' epsilonTest wsa wta
   = let finals  = [ ((ssi, [ts], sso), w1 * w2 * w3)
@@ -93,11 +130,12 @@ intersect' epsilonTest wsa wta
 {-- /snippet intersect --}
 {-- snippet iter --}
 iter
-  :: (Show p, Show q, Show t, Show w, Ord p, Ord q, Ord t, Ord w, Num w)
-  => State p q t w -> State p q t w
+  :: (Show p, Show q, Show t, Show w,
+      Ord p, Ord i, Ord q, Ord t, Ord w, Num w)
+  => State p q t w i -> State p q t w i
 iter s
   = if isEmpty (itemq s)
-    then s
+    then trace (show (getCount $ itemq s)) s
     else
       let (i, itemq') = deq (itemq s)
       in iter $ complete i $ predict i s{itemq = itemq'}
@@ -107,8 +145,8 @@ iter s
 {-- snippet init --}
 initPredictMap ::
   (Ord q) =>
-  [WTA.Transition q t w]
-  -> Map.Map q ([WTA.Transition q t w], Set.Set p)
+  [WTA.Transition q t w i]
+  -> Map.Map q ([WTA.Transition q t w i], Set.Set p)
 initPredictMap ts
   = Map.map (\x -> (x, Set.empty)) $
     Map.fromListWith (++) [ (WTA.transState t, [t]) | t <- ts ]
@@ -126,9 +164,10 @@ initScanMap ts
       ]
 
 
-initState ::
-  (Show p, Show q, Show t, Show w, Ord p, Ord q, Ord t, Ord w, Num w) =>
-  (t -> Bool) -> WSA.WSA p t w -> WTA.WTA q t w -> State p q t w
+initState
+  :: (Show p, Show q, Show t, Show w,
+      Ord p, Ord i, Ord q, Ord t, Ord w, Num w)
+  => (t -> Bool) -> WSA.WSA p t w -> WTA.WTA q t w i -> State p q t w i
 initState epsTest wsa wta
   = let state = State { itemq = emptyq
                       , pmap  = initPredictMap (WTA.transitions wta)
@@ -146,9 +185,10 @@ initState epsTest wsa wta
 
 ----- Predictor and Scanner ----------------------------------------------------
 {-- snippet predict --}
-predict ::
-  (Show p, Show q, Show t, Show w, Ord p, Ord q, Ord t, Ord w, Num w) =>
-  Item p q t w -> State p q t w -> State p q t w
+predict
+  :: (Show p, Show q, Show t, Show w,
+      Ord p, Ord i, Ord q, Ord t, Ord w, Num w)
+  => Item p q t w i -> State p q t w i -> State p q t w i
 predict
     Item { wsaStateSnd = p
          , wtaTransRest = q:_
@@ -158,9 +198,10 @@ predict _
   = id
 {-- /snippet predict --}
 {-- snippet predict_ --}
-predict' ::
-  (Show p, Show q, Show t, Show w, Ord p, Ord q, Ord t, Ord w, Num w) =>
-  (p, q) -> State p q t w -> State p q t w
+predict'
+  :: (Show p, Show q, Show t, Show w,
+      Ord p, Ord i, Ord q, Ord t, Ord w, Num w)
+  => (p, q) -> State p q t w i -> State p q t w i
 predict' (p, q) s
   = case Map.lookup q (pmap s) of
       Nothing -> s
@@ -168,15 +209,16 @@ predict' (p, q) s
         if Set.member p ps
         then s
         else
-          let newI t = Item p p t [] (WTA.transStates t) (WTA.transWeight t)
+          let newI t = Item p p t 0 [] (WTA.transStates t) (WTA.transWeight t)
               pmap'  = Map.insert q (ts, Set.insert p ps) (pmap s)
           in foldr (scan . newI) (s { pmap = pmap' }) ts
 {-- /snippet predict_ --}
 {-- snippet scan --}
 -- FIXME: if epsilonTest returns true, we must also add a transition!!
-scan ::
-  (Show p, Show q, Show t, Show w, Ord p, Ord q, Ord t, Ord w, Num w) =>
-  Item p q t w -> State p q t w -> State p q t w
+scan
+  :: (Show p, Show q, Show t, Show w,
+      Ord p, Ord i, Ord q, Ord t, Ord w, Num w)
+  => Item p q t w i -> State p q t w i -> State p q t w i
 scan i@Item{wtaTransRest = []} s
   = let p = wsaStateFst i
         t = WTA.transTerminal (wtaTrans i)
@@ -189,6 +231,7 @@ scan i@Item{wtaTransRest = []} s
                               (p,[WTA.transState $ wtaTrans i], p')
                               []
                               (weight i')
+                              ()
                         in (i', tr)
         is = map scanI (fromMaybe [] (Map.lookup (p, t) (smap s)))
         update = enqListWith fst is
@@ -203,8 +246,9 @@ scan i s
 ----- Completer ----------------------------------------------------------------
 {-- snippet complete --}
 complete
-  :: (Show p, Show q, Show t, Show w, Ord p, Ord q, Ord t, Ord w, Num w)
-  => Item p q t w -> State p q t w -> State p q t w
+  :: (Show p, Show q, Show t, Show w,
+      Ord p, Ord i, Ord q, Ord t, Ord w, Num w)
+  => Item p q t w i -> State p q t w i -> State p q t w i
 complete
     i@Item { wsaStateSnd = p
            , wtaTransRest = q:qs'
@@ -218,7 +262,7 @@ complete
                     (p, q)
                     (cmap s)
         trans'  = (concat $ map snd ps'') ++ _trans s
-    in s { itemq = itemq', cmap = cmap', _trans = trans' }
+    in s { itemq = itemq', cmap = cmap' {-, _trans = trans' -} }
 complete
     i@Item { wsaStateSnd = p'
            , wtaTransRest = []
@@ -237,16 +281,17 @@ complete
         trans'  = (concat $ map snd is') ++ _trans s
     in if maybe False (Set.member p' . fst) (Map.lookup (p, q) (cmap s))
        then s
-       else s { itemq = itemq', cmap = cmap', _trans = trans' }
+       else s { itemq = itemq', cmap = cmap' {-, _trans = trans' -} }
 
 
 completeItem
   :: Num w
   => p
-  -> Item p q t w
-  -> (Item p q t w, [WTA.Transition (p,[q],p) (Maybe t) w])
+  -> Item p q t w i
+  -> (Item p q t w i, [WTA.Transition (p,[q],p) (Maybe t) w ()])
 completeItem p' i
   = let i' = i { wsaStateSnd = p'
+               , bullet = (bullet i)+1
                , wtaTransSt = head (wtaTransRest i):wtaTransSt i
                , wtaTransRest = tail (wtaTransRest i)
                }
@@ -257,6 +302,7 @@ completeItem p' i
             [ (wsaStateFst i,wtaTransSt i, wsaStateSnd i),
               (wsaStateSnd i,[head (wtaTransRest i)], p')]
             1
+            ()
           ]
         t2 = if not . null $ wtaTransRest i' then []
           else [ WTA.Transition
@@ -264,6 +310,7 @@ completeItem p' i
                  (wsaStateFst i,[WTA.transState $ wtaTrans i], p')
                  [(wsaStateFst i,wtaTransSt i', p')]
                  (WTA.transWeight $ wtaTrans i)
+                 ()
                ]
     in (i', t1++t2)
 
@@ -280,7 +327,7 @@ liftSnd f (x, y) = (x, f y)
 ----- Debugging ----------------------------------------------------------------
 
 showItem ::
-  (Show p, Show q, Show t, Show w) => Item p q t w -> [Char]
+  (Show p, Show q, Show t, Show w) => Item p q t w i -> [Char]
 showItem i
   = let t   = wtaTrans i
         qs' = init (show (wtaTransSt i)) ++ "*" ++ tail (show (wtaTransRest i))
@@ -299,7 +346,7 @@ showItem i
         ++ show (wsaStateSnd i)
         ++ "]"
 
-showItemLaTeX :: (Show w) => Item Char Char Char w -> [Char]
+showItemLaTeX :: (Show w) => Item Char Char Char w i -> [Char]
 showItemLaTeX i
   = let t   = wtaTrans i
         qs  = WTA.transStates t
