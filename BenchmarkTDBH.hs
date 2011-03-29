@@ -16,6 +16,7 @@ import Data.List (nub)
 
 import TestData.TestWTA
 
+import qualified Data.List as L
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
 import qualified Data.Tree as T
@@ -37,6 +38,7 @@ main = do
     "tdbh" ->  tdbh (tail args)
     "tdbhStats" ->  tdbhStats (tail args)
     "printWTA" -> printWTA (tail args)
+    "example" -> example (tail args)
 
 
 printFileHG [hgFile]
@@ -210,6 +212,49 @@ tdbhHelper args f = do
     $   readFile (args !! 0)
   let yld = read (args !! 1) :: [String]
   f (WSA.fromList 1 yld) (WTA.fromHypergraph {-("ROOT", 0)-}0 g)
+example _ = do
+  let wta' = BHC.intersect wsa wta
+  let ts = WTA.transitions wta'
+  flip mapM_ (WTA.states wta') $ \ v ->
+     putStrLn
+      $   "\\node[state] (" 
+      ++  stateLab v
+      ++  ") {$\\mathit{"
+      ++  stateLab v
+      ++  "}/"
+      ++  maybe "0" show (L.lookup v (WTA.finalWeights wta'))
+      ++ "$};"
+  flip mapM_ ts $ \ t ->
+    putStrLn $ "\\node[edge] (" ++ transLab t ++ ") {};"
+  flip mapM_ ts $ \ t@(WTA.Transition l hd tl w) ->
+    putStrLn
+      $   "\\path ("
+      ++  transLab t
+      ++  ") node[above=\\ab] {$"
+      ++  l
+      ++  "/"
+      ++  show w
+      ++  "$};"
+  flip mapM_ ts $ \ t@(WTA.Transition l hd tl w) -> do
+    putStrLn $ "\\draw[->] (" ++ transLab t ++ ") to (" ++ stateLab hd ++ ");"
+    flip mapM_ tl $ \ v ->
+      putStrLn $ "\\draw[->] (" ++ stateLab v ++ ") to (" ++ transLab t ++ ");"
+  where
+    stateLab (p, q, p') = [p, q, p']
+    transLab (WTA.Transition l hd tl w)
+      = stateLab hd ++ "-" ++ concat (L.intersperse "_" (map stateLab tl))
+    wta = WTA.create
+            [ WTA.Transition "\\sigma" 'f' "qf" 1
+            , WTA.Transition "\\alpha" 'f' ""   2
+            , WTA.Transition "\\alpha" 'q' ""   2
+            ]
+            [ ('f', 1) ]
+    wsa = WSA.create
+            [ WSA.Transition "\\alpha" 'p' 'r' 1
+            , WSA.Transition "\\alpha" 'r' 'p' 1
+            ]
+            [ ('p', 1) ]
+            [ ('r', 1) ]
 
 
 negrasToTrees
