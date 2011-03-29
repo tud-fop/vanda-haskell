@@ -13,26 +13,26 @@ import Debug.Trace
 {-- /snippet head --}
 ----- Queue --------------------------------------------------------------------
 {-- snippet queue --}
-data Queue a = Queue [a] [a] (Set.Set a) Integer deriving (Show)
+data Queue a = Queue [a] [a] (Set.Set a) deriving (Show)
 
 emptyq :: Queue a
-emptyq = Queue [] [] Set.empty 0
+emptyq = Queue [] [] Set.empty
 
 isEmpty :: Queue a -> Bool
-isEmpty (Queue [] [] _ _) = True
-isEmpty _                 = False
+isEmpty (Queue [] [] _) = True
+isEmpty _               = False
 
 enq :: (Show a, Ord a) => a -> Queue a -> Queue a
-enq y q@(Queue xs ys s n) = Queue xs (y:ys) s n
-  {--if (Set.member y s) then q else -- trace (show y) $
-   Queue xs (y:ys) (Set.insert y s) n -- $! (n+1)
-   -- Queue xs ys s $! (n+1)
-   --}
+enq y q@(Queue xs ys s) =
+  if Set.member y s
+  then q
+  else Queue xs (y:ys) (Set.insert y s)
+
 
 deq :: Queue a -> (a, Queue a)
-deq (Queue (x:xs) ys       s n) = (x, Queue xs ys s n)
-deq (Queue []     ys@(_:_) s n) = deq (Queue (reverse ys) [] s n)
-deq (Queue []     []       _ _) = error "Cannot dequeue from empty queue."
+deq (Queue (x:xs) ys       s) = (x, Queue xs ys s)
+deq (Queue []     ys@(_:_) s) = deq (Queue (reverse ys) [] s)
+deq (Queue []     []       _) = error "Cannot dequeue from empty queue."
 
 enqList :: (Show a, Ord a) => [a] -> Queue a -> Queue a
 enqList xs q = foldr enq q xs
@@ -41,9 +41,7 @@ enqListWith :: (Show a, Ord a) => (b -> a) -> [b] -> Queue a -> Queue a
 enqListWith f xs q = foldr (enq . f) q xs
 
 toList :: Queue a -> [a]
-toList (Queue xs ys _ _) = xs ++ (reverse ys)
-
-getCount (Queue _ _ _ n) = n 
+toList (Queue xs ys _) = xs ++ (reverse ys)
 {-- /snippet queue --}
 
 ----- Main ---------------------------------------------------------------------
@@ -135,7 +133,7 @@ iter
   => State p q t w i -> State p q t w i
 iter s
   = if isEmpty (itemq s)
-    then trace (show (getCount $ itemq s)) s
+    then s
     else
       let (i, itemq') = deq (itemq s)
       in iter $ complete i $ predict i s{itemq = itemq'}
@@ -262,7 +260,7 @@ complete
                     (p, q)
                     (cmap s)
         trans'  = (concat $ map snd ps'') ++ _trans s
-    in s { itemq = itemq', cmap = cmap' {-, _trans = trans' -} }
+    in s { itemq = itemq', cmap = cmap', _trans = trans' }
 complete
     i@Item { wsaStateSnd = p'
            , wtaTransRest = []
@@ -281,7 +279,7 @@ complete
         trans'  = (concat $ map snd is') ++ _trans s
     in if maybe False (Set.member p' . fst) (Map.lookup (p, q) (cmap s))
        then s
-       else s { itemq = itemq', cmap = cmap' {-, _trans = trans' -} }
+       else s { itemq = itemq', cmap = cmap', _trans = trans' }
 
 
 completeItem
