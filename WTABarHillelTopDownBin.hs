@@ -188,7 +188,7 @@ scan i@Item{wtaTransRest = []} s
                               (Just $ WTA.transTerminal $ wtaTrans i)
                               (p,[WTA.transState $ wtaTrans i], p')
                               []
-                              w
+                              (weight i')
                         in (i', tr)
         is = map scanI (fromMaybe [] (Map.lookup (p, t) (smap s)))
         update = enqListWith fst is
