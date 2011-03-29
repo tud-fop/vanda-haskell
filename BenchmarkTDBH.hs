@@ -16,6 +16,7 @@ import Data.List (nub)
 
 import TestData.TestWTA
 
+import Control.DeepSeq
 import qualified Data.List as L
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
@@ -38,6 +39,7 @@ main = do
     "tdbh" ->  tdbh (tail args)
     "tdbhStats" ->  tdbhStats (tail args)
     "printWTA" -> printWTA (tail args)
+    "readWTA" -> readWTA (tail args)
     "example" -> example (tail args)
 
 
@@ -171,11 +173,7 @@ binarize args = do
 
 tdbh args
   = tdbhHelper args
-      ( \ wsa wta -> do
-        let wta' = BH.intersect wsa wta
-        WTA.printWTA wta'
-        -- printWTAStatistic wta'
-      )
+      (\ wsa wta -> rnf (BH.intersect wsa wta) `seq` return ())
 
 
 tdbhStats args
@@ -205,6 +203,10 @@ tdbhStats args
 
 printWTA args
   = tdbhHelper args (const WTA.printWTA)
+
+
+readWTA args
+  = tdbhHelper args (\ wsa wta -> rnf wta `seq` return ())
 
 
 tdbhHelper args f = do
