@@ -18,8 +18,9 @@ ps='filtered/Benchmark'
 
 cat >|plot.tmp <<EOF
 set terminal latex
-set size 0.63,0.7
-set key off #bottom right
+set size 0.7,1.0
+#set key bottom right
+set key off
 #set y2tics
 #set ytics nomirror
 # set label 'test'
@@ -32,7 +33,7 @@ set yrange [0.01:100]
 
 
 set xlabel "{\\\\small length of input sentence in words}"
-set ylabel "{\\\\small\\\\rotatebox{90}{execution time in seconds}}"
+
 
 set output '${po}/tdbh.gnuplot.tex'
 plot '${ps}TDBH_hg_400_0_binarized.csv' using (\$6 + 0.0):(\$4 - 0.38) title '0 splits, tdbh with binarized wta' with points 2 \
@@ -41,6 +42,17 @@ plot '${ps}TDBH_hg_400_0_binarized.csv' using (\$6 + 0.0):(\$4 - 0.38) title '0 
    , '${ps}TDBH_hg_400_2.csv'           using (\$6 + 0.3):(\$4 - 0.25) title '2 splits, tdbh' with points 6  \
    , '${ps}TDBH_hg_400_3_binarized.csv' using (\$6 + 0.4):(\$4 - 0.67) title '3 splits, tdbh with binarized wta' with points 7  \
    , '${ps}TDBH_hg_400_3.csv'           using (\$6 + 0.5):(\$4 - 0.27) title '3 splits, tdbh' with points 10
+
+set output '${po}/400_3.gnuplot.tex'
+plot '${ps}TDBH_hg_400_3_binarized.csv' using (\$6 + 0.0):(\$4 - 0.67) title 'tdbh with binarized wta' with points 2 \
+   , '${ps}TDBH_hg_400_3.csv'           using (\$6 + 0.1):(\$4 - 0.27) title 'tdbh' with points 4  \
+   , '${ps}TDBHBin_hg_400_3_binarized.csv' using (\$6 + 0.2):(\$4 - 0.67) title 'tdbh-bin with binarized wta' with points 5  \
+   , '${ps}TDBHBin_hg_400_3.csv'           using (\$6 + 0.3):(\$4 - 0.27) title 'tdbh-bin' with points 6  \
+   , '${ps}Complete_hg_400_3_binarized.csv' using (\$6 + 0.4):(\$4 - 0.69) title 'complete with binarized wta' with points 7  \
+   , '${ps}Complete_hg_400_3.csv'           using (\$6 + 0.5):(\$4 - 0.30) title 'complete' with points 10
+
+
+set ylabel "{\\\\small\\\\rotatebox{90}{execution time in seconds}}"
 
 set output '${po}/tdbh-bin.gnuplot.tex'
 plot '${ps}TDBHBin_hg_400_0_binarized.csv' using (\$6 + 0.0):(\$4 - 0.39) title '0 splits, tdbh-bin with binarized wta' with points 2 \
@@ -57,14 +69,6 @@ plot '${ps}TDBH_hg_400_2_binarized.csv' using (\$6 + 0.0):(\$4 - 0.62) title 'td
    , '${ps}TDBHBin_hg_400_2.csv'           using (\$6 + 0.3):(\$4 - 0.25) title 'tdbh-bin' with points 6  \
    , '${ps}Complete_hg_400_2_binarized.csv' using (\$6 + 0.4):(\$4 - 0.63) title 'complete with binarized wta' with points 7  \
    , '${ps}Complete_hg_400_2.csv'           using (\$6 + 0.5):(\$4 - 0.27) title 'complete' with points 10
-
-set output '${po}/400_3.gnuplot.tex'
-plot '${ps}TDBH_hg_400_3_binarized.csv' using (\$6 + 0.0):(\$4 - 0.67) title 'tdbh with binarized wta' with points 2 \
-   , '${ps}TDBH_hg_400_3.csv'           using (\$6 + 0.1):(\$4 - 0.27) title 'tdbh' with points 4  \
-   , '${ps}TDBHBin_hg_400_3_binarized.csv' using (\$6 + 0.2):(\$4 - 0.67) title 'tdbh-bin with binarized wta' with points 5  \
-   , '${ps}TDBHBin_hg_400_3.csv'           using (\$6 + 0.3):(\$4 - 0.27) title 'tdbh-bin' with points 6  \
-   , '${ps}Complete_hg_400_3_binarized.csv' using (\$6 + 0.4):(\$4 - 0.69) title 'complete with binarized wta' with points 7  \
-   , '${ps}Complete_hg_400_3.csv'           using (\$6 + 0.5):(\$4 - 0.30) title 'complete' with points 10
 
 # pause -1  "Hit return to continue"
 EOF
