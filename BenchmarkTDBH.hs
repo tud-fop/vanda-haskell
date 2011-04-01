@@ -101,7 +101,7 @@ train args = do
 test args = do
   let hgFile = args !! 0
   let treeIndex = read $ args !! 1 :: Int
-  let f = if args !! 2 == "p" then onlyPreterminals else id
+  let f = if length args >= 3 then onlyPreterminals else id
   g <-  fmap (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
     $   readFile hgFile
   -- putStrLn $ drawHypergraph g
@@ -132,12 +132,14 @@ test args = do
     if null (vertices g')
       then putStrLn "---!!! no parse !!!---"
       else do
+        putStrLn $ "correct tree:"
+        putStrLn $ "weight (in input wta):      " ++ show (WTA.weightTree wta t)
+        putStrLn $ "weight (in Bar-Hillel wta): " ++ show (WTA.weightTree wta' t)
         putStrLn $ T.drawTree t
         flip mapM_ ts'' $ \ (t', w) -> do
-          putStr "Weight: "
-          print $ w
-          print $ WTA.weightTree wta t'
-          print $ WTA.weightTree wta' t'
+          putStrLn $ "weight (n-best):            " ++ show w
+          putStrLn $ "weight (in input wta):      " ++ show (WTA.weightTree wta t')
+          putStrLn $ "weight (in Bar-Hillel wta): " ++ show (WTA.weightTree wta' t')
           putStrLn $ T.drawTree t'
     putStrLn (replicate 80 '=')
 
@@ -359,7 +361,7 @@ traceFile file x y
 hgToNBestHg g
   = ( vertices g
     , \ v -> map (\ e -> (eId e, eTail e)) $ M.findWithDefault [] v eM
-    , \ i _ -> M.findWithDefault 0 i iM
+    , \ i ws -> negate $ product (map negate ws) * M.findWithDefault 0 i iM
     )
   where
     eM = edgesM g

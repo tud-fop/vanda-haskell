@@ -2,7 +2,6 @@
 
 module Main where
 
-import qualified Algorithms.NBest as NB
 import qualified Data.WTAid as WTA
 import qualified Data.WSA as WSA
 import Data.Hypergraph
@@ -154,29 +153,6 @@ yield (T.Node _ ts) = concatMap yield ts
 
 traceFile file x y
   = unsafePerformIO (writeFile file (show x) >> return y)
-
-
-hgToNBestHg g
-  = ( vertices g
-    , \ v -> map (\ e -> (eId e, eTail e)) $ M.findWithDefault [] v eM
-    , \ i _ -> M.findWithDefault 0 i iM
-    )
-  where
-    eM = edgesM g
-    iM = M.fromList $ map (\ e -> (eId e, eWeight e)) $ edges g
-
-
-hPathToTree (NB.B i bs)
-  = T.Node i (map hPathToTree bs)
-
-
-idTreeToLabelTree g
-  = fmap (\ i -> M.findWithDefault (error "unknown eId") i iM)
-  where
-    iM = M.fromList $ map (\ e -> (eId e, eLabel e)) $ edges g
-
-
-pairToTuple (NB.P x y) = (x, y)
 
 
 printWTAStatistic wta = do
