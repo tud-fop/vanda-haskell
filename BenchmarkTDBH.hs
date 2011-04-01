@@ -11,7 +11,7 @@ import qualified RuleExtraction as RE
 import qualified StateSplit as SPG
 import qualified WTABarHillelTopDown as BH
 import qualified WTABarHillelComplete as BHC
-import Tools.Miscellaneous (mapFst)
+import Tools.Miscellaneous (mapFst, mapSnd)
 import Data.List (nub)
 
 import TestData.TestWTA
@@ -41,6 +41,9 @@ main = do
     "printWTA" -> printWTA (tail args)
     "readWTA" -> readWTA (tail args)
     "example" -> example (tail args)
+    "manySentences" -> manySentences (tail args)
+    "manySentencesZigZag" -> manySentencesZigZag (tail args)
+    "evenSentencelength" -> evenSentencelength (tail args)
 
 
 printFileHG [hgFile]
@@ -259,6 +262,77 @@ example _ = do
             ]
             [ ('p', 1) ]
             [ ('r', 1) ]
+
+
+manySentences args = do
+  g <-  fmap (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
+    $   readFile (args !! 0)
+  let ylds = read (args !! 1) :: [[String]]
+  let wta = WTA.fromHypergraph {-("ROOT", 0)-}0 g
+  let ss =  [ ["KON","ART","ADJA","NN","VVFIN","KOUS","PRF","ART","NN","KOKOM","NE","APPR","NE","ADJD","VVINF","VAFIN","PPER","VAFIN","ADV","PPER","VVFIN","ART","NN","PTKVZ"]
+            , ["ART","ADJA","NN","PRELS","ADV","APPR","CARD","NN","APPRART","NN","VVFIN","VVFIN","PIS","PRELS","PTKNEG","VVFIN","KOUS","NE","APPR","NN","ART","ADJA","NN","VAFIN"]
+            , ["ADV","VVFIN","PPER","ART","NN","APPO","APPR","ADJA","KON","ADJA","NN","PIAT","NN","PRELS","VVFIN","NE","VAFIN","PIS","APPR","PPER","KON","PRELS","ART","NN","VVFIN"]
+            , ["CARD","NN","PRELS","NE","ADV","ADV","VVFIN","NN","KON","NN","VVFIN","PPER","ADV","PTKZU","VVINF"]
+            , ["PIS","PRELS","PRF","APPR","ART","NN","VVFIN","VAFIN","NE","NE","PRELS","NE","APPR","ART","NN","ART","NN","NE","CARD","NN","NN","VVFIN"]
+            , ["ART","NN","PROAV","PWAT","NN","NN","NE","ART","NN","ADV","ART","NN","APPR","NE","NN","VAFIN","VVFIN","PRF","PROAV","PWAV","NE","PPOSAT","NN","VVFIN"]
+            ]
+  -- let ss = ["abc", "def"]
+  let wsa = combineWSAs $ map (WSA.fromList 1) ylds
+  putStrLn $ unlines $ map show $ WSA.transitions wsa
+  putStrLn $ unlines $ map show $ WSA.initialWeights wsa
+  putStrLn $ unlines $ map show $ WSA.finalWeights wsa
+  rnf (BH.intersect wsa wta) `seq` return ()
+  where
+    combineWSAs xs = let (ts, is, fs) = go (0 :: Int) xs in WSA.create ts is fs
+      where
+        go _ [] = ([], [], [])
+        go n (x:xs)
+          = let (ts, is, fs) = go (n + 1) xs
+            in
+            ( (map (\ (WSA.Transition t p p' w) -> WSA.Transition t (n, p) (n, p') w) (WSA.transitions x) ++ ts)
+            , (map (\ (p, w) -> ((n, p), w)) (WSA.initialWeights x) ++ is)
+            , (map (\ (p, w) -> ((n, p), w)) (WSA.finalWeights x) ++ fs)
+            )
+
+
+manySentencesZigZag args = do
+  g <-  fmap (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
+    $   readFile (args !! 0)
+  let ylds = read (args !! 1) :: [[String]]
+  let wta = WTA.fromHypergraph {-("ROOT", 0)-}0 g
+  let wsa = combineWSAs $ map (WSA.fromList 1) ylds
+  putStrLn $ unlines $ map show $ WSA.transitions wsa
+  putStrLn $ unlines $ map show $ WSA.initialWeights wsa
+  putStrLn $ unlines $ map show $ WSA.finalWeights wsa
+  rnf (BH.intersect wsa wta) `seq` return ()
+  where
+    combineWSAs xs
+      = WSA.create
+          (concatMap WSA.transitions xs)
+          (concatMap WSA.initialWeights xs)
+          (concatMap WSA.finalWeights xs)
+
+
+evenSentencelength args = do
+  g <-  fmap (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
+    $   readFile (args !! 0)
+  let ylds = read (args !! 1) :: [String]
+  let redundancy = read (args !! 2) :: Int
+  let wta = WTA.fromHypergraph {-("ROOT", 0)-}0 g
+  let wsa = WSA.create
+              ( flip concatMap (nub ylds) $ \ x ->
+                  flip concatMap [1 .. redundancy] $ \ n ->
+                    [WSA.Transition x 0 n 1, WSA.Transition x n 0 1]
+              )
+              [(0 :: Int, 1)]
+              [(0 :: Int, 1)]
+--   let wsa = WSA.fromListCyclic 1 ylds
+--   putStrLn $ unlines $ map show $ WSA.transitions wsa
+--   putStrLn $ unlines $ map show $ WSA.initialWeights wsa
+--   putStrLn $ unlines $ map show $ WSA.finalWeights wsa
+--   WTA.printWTA $ BH.intersect wsa wta
+--   print $ length $ WTA.transitions $ BH.intersect wsa wta
+  rnf (BH.intersect wsa wta) `seq` return ()
 
 
 negrasToTrees

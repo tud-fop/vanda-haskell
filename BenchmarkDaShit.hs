@@ -30,6 +30,8 @@ main = do
     "tdbhStats" ->  tdbhStats (tail args)
     "printWTA" -> printWTA (tail args)
     "readWTA" -> readWTA (tail args)
+    "manySentencesZigZag" -> manySentencesZigZag (tail args)
+    "evenSentencelength" -> evenSentencelength (tail args)
 
 
 printFileHG [hgFile]
@@ -91,6 +93,46 @@ tdbhHelper args f = do
     $   readFile (args !! 0)
   let yld = read (args !! 1) :: [String]
   f (WSA.fromList 1 yld) (WTA.addId $ WTA.fromHypergraph {-("ROOT", 0)-}0 g)
+
+
+manySentencesZigZag args = do
+  g <-  fmap (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
+    $   readFile (args !! 0)
+  let ylds = read (args !! 1) :: [[String]]
+  let wta = WTA.addId $ WTA.fromHypergraph {-("ROOT", 0)-}0 g
+  let wsa = combineWSAs $ map (WSA.fromList 1) ylds
+  putStrLn $ unlines $ map show $ WSA.transitions wsa
+  putStrLn $ unlines $ map show $ WSA.initialWeights wsa
+  putStrLn $ unlines $ map show $ WSA.finalWeights wsa
+  rnf (BHB.intersect wsa wta) `seq` return ()
+  where
+    combineWSAs xs
+      = WSA.create
+          (concatMap WSA.transitions xs)
+          (concatMap WSA.initialWeights xs)
+          (concatMap WSA.finalWeights xs)
+
+
+evenSentencelength args = do
+  g <-  fmap (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
+    $   readFile (args !! 0)
+  let ylds = read (args !! 1) :: [String]
+  let redundancy = read (args !! 2) :: Int
+  let wta = WTA.addId $ WTA.fromHypergraph {-("ROOT", 0)-}0 g
+  let wsa = WSA.create
+              ( flip concatMap (nub ylds) $ \ x ->
+                  flip concatMap [1 .. redundancy] $ \ n ->
+                    [WSA.Transition x 0 n 1, WSA.Transition x n 0 1]
+              )
+              [(0 :: Int, 1)]
+              [(0 :: Int, 1)]
+--   let wsa = WSA.fromListCyclic 1 ylds
+--   putStrLn $ unlines $ map show $ WSA.transitions wsa
+--   putStrLn $ unlines $ map show $ WSA.initialWeights wsa
+--   putStrLn $ unlines $ map show $ WSA.finalWeights wsa
+--   WTA.printWTA $ BHB.intersect wsa wta
+--   print $ length $ WTA.transitions $ BHB.intersect wsa wta
+  rnf (BHB.intersect wsa wta) `seq` return ()
 
 
 negrasToTrees
