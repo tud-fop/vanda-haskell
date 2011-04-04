@@ -52,6 +52,7 @@ train maxIt ts target g gen = go maxIt $ train' ts target g gen
     go 0 (x:_)  = x
     go _ [x]    = x
     go n (_:xs) = go (n - 1) xs
+    go _ _ = error "StateSplit.train.go"
 
 
 -- | Train the weights of a 'Hypergraph' by refining the states and weights

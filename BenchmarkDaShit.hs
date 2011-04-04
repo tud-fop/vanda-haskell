@@ -28,11 +28,12 @@ main = do
     "readWTA" -> readWTA (tail args)
     "manySentencesZigZag" -> manySentencesZigZag (tail args)
     "evenSentencelength" -> evenSentencelength (tail args)
+    _ -> putStrLn "Unknown action."
 
 
 printFileHG :: [String] -> IO ()
-printFileHG [hgFile]
-  = readFile hgFile
+printFileHG args
+  = readFile (args !! 0)
   >>= putStrLn
     . drawHypergraph
     . (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())

@@ -230,6 +230,8 @@ complete
     in if maybe False (Set.member p' . fst) (Map.lookup (p, q) (cmap s))
        then s
        else s { itemq = itemq', cmap = cmap' }
+complete _ _
+  = error "WTABarHillelTopDown.complete"
 
 
 completeItem :: p -> Item p q t w -> Item p q t w
@@ -279,6 +281,7 @@ showItemLaTeX i
         cts = (:[])
         term 'a' = "\\alpha"
         term 'b' = "\\beta"
+        term _   = error "WTABarHillelTopDown.showItemLaTeX"
     in     "[("
         ++ qs'
         ++ ", "

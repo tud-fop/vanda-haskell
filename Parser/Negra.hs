@@ -276,6 +276,7 @@ pointerTreeToCrossedTree ptrTree = f 0 ptrTree
             Just ([lab], children) -> T.Node (Just lab, []) (map (g pt) children)
             Just ([], children) -> T.Node (Nothing, []) (map (g pt) children)
             Nothing -> error ("PointerTree malformed: pointer " ++ show pt ++ " does not exists:\n" ++ show ptrTree)
+            _ -> error "Parser.Negra.pointerTreeToCrossedTree"
     g pt (Left num) = f num pt
     g _ (Right (leaf, pos)) = T.Node (Just leaf, [(pos, pos)]) []
 
@@ -451,6 +452,7 @@ instance B.Binary SentenceData where
   get = B.get >>= \t -> case (t :: Word8) of
     0 -> SentenceWord <$> B.get <*> B.get <*> B.get <*> B.get <*> B.get <*> B.get
     1 -> SentenceNode <$> B.get <*> B.get <*> B.get <*> B.get <*> B.get <*> B.get
+    _ -> error "Parser.Negra.get"
 
 instance B.Binary Edge where
   put e = do

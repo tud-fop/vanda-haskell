@@ -18,6 +18,7 @@ main = do
     "tdbh" ->  tdbh (tail args)
     "tdbhStats" ->  tdbhStats (tail args)
     "readWTA" -> readWTA (tail args)
+    _ -> putStrLn "Unknown action."
 
 
 tdbh :: [String] -> IO ()

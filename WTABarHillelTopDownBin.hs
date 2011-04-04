@@ -354,6 +354,7 @@ showItemLaTeX i
         cts = (:[])
         term 'a' = "\\alpha"
         term 'b' = "\\beta"
+        term _   = error "WTABarHillelTopDownBin.showItemLaTeX"
     in     "[("
         ++ qs'
         ++ ", "
