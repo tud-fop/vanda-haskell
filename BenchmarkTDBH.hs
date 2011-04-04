@@ -83,7 +83,8 @@ train args = do
             "ROOT"
             (RE.extractHypergraph trains :: Hypergraph String String Double ())
             (R.mkStdGen 0)
-  flip mapM_ (zip [0 ..] gsgens) $ \ (n, (g, _)) -> do
+        :: [(Hypergraph (String, Int) String Double [Int], R.StdGen)]
+  flip mapM_ (zip [(0 :: Int) ..] gsgens) $ \ (n, (g, _)) -> do
     writeFile ("hg_" ++ show exs ++ "_" ++ show n ++ ".txt") (show $ mapIds (const ()) g)
     writeFile ("hg_" ++ show exs ++ "_" ++ show n ++ "_withTerminals.txt")
       $ show
@@ -264,13 +265,13 @@ example _ = do
     transLab (WTA.Transition _ hd tl _)
       = stateLab hd ++ "-" ++ concat (L.intersperse "_" (map stateLab tl))
     wta = WTA.create
-            [ WTA.Transition "\\sigma" 'f' "qf" 1
+            [ WTA.Transition "\\sigma" 'f' "qf" (1 :: Int)
             , WTA.Transition "\\alpha" 'f' ""   2
             , WTA.Transition "\\alpha" 'q' ""   2
             ]
             [ ('f', 1) ]
     wsa = WSA.create
-            [ WSA.Transition "\\alpha" 'p' 'r' 1
+            [ WSA.Transition "\\alpha" 'p' 'r' (1 :: Int)
             , WSA.Transition "\\alpha" 'r' 'p' 1
             ]
             [ ('p', 1) ]

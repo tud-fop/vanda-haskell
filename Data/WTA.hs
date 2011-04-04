@@ -222,11 +222,11 @@ generate' wta = map fst $ generateHeight wta 0 M.empty
 
 
 generateHeight
-  :: (Num h, Ord h, Ord q)
+  :: (Ord q)
   => WTA q t w
-  -> h
-  -> M.Map q [(T.Tree (q, t, w), h)]
-  -> [(T.Tree (q, t, w), h)]
+  -> Int
+  -> M.Map q [(T.Tree (q, t, w), Int)]
+  -> [(T.Tree (q, t, w), Int)]
 generateHeight wta h m
   = let trees
           = [ ( T.Node (transState t, transTerminal t, transWeight t) trees'

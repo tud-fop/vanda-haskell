@@ -309,7 +309,7 @@ getIntersectItemsLaTeX ::
   -> [[Char]]
 getIntersectItemsLaTeX epsTest wsa wta
   = zipWith (++)
-        (map (\x -> "\\\\\n&  i_{" ++ show x ++ "} = ") [1 ..])
+        (map (\x -> "\\\\\n&  i_{" ++ show x ++ "} = ") [(1 :: Int) ..])
         (iter (Just . showItemLaTeX) (initState epsTest wsa wta))
 
 
