@@ -11,10 +11,8 @@ import qualified RuleExtraction as RE
 import qualified StateSplit as SPG
 import qualified WTABarHillelTopDown as BH
 import qualified WTABarHillelComplete as BHC
-import Tools.Miscellaneous (mapFst, mapSnd)
+import Tools.Miscellaneous (mapFst)
 import Data.List (nub)
-
-import TestData.TestWTA
 
 import Control.DeepSeq
 import qualified Data.List as L

@@ -8,7 +8,8 @@ import qualified Data.Set as Set
 import qualified Data.WSA as WSA
 import qualified Data.WTAid as WTA
 import Data.Maybe (fromMaybe)
-import Debug.Trace
+
+-- import Debug.Trace
 
 {-- /snippet head --}
 ----- Queue --------------------------------------------------------------------

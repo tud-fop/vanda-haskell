@@ -7,16 +7,11 @@ import qualified Data.WSA as WSA
 import Data.Hypergraph
 import qualified Parser.Negra as Negra
 import qualified WTABarHillelTopDownBin as BHB
-import Tools.Miscellaneous (mapFst)
 import Data.List (nub)
 
 import Control.DeepSeq
-import qualified Data.List as L
-import qualified Data.Map as M
-import Data.Maybe (fromMaybe)
 import qualified Data.Tree as T
 import Text.Parsec.String (parseFromFile)
-import qualified Random as R
 import System(getArgs)
 import Text.Parsec (ParseError ())
 

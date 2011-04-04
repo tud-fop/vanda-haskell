@@ -23,9 +23,9 @@ import qualified Data.Set as Set
 import Data.Map ( Map )
 import qualified Data.Map as Map
 import Maybe
-import Array
+-- import Array
 import System( getArgs )
-import Debug.Trace
+-- import Debug.Trace
 import qualified Data.Heap as Heap
 import Data.Heap ( MinHeap )
 import Parser.HGraphLoader

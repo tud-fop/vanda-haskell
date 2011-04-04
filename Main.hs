@@ -12,17 +12,17 @@ profiling:
 module Main where
 
 import Demo
-import RuleExtraction
-import Tools.PrettyPrint
+-- import RuleExtraction
+-- import Tools.PrettyPrint
 
-import Data.Function(on)
-import Algorithms.InsideOutsideWeights
+-- import Data.Function(on)
+-- import Algorithms.InsideOutsideWeights
 -- import Algorithms.ExpectationMaximization
-import qualified Data.List as L
-import qualified Data.Map  as M
-import qualified Data.Set  as S
-import qualified Data.Tree as T
-import Text.Parsec.String (parseFromFile)
+-- import qualified Data.List as L
+-- import qualified Data.Map  as M
+-- import qualified Data.Set  as S
+-- import qualified Data.Tree as T
+-- import Text.Parsec.String (parseFromFile)
 
 
 main :: IO ()

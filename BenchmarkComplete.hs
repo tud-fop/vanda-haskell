@@ -2,28 +2,13 @@
 
 module Main where
 
-import qualified Algorithms.NBest as NB
 import qualified Data.WTA as WTA
 import qualified Data.WSA as WSA
 import Data.Hypergraph
-import qualified Parser.Negra as Negra
-import qualified RuleExtraction as RE
-import qualified StateSplit as SPG
 import qualified WTABarHillelComplete as BH
-import Tools.Miscellaneous (mapFst)
-import Data.List (nub)
-
-import TestData.TestWTA
 
 import Control.DeepSeq
-import qualified Data.List as L
-import qualified Data.Map as M
-import Data.Maybe (fromMaybe)
-import qualified Data.Tree as T
-import Text.Parsec.String (parseFromFile)
-import qualified Random as R
 import System(getArgs)
-import System.IO.Unsafe
 
 
 main :: IO ()

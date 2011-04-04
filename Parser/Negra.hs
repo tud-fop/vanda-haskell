@@ -11,7 +11,7 @@ import           Control.Applicative
 import           Control.DeepSeq
 import qualified Data.Binary   as B
 import           Data.ByteString.Lazy (ByteString)
-import           Data.Char     (isDigit, ord)
+import           Data.Char     (ord)
 import qualified Data.IntMap   as IntMap
 import qualified Data.List     as L
 import           Data.Ord      (comparing)
@@ -19,7 +19,7 @@ import qualified Data.Tree     as T
 import           Data.Word     (Word8)
 import           Text.Parsec   hiding (many, (<|>))
 
-import Debug.Trace
+-- import Debug.Trace
 
 data Sentence = Sentence
     { sId :: Int

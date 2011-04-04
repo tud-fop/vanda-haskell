@@ -29,7 +29,6 @@ import Tools.FastNub(nub)
 import Tools.Miscellaneous(mapFst, mapRandomR)
 
 import Control.DeepSeq
-import qualified Data.List as L
 import qualified Data.Map as M
 import qualified Random as R
 import qualified Data.Tree as T

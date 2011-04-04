@@ -22,11 +22,11 @@ import Text.ParserCombinators.Parsec
 import qualified Text.ParserCombinators.Parsec.Token as P
 import Text.ParserCombinators.Parsec.Error
 import Text.ParserCombinators.Parsec.Language ( emptyDef )
-import Data.List
+-- import Data.List
 import Data.Char
 import Data.Either
-import GHC.IO
-import Data.Map (Map)
+-- import GHC.IO
+-- import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.IntMap as IntMap
 import Data.Set (Set)
