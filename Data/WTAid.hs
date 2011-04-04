@@ -147,9 +147,9 @@ mapWeightsRandomR r f wta g
                       (finalWeights wta)
                       g'
     in (wta{transitions = ts, finalWeights = fs}, g'')
-  where
-    h :: (a -> b) -> (b -> c -> (d, e)) -> (a -> d -> f) -> a -> c -> (f, e)
-    h unpack f pack x g = let (y, g') = f (unpack x) g in (pack x y, g')
+  -- where
+  --   h :: (a -> b) -> (b -> c -> (d, e)) -> (a -> d -> f) -> a -> c -> (f, e)
+  --   h unpack f pack x g = let (y, g') = f (unpack x) g in (pack x y, g')
 
 
 mapStates :: (Ord q) => (p -> q) -> WTA p t w i -> WTA q t w i

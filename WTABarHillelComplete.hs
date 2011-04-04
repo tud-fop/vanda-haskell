@@ -74,7 +74,8 @@ combine ps qs
     where f p ps (q:qs) = [ (p, (p, q, p'):x, p'') | p' <- ps, (_, x, p'') <- f p' ps qs ]
           f p _  _      = [ (p, [], p) ]
 
-
+{-
 variations :: (Num n) => n -> [a] -> [[a]]
 variations 0 _  = [[]]
 variations n xs = [ y:ys | y <- xs, ys <- variations (n - 1) xs ]
+-}

@@ -25,7 +25,7 @@ cyk (l1, l2) w = (reverse l1', l2')
 	-- l2' is simple
 	l2' = [((i,n,i+1),t,_id) | (i,t) <- zip [0..] w, (n,t',_id) <- l2, t' == t]
 	-- for l1', we use foreach
-	State items' l1' = foreach index iter initial
+	State _ l1' = foreach index iter initial
 	index = [(i,j,k,p) | k <- [2..m], i <- [0..m-k], j <- [1..k-1], p <- l1 ]
 	m = length w
 	initial = State (S.fromList . fst3 . unzip3 $ l2') []

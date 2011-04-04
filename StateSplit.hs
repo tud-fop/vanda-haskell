@@ -102,7 +102,7 @@ splitMergeStep
   -> (Hypergraph (v, n) l w [i], gen)
 splitMergeStep offset ts target g0 gen
   = let
-    (i, (g1, gen'))
+    (_, (g1, gen'))
       = mapSnd (mapFst properize)
       $ mapSnd (flip (randomizeWeights 10) gen)
       $ mapAccumIds (\ i _ -> {-i `seq`-} (i + 1, i)) 0

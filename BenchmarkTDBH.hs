@@ -121,17 +121,8 @@ test args = do
                 $ WTA.toHypergraph
                 $ BH.intersect (WSA.fromList 1 $ yield t) wta
     let wta' = WTA.fromHypergraph target' g'
-    let ts' = take 3
-            $ filter ((t ==) . fst)
-            $ filter ((0 /= ) . snd)
-            $ map ( \ t' -> (t', WTA.weightTree wta' t'))
-            $ nub
-            $ filter (\ (T.Node r _) -> r == "ROOT")
-            $ take 10000
-            $ WTA.generate
-            $ wta'
     let nbHg = hgToNBestHg g'
-    let ts''  = map (mapFst (idTreeToLabelTree g' . hPathToTree) . pairToTuple)
+    let ts'  = map (mapFst (idTreeToLabelTree g' . hPathToTree) . pairToTuple)
               $ NB.best' nbHg target' 3
     print $ yield t
     -- putStrLn $ WTA.showWTA $ wta'
@@ -142,7 +133,7 @@ test args = do
         putStrLn $ "weight (in input wta):      " ++ show (WTA.weightTree wta t)
         putStrLn $ "weight (in Bar-Hillel wta): " ++ show (WTA.weightTree wta' t)
         putStrLn $ T.drawTree t
-        flip mapM_ ts'' $ \ (t', w) -> do
+        flip mapM_ ts' $ \ (t', w) -> do
           putStrLn $ "weight (n-best):            " ++ show w
           putStrLn $ "weight (in input wta):      " ++ show (WTA.weightTree wta t')
           putStrLn $ "weight (in Bar-Hillel wta): " ++ show (WTA.weightTree wta' t')
@@ -291,14 +282,6 @@ manySentences args = do
     $   readFile (args !! 0)
   let ylds = read (args !! 1) :: [[String]]
   let wta = WTA.fromHypergraph {-("ROOT", 0)-}0 g
-  let ss =  [ ["KON","ART","ADJA","NN","VVFIN","KOUS","PRF","ART","NN","KOKOM","NE","APPR","NE","ADJD","VVINF","VAFIN","PPER","VAFIN","ADV","PPER","VVFIN","ART","NN","PTKVZ"]
-            , ["ART","ADJA","NN","PRELS","ADV","APPR","CARD","NN","APPRART","NN","VVFIN","VVFIN","PIS","PRELS","PTKNEG","VVFIN","KOUS","NE","APPR","NN","ART","ADJA","NN","VAFIN"]
-            , ["ADV","VVFIN","PPER","ART","NN","APPO","APPR","ADJA","KON","ADJA","NN","PIAT","NN","PRELS","VVFIN","NE","VAFIN","PIS","APPR","PPER","KON","PRELS","ART","NN","VVFIN"]
-            , ["CARD","NN","PRELS","NE","ADV","ADV","VVFIN","NN","KON","NN","VVFIN","PPER","ADV","PTKZU","VVINF"]
-            , ["PIS","PRELS","PRF","APPR","ART","NN","VVFIN","VAFIN","NE","NE","PRELS","NE","APPR","ART","NN","ART","NN","NE","CARD","NN","NN","VVFIN"]
-            , ["ART","NN","PROAV","PWAT","NN","NN","NE","ART","NN","ADV","ART","NN","APPR","NE","NN","VAFIN","VVFIN","PRF","PROAV","PWAV","NE","PPOSAT","NN","VVFIN"]
-            ]
-  -- let ss = ["abc", "def"]
   let wsa = combineWSAs $ map (WSA.fromList 1) ylds
   putStrLn $ unlines $ map show $ WSA.transitions wsa
   putStrLn $ unlines $ map show $ WSA.initialWeights wsa

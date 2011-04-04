@@ -47,7 +47,7 @@ showHGraph
   => HGraph hNode hEdge hWeight -> String
 showHGraph (hNodes,hBack,hWeights) = show hNodes ++ "\n" ++ f' ++ "\n" ++ "kanten: " ++ show cnt ++ "\n"
     where
-        b = map (\x -> (show x) ++ "-->" ++ show (hBack x)) hNodes
+        -- b = map (\x -> (show x) ++ "-->" ++ show (hBack x)) hNodes
         cnt = sum $ map (\x -> length (hBack x)) hNodes
         f = map (\x -> map (\y@(sym,ls) -> show x  ++ "-->" ++ show y ++ "   weight:" ++ show (hWeights sym [])) (hBack x) ) hNodes
         f' = concat $ intersperse "\n" (concat f)

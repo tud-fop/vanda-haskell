@@ -324,7 +324,7 @@ dropZeroWeighted g
 verticesToInt
   :: (Ord v) => v -> Hypergraph v l w i -> (M.Map v Int, Hypergraph Int l w i)
 verticesToInt target g
-  = let (i, vM) = mapSnd (M.insert target 0)
+  = let (_, vM) = mapSnd (M.insert target 0)
                 $ mapSnd M.fromDistinctAscList
                 $ L.mapAccumL (\ i v -> {-i `seq`-} (i + 1, (v, i))) 1
                 $ S.toAscList

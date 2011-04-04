@@ -31,11 +31,11 @@ tdbhStats args
   = tdbhHelper args
       ( \ wsa wta -> do
         let wta' = BH.intersect wsa wta
-        let target' = (fst $ head $ WTA.finalWeights wta')
-        let wta'' = WTA.fromHypergraph target'
-                  $ dropUnreachables target'
-                  $ WTA.toHypergraph
-                  $ wta'
+        -- let target' = (fst $ head $ WTA.finalWeights wta')
+        -- let wta'' = WTA.fromHypergraph target'
+        --           $ dropUnreachables target'
+        --           $ WTA.toHypergraph
+        --           $ wta'
         putStr "yield-length:              "
         putStrLn $ show $ length $ (read (args !! 1) :: [String])
         putStr "tdbh-trans-states-finals:  "

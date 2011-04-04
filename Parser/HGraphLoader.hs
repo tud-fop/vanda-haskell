@@ -64,21 +64,21 @@ configStyle   = emptyDef
 
 lexer       :: P.TokenParser st
 parens      :: CharParser st a -> CharParser st a
-braces      :: CharParser st a -> CharParser st a
-identifier  :: CharParser st String
+-- braces      :: CharParser st a -> CharParser st a
+-- identifier  :: CharParser st String
 float       :: CharParser st Double
-integer     :: CharParser st Integer
-reserved    :: String -> CharParser st ()
+-- integer     :: CharParser st Integer
+-- reserved    :: String -> CharParser st ()
 symbol      :: String -> CharParser st String
 
 lexer       = P.makeTokenParser configStyle
 
 parens      = P.parens lexer
-braces      = P.braces lexer
-identifier  = P.identifier lexer
+-- braces      = P.braces lexer
+-- identifier  = P.identifier lexer
 float       = P.float lexer
-integer     = P.integer lexer
-reserved    = P.reserved lexer
+-- integer     = P.integer lexer
+-- reserved    = P.reserved lexer
 symbol      = P.symbol lexer
 
 p_NT :: Parser NT'
