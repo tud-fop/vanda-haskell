@@ -314,8 +314,13 @@ split (x:xs) = it [] x xs
 
 -- ---------------------------------------------------------------------------
 
-instance (NFData q, NFData t, NFData w) => NFData (Transition q t w i) where
-  rnf (Transition l hd tl w i) = rnf l `seq` rnf hd `seq` rnf tl `seq` rnf w
+instance (NFData q, NFData t, NFData w, NFData i)
+  => NFData (Transition q t w i)
+  where
+  rnf (Transition l hd tl w i)
+    = rnf l `seq` rnf hd `seq` rnf tl `seq` rnf w `seq` rnf i
 
-instance (NFData q, NFData t, NFData w) => NFData (WTA q t w i) where
+instance (NFData q, NFData t, NFData w, NFData i)
+  => NFData (WTA q t w i)
+  where
   rnf (WTA s t f) = rnf s `seq` rnf t `seq` rnf f
