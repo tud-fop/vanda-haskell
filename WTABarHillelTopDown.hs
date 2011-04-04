@@ -73,12 +73,12 @@ intersect' ::
   -> WTA.WTA q t w
   -> WTA.WTA (p, q, p) t w
 {-- /snippet head --}
-intersect' epsilonTest wsa wta
+intersect' epsTest wsa wta
   = let finals  = [ ((ssi, ts, sso), w1 * w2 * w3)
                   | (ssi, w1) <- WSA.initialWeights wsa
                   , (ts , w2) <- WTA.finalWeights wta
                   , (sso, w3) <- WSA.finalWeights wsa ]
-        trans   = iter extractTransition (initState epsilonTest wsa wta)
+        trans   = iter extractTransition (initState epsTest wsa wta)
     in WTA.create trans finals
 {-- /snippet intersect --}
 {-- snippet iter --}
@@ -295,8 +295,8 @@ showItemLaTeX i
 getIntersectItems ::
   (Ord p, Show p, Ord q, Show q, Ord t, Show t, Num w) =>
   (t -> Bool) -> WSA.WSA p t w -> WTA.WTA q t w -> [[Char]]
-getIntersectItems epsilonTest wsa wta
-  = iter (Just . showItem) (initState epsilonTest wsa wta)
+getIntersectItems epsTest wsa wta
+  = iter (Just . showItem) (initState epsTest wsa wta)
 
 getIntersectItemsLaTeX ::
   (Num w) =>
@@ -304,10 +304,10 @@ getIntersectItemsLaTeX ::
   -> WSA.WSA Char Char w
   -> WTA.WTA Char Char w
   -> [[Char]]
-getIntersectItemsLaTeX epsilonTest wsa wta
+getIntersectItemsLaTeX epsTest wsa wta
   = zipWith (++)
         (map (\x -> "\\\\\n&  i_{" ++ show x ++ "} = ") [1 ..])
-        (iter (Just . showItemLaTeX) (initState epsilonTest wsa wta))
+        (iter (Just . showItemLaTeX) (initState epsTest wsa wta))
 
 
 intersectionIntemCount

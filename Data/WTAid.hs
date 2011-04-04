@@ -82,7 +82,7 @@ transIsLeaf _                               = False
 
 binarize :: (Ord q, Num w) => WTA q t w i -> WTA [q] (Maybe t) w ()
 binarize wta
-  = let states = nub $
+  = let qs     = nub $
                  -- map (:[]) (states wta) ++
                  map ((:[]) . transState) (transitions wta) ++
                  concat
@@ -92,14 +92,14 @@ binarize wta
         trans  = [ Transition (Just t) [q] [] w ()
                  | Transition       t   q  [] w _ <- transitions wta
                  ] ++
-                 [ Transition (Just t) [q] [qs]       w ()
-                 | Transition       t   q   qs@(_:_)  w _ <- transitions wta
+                 [ Transition (Just t) [q] [qs']       w ()
+                 | Transition       t   q   qs'@(_:_)  w _ <- transitions wta
                  ] ++
-                 [ Transition Nothing qqs [[q], qs] 1 ()
-                 | qqs@(q:qs@(_:_)) <- states
+                 [ Transition Nothing qqs [[q], qs'] 1 ()
+                 | qqs@(q:qs'@(_:_)) <- qs
                  ]
         finals = map (mapFst (:[])) (finalWeights wta)
-    in WTA states trans finals
+    in WTA qs trans finals
 
 addId :: WTA q t w i -> WTA q t w Int
 addId wta@WTA{ transitions = ts } = wta{ transitions = map f (zip ts [0..]) }
@@ -138,12 +138,12 @@ mapWeightsRandomR
 mapWeightsRandomR r f wta g
   = let (ts, g' ) = mapRandomR
                       r
-                      (\t r -> t{transWeight = f (transWeight t) r})
+                      (\t r' -> t{transWeight = f (transWeight t) r'})
                       (transitions wta)
                       g
         (fs, g'') = mapRandomR
                       r
-                      (\(q, w) r -> (q, f w r))
+                      (\(q, w) r' -> (q, f w r'))
                       (finalWeights wta)
                       g'
     in (wta{transitions = ts, finalWeights = fs}, g'')

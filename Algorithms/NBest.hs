@@ -101,7 +101,7 @@ knuth' h@(_,hBack,hWeights) (oldMap,unvis,vis)
 			                   let (ws,_) = unzip b
 			                   return ((hWeights sym ws),sym)		
 			list = [(v', (f sym ((map ((Map.!) oldMap) srcs)))) | v' <- Set.toList unvis, (sym,srcs) <- (hBack v'), (Set.isSubsetOf (Set.fromList srcs) vis)]
-			list'= filter (\(_,m) -> isJust m) list
+			list'= filter (\(_,m') -> isJust m') list
 			(v,m) = minimumBy (\(_,(Just (x,_))) (_,(Just (x',_)))-> compare x x') list'
 			
 			
@@ -120,7 +120,7 @@ kknuth' h@(_,hBack,hWeights) (_:xs)
 			                   let (ws,_) = unzip b
 			                   return ((hWeights sym ws),sym)		
 			list = [(v', (f sym ((map ((Map.!) oldMap) srcs)))) | v' <- Set.toList unvis, (sym,srcs) <- (hBack v'), (Set.isSubsetOf (Set.fromList srcs) vis)]
-			list'= filter (\(_,m) -> isJust m) list
+			list'= filter (\(_,m') -> isJust m') list
 			(v,m) = minimumBy (\(_,(Just (x,_))) (_,(Just (x',_)))-> compare x x') list'			
 --------------------------------------------------------------------
 --      Calculation of n-best hyperpaths                          --
@@ -146,7 +146,7 @@ topconcat f lists
     where
         combine :: [[a]] -> [[[a]]]
         combine [] = [[]]
-        combine (x:xs) = (map (x:) c) ++ [((tail x):(map (\x-> [head x]) xs))]
+        combine (x:xs) = (map (x:) c) ++ [((tail x):(map (\ x' -> [head x']) xs))]
 	        where c = combine xs
 
 

@@ -119,12 +119,12 @@ intersect'
   -> WTA.WTA q t w i
   -> WTA.WTA (p, [q], p) (Maybe t) w ()
 {-- /snippet head --}
-intersect' epsilonTest wsa wta
+intersect' epsTest wsa wta
   = let finals  = [ ((ssi, [ts], sso), w1 * w2 * w3)
                   | (ssi, w1) <- WSA.initialWeights wsa
                   , (ts , w2) <- WTA.finalWeights wta
                   , (sso, w3) <- WSA.finalWeights wsa ]
-        trans   = _trans $ iter $ initState epsilonTest wsa wta
+        trans   = _trans $ iter $ initState epsTest wsa wta
     in WTA.create trans finals
 {-- /snippet intersect --}
 {-- snippet iter --}

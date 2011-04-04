@@ -70,9 +70,9 @@ intersectFinals wsa wta
 
 combine :: [p] -> [q] -> [(p, [(p, q, p)], p)]
 combine ps qs
-  = concat [ f p ps qs | p <- ps ]
-    where f p ps (q:qs) = [ (p, (p, q, p'):x, p'') | p' <- ps, (_, x, p'') <- f p' ps qs ]
-          f p _  _      = [ (p, [], p) ]
+  = concat [ f p qs | p <- ps ]
+    where f p (q:qs') = [ (p, (p, q, p'):x, p'') | p' <- ps, (_, x, p'') <- f p' qs' ]
+          f p _      = [ (p, [], p) ]
 
 {-
 variations :: (Num n) => n -> [a] -> [[a]]

@@ -133,12 +133,12 @@ outside'
 outside' c w m target g
   = M.map fst $ go $ initOutsideMap w m target g
   where
-    go m
+    go m'
       = {-trace "Dong!" $-}
-        let m' = outsideStep m
-        in if checkMapsOn fst c m m'
-        then m'
-        else go m'
+        let m'' = outsideStep m'
+        in if checkMapsOn fst c m' m''
+        then m''
+        else go m''
 
 
 -- | Do one iteration step for the fixpoint computation of the outside

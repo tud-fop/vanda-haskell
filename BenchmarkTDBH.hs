@@ -291,8 +291,8 @@ manySentences args = do
     combineWSAs xs = let (ts, is, fs) = go (0 :: Int) xs in WSA.create ts is fs
       where
         go _ [] = ([], [], [])
-        go n (x:xs)
-          = let (ts, is, fs) = go (n + 1) xs
+        go n (x:xs')
+          = let (ts, is, fs) = go (n + 1) xs'
             in
             ( (map (\ (WSA.Transition t p p' w) -> WSA.Transition t (n, p) (n, p') w) (WSA.transitions x) ++ ts)
             , (map (\ (p, w) -> ((n, p), w)) (WSA.initialWeights x) ++ is)

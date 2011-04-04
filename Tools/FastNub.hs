@@ -9,9 +9,9 @@ import qualified Data.Set as Set
 nub :: (Ord a) => [a] -> [a]
 nub xs = f xs Set.empty
   where
-    f (x:xs) s = if Set.member x s
-                 then f xs s
-                 else x : f xs (Set.insert x s)
+    f (y:ys) s = if Set.member y s
+                 then f ys s
+                 else y : f ys (Set.insert y s)
     f []     _ = []
 
 

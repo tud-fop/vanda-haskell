@@ -273,7 +273,7 @@ pointerTreeToCrossedTree ptrTree = f 0 ptrTree
   where
     f num pt
       = case IntMap.lookup num pt of
-            Just ([label], children) -> T.Node (Just label, []) (map (g pt) children)
+            Just ([lab], children) -> T.Node (Just lab, []) (map (g pt) children)
             Just ([], children) -> T.Node (Nothing, []) (map (g pt) children)
             Nothing -> error ("PointerTree malformed: pointer " ++ show pt ++ " does not exists:\n" ++ show ptrTree)
     g pt (Left num) = f num pt
@@ -285,10 +285,10 @@ pointerTreeToCrossedTree ptrTree = f 0 ptrTree
 updateInnerSpans
   :: T.Tree (a, [Span])
   -> T.Tree (a, [Span])
-updateInnerSpans (T.Node (label, _) forest@(_:_))
+updateInnerSpans (T.Node (lab, _) forest@(_:_))
   = let forest' = map updateInnerSpans forest
         spans = mergeSpans $ concatMap (snd . T.rootLabel) forest' in
-    T.Node (label, spans) forest'
+    T.Node (lab, spans) forest'
 updateInnerSpans node = node
 
 
@@ -320,20 +320,20 @@ test_mergeSpans
 splitCrossedTree
   :: T.Tree   (a, [Span])
   -> T.Forest ((a, Span), Span)
-splitCrossedTree (T.Node (label, spans) forest)
+splitCrossedTree (T.Node (lab, spans) forest)
   = relabel 1
   $ foldr f
           (map ((,) []) spans)
           (concatMap splitCrossedTree forest)
     where
-      f t@(T.Node (_, sChild) _) (current@(children, sParent):forest)
+      f t@(T.Node (_, sChild) _) (current@(children, sParent):forest')
         = if fst sChild >= fst sParent && snd sChild <= snd sParent
-          then (L.insertBy (comparing (snd . T.rootLabel)) t children, sParent):forest
-          else current : f t forest
+          then (L.insertBy (comparing (snd . T.rootLabel)) t children, sParent):forest'
+          else current : f t forest'
       f _ [] = error "spans malformed"
-      relabel i ((f, s):xs)
-        = let i' = i + length f in
-          T.Node ((label, (i, i' - 1)), s) f : relabel i' xs
+      relabel i ((g, s):xs)
+        = let i' = i + length g in
+          T.Node ((lab, (i, i' - 1)), s) g : relabel i' xs
       relabel _ _ = []
 
 
@@ -408,9 +408,9 @@ newtype LazyBinaryList a = LazyBinaryList {unLazyBinaryList :: [a]} deriving Sho
 instance (B.Binary a) => B.Binary (LazyBinaryList a) where
   put (LazyBinaryList xs) = go xs
     where
-      go xs
+      go xs'
         = let maxL = 1
-              (ys, zs) = splitAt maxL xs
+              (ys, zs) = splitAt maxL xs'
               l        = fromIntegral (if null zs then length ys else maxL) :: Word8
               putChunk = B.put l >> mapM_ B.put ys
           in if l /= 0

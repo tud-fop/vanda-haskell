@@ -236,10 +236,10 @@ mapAccumIds
   -> a
   -> Hypergraph v l w i
   -> (a, Hypergraph v l w i')
-mapAccumIds f acc g
-  = (acc', g{edgesM = eM'})
+mapAccumIds f accStart g
+  = (accEnd, g{edgesM = eM'})
   where
-    (acc', eM') = M.mapAccum (L.mapAccumL f') acc (edgesM g)
+    (accEnd, eM') = M.mapAccum (L.mapAccumL f') accStart (edgesM g)
     f'  acc e = let (acc', i) = f acc (eId e)
                 in (acc', e{eId = i})
 
@@ -279,7 +279,7 @@ mapWeightsRandomR range f g gen
       $ mapRandomR
           range
           (\e r -> e{eWeight = f (eWeight e) r})
-    flipSwap f x y = let (y', x') = f y x in (x', y')
+    flipSwap f' x y = let (y', x') = f' y x in (x', y')
 
 -- ---------------------------------------------------------------------------
 
@@ -380,17 +380,17 @@ parseTree' pos target look (T.Node l ts) m
     key = (target, pos, l)
     target' = (target, pos)
     mNext
-      = for (M.insert key [] m) (look target l (length ts)) $ \ m e ->
-          let (m', b) = checkChildren m (zip3 (eTail e) [(1 :: Int) ..] ts)
+      = for (M.insert key [] m) (look target l (length ts)) $ \ m' e ->
+          let (m'', b) = checkChildren m' (zip3 (eTail e) [(1 :: Int) ..] ts)
               e' = eMapHeadTail
                       (const target')
                       (flip zip $ map (: pos) [1 ..])
                       e
-          in if b then m' else M.insertWith (++) key [e'] m'
-    checkChildren m [] = (m, False)
-    checkChildren m ((v, n, t) : xs)
-      = let (m', isNull) = parseTree' (n : pos) v look t m
-        in if isNull then (m', True) else checkChildren m' xs
+          in if b then m'' else M.insertWith (++) key [e'] m''
+    checkChildren m' [] = (m', False)
+    checkChildren m' ((v, n, t) : xs)
+      = let (m'', isNull) = parseTree' (n : pos) v look t m'
+        in if isNull then (m'', True) else checkChildren m'' xs
     for x ys f = L.foldl' f x ys
 
 -- ---------------------------------------------------------------------------

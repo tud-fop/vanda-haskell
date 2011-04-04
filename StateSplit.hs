@@ -70,8 +70,8 @@ train'
   -> Hypergraph v l w i'  -- ^ initial 'Hypergraph'
   -> gen                  -- ^ random number generator
   -> [(Hypergraph (v, n) l w [i], gen)]
-train' ts target g gen
-  = go 0 1 (mapIds (const []) $ initialize g) gen
+train' ts target g0 gen0
+  = go 0 1 (mapIds (const []) $ initialize g0) gen0
   where
     target' = initializeVertex target
     go count offset g gen
@@ -119,7 +119,7 @@ splitMergeStep offset ts target g0 gen
     getWeight
       = fromJust . flip M.lookup wM . eId
     ios
-      = map (\ (target, g, _) -> insideOutside getWeight target g) training
+      = map (\ (target', g, _) -> insideOutside getWeight target' g) training
     toMerge
       = S.fromList
       $ map fst
@@ -164,9 +164,9 @@ deltasLikelihood
   => n -> (v, n) -> [M.Map ((v, n), p) (w, w)] -> M.Map (v, n) w
 deltasLikelihood offset target ios
   = for M.empty ios $ \ m io ->
-      for m (M.keys io) $ \ m v1 ->
+      for m (M.keys io) $ \ m' v1 ->
         if snd (fst v1) >= offset || fst v1 == target
-        then m
+        then m'
         else
           let v2 = mapFst (mapSnd (offset +)) v1
               s = sum
@@ -181,7 +181,7 @@ deltasLikelihood offset target ios
               (i2, o2) = M.findWithDefault (0, 0) v2 io
               p = (s + 0.5 * (i1 + i2) * (o1 + o2)) / (s + i1 * o1 + i2 * o2)
                       -- in the paper special factors are used instead of 0.5
-          in M.insertWith' (*) (fst v2) p m
+          in M.insertWith' (*) (fst v2) p m'
   where
     for x ys f = L.foldl' f x ys
 
@@ -212,14 +212,14 @@ split offset dontSplit g
   = hypergraph
       [ hyperedge hd tl (eLabel e) w (eId e)
       | e <- edges g
-      , let tls = combinations . map split $ eTail e
+      , let tls = combinations . map splitV $ eTail e
       , let w   = eWeight e / fromIntegral (length tls)
-      , hd <- split (eHead e)
+      , hd <- splitV (eHead e)
       , tl <- tls
       ]
   where
-    split v@(x, n) | dontSplit v = [v]
-                   | otherwise   = [v, (x, n + offset)]
+    splitV v@(x, n) | dontSplit v = [v]
+                    | otherwise   = [v, (x, n + offset)]
 
 
 -- | Do a state-merging step.
