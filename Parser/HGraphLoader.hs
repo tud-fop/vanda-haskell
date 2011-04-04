@@ -96,9 +96,9 @@ p_T =  P.lexeme lexer $ do
 p_RULE :: Parser RULE'
 p_RULE = P.lexeme lexer $ do
                              lhs <- p_LHS
-                             symbol "->"
+                             _ <- symbol "->"
                              rhs <- p_RHS
-                             symbol "#"
+                             _ <- symbol "#"
                              weight <- p_WEIGHT
                              return (R' lhs rhs weight)
 
@@ -136,7 +136,7 @@ p_WEIGHT = do
 
 float_withoutLeadingZero :: Parser Double
 float_withoutLeadingZero =  P.lexeme lexer ( do
-                                char '.'
+                                _ <- char '.'
                                 digits <- many1 digit <?> "float_withoutLeadingZero"
                                 return (foldr op 0.0 digits)
                              <?> "float_withoutLeadingZero")
