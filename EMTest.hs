@@ -61,8 +61,8 @@ doEM g@(l1,l2) n0 es
         = map (S.elems)
         . M.elems
         $ foldl (flip f2) (foldl (flip f1) M.empty l1) l2 
-      f1 (a1,a2,a3,_id) = M.insertWith (S.union) a1 (S.singleton _id)
-      f2 (a,b,_id) = M.insertWith (S.union) a (S.singleton _id)
+      f1 (a1,_,_,_id) = M.insertWith (S.union) a1 (S.singleton _id)
+      f2 (a,_,_id) = M.insertWith (S.union) a (S.singleton _id)
 
 main :: IO ()
 main = do

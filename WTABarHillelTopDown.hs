@@ -202,8 +202,8 @@ scan i s
 complete ::
   (Ord p, Ord q) => Item p q t w -> State p q t w -> State p q t w
 complete
-    i@Item { wsaStatesRev = ps@(p:_)
-           , wtaTransRest = q:qs'
+    i@Item { wsaStatesRev = p:_
+           , wtaTransRest = q:_
            }
     s
   = let ps'     = maybe [] (Set.toList . fst) (Map.lookup (p, q) (cmap s))

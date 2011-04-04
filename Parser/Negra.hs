@@ -357,11 +357,11 @@ negraTreeToTree _
 -}
 
 negraTreeToTree :: T.Tree ((Maybe SentenceData, Span), Span) -> T.Tree String
-negraTreeToTree (T.Node ((Nothing, sl), sg) f)
+negraTreeToTree (T.Node ((Nothing, _), _) f)
   = T.Node "ROOT" (fmap negraTreeToTree f)
-negraTreeToTree (T.Node ((Just dat@(SentenceNode{}), sl), sg) f)
+negraTreeToTree (T.Node ((Just dat@(SentenceNode{}), _), _) f)
   = T.Node (sdPostag dat) (fmap negraTreeToTree f)
-negraTreeToTree (T.Node ((Just dat@(SentenceWord{}), sl), sg) [])
+negraTreeToTree (T.Node ((Just dat@(SentenceWord{}), _), _) [])
   = T.Node (sdPostag dat) [T.Node (sdWord dat) []]
 negraTreeToTree _
   = error "malformed negra tree: a SentenceWord has children"

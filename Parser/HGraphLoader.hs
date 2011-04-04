@@ -154,7 +154,7 @@ p_GRAMMAR = do
 getSymbols :: [RULE'] -> (Set T', Set NT')
 getSymbols rules = foldr f (Set.empty,Set.empty) rules
     where
-        f (R' lhs rhs weight) (ts,nts) = (Set.union ts' ts,Set.union nts' (Set.insert lhs nts))
+        f (R' lhs rhs _) (ts,nts) = (Set.union ts' ts,Set.union nts' (Set.insert lhs nts))
             where
                 (ts',nts') = getSymbols' rhs
                 getSymbols' :: RHS' -> (Set T', Set NT')
@@ -164,14 +164,14 @@ getSymbols rules = foldr f (Set.empty,Set.empty) rules
 
 
 transform :: GRAMMAR ->  HQuery Int Int WEIGHT'
-transform (ts,nts,s,rules) = ((Map.!) ntMap s, (nodes, (IntMap.!) hBack, (IntMap.!) hWeights))
+transform (_,nts,s,rules) = ((Map.!) ntMap s, (nodes, (IntMap.!) hBack, (IntMap.!) hWeights))
     where
          rules' = map (\(sym, (R' lhs rhs weight)) -> (sym,((Map.!) ntMap lhs), map ((Map.!) ntMap) (f rhs) ,weight))  (zip [1..] rules)
          hBack = foldr (\(sym,dst,srcs,_) m -> IntMap.insertWith (++) dst [(sym,srcs)] m) defaultMap rules'
          hWeights = IntMap.fromList $ map (\(s,_,_,w) -> (s,foldr (\(W' d) (W' d') -> W' (d * d')) w)) rules'
          ntMap = Map.fromAscList $  zip (Set.toAscList nts) [1..]
          f (Leaf nt) = [nt]
-         f (Branch t list) = rights list
+         f (Branch _ list) = rights list
          defaultMap = IntMap.fromAscList (map (\x -> (x,[]) ) nodes)
          nodes = Map.elems ntMap
 

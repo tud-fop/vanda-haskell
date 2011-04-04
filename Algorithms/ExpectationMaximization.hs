@@ -41,7 +41,7 @@ forestEM
   -> M.Map i w
 forestEM part gs exId p i
   = snd $ iter (forestEMstep part gs exId) p' (0,i) where
-    p' (l1,m1) (l2,m2) it = p (abs (l2-l1)) it
+    p' (l1,_) (l2,_) it = p (abs (l2-l1)) it
 
 -- | Compute the list of EM estimates for a given corpus.
 -- Use 'take' or '!!' to access a prefix or an element, respectively.
@@ -108,7 +108,7 @@ forestEMstepList
                           -- ^ function extracting the id from a 'Hyperedge'
   -> (w, M.Map i w)       -- ^ log-likelihood and weight vector prior to step
   -> [(w, [(i, w)], M.Map v w, M.Map v w)] -- ^ (see general info)
-forestEMstepList gs exId (l1,theta)
+forestEMstepList gs exId (_,theta)
   = [
       ( w * log innerv0 -- contribution to log-likelihood
       , [ -- a list of id/weight pairs for upcoming id-specific summation

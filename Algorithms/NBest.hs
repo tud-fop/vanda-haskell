@@ -49,7 +49,7 @@ showHGraph (hNodes,hBack,hWeights) = show hNodes ++ "\n" ++ f' ++ "\n" ++ "kante
     where
         -- b = map (\x -> (show x) ++ "-->" ++ show (hBack x)) hNodes
         cnt = sum $ map (\x -> length (hBack x)) hNodes
-        f = map (\x -> map (\y@(sym,ls) -> show x  ++ "-->" ++ show y ++ "   weight:" ++ show (hWeights sym [])) (hBack x) ) hNodes
+        f = map (\x -> map (\y@(sym,_) -> show x  ++ "-->" ++ show y ++ "   weight:" ++ show (hWeights sym [])) (hBack x) ) hNodes
         f' = concat $ intersperse "\n" (concat f)
 
 --instance (Show hNode,Show hEdge,Show hWeight) => Show (HGraph hNode hEdge hWeight) where
@@ -59,7 +59,7 @@ instance (Eq a, Eq b) => Eq (Pair a b) where
     (==) (P a b) (P a' b') = (b == b') && (a == a')
 
 instance (Eq a,Ord b) => Ord (Pair a b) where
-    compare (P a b) (P a' b') = compare b b'
+    compare (P _ b) (P _ b') = compare b b'
 
 
 -- our merge data structure for the heap
@@ -67,14 +67,14 @@ data M a = E | M a [M a]
 
 instance Ord a => Eq (M a) where
 	E == E = True
-	M a1 l1 == M a2 l2 = a1 == a2
+	M a1 _ == M a2 _ = a1 == a2
 	_ == _ = False
 
 instance Ord a => Ord (M a) where
 	compare E E = EQ
 	compare E _ = LT
 	compare _ E = GT
-	compare (M a1 l1) (M a2 l2) = compare a1 a2
+	compare (M a1 _) (M a2 _) = compare a1 a2
 
 
 lft :: HGraph hNode hEdge hWeight -> HGraph hNode hEdge (Pair (HPath hEdge) hWeight)
@@ -90,10 +90,10 @@ lft  (hNodes,hBack,hWeights) = (hNodes,hBack,hWeights')
 
 
 knuth :: (Ord hWeight, Ord hNode, Ord hEdge) => HGraph hNode hEdge hWeight -> hNode -> (Maybe (hWeight,hEdge))
-knuth h@(hNodes,hBack,hWeights)= (Map.!) $ knuth' h ((Map.fromList [(v, Nothing) | v <- hNodes]), (Set.fromList hNodes), Set.empty)
+knuth h@(hNodes,_,_)= (Map.!) $ knuth' h ((Map.fromList [(v, Nothing) | v <- hNodes]), (Set.fromList hNodes), Set.empty)
 	
 knuth' ::  (Ord hWeight, Ord hNode, Ord hEdge) => HGraph hNode hEdge hWeight -> (Map hNode (Maybe (hWeight,hEdge)), Set hNode, Set hNode) -> Map hNode (Maybe (hWeight,hEdge))
-knuth' h@(hNodes,hBack,hWeights) (oldMap,unvis,vis)
+knuth' h@(_,hBack,hWeights) (oldMap,unvis,vis)
     | Set.null unvis = oldMap
     | otherwise  = knuth' h ((Map.insert v m oldMap), (Set.delete v unvis), (Set.insert v vis))
 	where
@@ -106,12 +106,12 @@ knuth' h@(hNodes,hBack,hWeights) (oldMap,unvis,vis)
 			
 			
 kknuth :: (Ord hWeight, Ord hNode, Ord hEdge) => HGraph hNode hEdge hWeight -> hNode -> (Maybe (hWeight,hEdge))
-kknuth h@(hNodes,hBack,hWeights)= (Map.!) m
+kknuth h@(hNodes,_,_)= (Map.!) m
 	where (m,_,_) = kknuth' h hNodes
 	
 kknuth' ::  (Ord hWeight, Ord hNode, Ord hEdge) => HGraph hNode hEdge hWeight -> [hNode] -> (Map hNode (Maybe (hWeight,hEdge)), Set hNode, Set hNode)
-kknuth' (hNodes,hBack,hWeights) [] = ((Map.fromList [(v, Nothing) | v <- hNodes]), (Set.fromList hNodes), Set.empty)
-kknuth' h@(hNodes,hBack,hWeights) (x:xs)
+kknuth' (hNodes,_,_) [] = ((Map.fromList [(v, Nothing) | v <- hNodes]), (Set.fromList hNodes), Set.empty)
+kknuth' h@(_,hBack,hWeights) (_:xs)
     | (null list') = (oldMap, unvis, vis)
     | otherwise  = ((Map.insert v m oldMap), (Set.delete v unvis), (Set.insert v vis))
 	where
@@ -152,7 +152,7 @@ topconcat f lists
 
 mytail :: M a -> [M a]
 mytail E = []
-mytail (M a as) = as
+mytail (M _ as) = as
 
 best :: (Ord hWeight, Ord hNode, Ord hEdge) => HGraph hNode hEdge hWeight -> hNode -> Int -> [hWeight]
 best h v n = take n (q h (knuth h) v)

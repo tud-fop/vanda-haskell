@@ -250,7 +250,7 @@ complete
   => Item p q t w i -> State p q t w i -> State p q t w i
 complete
     i@Item { wsaStateSnd = p
-           , wtaTransRest = q:qs'
+           , wtaTransRest = q:_
            }
     s
   = let ps'     = maybe [] (Set.toList . fst) (Map.lookup (p, q) (cmap s))

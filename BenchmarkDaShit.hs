@@ -90,7 +90,7 @@ printWTA args
 
 readWTA :: [String] -> IO ()
 readWTA args
-  = tdbhHelper args (\ wsa wta -> rnf wta `seq` return ())
+  = tdbhHelper args (\ _ wta -> rnf wta `seq` return ())
 
 
 tdbhHelper

@@ -215,7 +215,7 @@ printWTA args
 
 readWTA :: [String] -> IO ()
 readWTA args
-  = tdbhHelper args (\ wsa wta -> rnf wta `seq` return ())
+  = tdbhHelper args (\ _ wta -> rnf wta `seq` return ())
 
 
 tdbhHelper
@@ -245,7 +245,7 @@ example _ = do
       ++ "$};"
   flip mapM_ ts $ \ t ->
     putStrLn $ "\\node[edge] (" ++ transLab t ++ ") {};"
-  flip mapM_ ts $ \ t@(WTA.Transition l hd tl w) ->
+  flip mapM_ ts $ \ t@(WTA.Transition l _ _ w) ->
     putStrLn
       $   "\\path ("
       ++  transLab t
@@ -254,13 +254,13 @@ example _ = do
       ++  "/"
       ++  show w
       ++  "$};"
-  flip mapM_ ts $ \ t@(WTA.Transition l hd tl w) -> do
+  flip mapM_ ts $ \ t@(WTA.Transition _ hd tl _) -> do
     putStrLn $ "\\draw[->] (" ++ transLab t ++ ") to (" ++ stateLab hd ++ ");"
     flip mapM_ tl $ \ v ->
       putStrLn $ "\\draw[->] (" ++ stateLab v ++ ") to (" ++ transLab t ++ ");"
   where
     stateLab (p, q, p') = [p, q, p']
-    transLab (WTA.Transition l hd tl w)
+    transLab (WTA.Transition _ hd tl _)
       = stateLab hd ++ "-" ++ concat (L.intersperse "_" (map stateLab tl))
     wta = WTA.create
             [ WTA.Transition "\\sigma" 'f' "qf" 1
