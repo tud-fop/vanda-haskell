@@ -56,6 +56,7 @@ create ts fs
 {-- /snippet types --}
 
 
+fromHypergraph :: (Num w) => v -> Hypergraph v l w i -> WTA v l w
 fromHypergraph target g
   = WTA
       (vertices g)
@@ -64,6 +65,8 @@ fromHypergraph target g
       )
       [(target, 1)]
 
+
+toHypergraph :: (Ord q) => WTA q t w -> Hypergraph q t w ()
 toHypergraph wta
   = hypergraph
   . map (\ t -> hyperedge (transState t) (transStates t) (transTerminal t) (transWeight t) ())

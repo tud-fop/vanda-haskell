@@ -7,6 +7,8 @@ import Data.Hypergraph
 
 import Data.Tree
 
+
+testHypergraphs :: (Fractional w) => [Hypergraph Char Char w ()]
 testHypergraphs
   = [ --      in     out A  out B
       -- A    2/3    1      1.6
@@ -59,6 +61,8 @@ testHypergraphs
         ]
     ]
 
+
+testTreess :: [[Tree Char]]
 testTreess
   = [ []
     , []

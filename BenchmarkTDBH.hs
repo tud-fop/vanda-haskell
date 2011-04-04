@@ -24,8 +24,10 @@ import qualified Data.Tree as T
 import Text.Parsec.String (parseFromFile)
 import qualified Random as R
 import System(getArgs)
-import System.IO.Unsafe
+import Text.Parsec (ParseError ())
 
+
+main :: IO ()
 main = do
   args <- getArgs
   case head args of
@@ -46,23 +48,28 @@ main = do
     "evenSentencelength" -> evenSentencelength (tail args)
 
 
+printFileHG :: [String] -> IO ()
 printFileHG [hgFile]
   = readFile hgFile
   >>= putStrLn
     . drawHypergraph
     . (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
 
+
+getData :: IO (Either ParseError [Negra.Sentence])
 getData
   = parseFromFile
       Negra.p_negra
       "Parser/tiger_release_aug07_notable_2000_utf-8.export"
 
 
+printYields :: a -> IO ()
 printYields _ = do
   Right dta <- getData
   putStr $ unlines $ map (show . reverse . yield . onlyPreterminals) $ negrasToTrees dta
 
 
+train :: [String] -> IO ()
 train args = do
   let its = read (args !! 0)
   let exs = read (args !! 1)
@@ -98,6 +105,7 @@ train args = do
         else [e]
 
 
+test :: [String] -> IO ()
 test args = do
   let hgFile = args !! 0
   let treeIndex = read $ args !! 1 :: Int
@@ -144,6 +152,7 @@ test args = do
     putStrLn (replicate 80 '=')
 
 
+convert :: [String] -> IO ()
 convert args = do
   let hgFile = args !! 0
   g <-  fmap (mapIds (const ()) . (read :: String -> Hypergraph (String, Int) String Double [Int]))
@@ -154,6 +163,7 @@ convert args = do
   writeFile ("noId/" ++ hgFile' ++ "_reverse.txt") (show gRev)
 
 
+convert2 :: [String] -> IO ()
 convert2 args = do
   let hgFile = args !! 0
   g <-  fmap (read :: String -> Hypergraph (String, Int) String Double ())
@@ -161,6 +171,7 @@ convert2 args = do
   writeFile ("IntVertices/" ++ hgFile) (show $ snd $ verticesToInt ("ROOT", 0) g)
 
 
+binarize :: [String] -> IO ()
 binarize args = do
   let hgFile = args !! 0
   g <-  fmap (read :: String -> Hypergraph (String, Int) String Double ())
@@ -176,11 +187,13 @@ binarize args = do
 --   putStrLn $ drawHypergraph g'
 
 
+tdbh :: [String] -> IO ()
 tdbh args
   = tdbhHelper args
       (\ wsa wta -> rnf (BH.intersect wsa wta) `seq` return ())
 
 
+tdbhStats :: [String] -> IO ()
 tdbhStats args
   = tdbhHelper args
       ( \ wsa wta -> do
@@ -206,14 +219,21 @@ tdbhStats args
       )
 
 
+printWTA :: [String] -> IO ()
 printWTA args
   = tdbhHelper args (const WTA.printWTA)
 
 
+readWTA :: [String] -> IO ()
 readWTA args
   = tdbhHelper args (\ wsa wta -> rnf wta `seq` return ())
 
 
+tdbhHelper
+  :: (Num w)
+  => [String]
+  -> (WSA.WSA Int String w -> WTA.WTA Int String Double -> IO a)
+  -> IO a
 tdbhHelper args f = do
   g <-  fmap (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
     $   readFile (args !! 0)
@@ -221,6 +241,7 @@ tdbhHelper args f = do
   f (WSA.fromList 1 yld) (WTA.fromHypergraph {-("ROOT", 0)-}0 g)
 
 
+example :: a -> IO ()
 example _ = do
   let wta' = BHC.intersect wsa wta
   let ts = WTA.transitions wta'
@@ -266,6 +287,7 @@ example _ = do
             [ ('r', 1) ]
 
 
+manySentences :: [String] -> IO ()
 manySentences args = do
   g <-  fmap (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
     $   readFile (args !! 0)
@@ -297,6 +319,7 @@ manySentences args = do
             )
 
 
+manySentencesZigZag :: [String] -> IO ()
 manySentencesZigZag args = do
   g <-  fmap (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
     $   readFile (args !! 0)
@@ -315,6 +338,7 @@ manySentencesZigZag args = do
           (concatMap WSA.finalWeights xs)
 
 
+evenSentencelength :: [String] -> IO ()
 evenSentencelength args = do
   g <-  fmap (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
     $   readFile (args !! 0)
@@ -337,6 +361,7 @@ evenSentencelength args = do
   rnf (BH.intersect wsa wta) `seq` return ()
 
 
+negrasToTrees :: [Negra.Sentence] -> [T.Tree String]
 negrasToTrees
   = concatMap
       ( fmap Negra.negraTreeToTree
@@ -346,18 +371,20 @@ negrasToTrees
       )
 
 
+onlyPreterminals :: T.Tree a -> T.Tree a
 onlyPreterminals (T.Node x [T.Node _ []]) = T.Node x []
 onlyPreterminals (T.Node x ts) = T.Node x (map onlyPreterminals ts)
 
 
+yield :: T.Tree a -> [a]
 yield (T.Node r []) = [r]
 yield (T.Node _ ts) = concatMap yield ts
 
 
-traceFile file x y
-  = unsafePerformIO (writeFile file (show x) >> return y)
-
-
+hgToNBestHg
+  :: (Ord v, Num w, Ord i)
+  => Hypergraph v l w i
+  -> ([v], v -> [(i, [v])], i -> [w] -> w)
 hgToNBestHg g
   = ( vertices g
     , \ v -> map (\ e -> (eId e, eTail e)) $ M.findWithDefault [] v eM
@@ -368,19 +395,23 @@ hgToNBestHg g
     iM = M.fromList $ map (\ e -> (eId e, eWeight e)) $ edges g
 
 
+hPathToTree :: NB.HPath a -> T.Tree a
 hPathToTree (NB.B i bs)
   = T.Node i (map hPathToTree bs)
 
 
+idTreeToLabelTree :: (Ord i, Functor f) => Hypergraph v l w i -> f i -> f l
 idTreeToLabelTree g
   = fmap (\ i -> M.findWithDefault (error "unknown eId") i iM)
   where
     iM = M.fromList $ map (\ e -> (eId e, eLabel e)) $ edges g
 
 
+pairToTuple :: NB.Pair a b -> (a, b)
 pairToTuple (NB.P x y) = (x, y)
 
 
+printWTAStatistic :: WTA.WTA q t w -> IO ()
 printWTAStatistic wta = do
   putStr   $ show $ length $ WTA.transitions  wta
   putStr "\t"

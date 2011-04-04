@@ -54,12 +54,22 @@ type HQuery hNode hEdge hWeight = (hNode,HGraph hNode hEdge hWeight)
 data HPath hEdge = B hEdge [HPath hEdge] deriving (Eq,Show)
 data Pair a b = P a b deriving Show
 
+configStyle :: P.LanguageDef st
 configStyle   = emptyDef
                 { P.commentLine    = "%"
                 , P.reservedNames  = ["#","->"]
                 , P.reservedOpNames= []
                 , P.caseSensitive  = True
                 }
+
+lexer       :: P.TokenParser st
+parens      :: CharParser st a -> CharParser st a
+braces      :: CharParser st a -> CharParser st a
+identifier  :: CharParser st String
+float       :: CharParser st Double
+integer     :: CharParser st Integer
+reserved    :: String -> CharParser st ()
+symbol      :: String -> CharParser st String
 
 lexer       = P.makeTokenParser configStyle
 
@@ -165,6 +175,7 @@ transform (ts,nts,s,rules) = ((Map.!) ntMap s, (nodes, (IntMap.!) hBack, (IntMap
          defaultMap = IntMap.fromAscList (map (\x -> (x,[]) ) nodes)
          nodes = Map.elems ntMap
 
+loadHGraph :: SourceName -> IO (Either [Char] (HQuery Int Int WEIGHT'))
 loadHGraph file = do
                 parsedcontent <- parseFromFile p_GRAMMAR file
                 case parsedcontent of

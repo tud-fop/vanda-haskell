@@ -25,6 +25,8 @@ import qualified Random as R
 import System(getArgs)
 import System.IO.Unsafe
 
+
+main :: IO ()
 main = do
   args <- getArgs
   case head args of
@@ -33,11 +35,13 @@ main = do
     "readWTA" -> readWTA (tail args)
 
 
+tdbh :: [String] -> IO ()
 tdbh args
   = tdbhHelper args
       (\ wsa wta -> rnf (BH.intersect wsa wta) `seq` return ())
 
 
+tdbhStats :: [String] -> IO ()
 tdbhStats args
   = tdbhHelper args
       ( \ wsa wta -> do
@@ -63,10 +67,17 @@ tdbhStats args
       )
 
 
+readWTA :: [String] -> IO ()
 readWTA args
   = tdbhHelper args (\ wsa wta -> rnf wta `seq` return ())
 
 
+
+tdbhHelper
+  :: (Num w)
+  => [String]
+  -> (WSA.WSA Int String w -> WTA.WTA Int String Double -> IO a)
+  -> IO a
 tdbhHelper args f = do
   g <-  fmap (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
     $   readFile (args !! 0)
@@ -74,6 +85,8 @@ tdbhHelper args f = do
   f (WSA.fromList 1 yld) (WTA.fromHypergraph {-("ROOT", 0)-}0 g)
 
 
+
+printWTAStatistic :: WTA.WTA q t w -> IO ()
 printWTAStatistic wta = do
   putStr   $ show $ length $ WTA.transitions  wta
   putStr "\t"

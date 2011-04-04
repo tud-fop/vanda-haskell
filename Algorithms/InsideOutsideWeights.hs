@@ -262,4 +262,5 @@ splits3 [x]    = [([], x, [])]
 splits3 (x:xs) = ([], x, xs) : map (mapFst3 (x :)) (splits3 xs)
 
 
+mapFst3 :: (a -> d) -> (a, b, c) -> (d, b, c)
 mapFst3 f (x, y, z) = (f x,   y,   z)

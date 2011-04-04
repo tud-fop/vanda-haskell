@@ -25,6 +25,7 @@ import qualified Data.Tree as T
 import Text.Parsec.String (parseFromFile)
 
 
+main :: IO ()
 main = demo4_4
 
 -- main = testdata >>= \x -> print $ fmap (length {-. unLazyBinaryList . safeDecode-}) x
@@ -39,10 +40,10 @@ main = demo4_4
   -- w 1
   -- print x
 
-w n = print (wait (1000000 + n))
+-- w n = print (wait (1000000 + n))
 
-wait 0 = 0
-wait i = wait (i - 1)
+-- wait 0 = 0
+-- wait i = wait (i - 1)
 
 -- main = mainExtract
 

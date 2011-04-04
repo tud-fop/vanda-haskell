@@ -42,6 +42,9 @@ data HPath hEdge = B hEdge [HPath hEdge] deriving (Eq,Show)
 data Pair a b = P a b deriving Show
 
 
+showHGraph
+  :: (Show hNode, Show hEdge, Show hWeight)
+  => HGraph hNode hEdge hWeight -> String
 showHGraph (hNodes,hBack,hWeights) = show hNodes ++ "\n" ++ f' ++ "\n" ++ "kanten: " ++ show cnt ++ "\n"
     where
         b = map (\x -> (show x) ++ "-->" ++ show (hBack x)) hNodes
@@ -154,10 +157,17 @@ mytail (M a as) = as
 best :: (Ord hWeight, Ord hNode, Ord hEdge) => HGraph hNode hEdge hWeight -> hNode -> Int -> [hWeight]
 best h v n = take n (q h (knuth h) v)
 
+best'
+  :: (Ord hEdge, Ord hWeight, Ord hNode)
+  => HGraph hNode hEdge hWeight
+  -> hNode
+  -> Int
+  -> [Pair (HPath hEdge) hWeight]
 best' h v n =  take n (q h' (knuth h') v)
     where
         h' = lft h
 
+main :: IO ()
 main = do
         args <- getArgs
         let (file,n) = (head args, (read (head (tail args)))::Int)

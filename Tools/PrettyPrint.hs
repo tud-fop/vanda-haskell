@@ -2,11 +2,12 @@
 
 module Tools.PrettyPrint(prettyIndentBracktes) where
 
+
+indentation :: Int -> String
 indentation i = replicate (2 * i) ' '
 
-prettyIndentBracktes
-    :: String
-    -> String
+
+prettyIndentBracktes :: String -> String
 prettyIndentBracktes s
     = pp s 0 False
       where

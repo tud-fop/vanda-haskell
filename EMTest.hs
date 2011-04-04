@@ -16,6 +16,7 @@ data State n t i = State
 	(S.Set (Int,n,Int))
 	[((Int,n,Int),(Int,n,Int),(Int,n,Int),i)]
 
+fst3 :: (a, b, c) -> a
 fst3 (a,_,_) = a
 
 cyk :: (Ord n,Eq t) => Grammar n t i -> [t] -> Grammar (Int, n, Int) t i
@@ -63,6 +64,7 @@ doEM g@(l1,l2) n0 es
       f1 (a1,a2,a3,_id) = M.insertWith (S.union) a1 (S.singleton _id)
       f2 (a,b,_id) = M.insertWith (S.union) a (S.singleton _id)
 
+main :: IO ()
 main = do
 	--print (cyk ([('Z','Z','Z',1)],[('Z','a',2)]) "aaaaa")
 	putStr . prettyIndentBracktes . show $ g

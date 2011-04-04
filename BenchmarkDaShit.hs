@@ -18,8 +18,10 @@ import qualified Data.Tree as T
 import Text.Parsec.String (parseFromFile)
 import qualified Random as R
 import System(getArgs)
-import System.IO.Unsafe
+import Text.Parsec (ParseError ())
 
+
+main :: IO ()
 main = do
   args <- getArgs
   case head args of
@@ -33,27 +35,34 @@ main = do
     "evenSentencelength" -> evenSentencelength (tail args)
 
 
+printFileHG :: [String] -> IO ()
 printFileHG [hgFile]
   = readFile hgFile
   >>= putStrLn
     . drawHypergraph
     . (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
 
+
+getData :: IO (Either ParseError [Negra.Sentence])
 getData
   = parseFromFile
       Negra.p_negra
       "Parser/tiger_release_aug07_notable_2000_utf-8.export"
 
 
+printYields :: a -> IO ()
 printYields _ = do
   Right dta <- getData
   putStr $ unlines $ map (show . reverse . yield . onlyPreterminals) $ negrasToTrees dta
 
+
+tdbh :: [String] -> IO ()
 tdbh args
   = tdbhHelper args
       (\ wsa wta -> rnf (BHB.intersect wsa wta) `seq` return ())
 
 
+tdbhStats :: [String] -> IO ()
 tdbhStats args
   = tdbhHelper args
       ( \ wsa wta -> do
@@ -79,14 +88,21 @@ tdbhStats args
       )
 
 
+printWTA :: [String] -> IO ()
 printWTA args
   = tdbhHelper args (const WTA.printWTA)
 
 
+readWTA :: [String] -> IO ()
 readWTA args
   = tdbhHelper args (\ wsa wta -> rnf wta `seq` return ())
 
 
+tdbhHelper
+  :: (Num w)
+  => [String]
+  -> (WSA.WSA Int String w -> WTA.WTA Int String Double Int -> IO a)
+  -> IO a
 tdbhHelper args f = do
   g <-  fmap (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
     $   readFile (args !! 0)
@@ -94,6 +110,7 @@ tdbhHelper args f = do
   f (WSA.fromList 1 yld) (WTA.addId $ WTA.fromHypergraph {-("ROOT", 0)-}0 g)
 
 
+manySentencesZigZag :: [String] -> IO ()
 manySentencesZigZag args = do
   g <-  fmap (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
     $   readFile (args !! 0)
@@ -112,6 +129,7 @@ manySentencesZigZag args = do
           (concatMap WSA.finalWeights xs)
 
 
+evenSentencelength :: [String] -> IO ()
 evenSentencelength args = do
   g <-  fmap (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
     $   readFile (args !! 0)
@@ -134,6 +152,7 @@ evenSentencelength args = do
   rnf (BHB.intersect wsa wta) `seq` return ()
 
 
+negrasToTrees :: [Negra.Sentence] -> [T.Tree String]
 negrasToTrees
   = concatMap
       ( fmap Negra.negraTreeToTree
@@ -143,18 +162,17 @@ negrasToTrees
       )
 
 
+onlyPreterminals :: T.Tree a -> T.Tree a
 onlyPreterminals (T.Node x [T.Node _ []]) = T.Node x []
 onlyPreterminals (T.Node x ts) = T.Node x (map onlyPreterminals ts)
 
 
+yield :: T.Tree t -> [t]
 yield (T.Node r []) = [r]
 yield (T.Node _ ts) = concatMap yield ts
 
 
-traceFile file x y
-  = unsafePerformIO (writeFile file (show x) >> return y)
-
-
+printWTAStatistic :: WTA.WTA q t w i -> IO ()
 printWTAStatistic wta = do
   putStr   $ show $ length $ WTA.transitions  wta
   putStr "\t"

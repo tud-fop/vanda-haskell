@@ -303,6 +303,8 @@ mergeSpans = m . L.sort
         else a : m ys
     m xs = xs
 
+
+test_mergeSpans :: Bool
 test_mergeSpans
   = mergeSpans [(1,1), (1,2), (3,4), (6,10), (7,9), (11,12)]
     == [(1,4), (6,12)]
@@ -384,7 +386,9 @@ showSentenceData SentenceNode{sdPostag = t} = t
 --     ->  putStrLn $ T.drawForest $ fmap (fmap show) $ fmap negraTreeToTree $ negraToForest $ sData ( x !! 10)
 
 
+corpusSmall :: String
 corpusSmall = "/home/gdp/dietze/Documents/vanda/Parser/tiger_release_aug07_part.export"
+corpusBig :: String
 corpusBig = "/var/local/share/gdp/nlp/resources/tigercorpus2.1/corpus/tiger_release_aug07.export"
 
 

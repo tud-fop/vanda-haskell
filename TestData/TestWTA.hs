@@ -5,6 +5,7 @@ module TestData.TestWTA where
 import Data.WTA
 
 
+testWTAs :: (Num w) => [WTA Char Char w]
 testWTAs =
     [ create  -- 0
         []

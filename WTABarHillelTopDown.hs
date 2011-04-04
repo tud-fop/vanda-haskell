@@ -310,5 +310,7 @@ getIntersectItemsLaTeX epsilonTest wsa wta
         (iter (Just . showItemLaTeX) (initState epsilonTest wsa wta))
 
 
+intersectionIntemCount
+  :: (Ord p, Ord q, Ord t, Num w) => WSA.WSA p t w -> WTA.WTA q t w -> Int
 intersectionIntemCount wsa wta
   = length $ iter Just (initState (const False) wsa wta)
