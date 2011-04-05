@@ -6,7 +6,7 @@ import qualified Data.WTAid as WTA
 import qualified Data.WSA as WSA
 import Data.Hypergraph
 import qualified Parser.Negra as Negra
-import qualified WTABarHillelTopDownBin as BHB
+import qualified Algorithms.WTABarHillelTopDownBinarizing as BHB
 import Data.List (nub)
 
 import Control.DeepSeq

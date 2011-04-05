@@ -1,6 +1,9 @@
 -- Copyright (c) 2010, Toni Dietze
 
-module WTABarHillelComplete(intersect, intersectTransitionCount) where
+module Algorithms.WTABarHillelComplete
+( intersect
+, intersectTransitionCount
+) where
 
 import qualified Data.WSA as WSA
 import qualified Data.WTA as WTA

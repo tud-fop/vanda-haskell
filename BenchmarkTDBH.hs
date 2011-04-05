@@ -7,10 +7,10 @@ import qualified Data.WTA as WTA
 import qualified Data.WSA as WSA
 import Data.Hypergraph
 import qualified Parser.Negra as Negra
-import qualified RuleExtraction as RE
-import qualified StateSplit as SPG
-import qualified WTABarHillelTopDown as BH
-import qualified WTABarHillelComplete as BHC
+import qualified Algorithms.RuleExtraction as RE
+import qualified Algorithms.StateSplit as SPG
+import qualified Algorithms.WTABarHillelTopDown as BH
+import qualified Algorithms.WTABarHillelComplete as BHC
 import Tools.Miscellaneous (mapFst)
 import Data.List (nub)
 

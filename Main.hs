@@ -12,7 +12,7 @@ profiling:
 module Main where
 
 import Demo
--- import RuleExtraction
+-- import Algorithms.RuleExtraction
 -- import Tools.PrettyPrint
 
 -- import Data.Function(on)

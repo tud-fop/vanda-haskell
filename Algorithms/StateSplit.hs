@@ -12,7 +12,7 @@
 --   AAAI 2007 (Nectar Track)
 --   <http://www.petrovi.de/data/aaai07.pdf>
 
-module StateSplit where
+module Algorithms.StateSplit where
 
 import Algorithms.ExpectationMaximization
 import Algorithms.InsideOutsideWeights

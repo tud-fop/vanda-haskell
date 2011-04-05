@@ -1,7 +1,7 @@
 -- Copyright (c) 2010, Toni Dietze
 {-- snippet head --}
 --module WTABarHillelTopDown(intersect, intersect') where
-module WTABarHillelTopDownBin where
+module Algorithms.WTABarHillelTopDownBinarizing where
 
 import qualified Data.Map as Map
 import qualified Data.Set as Set

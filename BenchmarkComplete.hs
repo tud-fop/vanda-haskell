@@ -5,7 +5,7 @@ module Main where
 import qualified Data.WTA as WTA
 import qualified Data.WSA as WSA
 import Data.Hypergraph
-import qualified WTABarHillelComplete as BH
+import qualified Algorithms.WTABarHillelComplete as BH
 
 import Control.DeepSeq
 import System(getArgs)

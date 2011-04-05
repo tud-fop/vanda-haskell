@@ -1,6 +1,6 @@
 -- Copyright (c) 2010, Toni Dietze
 
-module RuleExtraction where
+module Algorithms.RuleExtraction where
 
 import Data.Hypergraph
 import qualified Data.WTA as WTA
