@@ -400,7 +400,7 @@ parseTree' pos target look (T.Node l ts) m
 
 nBest :: (Num w, Ord v, Ord w) => Int -> v -> Hypergraph v l w i -> [w]
 nBest n target g
-  = NBest.best h target n
+  = map negate $ NBest.best h target n
   where (h, _) = nBestHelper g
 
 
@@ -408,7 +408,7 @@ nBest'
   :: (Num w, Ord v, Ord w)
   => Int -> v -> Hypergraph v l w i -> [(T.Tree (Hyperedge v l w i), w)]
 nBest' n target g
-  = map (\ (NBest.P p w) -> (fmap (ieA A.!) $ hPathToTree p, w))
+  = map (\ (NBest.P t w) -> (fmap (ieA A.!) t, negate w))
   $ NBest.best' h target n
   where (h, ieA) = nBestHelper g
 
@@ -431,11 +431,6 @@ nBestHelper g
         , \ v -> M.findWithDefault [] v hBackM
         , \ i' ws -> product (map negate ws) * (hWeightA A.! i')
         )
-
-
-hPathToTree :: NBest.HPath a -> T.Tree a
-hPathToTree (NBest.B i bs)
-  = T.Node i (map hPathToTree bs)
 
 -- ---------------------------------------------------------------------------
 

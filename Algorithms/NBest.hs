@@ -22,6 +22,7 @@ import Data.Set ( Set )
 import qualified Data.Set as Set
 import Data.Map ( Map )
 import qualified Data.Map as Map
+import qualified Data.Tree as T
 import Maybe
 -- import Array
 import System( getArgs )
@@ -39,7 +40,6 @@ type HBack hEdge hNode = hNode -> [(hEdge, [hNode])]
 type HGraph hNode hEdge hWeight
       = ([hNode], HBack hEdge hNode, HWeights hEdge hWeight)
 type HQuery hNode hEdge hWeight = (hNode, HGraph hNode hEdge hWeight)
-data HPath hEdge = B hEdge [HPath hEdge] deriving (Eq, Show)
 data Pair a b = P a b deriving Show
 
 
@@ -92,10 +92,10 @@ instance Ord a => Ord (M a) where
 
 lft
   :: HGraph hNode hEdge hWeight
-  -> HGraph hNode hEdge (Pair (HPath hEdge) hWeight)
+  -> HGraph hNode hEdge (Pair (T.Tree hEdge) hWeight)
 lft  (hNodes, hBack, hWeights) = (hNodes, hBack, hWeights')
   where
-    hWeights' hEdge pairs = P (B hEdge l1) (hWeights hEdge l2)
+    hWeights' hEdge pairs = P (T.Node hEdge l1) (hWeights hEdge l2)
       where
         (l1, l2) =  foldr (\ (P a b) (as, bs) -> (a:as, b:bs)) ([], []) pairs
 
@@ -263,7 +263,7 @@ best'
   => HGraph hNode hEdge hWeight
   -> hNode
   -> Int
-  -> [Pair (HPath hEdge) hWeight]
+  -> [Pair (T.Tree hEdge) hWeight]
 best' h v n
   = take n (q h' (knuth h') v)
   where

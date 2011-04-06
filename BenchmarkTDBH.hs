@@ -152,7 +152,7 @@ test2 _ = do
       putStrLn $ "target: " ++ show target
       putStrLn ""
       flip mapM_ ts $ \ (t, w) -> do
-        putStrLn $ "weight (n-best):            " ++ show (negate w)
+        putStrLn $ "weight (n-best):            " ++ show w
         putStrLn $ "weight (in input wta):      " ++ show (WTA.weightTree (WTA.fromHypergraph target g) t)
         putStrLn $ T.drawTree $ fmap show t
       putStrLn (replicate 80 '=')
