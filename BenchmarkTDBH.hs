@@ -13,6 +13,7 @@ import qualified Algorithms.WTABarHillelTopDown as BH
 import qualified Algorithms.WTABarHillelComplete as BHC
 import Tools.Miscellaneous (mapFst)
 import Data.List (nub)
+import TestData.TestHypergraph
 
 import Control.DeepSeq
 import qualified Data.List as L
@@ -33,6 +34,7 @@ main = do
     "printYields" -> printYields (tail args)
     "train" -> train (tail args)
     "test" -> test (tail args)
+    "test2" -> test2 (tail args)
     "convert" -> convert (tail args)
     "convert2" -> convert2 (tail args)
     "binarize" -> binarize (tail args)
@@ -141,6 +143,29 @@ test args = do
           putStrLn $ "weight (in Bar-Hillel wta): " ++ show (WTA.weightTree wta' t')
           putStrLn $ T.drawTree t'
     putStrLn (replicate 80 '=')
+
+
+test2 :: [String] -> IO ()
+test2 args = do
+  flip mapM_ (tail testHypergraphs) $ \ g' -> do
+    flip mapM_ (vertices g') $ \ target -> do
+      -- let g' = testHypergraphs !! 2 :: Hypergraph Char Char Double ()
+      let (_, g) = mapAccumIds (\ i _ -> {-i `seq`-} (i + 1, i)) (0 :: Int)
+                 -- $ dropUnreachables target
+                 $ g'
+      -- let target = 't'
+      let wta = WTA.fromHypergraph target g
+      let nbHg = hgToNBestHg g
+      let ts  = map (mapFst (idTreeToLabelTree g . hPathToTree) . pairToTuple)
+              $ NB.best' nbHg target 5
+      putStrLn $ drawHypergraph g
+      putStrLn $ "target: " ++ show target
+      putStrLn ""
+      flip mapM_ ts $ \ (t, w) -> do
+        putStrLn $ "weight (n-best):            " ++ show (negate w)
+        putStrLn $ "weight (in input wta):      " ++ show (WTA.weightTree wta t)
+        putStrLn $ T.drawTree $ fmap show t
+      putStrLn (replicate 80 '=')
 
 
 convert :: [String] -> IO ()
