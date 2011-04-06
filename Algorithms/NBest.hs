@@ -35,22 +35,35 @@ import Parser.HGraphLoader
 
 
 type HWeights hEdge hWeight = hEdge -> [hWeight] -> hWeight
-type HBack hEdge hNode = hNode -> [(hEdge,[hNode])]
-type HGraph hNode hEdge hWeight = ([hNode],HBack hEdge hNode ,HWeights hEdge hWeight )
-type HQuery hNode hEdge hWeight = (hNode,HGraph hNode hEdge hWeight)
-data HPath hEdge = B hEdge [HPath hEdge] deriving (Eq,Show)
+type HBack hEdge hNode = hNode -> [(hEdge, [hNode])]
+type HGraph hNode hEdge hWeight
+      = ([hNode], HBack hEdge hNode, HWeights hEdge hWeight)
+type HQuery hNode hEdge hWeight = (hNode, HGraph hNode hEdge hWeight)
+data HPath hEdge = B hEdge [HPath hEdge] deriving (Eq, Show)
 data Pair a b = P a b deriving Show
 
 
 showHGraph
   :: (Show hNode, Show hEdge, Show hWeight)
   => HGraph hNode hEdge hWeight -> String
-showHGraph (hNodes,hBack,hWeights) = show hNodes ++ "\n" ++ f' ++ "\n" ++ "kanten: " ++ show cnt ++ "\n"
-    where
-        -- b = map (\x -> (show x) ++ "-->" ++ show (hBack x)) hNodes
-        cnt = sum $ map (\x -> length (hBack x)) hNodes
-        f = map (\x -> map (\y@(sym,_) -> show x  ++ "-->" ++ show y ++ "   weight:" ++ show (hWeights sym [])) (hBack x) ) hNodes
-        f' = concat $ intersperse "\n" (concat f)
+showHGraph (hNodes, hBack, hWeights)
+  = show hNodes ++ "\n" ++ f' ++ "\n" ++ "kanten: " ++ show cnt ++ "\n"
+  where
+    -- b = map (\x -> (show x) ++ "-->" ++ show (hBack x)) hNodes
+    cnt = sum $ map (\x -> length (hBack x)) hNodes
+    f = map
+          ( \ x -> map
+            (\ y@(sym, _) ->
+                  show x
+              ++  "-->"
+              ++  show y
+              ++  "   weight:"
+              ++  show (hWeights sym [])
+            )
+            (hBack x)
+          )
+          hNodes
+    f' = concat $ intersperse "\n" (concat f)
 
 --instance (Show hNode,Show hEdge,Show hWeight) => Show (HGraph hNode hEdge hWeight) where
 --    show (hNodes,hBack,hWeights) = "(" ++ show hNodes ++ ")"
@@ -77,85 +90,173 @@ instance Ord a => Ord (M a) where
   compare (M a1 _) (M a2 _) = compare a1 a2
 
 
-lft :: HGraph hNode hEdge hWeight -> HGraph hNode hEdge (Pair (HPath hEdge) hWeight)
-lft  (hNodes,hBack,hWeights) = (hNodes,hBack,hWeights')
-    where
-         hWeights' hEdge pairs = P (B hEdge l1) (hWeights hEdge l2)
-            where
-                (l1,l2) =  foldr (\(P a b) (as,bs) -> (a:as,b:bs)) ([],[]) pairs
+lft
+  :: HGraph hNode hEdge hWeight
+  -> HGraph hNode hEdge (Pair (HPath hEdge) hWeight)
+lft  (hNodes, hBack, hWeights) = (hNodes, hBack, hWeights')
+  where
+    hWeights' hEdge pairs = P (B hEdge l1) (hWeights hEdge l2)
+      where
+        (l1, l2) =  foldr (\ (P a b) (as, bs) -> (a:as, b:bs)) ([], []) pairs
+
 
 --------------------------------------------------------------------
 --      Calculation of best hyperpath                             --
 --------------------------------------------------------------------
 
+knuth
+  :: (Ord hWeight, Ord hNode, Ord hEdge)
+  => HGraph hNode hEdge hWeight -> hNode -> Maybe (hWeight, hEdge)
+knuth h@(hNodes, _, _)
+  = (Map.!)
+  $ knuth' h
+      ( Map.fromList [(v, Nothing) | v <- hNodes]
+      , Set.fromList hNodes
+      , Set.empty
+      )
 
-knuth :: (Ord hWeight, Ord hNode, Ord hEdge) => HGraph hNode hEdge hWeight -> hNode -> (Maybe (hWeight,hEdge))
-knuth h@(hNodes,_,_)= (Map.!) $ knuth' h ((Map.fromList [(v, Nothing) | v <- hNodes]), (Set.fromList hNodes), Set.empty)
 
-knuth' ::  (Ord hWeight, Ord hNode, Ord hEdge) => HGraph hNode hEdge hWeight -> (Map hNode (Maybe (hWeight,hEdge)), Set hNode, Set hNode) -> Map hNode (Maybe (hWeight,hEdge))
-knuth' h@(_,hBack,hWeights) (oldMap,unvis,vis)
-    | Set.null unvis = oldMap
-    | otherwise  = knuth' h ((Map.insert v m oldMap), (Set.delete v unvis), (Set.insert v vis))
+knuth'
+  :: (Ord hWeight, Ord hNode, Ord hEdge)
+  => HGraph hNode hEdge hWeight
+  -> (Map hNode (Maybe (hWeight, hEdge)), Set hNode, Set hNode)
+  -> Map hNode (Maybe (hWeight, hEdge))
+knuth' h@(_, hBack, hWeights) (oldMap, unvis, vis)
+  | Set.null unvis
+    = oldMap
+  | otherwise
+    = knuth' h
+        ( Map.insert v m oldMap
+        , Set.delete v unvis
+        , Set.insert v vis
+        )
   where
-      f sym weights = do b <- (sequence weights)
-                         let (ws,_) = unzip b
-                         return ((hWeights sym ws),sym)
-      list = [(v', (f sym ((map ((Map.!) oldMap) srcs)))) | v' <- Set.toList unvis, (sym,srcs) <- (hBack v'), (Set.isSubsetOf (Set.fromList srcs) vis)]
-      list'= filter (\(_,m') -> isJust m') list
-      (v,m) = minimumBy (\(_,(Just (x,_))) (_,(Just (x',_)))-> compare x x') list'
+    f sym weights = do
+      b <- sequence weights
+      let (ws, _) = unzip b
+      return (hWeights sym ws, sym)
+    list
+      = [ (v', f sym (map ((Map.!) oldMap) srcs))
+        | v' <- Set.toList unvis
+        , (sym, srcs) <- hBack v'
+        , Set.isSubsetOf (Set.fromList srcs) vis
+        ]
+    list' = filter (\ (_, m') -> isJust m') list
+    (v, m)
+      = minimumBy (\ (_, Just (x, _)) (_, Just (x', _)) -> compare x x') list'
 
 
-kknuth :: (Ord hWeight, Ord hNode, Ord hEdge) => HGraph hNode hEdge hWeight -> hNode -> (Maybe (hWeight,hEdge))
-kknuth h@(hNodes,_,_)= (Map.!) m
-  where (m,_,_) = kknuth' h hNodes
+kknuth
+  :: (Ord hWeight, Ord hNode, Ord hEdge)
+  => HGraph hNode hEdge hWeight -> hNode -> Maybe (hWeight, hEdge)
+kknuth h@(hNodes, _, _)
+  = (Map.!) m
+  where (m, _, _) = kknuth' h hNodes
 
-kknuth' ::  (Ord hWeight, Ord hNode, Ord hEdge) => HGraph hNode hEdge hWeight -> [hNode] -> (Map hNode (Maybe (hWeight,hEdge)), Set hNode, Set hNode)
-kknuth' (hNodes,_,_) [] = ((Map.fromList [(v, Nothing) | v <- hNodes]), (Set.fromList hNodes), Set.empty)
-kknuth' h@(_,hBack,hWeights) (_:xs)
-    | (null list') = (oldMap, unvis, vis)
-    | otherwise  = ((Map.insert v m oldMap), (Set.delete v unvis), (Set.insert v vis))
+
+kknuth'
+  ::  (Ord hWeight, Ord hNode, Ord hEdge)
+  => HGraph hNode hEdge hWeight
+  -> [hNode]
+  -> (Map hNode (Maybe (hWeight,hEdge)), Set hNode, Set hNode)
+kknuth' (hNodes, _, _) []
+  = ( Map.fromList [(v, Nothing) | v <- hNodes]
+    , Set.fromList hNodes
+    , Set.empty
+    )
+kknuth' h@(_, hBack, hWeights) (_:xs)
+  | null list'
+    = (oldMap, unvis, vis)
+  | otherwise
+    = ( Map.insert v m oldMap
+      , Set.delete v unvis
+      , Set.insert v vis
+      )
   where
-      (oldMap,unvis,vis) = kknuth' h xs
-      f sym weights = do b <- (sequence weights)
-                         let (ws,_) = unzip b
-                         return ((hWeights sym ws),sym)
-      list = [(v', (f sym ((map ((Map.!) oldMap) srcs)))) | v' <- Set.toList unvis, (sym,srcs) <- (hBack v'), (Set.isSubsetOf (Set.fromList srcs) vis)]
-      list'= filter (\(_,m') -> isJust m') list
-      (v,m) = minimumBy (\(_,(Just (x,_))) (_,(Just (x',_)))-> compare x x') list'
+    (oldMap, unvis, vis) = kknuth' h xs
+    f sym weights = do
+      b <- sequence weights
+      let (ws, _) = unzip b
+      return (hWeights sym ws, sym)
+    list
+      = [ (v', f sym (map ((Map.!) oldMap) srcs))
+        | v' <- Set.toList unvis
+        , (sym, srcs) <- hBack v'
+        , Set.isSubsetOf (Set.fromList srcs) vis
+        ]
+    list' = filter (\ (_, m') -> isJust m') list
+    (v, m)
+      = minimumBy (\ (_, Just (x, _)) (_, Just (x', _)) -> compare x x') list'
+
+
 --------------------------------------------------------------------
 --      Calculation of n-best hyperpaths                          --
 --------------------------------------------------------------------
-q :: (Ord hWeight, Ord hNode, Ord hEdge) => HGraph hNode hEdge hWeight -> (hNode -> Maybe (hWeight,hEdge)) -> hNode -> [hWeight]
-q h@(hNodes,hBack,hWeights) kn = (Map.!) m
-    where
-        m = Map.fromList [(hNode, q' hNode) | hNode <- hNodes]
-        q' v = case (kn v) of
-                Nothing -> []
-                Just (w,edge) -> w:(p (Heap.fromList([ topconcat (hWeights sym) (map (q h kn) srcs) | (sym,srcs) <- (hBack v), sym /= edge] ++  ( mytail $ head [ topconcat (hWeights sym) (map (q h kn) srcs) | (sym,srcs) <- (hBack v), sym == edge]))))
 
-p :: Ord hWeight => MinHeap (M hWeight) -> [hWeight]
-p heap = case Heap.view heap of
-  Nothing -> []
-  Just (E, heap') -> p heap'
-  Just ((M a l), heap') -> a:(p (Heap.union heap' (Heap.fromList l)))
+q :: (Ord hWeight, Ord hNode, Ord hEdge)
+  => HGraph hNode hEdge hWeight
+  -> (hNode -> Maybe (hWeight, hEdge))
+  -> hNode
+  -> [hWeight]
+q h@(hNodes, hBack, hWeights) kn
+  = (Map.!) m
+  where
+    m = Map.fromList [(hNode, q' hNode) | hNode <- hNodes]
+    q' v
+      = case kn v of
+          Nothing -> []
+          Just (w, edge) ->
+              w
+            : p (Heap.fromList (
+                    [ topconcat (hWeights sym) (map (q h kn) srcs)
+                    | (sym, srcs) <- hBack v
+                    , sym /= edge
+                    ]
+                ++  ( mytail
+                    $ head
+                      [ topconcat (hWeights sym) (map (q h kn) srcs)
+                      | (sym, srcs) <- hBack v
+                      , sym == edge
+                      ]
+                    )
+                ))
 
-topconcat :: Eq hWeight => ([hWeight] -> hWeight) -> [[hWeight]] -> M hWeight
+
+p :: (Ord hWeight) => MinHeap (M hWeight) -> [hWeight]
+p heap
+  = case Heap.view heap of
+      Nothing -> []
+      Just (E, heap') -> p heap'
+      Just (M a l, heap') -> a : p (Heap.union heap' (Heap.fromList l))
+
+
+topconcat
+  :: (Eq hWeight) => ([hWeight] -> hWeight) -> [[hWeight]] -> M hWeight
 topconcat f lists
-  | elem [] lists = E
-  | otherwise = M (f (map head lists)) (map (topconcat f) (tail (combine lists)))
-    where
-        combine :: [[a]] -> [[[a]]]
-        combine [] = [[]]
-        combine (x:xs) = (map (x:) c) ++ [((tail x):(map (\ x' -> [head x']) xs))]
-          where c = combine xs
+  | elem [] lists
+    = E
+  | otherwise
+    = M (f (map head lists)) (map (topconcat f) (tail (combine lists)))
+  where
+    combine :: [[a]] -> [[[a]]]
+    combine [] = [[]]
+    combine (x:xs) = map (x:) c ++ [tail x : map (\ x' -> [head x']) xs]
+      where c = combine xs
 
 
 mytail :: M a -> [M a]
 mytail E = []
 mytail (M _ as) = as
 
-best :: (Ord hWeight, Ord hNode, Ord hEdge) => HGraph hNode hEdge hWeight -> hNode -> Int -> [hWeight]
+
+best
+  :: (Ord hWeight, Ord hNode, Ord hEdge)
+  => HGraph hNode hEdge hWeight
+  -> hNode
+  -> Int
+  -> [hWeight]
 best h v n = take n (q h (knuth h) v)
+
 
 best'
   :: (Ord hEdge, Ord hWeight, Ord hNode)
@@ -163,21 +264,24 @@ best'
   -> hNode
   -> Int
   -> [Pair (HPath hEdge) hWeight]
-best' h v n =  take n (q h' (knuth h') v)
-    where
-        h' = lft h
+best' h v n
+  = take n (q h' (knuth h') v)
+  where
+    h' = lft h
+
 
 main :: IO ()
 main = do
-        args <- getArgs
-        let (file,n) = (head args, (read (head (tail args)))::Int)
-        -- m <- loadHGraph file
-        m <- loadHGraph file
-        case m of
-            Right (node,hGraph) -> print (best' hGraph node n)
-            -- Right (node,hGraph) -> print (knuth hGraph node)
-            -- Right (node,hGraph) -> putStr $ showHGraph hGraph
-            Left err -> print err
+  args <- getArgs
+  let (file, n) = (head args, (read (head (tail args))) :: Int)
+  -- m <- loadHGraph file
+  m <- loadHGraph file
+  case m of
+    Right (node, hGraph) -> print (best' hGraph node n)
+    -- Right (node,hGraph) -> print (knuth hGraph node)
+    -- Right (node,hGraph) -> putStr $ showHGraph hGraph
+    Left err -> print err
+
 {-
 knuth :: (Ord hWeight, Ord hNode, Ord hEdge) => HGraph hNode hEdge hWeight -> hNode -> (Maybe (hWeight,hEdge))
 knuth h@(hNodes,hBack,hWeights)= (Map.!) $ knuth' ((Map.fromList [(v, Nothing) | v <- hNodes]), (Set.fromList hNodes), Set.empty)
