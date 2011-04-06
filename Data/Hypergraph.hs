@@ -42,15 +42,19 @@ module Data.Hypergraph (
 , verticesToInt
 -- * Parsing
 , parseTree
+, nBest
+, nBest'
 -- * Pretty Printing
 , drawHypergraph
 , drawHyperedge
 ) where
 
 
+import qualified Algorithms.NBest as NBest
 import qualified Data.Queue as Q
 import Tools.Miscellaneous (mapFst, mapSnd, sumWith, mapRandomR)
 
+import qualified Data.Array as A
 import qualified Data.List as L
 import qualified Data.Map as M
 import Data.Maybe
@@ -392,6 +396,46 @@ parseTree' pos target look (T.Node l ts) m
       = let (m'', isNull) = parseTree' (n : pos) v look t m'
         in if isNull then (m'', True) else checkChildren m'' xs
     for x ys f = L.foldl' f x ys
+
+
+nBest :: (Num w, Ord v, Ord w) => Int -> v -> Hypergraph v l w i -> [w]
+nBest n target g
+  = NBest.best h target n
+  where (h, _) = nBestHelper g
+
+
+nBest'
+  :: (Num w, Ord v, Ord w)
+  => Int -> v -> Hypergraph v l w i -> [(T.Tree (Hyperedge v l w i), w)]
+nBest' n target g
+  = map (\ (NBest.P p w) -> (fmap (ieA A.!) $ hPathToTree p, w))
+  $ NBest.best' h target n
+  where (h, ieA) = nBestHelper g
+
+
+nBestHelper
+  :: (Num w, Ord v)
+  => Hypergraph v l w i
+  -> ( ([v], v -> [(Int, [v])], Int -> [w] -> w)
+     , A.Array Int (Hyperedge v l w i)
+     )
+nBestHelper g
+  = (h, ieA)
+  where
+    (i, ieM)
+      = M.mapAccum (L.mapAccumL (\ i' e -> (i' + 1, (i', e)))) (0 :: Int) (edgesM g)
+    ieA = A.array (0, i - 1) $ concat $ M.elems ieM
+    hBackM = M.map (map $ \ ie -> (fst ie, eTail $ snd ie)) ieM
+    hWeightA = fmap (negate . eWeight) ieA
+    h = ( vertices g
+        , \ v -> M.findWithDefault [] v hBackM
+        , \ i' ws -> product (map negate ws) * (hWeightA A.! i')
+        )
+
+
+hPathToTree :: NBest.HPath a -> T.Tree a
+hPathToTree (NBest.B i bs)
+  = T.Node i (map hPathToTree bs)
 
 -- ---------------------------------------------------------------------------
 

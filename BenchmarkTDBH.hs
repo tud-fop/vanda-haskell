@@ -2,7 +2,6 @@
 
 module Main where
 
-import qualified Algorithms.NBest as NB
 import qualified Data.WTA as WTA
 import qualified Data.WSA as WSA
 import Data.Hypergraph
@@ -120,14 +119,12 @@ test args = do
   let wta = WTA.fromHypergraph {-("ROOT", 0)-}0 g
   flip mapM_ ts $ \ t -> do
     let target' = (0, {-("ROOT", 0)-}0, length $ yield t)
-    let (_, g') = mapAccumIds (\ i _ -> {-i `seq`-} (i + 1, i)) (0 :: Int)
-                $ dropUnreachables target'
-                $ WTA.toHypergraph
-                $ BH.intersect (WSA.fromList 1 $ yield t) wta
+    let g' = dropUnreachables target'
+           $ WTA.toHypergraph
+           $ BH.intersect (WSA.fromList 1 $ yield t) wta
     let wta' = WTA.fromHypergraph target' g'
-    let nbHg = hgToNBestHg g'
-    let ts'  = map (mapFst (idTreeToLabelTree g' . hPathToTree) . pairToTuple)
-              $ NB.best' nbHg target' 3
+    let ts'  = map (mapFst (fmap eLabel))
+              $ nBest' 3 target' g'
     print $ yield t
     -- putStrLn $ WTA.showWTA $ wta'
     if null (vertices g')
@@ -146,24 +143,17 @@ test args = do
 
 
 test2 :: [String] -> IO ()
-test2 args = do
-  flip mapM_ (tail testHypergraphs) $ \ g' -> do
-    flip mapM_ (vertices g') $ \ target -> do
-      -- let g' = testHypergraphs !! 2 :: Hypergraph Char Char Double ()
-      let (_, g) = mapAccumIds (\ i _ -> {-i `seq`-} (i + 1, i)) (0 :: Int)
-                 -- $ dropUnreachables target
-                 $ g'
-      -- let target = 't'
-      let wta = WTA.fromHypergraph target g
-      let nbHg = hgToNBestHg g
-      let ts  = map (mapFst (idTreeToLabelTree g . hPathToTree) . pairToTuple)
-              $ NB.best' nbHg target 5
+test2 _ = do
+  flip mapM_ (tail testHypergraphs :: [Hypergraph Char Char Double ()]) $ \ g -> do
+    flip mapM_ (vertices g) $ \ target -> do
+      let ts  = map (mapFst (fmap eLabel))
+              $ nBest' 5 target g
       putStrLn $ drawHypergraph g
       putStrLn $ "target: " ++ show target
       putStrLn ""
       flip mapM_ ts $ \ (t, w) -> do
         putStrLn $ "weight (n-best):            " ++ show (negate w)
-        putStrLn $ "weight (in input wta):      " ++ show (WTA.weightTree wta t)
+        putStrLn $ "weight (in input wta):      " ++ show (WTA.weightTree (WTA.fromHypergraph target g) t)
         putStrLn $ T.drawTree $ fmap show t
       putStrLn (replicate 80 '=')
 
@@ -387,36 +377,6 @@ onlyPreterminals (T.Node x ts) = T.Node x (map onlyPreterminals ts)
 yield :: T.Tree a -> [a]
 yield (T.Node r []) = [r]
 yield (T.Node _ ts) = concatMap yield ts
-
-
-hgToNBestHg
-  :: (Ord v, Num w, Ord i)
-  => Hypergraph v l w i
-  -> ([v], v -> [(i, [v])], i -> [w] -> w)
-hgToNBestHg g
-  = ( vertices g
-    , \ v -> map (\ e -> (eId e, eTail e)) $ M.findWithDefault [] v eM
-    , \ i ws -> negate $ product (map negate ws) * M.findWithDefault 0 i iM
-    )
-  where
-    eM = edgesM g
-    iM = M.fromList $ map (\ e -> (eId e, eWeight e)) $ edges g
-
-
-hPathToTree :: NB.HPath a -> T.Tree a
-hPathToTree (NB.B i bs)
-  = T.Node i (map hPathToTree bs)
-
-
-idTreeToLabelTree :: (Ord i, Functor f) => Hypergraph v l w i -> f i -> f l
-idTreeToLabelTree g
-  = fmap (\ i -> M.findWithDefault (error "unknown eId") i iM)
-  where
-    iM = M.fromList $ map (\ e -> (eId e, eLabel e)) $ edges g
-
-
-pairToTuple :: NB.Pair a b -> (a, b)
-pairToTuple (NB.P x y) = (x, y)
 
 
 printWTAStatistic :: WTA.WTA q t w -> IO ()
