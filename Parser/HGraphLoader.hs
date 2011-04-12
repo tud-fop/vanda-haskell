@@ -43,8 +43,8 @@ newtype WEIGHT' = W' Double   deriving (Show,Eq)
 
 instance Ord WEIGHT' where
     compare (W' w1) (W' w2) = compare w2 w1
-       -- | w1 > w2 = LT -- inverse
-       -- | otherwise = GT
+       -- -- | w1 > w2 = LT -- inverse
+       -- -- | otherwise = GT
 
 
 type HWeights hEdge hWeight = hEdge -> [hWeight] -> hWeight

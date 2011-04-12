@@ -1,21 +1,22 @@
------------------------------------------------------------------------------
+-- (c) 2010 Daniel Geisler
+-- (c) 2010 Matthias Büchse <Matthias.Buechse@tu-dresden.de>
+-- (c) 2011 Toni Dietze <Toni.Dietze@tu-dresden.de>
 --
--- Module      :  Main
--- Copyright   :
--- License     :  AllRightsReserved
+-- Technische Universität Dresden / Faculty of Computer Science / Institute
+-- of Theoretical Computer Science / Chair of Foundations of Programming
 --
--- Maintainer  :
--- Stability   :
--- Portability :
---
--- |
---
------------------------------------------------------------------------------
-{-# OPTIONS_GHC -fglasgow-exts -XBangPatterns -XGADTs #-}
+-- Redistribution and use in source and binary forms, with or without
+-- modification, is ONLY permitted for teaching purposes at Technische
+-- Universität Dresden AND IN COORDINATION with the Chair of Foundations
+-- of Programming.
+-- ---------------------------------------------------------------------------
 
+module Algorithms.NBest
+( best, worst
+, best', worst'
+) where
 
-
-module Algorithms.NBest where
+import Tools.Miscellaneous (mapSnd)
 
 import Data.List
 import Data.Set ( Set )
@@ -25,11 +26,11 @@ import qualified Data.Map as Map
 import qualified Data.Tree as T
 import Maybe
 -- import Array
-import System( getArgs )
+-- import System( getArgs )
 -- import Debug.Trace
 import qualified Data.Heap as Heap
 import Data.Heap ( MinHeap )
-import Parser.HGraphLoader
+-- import Parser.HGraphLoader
 -- import Control.Parallel.Strategies
 
 
@@ -39,10 +40,9 @@ type HWeights hEdge hWeight = hEdge -> [hWeight] -> hWeight
 type HBack hEdge hNode = hNode -> [(hEdge, [hNode])]
 type HGraph hNode hEdge hWeight
       = ([hNode], HBack hEdge hNode, HWeights hEdge hWeight)
-type HQuery hNode hEdge hWeight = (hNode, HGraph hNode hEdge hWeight)
 data Pair a b = P a b deriving Show
 
-
+{-
 showHGraph
   :: (Show hNode, Show hEdge, Show hWeight)
   => HGraph hNode hEdge hWeight -> String
@@ -64,7 +64,7 @@ showHGraph (hNodes, hBack, hWeights)
           )
           hNodes
     f' = concat $ intersperse "\n" (concat f)
-
+-}
 --instance (Show hNode,Show hEdge,Show hWeight) => Show (HGraph hNode hEdge hWeight) where
 --    show (hNodes,hBack,hWeights) = "(" ++ show hNodes ++ ")"
 
@@ -145,7 +145,7 @@ knuth' h@(_, hBack, hWeights) (oldMap, unvis, vis)
     (v, m)
       = minimumBy (\ (_, Just (x, _)) (_, Just (x', _)) -> compare x x') list'
 
-
+{-
 kknuth
   :: (Ord hWeight, Ord hNode, Ord hEdge)
   => HGraph hNode hEdge hWeight -> hNode -> Maybe (hWeight, hEdge)
@@ -187,7 +187,7 @@ kknuth' h@(_, hBack, hWeights) (_:xs)
     list' = filter (\ (_, m') -> isJust m') list
     (v, m)
       = minimumBy (\ (_, Just (x, _)) (_, Just (x', _)) -> compare x x') list'
-
+-}
 
 --------------------------------------------------------------------
 --      Calculation of n-best hyperpaths                          --
@@ -230,10 +230,9 @@ p heap
       Just (M a l, heap') -> a : p (Heap.union heap' (Heap.fromList l))
 
 
-topconcat
-  :: (Eq hWeight) => ([hWeight] -> hWeight) -> [[hWeight]] -> M hWeight
+topconcat :: ([hWeight] -> hWeight) -> [[hWeight]] -> M hWeight
 topconcat f lists
-  | elem [] lists
+  | any null lists
     = E
   | otherwise
     = M (f (map head lists)) (map (topconcat f) (tail (combine lists)))
@@ -249,6 +248,9 @@ mytail E = []
 mytail (M _ as) = as
 
 
+-- | @best hypergraph vertex n@ computes the weights of the @n@ best
+-- executions of @hypergraph@ beginning at @vertex@, where best means the
+-- executions with the lowest weights with respect do 'Ord'.
 best
   :: (Ord hWeight, Ord hNode, Ord hEdge)
   => HGraph hNode hEdge hWeight
@@ -258,18 +260,56 @@ best
 best h v n = take n (q h (knuth h) v)
 
 
+-- | @best' hypergraph vertex n@ computes the @n@ best executions and their
+-- weights of @hypergraph@ beginning at @vertex@, where best means the
+-- executions with the lowest weights with respect do 'Ord'.
 best'
   :: (Ord hEdge, Ord hWeight, Ord hNode)
   => HGraph hNode hEdge hWeight
   -> hNode
   -> Int
-  -> [Pair (T.Tree hEdge) hWeight]
+  -> [(T.Tree hEdge, hWeight)]
 best' h v n
-  = take n (q h' (knuth h') v)
+  = map (\ (P t w) -> (t, w))
+  $ take n (q h' (knuth h') v)
   where
     h' = lft h
 
 
+newtype FlipOrd a = FlipOrd { unflipOrd :: a } deriving (Eq)
+
+instance (Ord a) => Ord (FlipOrd a) where
+  compare (FlipOrd x) (FlipOrd y) = compare y x
+
+
+-- | @worst hypergraph vertex n@ computes the weights of the @n@ worst
+-- executions of @hypergraph@ beginning at @vertex@, where worst means the
+-- executions with the highest weights with respect do 'Ord'.
+worst
+  :: (Ord hWeight, Ord hNode, Ord hEdge)
+  => HGraph hNode hEdge hWeight
+  -> hNode
+  -> Int
+  -> [hWeight]
+worst (hNodes, hBack, hWeights) v n
+  = map unflipOrd
+  $ best (hNodes, hBack, \ e -> FlipOrd . hWeights e . map unflipOrd) v n
+
+
+-- | @worst' hypergraph vertex n@ computes the @n@ worst executions and their
+-- weights of @hypergraph@ beginning at @vertex@, where worst means the
+-- executions with the highest weights with respect do 'Ord'.
+worst'
+  :: (Ord hEdge, Ord hWeight, Ord hNode)
+  => HGraph hNode hEdge hWeight
+  -> hNode
+  -> Int
+  -> [(T.Tree hEdge, hWeight)]
+worst' (hNodes, hBack, hWeights) v n
+  = map (mapSnd unflipOrd)
+  $ best' (hNodes, hBack, \ e -> FlipOrd . hWeights e . map unflipOrd) v n
+
+{-
 main :: IO ()
 main = do
   args <- getArgs
@@ -281,8 +321,10 @@ main = do
     -- Right (node,hGraph) -> print (knuth hGraph node)
     -- Right (node,hGraph) -> putStr $ showHGraph hGraph
     Left err -> print err
-
+-}
 {-
+-# OPTIONS_GHC -fglasgow-exts -XBangPatterns -XGADTs #-
+
 knuth :: (Ord hWeight, Ord hNode, Ord hEdge) => HGraph hNode hEdge hWeight -> hNode -> (Maybe (hWeight,hEdge))
 knuth h@(hNodes,hBack,hWeights)= (Map.!) $ knuth' ((Map.fromList [(v, Nothing) | v <- hNodes]), (Set.fromList hNodes), Set.empty)
   where

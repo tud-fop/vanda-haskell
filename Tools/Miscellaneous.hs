@@ -1,4 +1,13 @@
--- Copyright (c) 2010, Toni Dietze
+-- (c) 2010-2011 Toni Dietze <Toni.Dietze@tu-dresden.de>
+--
+-- Technische Universität Dresden / Faculty of Computer Science / Institute
+-- of Theoretical Computer Science / Chair of Foundations of Programming
+--
+-- Redistribution and use in source and binary forms, with or without
+-- modification, is ONLY permitted for teaching purposes at Technische
+-- Universität Dresden AND IN COORDINATION with the Chair of Foundations
+-- of Programming.
+-- ---------------------------------------------------------------------------
 
 module Tools.Miscellaneous(
 -- * Mapping
@@ -16,7 +25,7 @@ module Tools.Miscellaneous(
 import qualified Data.List as L
 import qualified Random as R
 
--- -----------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
 -- | Apply a function to the first component of a pair.
 {-# INLINE mapFst #-}
 mapFst :: (a -> c) -> (a, b) -> (c, b)
@@ -28,7 +37,7 @@ mapFst f = \ (x, y) -> (f x, y)
 mapSnd :: (b -> c) -> (a, b) -> (a, c)
 mapSnd f = \ (x, y) -> (x, f y)
 
--- -----------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
 -- | @mapRandomR r f xs g == (ys, g')@, where @ys@ is the list obtained by
 -- applying f to each element of xs and a random value in the range @r@, and
 -- @g'@ is a new random generator.
@@ -58,7 +67,7 @@ mapRandom' random f (x:xs) g
 mapRandom' _ _ [] g
   = ([], g)
 
--- -----------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
 -- | Sum the elements of a list after mapping them to a 'Num'; i.e.
 -- @sumWith f == sum . map f@
 sumWith :: (Num b) => (a -> b) -> [a] -> b

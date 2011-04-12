@@ -1,3 +1,15 @@
+-- (c) 2011 Matthias Büchse <Matthias.Buechse@tu-dresden.de>
+-- (c) 2011 Toni Dietze <Toni.Dietze@tu-dresden.de>
+--
+-- Technische Universität Dresden / Faculty of Computer Science / Institute
+-- of Theoretical Computer Science / Chair of Foundations of Programming
+--
+-- Redistribution and use in source and binary forms, with or without
+-- modification, is ONLY permitted for teaching purposes at Technische
+-- Universität Dresden AND IN COORDINATION with the Chair of Foundations
+-- of Programming.
+-- ---------------------------------------------------------------------------
+
 module Data.Hypergraph (
 -- * Types
   Hyperedge()
@@ -193,7 +205,7 @@ mapVerticesMonotonic f (Hypergraph vs es)
       )
 
 
- -- | Apply a function to the label of a 'Hyperedge'.
+-- | Apply a function to the label of a 'Hyperedge'.
 eMapLabel :: (l -> l') -> Hyperedge v l w i -> Hyperedge v l' w i
 eMapLabel f = \ e -> e{eLabel = f (eLabel e)}
 
@@ -400,7 +412,7 @@ parseTree' pos target look (T.Node l ts) m
 
 nBest :: (Num w, Ord v, Ord w) => Int -> v -> Hypergraph v l w i -> [w]
 nBest n target g
-  = map negate $ NBest.best h target n
+  = NBest.worst h target n
   where (h, _) = nBestHelper g
 
 
@@ -408,8 +420,8 @@ nBest'
   :: (Num w, Ord v, Ord w)
   => Int -> v -> Hypergraph v l w i -> [(T.Tree (Hyperedge v l w i), w)]
 nBest' n target g
-  = map (\ (NBest.P t w) -> (fmap (ieA A.!) t, negate w))
-  $ NBest.best' h target n
+  = map (mapFst (fmap (ieA A.!)))
+  $ NBest.worst' h target n
   where (h, ieA) = nBestHelper g
 
 
@@ -426,10 +438,10 @@ nBestHelper g
       = M.mapAccum (L.mapAccumL (\ i' e -> (i' + 1, (i', e)))) (0 :: Int) (edgesM g)
     ieA = A.array (0, i - 1) $ concat $ M.elems ieM
     hBackM = M.map (map $ \ ie -> (fst ie, eTail $ snd ie)) ieM
-    hWeightA = fmap (negate . eWeight) ieA
+    hWeightA = fmap eWeight ieA
     h = ( vertices g
         , \ v -> M.findWithDefault [] v hBackM
-        , \ i' ws -> product (map negate ws) * (hWeightA A.! i')
+        , \ i' ws -> product ws * (hWeightA A.! i')
         )
 
 -- ---------------------------------------------------------------------------
