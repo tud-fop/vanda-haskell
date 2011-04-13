@@ -66,6 +66,7 @@ import qualified Algorithms.NBest as NBest
 import qualified Data.Queue as Q
 import Tools.Miscellaneous (mapFst, mapSnd, sumWith, mapRandomR)
 
+import Control.DeepSeq
 import qualified Data.Array as A
 import qualified Data.List as L
 import qualified Data.Map as M
@@ -462,3 +463,17 @@ drawHypergraph g
   =   (unlines . map drawHyperedge . edges $ g)
   ++  show (length $ vertices g) ++ " vertices; "
   ++  show (length $ edges g) ++ " edges\n"
+
+-- ---------------------------------------------------------------------------
+
+instance
+  (NFData v, NFData l, NFData w, NFData i)
+  => NFData (Hyperedge v l w i) where
+  rnf (Hyperedge hd tl l w i)
+    = rnf hd `seq` rnf tl `seq` rnf l `seq` rnf w `seq` rnf i
+
+
+instance
+  (NFData v, NFData l, NFData w, NFData i)
+  => NFData (Hypergraph v l w i) where
+  rnf (Hypergraph vS eM) = rnf vS `seq` rnf eM
