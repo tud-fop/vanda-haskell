@@ -76,14 +76,15 @@ train' ts target g0 gen0
   where
     target' = initializeVertex target
     go count offset g gen
-      = let (g', gen') = splitMergeStep offset ts target' g gen
+      = (g, gen)
+      : let (g', gen') = splitMergeStep offset ts target' g gen
             count' = S.size $ verticesS g'
             offset' = 2 * offset
         in if offset' <= offset  -- check for overflow
-           then [(g, gen)]
+           then []
            else if count' == count
-           then [(g, gen), (g', gen')]
-           else (g, gen) : go count' offset' g' gen'
+           then [(g', gen')]
+           else go count' offset' g' gen'
 
 
 -- | Perform a split, the EM algorithm an a merge.
@@ -102,7 +103,8 @@ splitMergeStep
   -> gen                      -- ^ random number generator
   -> (Hypergraph (v, n) l w [i], gen)
 splitMergeStep offset ts target g0 gen
-  = let
+  = {-trace "splitMergeStep" $-}
+    let
     (_, (g1, gen'))
       = mapSnd (mapFst properize)
       $ mapSnd (flip (randomizeWeights 10) gen)
