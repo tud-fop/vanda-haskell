@@ -16,9 +16,7 @@ module Algorithms.InsideOutsideWeights (
 
 import Data.Hypergraph
 
-import qualified Data.List as L
 import qualified Data.Map  as M
-import Data.Maybe (fromMaybe)
 
 -- import Debug.Trace
 
@@ -176,22 +174,19 @@ initOutsideMap ::
   -> M.Map v (w, [(v, w)])
 initOutsideMap w m target
   = M.insert target (1, [(target, 1)])
-  . M.map ((,) 0 . M.toList . M.map sum . M.fromListWith (++))
+  . M.map ((,) 0 . M.toList . M.fromListWith (+))
   . M.fromListWith (++)
   . concatMap
       (\ e ->
-        map
-          (\ (xs, y, zs) ->
-            (y, [(eHead e, [w e * insideList xs * insideList zs])])
-          )
-          (splits3 (eTail e))
+        let hd = eHead e
+            tl = eTail e
+            ws = map (\ v -> M.findWithDefault 0 v m) tl
+            ls = scanl (*) 1 ws
+            rs = scanr (*) 1 ws
+            ew = w e
+        in zipWith3 (\ v l r -> (v, [(hd, ew * l * r)])) tl ls (tail rs)
       )
   . edges
-  where
-    insideList vs
-      = let step p v = p * fromMaybe 0 (M.lookup v m)
-        in L.foldl' step 1 vs
-
 
 -- Convergence ---------------------------------------------------------------
 
@@ -249,18 +244,3 @@ instance Converging Float where
 
 instance Converging Double where
   converged = convergedRealFloat
-
-
--- Miscellaneous--------------------------------------------------------------
-
--- | Build a list of all possible splits @(xs, y, ys)@ of a list @zs@, such
--- that @zs == xs ++ [y] ++ ys@. For example
--- @splits3 [1, 2, 3] == [([], 1, [2, 3]), ([1], 2, [3]), ([1, 2], 3, [])]@.
-splits3 :: [a] -> [([a], a, [a])]
-splits3 []     = []
-splits3 [x]    = [([], x, [])]
-splits3 (x:xs) = ([], x, xs) : map (mapFst3 (x :)) (splits3 xs)
-
-
-mapFst3 :: (a -> d) -> (a, b, c) -> (d, b, c)
-mapFst3 f (x, y, z) = (f x,   y,   z)
