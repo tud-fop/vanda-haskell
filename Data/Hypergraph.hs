@@ -411,12 +411,18 @@ parseTree' pos target look (T.Node l ts) m
     for x ys f = L.foldl' f x ys
 
 
+-- | @nBest n vertex hypergraph@ computes the weights of the @n@ best
+-- executions of @hypergraph@ beginning at @vertex@, where best means the
+-- executions with the highest weights with respect do 'Ord'.
 nBest :: (Num w, Ord v, Ord w) => Int -> v -> Hypergraph v l w i -> [w]
 nBest n target g
   = NBest.worst h target n
   where (h, _) = nBestHelper g
 
 
+-- | @nBest' n vertex hypergraph@ computes the @n@ best executions and their
+-- weights of @hypergraph@ beginning at @vertex@, where best means the
+-- executions with the highest weights with respect do 'Ord'.
 nBest'
   :: (Num w, Ord v, Ord w)
   => Int -> v -> Hypergraph v l w i -> [(T.Tree (Hyperedge v l w i), w)]
