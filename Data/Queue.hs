@@ -1,3 +1,20 @@
+-- (c) 2011 Toni Dietze <Toni.Dietze@tu-dresden.de>
+--
+-- Technische Universität Dresden / Faculty of Computer Science / Institute
+-- of Theoretical Computer Science / Chair of Foundations of Programming
+--
+-- Redistribution and use in source and binary forms, with or without
+-- modification, is ONLY permitted for teaching purposes at Technische
+-- Universität Dresden AND IN COORDINATION with the Chair of Foundations
+-- of Programming.
+-- ---------------------------------------------------------------------------
+
+-- | This module is based on Section 3.1.1 of
+--
+-- * Chris Okasaki.
+--   /Purely functional data structures./
+--   1998.
+--   <http://www.cs.cmu.edu/~rwh/theses/okasaki.pdf>
 module Data.Queue (
   Queue()
 , null
