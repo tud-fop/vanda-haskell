@@ -1,16 +1,14 @@
------------------------------------------------------------------------------
+-- (c) 2010 Daniel Geisler
+-- (c) 2010 Matthias Büchse <Matthias.Buechse@tu-dresden.de>
 --
--- Module      :  HGraphLoader
--- Copyright   :
--- License     :  AllRightsReserved
+-- Technische Universität Dresden / Faculty of Computer Science / Institute
+-- of Theoretical Computer Science / Chair of Foundations of Programming
 --
--- Maintainer  :
--- Stability   :
--- Portability :
---
--- |
---
------------------------------------------------------------------------------
+-- Redistribution and use in source and binary forms, with or without
+-- modification, is ONLY permitted for teaching purposes at Technische
+-- Universität Dresden AND IN COORDINATION with the Chair of Foundations
+-- of Programming.
+-- ---------------------------------------------------------------------------
 
 module Parser.HGraphLoader (
 loadHGraph

@@ -1,4 +1,14 @@
--- Copyright (c) 2010, Toni Dietze
+-- (c) 2011 Matthias Büchse <Matthias.Buechse@tu-dresden.de>
+-- (c) 2010-2011 Toni Dietze <Toni.Dietze@tu-dresden.de>
+--
+-- Technische Universität Dresden / Faculty of Computer Science / Institute
+-- of Theoretical Computer Science / Chair of Foundations of Programming
+--
+-- Redistribution and use in source and binary forms, with or without
+-- modification, is ONLY permitted for teaching purposes at Technische
+-- Universität Dresden AND IN COORDINATION with the Chair of Foundations
+-- of Programming.
+-- ---------------------------------------------------------------------------
 
 {-------------------------------------------------------------------------------
 
