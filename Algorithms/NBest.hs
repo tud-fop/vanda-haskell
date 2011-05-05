@@ -250,7 +250,7 @@ mytail (M _ as) = as
 
 -- | @best hypergraph vertex n@ computes the weights of the @n@ best
 -- executions of @hypergraph@ beginning at @vertex@, where best means the
--- executions with the lowest weights with respect do 'Ord'.
+-- executions with the lowest weights with respect to 'Ord'.
 best
   :: (Ord hWeight, Ord hNode, Ord hEdge)
   => HGraph hNode hEdge hWeight
@@ -262,7 +262,7 @@ best h v n = take n (q h (knuth h) v)
 
 -- | @best' hypergraph vertex n@ computes the @n@ best executions and their
 -- weights of @hypergraph@ beginning at @vertex@, where best means the
--- executions with the lowest weights with respect do 'Ord'.
+-- executions with the lowest weights with respect to 'Ord'.
 best'
   :: (Ord hEdge, Ord hWeight, Ord hNode)
   => HGraph hNode hEdge hWeight
@@ -284,7 +284,7 @@ instance (Ord a) => Ord (FlipOrd a) where
 
 -- | @worst hypergraph vertex n@ computes the weights of the @n@ worst
 -- executions of @hypergraph@ beginning at @vertex@, where worst means the
--- executions with the highest weights with respect do 'Ord'.
+-- executions with the highest weights with respect to 'Ord'.
 worst
   :: (Ord hWeight, Ord hNode, Ord hEdge)
   => HGraph hNode hEdge hWeight
@@ -298,7 +298,7 @@ worst (hNodes, hBack, hWeights) v n
 
 -- | @worst' hypergraph vertex n@ computes the @n@ worst executions and their
 -- weights of @hypergraph@ beginning at @vertex@, where worst means the
--- executions with the highest weights with respect do 'Ord'.
+-- executions with the highest weights with respect to 'Ord'.
 worst'
   :: (Ord hEdge, Ord hWeight, Ord hNode)
   => HGraph hNode hEdge hWeight
