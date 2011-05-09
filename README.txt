@@ -23,7 +23,7 @@ x86_64 GNU/Linux
 
 Es sollte unter Ubuntu ausreichen, folgende Pakete zu installieren:
 
-$ aptitude show cabal-install
+$ aptitude show ghc6-prof
 Package: ghc6-prof
 State: installed
 Automatically installed: no
@@ -34,7 +34,7 @@ Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
 Uncompressed Size: 262M
 Depends: ghc6 (= 6.12.1-12)
 
-$ aptitude show ghc6-prof
+$ aptitude show cabal-install
 Package: cabal-install
 State: installed
 Automatically installed: no
