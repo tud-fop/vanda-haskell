@@ -17,6 +17,7 @@ module Algorithms.KAStar
 import Control.Monad.State
 --import qualified Data.Set as Set
 import qualified Data.Map as M
+import Data.Map ((!))
 import qualified Data.Tree as T
 import qualified Data.Heap as H 
 import qualified Data.Ord as O
@@ -63,17 +64,54 @@ weight (O _ _ w)     = w
 weight (K _ _ _ _ w) = w
 weight (D _ _ _ w)   = w
 
+edge :: Item v l w i -> Hyperedge v l w i
+edge (I _ e _)     = e
+edge (O _ e _)     = e
+edge (K _ e _ _ _) = e
+edge (D _ e _ _)   = e
+
 
 -- | Chart of already explored items with their weights.
 --   Implemented as a map assigning nodes to their corresponding inside,
---   outside, etc., items. Lists should be sorted by /decreasing/ weights.
+--   outside, etc., items. Lists are sorted by /decreasing/ weights.
 type Chart v l w i = M.Map v ( [Item v l w i] -- Inside items
                              , [Item v l w i] -- Outside items
                              , [Item v l w i] -- Ranked derivation items
                              , [Item v l w i] -- Modified derivation items
                              )
 
+insideItems :: Ord v => Chart v l w i -> v -> [Item v l w i]
+insideItems c v = let (i, _, _, _) = c ! v
+                  in i
+
+outsideItems :: Ord v => Chart v l w i -> v -> [Item v l w i]
+outsideItems c v = let (_, o, _, _) = c ! v
+                  in o
+
+rankedItems :: Ord v => Chart v l w i -> v -> [Item v l w i]
+rankedItems c v = let (_, _, r, _) = c ! v
+                  in r
+
+derivationItems :: Ord v => Chart v l w i -> v -> [Item v l w i]
+derivationItems c v = let (_, _, _, d) = c ! v
+                  in d
+
+
 type Agenda v l w i = H.MinPrioHeap w (Item v l w i)
+
+
+traceBackpointers 
+  :: Ord v 
+  => Item v l w i
+  -> Hypergraph v l w i
+  -> Chart v l w i
+  -> T.Tree (Hyperedge v l w i)
+traceBackpointers (K _ e _ bps _) graph chart = T.Node e $ map f $ zip bps [0..]
+  where f (rank, idx)  = let precs = rankedItems chart (eTail e !! idx)
+                         in traceBackpointers (precs !! (length precs - rank)) 
+                                              graph
+                                              chart
+traceBackpointers _ _ _ = error "Only for ranked derivation items"
 
 
 -- | @kbest k g h G@ computes a list of @k@ best derivations of the goal
