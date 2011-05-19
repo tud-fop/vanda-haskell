@@ -44,36 +44,39 @@ data Item v l w i = Inside (I v l w i)
                   | Derivation (D v l w i)
                   deriving Show
 
-data I v l w i = I { iNode :: v
-                   , iEdge :: Hyperedge v l w i
-                   , iWeight :: w
+data I v l w i = I { iNode   :: v
+                   , iEdge   :: Maybe (Hyperedge v l w i)
+                   , iWeight :: Maybe w
                    } deriving Show
 
-data O v l w i = O { oNode :: v
-                   , oEdge :: Hyperedge v l w i
-                   , oWeight :: w
+data O v l w i = O { oNode   :: v
+                   , oEdge   :: Maybe (Hyperedge v l w i)
+                   , oWeight :: Maybe w
                    } deriving Show
 
 data K v l w i = K { kNode         :: v
-                   , kEdge         :: Hyperedge v l w i
+                   , kEdge         :: Maybe (Hyperedge v l w i)
+                   , kWeight       :: Maybe w
                    , kRank         :: Int
                    , kBackpointers :: [Int]
-                   , kWeight :: w
                    } deriving Show
 
-data D v l w i = D { dNode :: v
-                   , dEdge :: Hyperedge v l w i
+data D v l w i = D { dNode         :: v
+                   , dEdge         :: Maybe (Hyperedge v l w i)
+                   , dWeight       :: Maybe w
                    , dBackpointers :: [Int]
-                   , dWeight :: w
                    } deriving Show
 
-weight :: Item v l w i -> w
+--mkI :: v -> I v l w i
+--mkI v = I v 
+
+weight :: Item v l w i -> Maybe w
 weight (Inside (I _ _ w))       = w
 weight (Outside (O _ _ w))      = w
-weight (Ranked (K _ _ _ _ w))   = w
-weight (Derivation (D _ _ _ w)) = w
+weight (Ranked (K _ _ w _ _))   = w
+weight (Derivation (D _ _ w _)) = w
 
-edge :: Item v l w i -> Hyperedge v l w i
+edge :: Item v l w i -> Maybe (Hyperedge v l w i)
 edge (Inside (I _ e _))       = e
 edge (Outside (O _ e _))      = e
 edge (Ranked (K _ e _ _ _))   = e
@@ -116,12 +119,15 @@ data Rule v l w i = R
   , rPriority :: [w] -> w
   }
 
-rulesKAStar :: Hyperedge v l w i -> [Rule v l w i]
-rulesKAStar e = ins e 
-                ++ switch e
-                ++ concat [out e i | i <- [0 .. (pred . length . eTail $ e)]]
-                ++ build e
-  where ins e = error ""
+rulesKAStar :: Hyperedge v l w i -> (v -> w) -> [Rule v l w i]
+rulesKAStar e h = ins e 
+                  ++ switch e
+                  ++ concat [out e i | i <- [0 .. (pred . length . eTail $ e)]]
+                  ++ build e
+  where ins e = [R (I . eHead $ e, map I . eTail e)
+                   (\ws -> sum ws + eWeight e)
+                   (\ws -> sum ws + eWeight e + h . eHead $ e)]
+                                                 
         switch e = error ""
         out e i = error ""
         build e = error ""
@@ -135,13 +141,20 @@ traceBackpointers
   => K v l w i
   -> Hypergraph v l w i
   -> Chart v l w i
-  -> T.Tree (Hyperedge v l w i)
-traceBackpointers (K _ e _ bps _) graph chart 
-  = T.Node e $ map traceSubtree $ zip bps [0..]
-    where traceSubtree (rank, idx)  
-            = let precs = ceRanked $ chart ! (eTail e !! idx)
-              in traceBackpointers (precs !! (length precs - rank)) graph chart
-
+  -> Maybe (T.Tree (Hyperedge v l w i))
+-- traceBackpointers (K _ e _ bps _) graph chart 
+--   = T.Node e $ map traceSubtree $ zip bps [0..]
+--     where traceSubtree (rank, idx)  
+--             = let precs = ceRanked $ chart ! (eTail e !! idx)
+--               in traceBackpointers (precs !! (length precs - rank)) graph chart
+traceBackpointers (K _ me _ _ bps) graph chart 
+  = do
+    e <- me
+    T.Node e `fmap` mapM 
+       (\(rank, idx) 
+          -> let precs = ceRanked $ chart ! (eTail e !! idx)
+             in traceBackpointers (precs !! (length precs - rank)) graph chart)
+       (zip bps [0..])
 
 -- | @kbest k g h G@ computes a list of @k@ best derivations of the goal
 --   node @g@ in the hypergraph @G@. It uses the supplied heuristic
@@ -174,3 +187,5 @@ edgesForward graph
 
 
 
+-- Control.Exception.catch (fromJust Nothing) (\e -> print $ ("asdf" ++  show (e::Control.Exception.SomeException)))
+--lol
