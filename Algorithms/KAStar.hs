@@ -21,6 +21,9 @@ import Data.Map ((!))
 import qualified Data.Tree as T
 import qualified Data.Heap as H 
 import qualified Data.Ord as O
+import qualified Data.List as L
+import Data.Maybe (listToMaybe)
+
 
 import Data.Hypergraph
 
@@ -76,6 +79,12 @@ edge (Outside (O _ e _))      = e
 edge (Ranked (K _ e _ _ _))   = e
 edge (Derivation (D _ e _ _)) = e
 
+node :: Item v l w i -> v
+node (Inside (I v _ _ ))      = v
+node (Outside (O v _ _))      = v
+node (Ranked (K v _ _ _ _))   = v
+node (Derivation (D v _ _ _)) = v
+
 
 -- | Chart of already explored items with their weights.
 --   Implemented as a map assigning nodes to their corresponding inside,
@@ -89,6 +98,33 @@ data ChartEntry v l w i = CE
   , ceRanked     :: [K v l w i] -- Ranked derivation items
   , ceDerivation :: [D v l w i] -- Modified derivation items
   }
+
+getItems :: Ord v => Chart v l w i -> Item v l w i -> [Item v l w i]
+getItems c (Inside (I v _ _)) 
+  = map Inside . filter ((v ==).iNode) . ceInside $ c ! v
+getItems c (Outside (O v _ _)) 
+  = map Outside  . filter ((v ==).oNode) . ceOutside $ c ! v
+getItems c (Ranked (K v _ _ _ _)) 
+  = map Ranked . filter ((v ==).kNode) . ceRanked $ c ! v
+getItems c (Derivation (D v _ _ _)) 
+  = map Derivation . filter ((v ==).dNode) . ceDerivation $ c ! v
+
+
+data Rule v l w i = R
+  { rRule :: (Item v l w i, [Item v l w i])
+  , rWeight :: [w] -> w
+  , rPriority :: [w] -> w
+  }
+
+rulesKAStar :: Hyperedge v l w i -> [Rule v l w i]
+rulesKAStar e = ins e 
+                ++ switch e
+                ++ concat [out e i | i <- [0 .. (pred . length . eTail $ e)]]
+                ++ build e
+  where ins e = error ""
+        switch e = error ""
+        out e i = error ""
+        build e = error ""
 
 
 type Agenda v l w i = H.MinPrioHeap w (Item v l w i)
@@ -122,3 +158,19 @@ kbest
               -- ^ A List of @k@ best derivations, with their weights
 kbest = error "not imp"
   
+-- | Helper function assigning to each node the list of edges with this
+--   node in their tail, together with the according index.
+--   Hopefully, this speeds things up.
+edgesForward 
+  :: Ord v
+  => Hypergraph v l w i 
+  -> M.Map v [(Hyperedge v l w i, Int)]
+edgesForward graph 
+  = L.foldl' (\m (a, b) -> M.insertWith' (++) a b m) M.empty . concatMap fwd $ edges
+  where edges = concat . M.elems . edgesM $ graph
+        fwd e = [(eTail e !! i, [(e, i)]) | i <- [0 .. pred . length . eTail $ e]]
+        -- perhaps the strict versions of fold and insert make this more
+        -- efficient... We will see.
+
+
+
