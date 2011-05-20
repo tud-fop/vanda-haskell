@@ -9,8 +9,6 @@
 -- of Programming.
 -- ---------------------------------------------------------------------------
 
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances #-}
-
 module Algorithms.KAStar 
   where
 
@@ -22,7 +20,7 @@ import qualified Data.Tree as T
 import qualified Data.Heap as H 
 import qualified Data.Ord as O
 import qualified Data.List as L
-import Data.Maybe (listToMaybe)
+import Data.Maybe (listToMaybe, maybeToList)
 
 
 import Data.Hypergraph
@@ -67,8 +65,20 @@ data D v l w i = D { dNode         :: v
                    , dBackpointers :: [Int]
                    } deriving Show
 
---mkI :: v -> I v l w i
---mkI v = I v 
+insideItem :: v -> Item v l w i
+insideItem v = Inside (I v Nothing Nothing)
+
+
+outsideItem :: v -> Item v l w i
+outsideItem v = Outside (O v Nothing Nothing)
+
+
+rankedItem :: v -> Item v l w i
+rankedItem v = Ranked (K v Nothing Nothing 0 [])
+
+
+derivationItem :: v -> Item v l w i
+derivationItem v = Derivation (D v Nothing Nothing [])
 
 weight :: Item v l w i -> Maybe w
 weight (Inside (I _ _ w))       = w
@@ -119,18 +129,22 @@ data Rule v l w i = R
   , rPriority :: [w] -> w
   }
 
-rulesKAStar :: Hyperedge v l w i -> (v -> w) -> [Rule v l w i]
-rulesKAStar e h = ins e 
-                  ++ switch e
-                  ++ concat [out e i | i <- [0 .. (pred . length . eTail $ e)]]
-                  ++ build e
-  where ins e = [R (I . eHead $ e, map I . eTail e)
-                   (\ws -> sum ws + eWeight e)
-                   (\ws -> sum ws + eWeight e + h . eHead $ e)]
-                                                 
-        switch e = error ""
-        out e i = error ""
-        build e = error ""
+rulesKAStar :: Num w => Hyperedge v l w i -> v -> (v -> w) -> [Rule v l w i]
+rulesKAStar e g h = ins
+                  ++ switch
+                  ++ concat [out i | i <- [0 .. (pred . length . eTail $ e)]]
+                  ++ build
+  where (hd, tl, we) = (eHead e, eTail e, eWeight e)
+        ins      = [R (insideItem hd, map insideItem tl)
+                    (\ws -> sum ws + we)
+                    (\ws -> sum ws + we + (h hd))]
+        switch   = [R (outsideItem g, [insideItem g])
+                    (const 0)
+                    sum] -- or rather 'head', since length ws == 1 for switch
+        out i    = [R (outsideItem (tl !! i), outsideItem hd : map insideItem tl)
+                      (\ws -> sum (take i ws) + sum (drop (i + 1) ws) + we) --maybe optimize
+                      (\ws -> sum ws + we)]
+        build    = error ""
 
 
 type Agenda v l w i = H.MinPrioHeap w (Item v l w i)
