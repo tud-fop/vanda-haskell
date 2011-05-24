@@ -83,7 +83,7 @@ data Hyperedge v l w i = Hyperedge
   , eLabel  :: l
   , eWeight :: w
   , eId     :: i
-  } deriving (Read, Show)
+  } deriving (Read, Show, Eq)
 
 data Hypergraph v l w i = Hypergraph
   { -- | Get a 'S.Set' of all vertices of a 'Hypergraph'.
