@@ -36,67 +36,49 @@ import Data.Hypergraph
 --     -- ^ Modified inside derivation, with list of derivation item ranks
 
 
-data Item v l w i = Inside (I v l w i)
-                  | Outside (O v l w i)
-                  | Ranked (K v l w i)
-                  | Derivation (D v l w i)
-                  deriving Show
+data Assignment v l w i = Inside (I v l w i) w
+                        | Outside (O v l w i) w
+                        | Ranked (K v l w i) w
+                          deriving (Show, Eq)
 
 data I v l w i = I { iNode   :: v
-                   , iEdge   :: Maybe (Hyperedge v l w i)
-                   , iWeight :: Maybe w
-                   } deriving Show
+                   } deriving (Show, Eq)
 
 data O v l w i = O { oNode   :: v
-                   , oEdge   :: Maybe (Hyperedge v l w i)
-                   , oWeight :: Maybe w
-                   } deriving Show
+                   } deriving (Show, Eq)
 
 data K v l w i = K { kNode         :: v
-                   , kEdge         :: Maybe (Hyperedge v l w i)
-                   , kWeight       :: Maybe w
+                   , kEdge         :: Hyperedge v l w i
                    , kRank         :: Int
                    , kBackpointers :: [Int]
-                   } deriving Show
+                   } deriving (Show, Eq)
 
-data D v l w i = D { dNode         :: v
-                   , dEdge         :: Maybe (Hyperedge v l w i)
-                   , dWeight       :: Maybe w
-                   , dBackpointers :: [Int]
-                   } deriving Show
+isInside :: Assignment v l w i -> Bool
+isInside (Inside _ _) = True
+isInside _ = False
 
-insideItem :: v -> Item v l w i
-insideItem v = Inside (I v Nothing Nothing)
+isOutside :: Assignment v l w i -> Bool
+isOutside (Outside _ _) = True
+isOutside _ = False
 
-
-outsideItem :: v -> Item v l w i
-outsideItem v = Outside (O v Nothing Nothing)
-
-
-rankedItem :: v -> Item v l w i
-rankedItem v = Ranked (K v Nothing Nothing 0 [])
+isRanked :: Assignment v l w i -> Bool
+isRanked (Ranked _ _) = True
+isRanked _ = False
 
 
-derivationItem :: v -> Item v l w i
-derivationItem v = Derivation (D v Nothing Nothing [])
+weight :: Assignment v l w i -> w
+weight (Inside _ w)   = w
+weight (Outside  _ w) = w
+weight (Ranked _ w)   = w
 
-weight :: Item v l w i -> Maybe w
-weight (Inside (I _ _ w))       = w
-weight (Outside (O _ _ w))      = w
-weight (Ranked (K _ _ w _ _))   = w
-weight (Derivation (D _ _ w _)) = w
+edge :: Assignment v l w i -> Maybe (Hyperedge v l w i)
+edge (Ranked (K _ e _ _ ) _) = Just e
+edge _                       = Nothing
 
-edge :: Item v l w i -> Maybe (Hyperedge v l w i)
-edge (Inside (I _ e _))       = e
-edge (Outside (O _ e _))      = e
-edge (Ranked (K _ e _ _ _))   = e
-edge (Derivation (D _ e _ _)) = e
-
-node :: Item v l w i -> v
-node (Inside (I v _ _ ))      = v
-node (Outside (O v _ _))      = v
-node (Ranked (K v _ _ _ _))   = v
-node (Derivation (D v _ _ _)) = v
+node :: Assignment v l w i -> v
+node (Inside (I v) _)       = v
+node (Outside (O v) _)      = v
+node (Ranked (K v _ _ _) _) = v
 
 
 -- | Chart of already explored items with their weights.
@@ -104,102 +86,135 @@ node (Derivation (D v _ _ _)) = v
 --   outside, etc., items. Lists are sorted by /decreasing/ weights.
 type Chart v l w i = M.Map v (ChartEntry v l w i)
 
--- | List of inside, outside, etc. items assigned to a node in the chart
-data ChartEntry v l w i = CE 
-  { ceInside     :: [I v l w i] -- Inside items
-  , ceOutside    :: [O v l w i] -- Outside items
-  , ceRanked     :: [K v l w i] -- Ranked derivation items
-  , ceDerivation :: [D v l w i] -- Modified derivation items
-  }
+data ChartEntry v l w i = CE { ceInside :: [Assignment v l w i]
+                             , ceOutside :: [Assignment v l w i]
+                             , ceRanked :: [Assignment v l w i]
+                             }
 
-getItems :: Ord v => Chart v l w i -> Item v l w i -> [Item v l w i]
-getItems c (Inside (I v _ _)) 
-  = map Inside . filter ((v ==).iNode) . ceInside $ c ! v
-getItems c (Outside (O v _ _)) 
-  = map Outside  . filter ((v ==).oNode) . ceOutside $ c ! v
-getItems c (Ranked (K v _ _ _ _)) 
-  = map Ranked . filter ((v ==).kNode) . ceRanked $ c ! v
-getItems c (Derivation (D v _ _ _)) 
-  = map Derivation . filter ((v ==).dNode) . ceDerivation $ c ! v
+insideAssignments :: Ord v => Chart v l w i -> v -> [Assignment v l w i]
+insideAssignments chart v = ceInside (chart ! v)
 
 
-data Rule v l w i = R
-  { rRule :: (Item v l w i, [Item v l w i])
-  , rWeight :: [w] -> w
-  , rPriority :: [w] -> w
-  }
-
-rulesKAStar :: Num w => Hyperedge v l w i -> v -> (v -> w) -> [Rule v l w i]
-rulesKAStar e g h = ins
-                  ++ switch
-                  ++ concat [out i | i <- [0 .. (pred . length . eTail $ e)]]
-                  ++ build
-  where (hd, tl, we) = (eHead e, eTail e, eWeight e)
-        ins      = [R (insideItem hd, map insideItem tl)
-                    (\ws -> sum ws + we)
-                    (\ws -> sum ws + we + (h hd))]
-        switch   = [R (outsideItem g, [insideItem g])
-                    (const 0)
-                    sum] -- or rather 'head', since length ws == 1 for switch
-        out i    = [R (outsideItem (tl !! i), outsideItem hd : map insideItem tl)
-                      (\ws -> sum (take i ws) + sum (drop (i + 1) ws) + we) --maybe optimize
-                      (\ws -> sum ws + we)]
-        build    = error ""
+outsideAssignments :: Ord v => Chart v l w i -> v -> [Assignment v l w i]
+outsideAssignments chart v = ceOutside (chart ! v)
 
 
-type Agenda v l w i = H.MinPrioHeap w (Item v l w i)
+rankedAssignments :: Ord v => Chart v l w i -> v -> [Assignment v l w i]
+rankedAssignments chart v = ceRanked (chart ! v)
+
+contains 
+  :: (Eq v, Ord v, Eq l, Eq w, Eq i) 
+  => Chart v l w i 
+  -> Assignment v l w i 
+  -> Bool
+chart `contains` (Inside (I v) _) = not . null $ insideAssignments chart v
+chart `contains` (Outside (O v) _) = not . null $ outsideAssignments chart v
+chart `contains` (Ranked (K v e _ bps) _) = not . null . filter f $ rankedAssignments chart v
+  where f (Ranked (K v' e' _ bps') _) = v' == v && e' == e && bps' == bps
+        f _                           = False
 
 
-traceBackpointers 
-  :: Ord v 
-  => K v l w i
-  -> Hypergraph v l w i
-  -> Chart v l w i
-  -> Maybe (T.Tree (Hyperedge v l w i))
--- traceBackpointers (K _ e _ bps _) graph chart 
---   = T.Node e $ map traceSubtree $ zip bps [0..]
---     where traceSubtree (rank, idx)  
---             = let precs = ceRanked $ chart ! (eTail e !! idx)
---               in traceBackpointers (precs !! (length precs - rank)) graph chart
-traceBackpointers (K _ me _ _ bps) graph chart 
-  = do
-    e <- me
-    T.Node e `fmap` mapM 
-       (\(rank, idx) 
-          -> let precs = ceRanked $ chart ! (eTail e !! idx)
-             in traceBackpointers (precs !! (length precs - rank)) graph chart)
-       (zip bps [0..])
 
--- | @kbest k g h G@ computes a list of @k@ best derivations of the goal
---   node @g@ in the hypergraph @G@. It uses the supplied heuristic
---   @h@ for efficiency, applying the KA* algorithm.
-kbest
-  :: (Ord v, Ord w, Num w)
-  => Int      -- ^ The number @k@ of derivations of @g@ to be searched for
-  -> v        -- ^ The goal node @g@ of @G@
-  -> (v -> w) -- ^ A heuristic function @h@, must be admissible and 
-              -- consistent, this precondition is /not/ checked!
+type Agenda v l w i = H.MinPrioHeap w (Assignment v l w i)
+
+insertAssignment :: Ord v => Assignment v l w i -> Chart v l w i -> Chart v l w i
+insertAssignment ass c = M.alter (Just . update ass) (node ass) c
+  where update a@(Inside _ _)  Nothing   = CE [a] [] []
+        update a@(Outside _ _) Nothing   = CE [] [a] []
+        update a@(Ranked _ _)  Nothing   = CE [] [] [a]
+        update a@(Inside _ _)  (Just ce) = ce{ceInside = [a]} 
+        --maybe exception when already non-nil
+        update a@(Outside _ _) (Just ce) = ce{ceOutside = [a]}
+        update a@(Ranked _ _)  (Just ce) = ce{ceRanked = a:(ceRanked ce)}
+        -- the above is ugly, perhaps it can be simplified with some monadic stuff
+
+newAssignments 
+  :: (Num w, Ord v, Eq l, Eq i) 
+  => Chart v l w i 
   -> Hypergraph v l w i 
-              -- ^ The hypergraph @G@ in which the search is performed
-  -> [(T.Tree (Hyperedge v l w i), w)] 
-              -- ^ A List of @k@ best derivations, with their weights
-kbest = error "not imp"
+  -> Assignment v l w i 
+  -> v 
+  -> (v -> w) 
+  -> [(w, Assignment v l w i)]
+newAssignments chart graph lastAss goal h = switch ++ ins ++ outs ++ builds
+  where
+    switch =
+      if isInside lastAss && node lastAss /= goal
+      then []
+      else do
+        ass <- ceInside (chart ! goal)
+        let new = Outside (O goal) 0
+        return (weight ass, new)
+    --    ins = if not . isInside $ lastAss
+    --          then []
+    --          else map
+    ins = let inhelper e = do
+                assmts <- forM (eTail e) (\v -> insideAssignments chart v)
+                guard (lastAss `elem` assmts)
+                let w = eWeight e + (sum . map weight $ assmts)
+                let p = h (eHead e) + w
+                return (p, Inside (I (eHead e)) w)
+          in concatMap inhelper . concat . M.elems . edgesM $ graph
+    outs = error ""
+    builds = error ""
+
+
+-- traceBackpointers 
+--   :: Ord v 
+--   => K v l w i
+--   -> Hypergraph v l w i
+--   -> Chart v l w i
+--   -> Maybe (T.Tree (Hyperedge v l w i))
+-- -- traceBackpointers (K _ e _ bps _) graph chart 
+-- --   = T.Node e $ map traceSubtree $ zip bps [0..]
+-- --     where traceSubtree (rank, idx)  
+-- --             = let precs = ceRanked $ chart ! (eTail e !! idx)
+-- --               in traceBackpointers (precs !! (length precs - rank)) graph chart
+-- traceBackpointers (K _ me _ _ bps) graph chart 
+--   = do
+--     e <- me
+--     T.Node e `fmap` mapM 
+--        (\(rank, idx) 
+--           -> let precs = ceRanked $ chart ! (eTail e !! idx)
+--              in traceBackpointers (precs !! (length precs - rank)) graph chart)
+--        (zip bps [0..])
+
+-- -- | @kbest k g h G@ computes a list of @k@ best derivations of the goal
+-- --   node @g@ in the hypergraph @G@. It uses the supplied heuristic
+-- --   @h@ for efficiency, applying the KA* algorithm.
+-- kbest
+--   :: (Ord v, Ord w, Num w)
+--   => Int      -- ^ The number @k@ of derivations of @g@ to be searched for
+--   -> v        -- ^ The goal node @g@ of @G@
+--   -> (v -> w) -- ^ A heuristic function @h@, must be admissible and 
+--               -- consistent, this precondition is /not/ checked!
+--   -> Hypergraph v l w i 
+--               -- ^ The hypergraph @G@ in which the search is performed
+--   -> [(T.Tree (Hyperedge v l w i), w)] 
+--               -- ^ A List of @k@ best derivations, with their weights
+-- kbest = error "not imp"
   
--- | Helper function assigning to each node the list of edges with this
---   node in their tail, together with the according index.
---   Hopefully, this speeds things up.
-edgesForward 
-  :: Ord v
-  => Hypergraph v l w i 
-  -> M.Map v [(Hyperedge v l w i, Int)]
-edgesForward graph 
-  = L.foldl' (\m (a, b) -> M.insertWith' (++) a b m) M.empty . concatMap fwd $ edges
-  where edges = concat . M.elems . edgesM $ graph
-        fwd e = [(eTail e !! i, [(e, i)]) | i <- [0 .. pred . length . eTail $ e]]
-        -- perhaps the strict versions of fold and insert make this more
-        -- efficient... We will see.
+-- -- | Helper function assigning to each node the list of edges with this
+-- --   node in their tail, together with the according index.
+-- --   Hopefully, this speeds things up.
+-- edgesForward 
+--   :: Ord v
+--   => Hypergraph v l w i 
+--   -> M.Map v [(Hyperedge v l w i, Int)]
+-- edgesForward graph 
+--   = L.foldl' (\m (a, b) -> M.insertWith' (++) a b m) M.empty . concatMap fwd $ edges
+--   where edges = concat . M.elems . edgesM $ graph
+--         fwd e = [(eTail e !! i, [(e, i)]) | i <- [0 .. pred . length . eTail $ e]]
+--         -- perhaps the strict versions of fold and insert make this more
+--         -- efficient... We will see.
 
 
 
 -- Control.Exception.catch (fromJust Nothing) (\e -> print $ ("asdf" ++  show (e::Control.Exception.SomeException)))
 --lol
+
+
+
+------------------------------------------------------------------------------
+
+  
