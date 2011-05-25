@@ -20,7 +20,7 @@ import qualified Data.Tree as T
 import qualified Data.Heap as H 
 import qualified Data.Ord as O
 import qualified Data.List as L
-import Data.Maybe (listToMaybe, maybeToList)
+import Data.Maybe (fromJust)
 
 
 import Data.Hypergraph
@@ -96,6 +96,8 @@ outsideAssignments chart v = ceOutside (chart ! v)
 rankedAssignments :: Ord v => Chart v l w i -> v -> [Assignment v l w i]
 rankedAssignments chart v = ceRanked (chart ! v)
 
+
+-- | @contains c a@ checks whether the chart @c@ already contains an assignment that is equal to @a@ (with no respect paid to the rank of ranked items).
 contains 
   :: (Eq v, Ord v, Eq l, Eq w, Eq i) 
   => Chart v l w i 
@@ -111,31 +113,40 @@ chart `contains` (Ranked (K v e _ bps) _) = not . any f $ rankedAssignments char
 
 type Agenda v l w i = H.MinPrioHeap w (Assignment v l w i)
 
-insertAssignment :: Ord v => Assignment v l w i -> Chart v l w i -> Chart v l w i
-insertAssignment ass c = M.alter (Just . update ass) (node ass) c
+-- | @chartInsert a c@ inserts assignment @a@ into chart @c@. Note that already present
+--   inside and outside items are overwritten at the moment instead of raising an error
+--   or an exception. Ranked items are annotated with their corresponding rank upon insertion.
+chartInsert :: Ord v => Assignment v l w i -> Chart v l w i -> Chart v l w i
+chartInsert ass c = M.alter (Just . update ass) (node ass) c
   where update a@(Inside _ _)  Nothing   = CE [a] [] []
         update a@(Outside _ _) Nothing   = CE [] [a] []
         update a@(Ranked _ _)  Nothing   = CE [] [] [a]
         update a@(Inside _ _)  (Just ce) = ce{ceInside = [a]} 
         --maybe exception when already non-nil
         update a@(Outside _ _) (Just ce) = ce{ceOutside = [a]}
-        update a@(Ranked _ _)  (Just ce) = ce{ceRanked = a:ceRanked ce}
+        update a@(Ranked _ _)  (Just ce) = ce{ceRanked = annotate a:ceRanked ce}
         -- the above is ugly, perhaps it can be simplified with some monadic stuff
+        annotate (Ranked (K v e r bps) w) 
+          = Ranked (K v e (succ . length $ (rankedAssignments c v)) bps) w
+        annotate x = x
 
+
+-- | creates the initial assignments together with their priorities to be put on the agenda,
 initialAssignments
   :: (Num w, Ord v, Eq l, Eq i)
-  => Chart v l w i
-  -> Hypergraph v l w i
+  => Hypergraph v l w i
   -> (v -> w)
   -> [(w, Assignment v l w i)]
-initialAssignments chart graph h
+initialAssignments graph h
   = map ins . filter ((==0) . length . eTail) 
       . concat . M.elems . edgesM $ graph
     where ins e = let w = eWeight e
                       p = w + (h . eHead $ e)
                   in (p, Inside (I . eHead $ e) w)
 
-
+-- | creates those new prioritized assignments to be put on the agenda that are using
+--   the last popped assignment. TODO: maybe prune edges which are not related to lastAss
+--   via precomputation
 newAssignments 
   :: (Num w, Ord v, Eq l, Eq i) 
   => Chart v l w i 
@@ -183,7 +194,33 @@ newAssignments chart graph lastAss goal h
       let p = w + weight oa
       let bps = map rank ibs
       return (p, Ranked (K (eHead e) e 0 bps) w)
-      
+
+--maybe wrap this into state monad
+kastar
+  :: (Num w, Ord w, Ord v, Eq l, Eq i) 
+  => Int
+  -> Hypergraph v l w i
+  -> v
+  -> (v -> w)
+  --  -> [(T.Tree (Hyperedge v l w i), w)]
+  ->[Assignment v l w i]
+kastar k graph g h
+  = execute M.empty (agendaInsert (initialAssignments graph h) (H.empty::Agenda v l w i))
+    where execute chart agenda 
+            = if done chart agenda
+              then rankedAssignments chart g
+              else let ((p, popped), agenda') = fromJust $ H.view agenda
+                       (chart', agenda'') 
+                         = if chart `contains` popped
+                           then (chart, agenda')
+                           else ( chartInsert popped chart
+                                , agendaInsert (newAssignments chart graph popped g h) agenda)
+                   in execute chart' agenda''
+          done chart agenda = length (rankedAssignments chart g) >= k
+                              || H.isEmpty agenda
+          agendaInsert as a = L.foldl' (flip H.insert)  a as
+                                      
+
 
 -- traceBackpointers 
 --   :: Ord v 
