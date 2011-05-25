@@ -25,17 +25,6 @@ import Data.Maybe (listToMaybe, maybeToList)
 
 import Data.Hypergraph
 
--- data Item v l w i =
---   I v (Hyperedge v l w i)   
---     -- ^ Inside item: 1-best derivation of a node
---   | O v (Hyperedge v l w i) 
---     -- ^ Outside item: 1-best g-context for a node
---   | K v (Hyperedge v l w i) Int [Int] 
---     -- ^ Ranked derivation item + backpointers
---   | D v (Hyperedge v l w i) [Int] 
---     -- ^ Modified inside derivation, with list of derivation item ranks
-
-
 data Assignment v l w i = Inside (I v l w i) w
                         | Outside (O v l w i) w
                         | Ranked (K v l w i) w
@@ -80,6 +69,11 @@ node (Inside (I v) _)       = v
 node (Outside (O v) _)      = v
 node (Ranked (K v _ _ _) _) = v
 
+rank :: Assignment v l w i -> Int
+rank (Ranked (K _ _ r _) _) = r
+rank a = error $ "Tried to compute rank of non-ranked assignment " -- ++ show a
+-- Or should I do this with maybe? I will have to signal error somewhere...
+
 
 -- | Chart of already explored items with their weights.
 --   Implemented as a map assigning nodes to their corresponding inside,
@@ -109,7 +103,7 @@ contains
   -> Bool
 chart `contains` (Inside (I v) _) = not . null $ insideAssignments chart v
 chart `contains` (Outside (O v) _) = not . null $ outsideAssignments chart v
-chart `contains` (Ranked (K v e _ bps) _) = not . null . filter f $ rankedAssignments chart v
+chart `contains` (Ranked (K v e _ bps) _) = not . any f $ rankedAssignments chart v
   where f (Ranked (K v' e' _ bps') _) = v' == v && e' == e && bps' == bps
         f _                           = False
 
@@ -125,8 +119,22 @@ insertAssignment ass c = M.alter (Just . update ass) (node ass) c
         update a@(Inside _ _)  (Just ce) = ce{ceInside = [a]} 
         --maybe exception when already non-nil
         update a@(Outside _ _) (Just ce) = ce{ceOutside = [a]}
-        update a@(Ranked _ _)  (Just ce) = ce{ceRanked = a:(ceRanked ce)}
+        update a@(Ranked _ _)  (Just ce) = ce{ceRanked = a:ceRanked ce}
         -- the above is ugly, perhaps it can be simplified with some monadic stuff
+
+initialAssignments
+  :: (Num w, Ord v, Eq l, Eq i)
+  => Chart v l w i
+  -> Hypergraph v l w i
+  -> (v -> w)
+  -> [(w, Assignment v l w i)]
+initialAssignments chart graph h
+  = map ins . filter ((==0) . length . eTail) 
+      . concat . M.elems . edgesM $ graph
+    where ins e = let w = eWeight e
+                      p = w + (h . eHead $ e)
+                  in (p, Inside (I . eHead $ e) w)
+
 
 newAssignments 
   :: (Num w, Ord v, Eq l, Eq i) 
@@ -136,28 +144,46 @@ newAssignments
   -> v 
   -> (v -> w) 
   -> [(w, Assignment v l w i)]
-newAssignments chart graph lastAss goal h = switch ++ ins ++ outs ++ builds
+newAssignments chart graph lastAss goal h 
+  = switch ++ ins ++ outs ++ builds
   where
-    switch =
-      if isInside lastAss && node lastAss /= goal
-      then []
-      else do
-        ass <- ceInside (chart ! goal)
-        let new = Outside (O goal) 0
-        return (weight ass, new)
-    --    ins = if not . isInside $ lastAss
-    --          then []
-    --          else map
-    ins = let inhelper e = do
-                assmts <- forM (eTail e) (\v -> insideAssignments chart v)
-                guard (lastAss `elem` assmts)
-                let w = eWeight e + (sum . map weight $ assmts)
-                let p = h (eHead e) + w
-                return (p, Inside (I (eHead e)) w)
-          in concatMap inhelper . concat . M.elems . edgesM $ graph
-    outs = error ""
-    builds = error ""
-
+    switch = do
+      guard $ isInside lastAss && node lastAss /= goal
+      ig <- ceInside (chart ! goal)
+      return (weight ig, Outside (O goal) 0)
+    ins = apply inhelper
+    outs = apply outhelper
+    builds = apply buildhelper
+    apply f = concatMap f . concat . M.elems . edgesM $ graph
+    inhelper e = do
+      ibs <- mapM (insideAssignments chart) (eTail e)
+      guard (lastAss `elem` ibs)
+      let w = eWeight e + (sum . map weight $ ibs)
+      let p = h (eHead e) + w
+      return (p, Inside (I (eHead e)) w)
+    outhelper e = do
+      ibs <- mapM (insideAssignments chart) (eTail e)
+      oa <- outsideAssignments chart $ eHead e
+      let assmts = oa : ibs -- we might express this with liftM2, but would lose the names
+      guard $ lastAss `elem` assmts
+      i <- [0 .. (length ibs - 1)]
+      let w = eWeight e + weight oa
+                + (sum . map weight $ take i ibs) -- leave out i-th element
+                + (sum . map weight $ drop (i + 1) ibs)
+      let p = w + weight (ibs !! i)
+      return (p, Outside (O (eTail e !! i)) w)
+    buildhelper e = do
+      oa <- outsideAssignments chart $ eHead e
+      ibs <- if null $ eTail e  -- case distinction because list monad treats x <- [] as "failure"
+             then return []
+             else mapM (rankedAssignments chart) (eTail e)
+      let assmts = oa : ibs
+      guard $ lastAss `elem` assmts
+      let w = eWeight e + (sum . map weight $ ibs)
+      let p = w + weight oa
+      let bps = map rank ibs
+      return (p, Ranked (K (eHead e) e 0 bps) w)
+      
 
 -- traceBackpointers 
 --   :: Ord v 
