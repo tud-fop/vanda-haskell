@@ -141,7 +141,7 @@ initialAssignments graph h
   = map ins . filter ((==0) . length . eTail) 
       . concat . M.elems . edgesM $ graph
     where ins e = let w = eWeight e
-                      p = w + (h . eHead $ e)
+                      p = w * (h . eHead $ e)
                   in (p, Inside (I . eHead $ e) w)
 
 -- | creates those new prioritized assignments to be put on the agenda that are using
@@ -161,7 +161,7 @@ newAssignments chart graph lastAss goal h
     switch = do
       guard $ isInside lastAss && node lastAss /= goal
       ig <- ceInside (chart ! goal)
-      return (weight ig, Outside (O goal) 0)
+      return (weight ig, Outside (O goal) 1)
     ins = apply inhelper
     outs = apply outhelper
     builds = apply buildhelper
@@ -169,8 +169,8 @@ newAssignments chart graph lastAss goal h
     inhelper e = do
       ibs <- mapM (insideAssignments chart) (eTail e)
       guard (lastAss `elem` ibs)
-      let w = eWeight e + (sum . map weight $ ibs)
-      let p = h (eHead e) + w
+      let w = eWeight e * (product . map weight $ ibs)
+      let p = h (eHead e) * w
       return (p, Inside (I (eHead e)) w)
     outhelper e = do
       ibs <- mapM (insideAssignments chart) (eTail e)
@@ -178,10 +178,10 @@ newAssignments chart graph lastAss goal h
       let assmts = oa : ibs -- we might express this with liftM2, but would lose the names
       guard $ lastAss `elem` assmts
       i <- [0 .. (length ibs - 1)]
-      let w = eWeight e + weight oa
-                + (sum . map weight $ take i ibs) -- leave out i-th element
-                + (sum . map weight $ drop (i + 1) ibs)
-      let p = w + weight (ibs !! i)
+      let w = eWeight e * weight oa
+                * (product . map weight $ take i ibs) -- leave out i-th element
+                * (product . map weight $ drop (i + 1) ibs)
+      let p = w * weight (ibs !! i)
       return (p, Outside (O (eTail e !! i)) w)
     buildhelper e = do
       oa <- outsideAssignments chart $ eHead e
@@ -190,8 +190,8 @@ newAssignments chart graph lastAss goal h
              else mapM (rankedAssignments chart) (eTail e)
       let assmts = oa : ibs
       guard $ lastAss `elem` assmts
-      let w = eWeight e + (sum . map weight $ ibs)
-      let p = w + weight oa
+      let w = eWeight e * (product . map weight $ ibs)
+      let p = w * weight oa
       let bps = map rank ibs
       return (p, Ranked (K (eHead e) e 0 bps) w)
 
