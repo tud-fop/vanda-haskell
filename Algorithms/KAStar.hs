@@ -20,7 +20,7 @@ import qualified Data.Tree as T
 import qualified Data.Heap as H 
 import qualified Data.Ord as O
 import qualified Data.List as L
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, mapMaybe)
 
 
 import Data.Hypergraph
@@ -202,13 +202,13 @@ kastar
   -> Hypergraph v l w i
   -> v
   -> (v -> w)
-  --  -> [(T.Tree (Hyperedge v l w i), w)]
-  ->[Assignment v l w i]
-kastar k graph g h
-  = execute M.empty (agendaInsert (initialAssignments graph h) (H.empty::Agenda v l w i))
-    where execute chart agenda 
+  -> [(T.Tree (Hyperedge v l w i), w)]
+  -- -> Chart v l w i
+kastar k graph g h = mapMaybe (traceBackpointers res) $ rankedAssignments res g
+  where res = execute M.empty $ agendaInsert (initialAssignments graph h) (H.empty::Agenda v l w i)
+        execute chart agenda 
             = if done chart agenda
-              then rankedAssignments chart g
+              then chart
               else let ((p, popped), agenda') = fromJust $ H.view agenda
                        (chart', agenda'') 
                          = if chart `contains` popped
@@ -216,46 +216,25 @@ kastar k graph g h
                            else ( chartInsert popped chart
                                 , agendaInsert (newAssignments chart graph popped g h) agenda)
                    in execute chart' agenda''
-          done chart agenda = length (rankedAssignments chart g) >= k
+        done chart agenda = length (rankedAssignments chart g) >= k
                               || H.isEmpty agenda
-          agendaInsert as a = L.foldl' (flip H.insert)  a as
+        agendaInsert as a = L.foldl' (flip H.insert)  a as
                                       
-
-
--- traceBackpointers 
---   :: Ord v 
---   => K v l w i
---   -> Hypergraph v l w i
---   -> Chart v l w i
---   -> Maybe (T.Tree (Hyperedge v l w i))
--- -- traceBackpointers (K _ e _ bps _) graph chart 
--- --   = T.Node e $ map traceSubtree $ zip bps [0..]
--- --     where traceSubtree (rank, idx)  
--- --             = let precs = ceRanked $ chart ! (eTail e !! idx)
--- --               in traceBackpointers (precs !! (length precs - rank)) graph chart
--- traceBackpointers (K _ me _ _ bps) graph chart 
---   = do
---     e <- me
---     T.Node e `fmap` mapM 
---        (\(rank, idx) 
---           -> let precs = ceRanked $ chart ! (eTail e !! idx)
---              in traceBackpointers (precs !! (length precs - rank)) graph chart)
---        (zip bps [0..])
 
 traceBackpointers 
   :: Ord v 
-  => Assignment v l w i 
-  -> Chart v l w i
+  => Chart v l w i
+  -> Assignment v l w i 
   -> Maybe (T.Tree (Hyperedge v l w i), w)
-traceBackpointers (Ranked k  w) c = do
-  t <- helper k c
+traceBackpointers c a@(Ranked _  w) = do
+  t <- helper a
   return (t, w)
-  where helper (K _ e _ bps) c = T.Node e `fmap` mapM
+  where helper (Ranked (K _ e _ bps) _) = T.Node e `fmap` mapM
           (\(rank, idx) 
              -> let precs = rankedAssignments c (eTail e !! idx)
-                in fst `fmap`  traceBackpointers (precs !! (length precs - rank)) c)
+                in helper (precs !! (length precs - rank)))
           (zip bps [0..])
-traceBackpointers _ _ = Nothing
+        helper _ = Nothing
 
 
 -- -- | @kbest k g h G@ computes a list of @k@ best derivations of the goal
