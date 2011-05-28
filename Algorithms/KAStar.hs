@@ -242,6 +242,22 @@ kastar k graph g h
 --              in traceBackpointers (precs !! (length precs - rank)) graph chart)
 --        (zip bps [0..])
 
+traceBackpointers 
+  :: Ord v 
+  => Assignment v l w i 
+  -> Chart v l w i
+  -> Maybe (T.Tree (Hyperedge v l w i), w)
+traceBackpointers (Ranked k  w) c = do
+  t <- helper k c
+  return (t, w)
+  where helper (K _ e _ bps) c = T.Node e `fmap` mapM
+          (\(rank, idx) 
+             -> let precs = rankedAssignments c (eTail e !! idx)
+                in fst `fmap`  traceBackpointers (precs !! (length precs - rank)) c)
+          (zip bps [0..])
+traceBackpointers _ _ = Nothing
+
+
 -- -- | @kbest k g h G@ computes a list of @k@ best derivations of the goal
 -- --   node @g@ in the hypergraph @G@. It uses the supplied heuristic
 -- --   @h@ for efficiency, applying the KA* algorithm.
