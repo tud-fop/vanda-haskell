@@ -33,10 +33,11 @@ import Demo
 -- import qualified Data.Set  as S
 -- import qualified Data.Tree as T
 -- import Text.Parsec.String (parseFromFile)
+import Algorithms.KAStar as KA
 
 
 main :: IO ()
-main = demo4_4
+main = KA.test
 
 -- main = testdata >>= \x -> print $ fmap (length {-. unLazyBinaryList . safeDecode-}) x
 
