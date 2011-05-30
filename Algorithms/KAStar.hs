@@ -250,17 +250,17 @@ kastar k graph g h
                            then (chart, agenda')
                            else let chart'' = chartInsert popped chart --ugly
                                 in ( chart''
-                                   , agendaInsert (newAssignments chart'' 
-                                                                  graph 
-                                                                  popped 
-                                                                  g 
+                                   , agendaInsert (newAssignments chart''
+                                                                  graph
+                                                                  popped
+                                                                  g
                                                                   h) 
                                                    agenda' -- ugliER!! ^^
                                    )
                    in execute chart' agenda''
         done chart agenda = length (rankedAssignments chart g) >= k
                               || H.isEmpty agenda
-        agendaInsert as a = L.foldl' (flip H.insert)  a as
+        agendaInsert as a = L.foldl' (flip H.insert) a as
                                       
 
 traceBackpointers 
@@ -305,7 +305,7 @@ test2 = hypergraph [ hyperedge 'a' ""   "alpha"   1.0 ()
 
 t graph goal h k = do
   putStrLn $ drawHypergraph graph
-  mapM_ putStrLn . map (uncurry str) $ kastar k graph goal h
+  mapM_ (putStrLn . uncurry str) $ kastar k graph goal h
     where str t w = "w = " ++ show w ++ "\n" 
                     ++ (T.drawTree . fmap drawHyperedge $ t)
 
