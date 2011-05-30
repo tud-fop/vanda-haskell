@@ -41,7 +41,10 @@ data K v l w i = K { kNode         :: v
                    , kEdge         :: Hyperedge v l w i
                    , kRank         :: Int
                    , kBackpointers :: [Int]
-                   } deriving (Show, Eq)
+                   } deriving (Show)
+
+instance (Eq v, Eq l, Eq w, Eq i) => Eq (K v l w i) where
+  (K v e _ bps) == (K v' e' _ bps') = v == v' && e == e' && bps == bps'
 
 isInside :: Assignment v l w i -> Bool
 isInside (Inside _ _) = True
@@ -106,10 +109,7 @@ contains
   -> Bool
 chart `contains` (Inside (I v) _) = not . null $ insideAssignments chart v
 chart `contains` (Outside (O v) _) = not . null $ outsideAssignments chart v
-chart `contains` (Ranked (K v e _ bps) _) = any f $ rankedAssignments chart v
-  where f (Ranked (K v' e' _ bps') _) = v' == v && e' == e && bps' == bps
-        f _                           = False
-
+chart `contains` r@(Ranked (K v _ _ _) _) = r `elem` rankedAssignments chart v
 
 
 type Agenda v l w i = H.MaxPrioHeap w (Assignment v l w i)
