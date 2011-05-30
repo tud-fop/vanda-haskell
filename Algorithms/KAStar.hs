@@ -213,10 +213,10 @@ kastar
   -> Hypergraph v l w i
   -> v
   -> (v -> w)
-  -- -> [(T.Tree (Hyperedge v l w i), w)]
-  -> Chart v l w i
---kastar k graph g h = mapMaybe (traceBackpointers res) $ rankedAssignments res g
-kastar k graph g h = res
+  -> [(T.Tree (Hyperedge v l w i), w)]
+  -- -> Chart v l w i
+kastar k graph g h = reverse $ mapMaybe (traceBackpointers res) $ rankedAssignments res g
+--kastar k graph g h = res
   where res = execute M.empty $ agendaInsert (initialAssignments graph h) (H.empty::Agenda v l w i)
         execute chart agenda | trace ("c: " ++ show chart ++ "\na: " ++ show agenda ++"\n") False = undefined
         execute chart agenda 
@@ -263,8 +263,9 @@ test2 = hypergraph [ hyperedge 'g' "" ' ' 1.0 ()
                    ]
 
 t1 = do
-  putStr $ drawHypergraph test1
-  print $ kastar 3 test1 'g' heur1
+  putStrLn $ drawHypergraph test1
+  mapM_ putStrLn . map (uncurry str) $ kastar 20 test1 'g' heur1
+        where str t w = "w = " ++ show w ++ "\n" ++ (T.drawTree . fmap drawHyperedge $ t)
 
 t2 = do
   putStr $ drawHypergraph test2
