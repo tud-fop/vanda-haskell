@@ -255,18 +255,23 @@ test1 = hypergraph [ hyperedge 'g' "ab" ' ' 1.0 ()
 heur1 :: Fractional w => Char -> w
 heur1 _ = 1.0
 
-test2 = hypergraph [ hyperedge 'g' "" ' ' 1.0 ()
-                   , hyperedge 'g' "g"  ' ' 0.9 ()
+test2 = hypergraph [ hyperedge 'a' ""   "alpha"   1.0 ()
+                   , hyperedge 'b' ""   "beta"    1.0 ()
+                   , hyperedge 'g' "ab" "sigma"   0.8 ()
+                   , hyperedge 'a' "g"  "delta"   0.9 ()
+                   , hyperedge 'b' "g"  "epsilon" 0.8 ()
                    ]
 
-t1 = do
-  putStrLn $ drawHypergraph test1
-  mapM_ putStrLn . map (uncurry str) $ kastar 20 test1 'g' heur1
+
+
+t graph goal h k = do
+  putStrLn $ drawHypergraph graph
+  mapM_ putStrLn . map (uncurry str) $ kastar k graph goal h
         where str t w = "w = " ++ show w ++ "\n" ++ (T.drawTree . fmap drawHyperedge $ t)
 
-t2 = do
-  putStr $ drawHypergraph test2
-  print $ kastar 3 test2 'g' heur1
+t1 = t test1 'g' heur1 20
+
+t2 = t test2 'g' heur1 1000
 
 
 -- -- | @kbest k g h G@ computes a list of @k@ best derivations of the goal
