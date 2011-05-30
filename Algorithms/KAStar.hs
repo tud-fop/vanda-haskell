@@ -21,7 +21,7 @@ import qualified Data.Heap as H
 import qualified Data.Ord as O
 import qualified Data.List as L
 import Data.Maybe (fromJust, mapMaybe)
-import Debug.Trace
+--import Debug.Trace
 
 
 import Data.Hypergraph
@@ -157,12 +157,10 @@ newAssignments
   -> (v -> w) 
   -> [(w, Assignment v l w i)]
 newAssignments chart graph lastAss goal h 
-  = let res = switch ++ ins ++ outs ++ builds
-    in trace ("newAssignments:" ++ show res) res
+  = switch ++ ins ++ outs ++ builds 
   where
     switch = do
       guard $ isInside lastAss && node lastAss == goal
-      --ig <- ceInside (chart ! goal)
       ig <- insideAssignments chart goal
       return (weight ig, Outside (O goal) 1)
     ins = apply inhelper
@@ -198,9 +196,8 @@ newAssignments chart graph lastAss goal h
       ibs <- if null $ eTail e  -- case distinction because list monad treats x <- [] as "failure"
              then return []
              else mapM (rankedAssignments chart) (eTail e)
-      let assmts' = oa : ibs
-      guard $ lastAss `elem` assmts' --PROBLEM!!!
-      let assmts = trace ("ASSMTS="++show assmts'++"\n") assmts'
+      let assmts = oa : ibs
+      guard $ lastAss `elem` assmts
       let w = eWeight e * (product . map weight $ ibs)
       let p = w * weight oa
       let bps = map rank ibs
@@ -218,7 +215,7 @@ kastar
 kastar k graph g h = reverse $ mapMaybe (traceBackpointers res) $ rankedAssignments res g
 --kastar k graph g h = res
   where res = execute M.empty $ agendaInsert (initialAssignments graph h) (H.empty::Agenda v l w i)
-        execute chart agenda | trace ("c: " ++ show chart ++ "\na: " ++ show agenda ++"\n") False = undefined
+        --execute chart agenda | trace ("c: " ++ show chart ++ "\na: " ++ show agenda ++"\n") False = undefined
         execute chart agenda 
             = if done chart agenda
               then chart
