@@ -271,7 +271,7 @@ t graph goal h k = do
 
 t1 = t test1 'g' heur1 20
 
-t2 = t test2 'g' heur1 1000
+t2 = t test2 'g' heur1 100
 
 
 -- -- | @kbest k g h G@ computes a list of @k@ best derivations of the goal
