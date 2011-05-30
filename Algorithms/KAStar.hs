@@ -13,12 +13,9 @@ module Algorithms.KAStar
   where
 
 import Control.Monad.State
---import qualified Data.Set as Set
 import qualified Data.Map as M
-import Data.Map ((!))
 import qualified Data.Tree as T
 import qualified Data.Heap as H 
-import qualified Data.Ord as O
 import qualified Data.List as L
 import Data.Maybe (fromJust, mapMaybe)
 --import Debug.Trace
@@ -26,26 +23,39 @@ import Data.Maybe (fromJust, mapMaybe)
 
 import Data.Hypergraph
 
+
+------------------------------------------------------------------------------
+-- Data Structures -----------------------------------------------------------
+------------------------------------------------------------------------------
+
+-- | Assignments associate an item with a weight. Used as data structure in
+--   agenda and chart.
 data Assignment v l w i = Inside (I v l w i) w
                         | Outside (O v l w i) w
                         | Ranked (K v l w i) w
                           deriving (Show, Eq)
 
+-- | Inside items of a node
 data I v l w i = I { iNode   :: v
                    } deriving (Show, Eq)
 
+-- | Outside items of a node
 data O v l w i = O { oNode   :: v
                    } deriving (Show, Eq)
 
+-- | Ranked derivation items of a node. Possess edge and backpointers for
+--   derivation reconstruction as well as a rank.
 data K v l w i = K { kNode         :: v
                    , kEdge         :: Hyperedge v l w i
                    , kRank         :: Int
                    , kBackpointers :: [Int]
                    } deriving (Show)
 
+-- When we check if the chart contains a ranked item, we disregard its rank.
 instance (Eq v, Eq l, Eq w, Eq i) => Eq (K v l w i) where
   (K v e _ bps) == (K v' e' _ bps') = v == v' && e == e' && bps == bps'
 
+-- maybe we can do without the following three functions
 isInside :: Assignment v l w i -> Bool
 isInside (Inside _ _) = True
 isInside _ = False
@@ -57,7 +67,6 @@ isOutside _ = False
 isRanked :: Assignment v l w i -> Bool
 isRanked (Ranked _ _) = True
 isRanked _ = False
-
 
 weight :: Assignment v l w i -> w
 weight (Inside _ w)   = w
@@ -73,6 +82,7 @@ node (Inside (I v) _)       = v
 node (Outside (O v) _)      = v
 node (Ranked (K v _ _ _) _) = v
 
+-- | /Nota bene:/ raises error if assignment doesn't contain a rank!
 rank :: Assignment v l w i -> Int
 rank (Ranked (K _ _ r _) _) = r
 rank a = error "Tried to compute rank of non-ranked assignment " -- ++ show a
@@ -89,6 +99,7 @@ data ChartEntry v l w i = CE { ceInside :: [Assignment v l w i]
                              , ceRanked :: [Assignment v l w i]
                              } deriving Show
 
+-- actual accessor functions for a chart
 insideAssignments :: Ord v => Chart v l w i -> v -> [Assignment v l w i]
 insideAssignments chart v = maybe [] ceInside $ M.lookup v chart 
 
@@ -100,8 +111,13 @@ outsideAssignments chart v = maybe [] ceOutside $ M.lookup v chart
 rankedAssignments :: Ord v => Chart v l w i -> v -> [Assignment v l w i]
 rankedAssignments chart v = maybe [] ceRanked $ M.lookup v chart
 
+-- TODO: mak abstract so that kbest and kworst possible
+type Agenda v l w i = H.MaxPrioHeap w (Assignment v l w i)
 
--- | @contains c a@ checks whether the chart @c@ already contains an assignment that is equal to @a@ (with no respect paid to the rank of ranked items).
+
+-- | @c `contains` a@ checks whether the chart @c@ already contains an 
+--   assignment that is equal to @a@ (with no respect paid to the rank 
+--   of ranked items).
 contains 
   :: (Eq v, Ord v, Eq l, Eq w, Eq i) 
   => Chart v l w i 
@@ -112,27 +128,31 @@ chart `contains` (Outside (O v) _) = not . null $ outsideAssignments chart v
 chart `contains` r@(Ranked (K v _ _ _) _) = r `elem` rankedAssignments chart v
 
 
-type Agenda v l w i = H.MaxPrioHeap w (Assignment v l w i)
-
--- | @chartInsert a c@ inserts assignment @a@ into chart @c@. Note that already present
---   inside and outside items are overwritten at the moment instead of raising an error
---   or an exception. Ranked items are annotated with their corresponding rank upon insertion.
+-- | @chartInsert a c@ inserts assignment @a@ into chart @c@. Note that already 
+--   present inside and outside items are overwritten at the moment instead of 
+--   raising an error or an exception. Ranked items are annotated with their 
+--   corresponding rank upon insertion.
 chartInsert :: Ord v => Assignment v l w i -> Chart v l w i -> Chart v l w i
 chartInsert ass c = M.alter (Just . update ass) (node ass) c
   where update a@(Inside _ _)  Nothing   = CE [a] [] []
         update a@(Outside _ _) Nothing   = CE [] [a] []
-        update a@(Ranked _ _)  Nothing   = CE [] [] [annotate a]
+        update a@(Ranked _ _)  Nothing   = CE [] [] [rk a]
         update a@(Inside _ _)  (Just ce) = ce{ceInside = [a]} 
         --maybe exception when already non-nil
         update a@(Outside _ _) (Just ce) = ce{ceOutside = [a]}
-        update a@(Ranked _ _)  (Just ce) = ce{ceRanked = annotate a:ceRanked ce}
-        -- the above is ugly, perhaps it can be simplified with some monadic stuff
-        annotate (Ranked (K v e r bps) w) 
+        update a@(Ranked _ _)  (Just ce) = ce{ceRanked = rk a:ceRanked ce}
+        -- the above is ugly, perhaps it can be simplified with monadic mojo
+        rk (Ranked (K v e r bps) w) 
           = Ranked (K v e (succ . length $ rankedAssignments c v) bps) w
-        annotate x = x
+        rk x = x
 
 
--- | creates the initial assignments together with their priorities to be put on the agenda,
+------------------------------------------------------------------------------
+-- KA* Algorithm -------------------------------------------------------------
+------------------------------------------------------------------------------
+
+-- | creates the initial assignments together with their priorities to be put 
+--   on the agenda,
 initialAssignments
   :: (Num w, Ord v, Eq l, Eq i)
   => Hypergraph v l w i
@@ -145,11 +165,12 @@ initialAssignments graph h
                       p = w * (h . eHead $ e)
                   in (p, Inside (I . eHead $ e) w)
 
--- | creates those new prioritized assignments to be put on the agenda that are using
---   the last popped assignment. TODO: maybe prune edges which are not related to lastAss
---   via precomputation
+-- | creates those new prioritized assignments to be put on the agenda that 
+--   are using the last popped assignment. 
+--   TODO: maybe prune edges which are not related to lastAss via 
+--   precomputation
 newAssignments 
-  :: (Num w, Ord v, Eq l, Eq i, Show l, Show v, Show i) --remove
+  :: (Num w, Ord v, Eq l, Eq i)
   => Chart v l w i 
   -> Hypergraph v l w i 
   -> Assignment v l w i 
@@ -167,10 +188,9 @@ newAssignments chart graph lastAss goal h
     outs = apply outhelper
     builds = apply buildhelper
     apply f = concatMap f . concat . M.elems . edgesM $ graph
-    -- inhelper e = trace ("E="++show e++"\n") $ do
-    --   ibs' <- mapM (insideAssignments chart) (eTail e)
-    --   --guard (lastAss `elem` ibs')
-    --   let ibs = trace ("\ninsAs="++show (map (insideAssignments chart) $eTail e)++"e="++show e++"\n") ibs'
+    -- inhelper e = do
+    --   ibs <- mapM (insideAssignments chart) (eTail e)
+    --   guard (lastAss `elem` ibs)
     --   let w = eWeight e * (product . map weight $ ibs)
     --   let p = h (eHead e) * w
     --   return (p, Inside (I (eHead e)) w)
@@ -183,17 +203,18 @@ newAssignments chart graph lastAss goal h
     outhelper e = do
       ibs <- mapM (insideAssignments chart) (eTail e)
       oa <- outsideAssignments chart $ eHead e
-      let assmts = oa : ibs -- we might express this with liftM2, but would lose the names
+      let assmts = oa : ibs 
       guard $ lastAss `elem` assmts
       i <- [0 .. (length ibs - 1)]
       let w = eWeight e * weight oa
-                * (product . map weight $ take i ibs) -- leave out i-th element
+                * (product . map weight $ take i ibs) -- drop i-th element
                 * (product . map weight $ drop (i + 1) ibs)
       let p = w * weight (ibs !! i)
       return (p, Outside (O (eTail e !! i)) w)
     buildhelper e = do
       oa <- outsideAssignments chart $ eHead e
-      ibs <- if null $ eTail e  -- case distinction because list monad treats x <- [] as "failure"
+      -- case distinction because list monad treats x <- [] as "failure"
+      ibs <- if null $ eTail e
              then return []
              else mapM (rankedAssignments chart) (eTail e)
       let assmts = oa : ibs
@@ -205,17 +226,21 @@ newAssignments chart graph lastAss goal h
 
 --maybe wrap this into state monad
 kastar
-  :: (Num w, Ord w, Ord v, Eq l, Eq i, Show l, Show i, Show v) --remove show later
+  :: (Num w, Ord w, Ord v, Eq l, Eq i)
   => Int
   -> Hypergraph v l w i
   -> v
   -> (v -> w)
   -> [(T.Tree (Hyperedge v l w i), w)]
   -- -> Chart v l w i
-kastar k graph g h = reverse $ mapMaybe (traceBackpointers res) $ rankedAssignments res g
---kastar k graph g h = res
-  where res = execute M.empty $ agendaInsert (initialAssignments graph h) (H.empty::Agenda v l w i)
-        --execute chart agenda | trace ("c: " ++ show chart ++ "\na: " ++ show agenda ++"\n") False = undefined
+kastar k graph g h 
+  = reverse $ mapMaybe (traceBackpointers res) $ rankedAssignments res g
+  --kastar k graph g h = res
+  where res = execute M.empty $ agendaInsert (initialAssignments graph h) 
+                                             (H.empty::Agenda v l w i)
+        --execute chart agenda | trace ("c: " ++ show chart 
+        --                       ++ "\na: " ++ show agenda ++"\n") False 
+        --                                     = undefined
         execute chart agenda 
             = if done chart agenda
               then chart
@@ -225,7 +250,13 @@ kastar k graph g h = reverse $ mapMaybe (traceBackpointers res) $ rankedAssignme
                            then (chart, agenda')
                            else let chart'' = chartInsert popped chart --ugly
                                 in ( chart''
-                                   , agendaInsert (newAssignments chart'' graph popped g h) agenda')
+                                   , agendaInsert (newAssignments chart'' 
+                                                                  graph 
+                                                                  popped 
+                                                                  g 
+                                                                  h) 
+                                                   agenda' -- ugliER!! ^^
+                                   )
                    in execute chart' agenda''
         done chart agenda = length (rankedAssignments chart g) >= k
                               || H.isEmpty agenda
@@ -247,13 +278,21 @@ traceBackpointers c a@(Ranked _  w) = do
           (zip bps [0..])
         helper _ = Nothing
 
+
+------------------------------------------------------------------------------
+-- Test cases ----------------------------------------------------------------
+------------------------------------------------------------------------------
+
 test1 = hypergraph [ hyperedge 'g' "ab" ' ' 1.0 ()
                    , hyperedge 'a' ""   ' ' 1.0 ()
                    , hyperedge 'b' ""   ' ' 1.0 ()
                    , hyperedge 'g' "g"  ' ' 0.9 ()
                    ]
+
+
 heur1 :: Fractional w => Char -> w
 heur1 _ = 1.0
+
 
 test2 = hypergraph [ hyperedge 'a' ""   "alpha"   1.0 ()
                    , hyperedge 'b' ""   "beta"    1.0 ()
@@ -267,28 +306,23 @@ test2 = hypergraph [ hyperedge 'a' ""   "alpha"   1.0 ()
 t graph goal h k = do
   putStrLn $ drawHypergraph graph
   mapM_ putStrLn . map (uncurry str) $ kastar k graph goal h
-        where str t w = "w = " ++ show w ++ "\n" ++ (T.drawTree . fmap drawHyperedge $ t)
+    where str t w = "w = " ++ show w ++ "\n" 
+                    ++ (T.drawTree . fmap drawHyperedge $ t)
+
 
 t1 = t test1 'g' heur1 20
 
-t2 = t test2 'g' heur1 100
+
+t2 = t test2 'g' heur1 400
 
 
--- -- | @kbest k g h G@ computes a list of @k@ best derivations of the goal
--- --   node @g@ in the hypergraph @G@. It uses the supplied heuristic
--- --   @h@ for efficiency, applying the KA* algorithm.
--- kbest
---   :: (Ord v, Ord w, Num w)
---   => Int      -- ^ The number @k@ of derivations of @g@ to be searched for
---   -> v        -- ^ The goal node @g@ of @G@
---   -> (v -> w) -- ^ A heuristic function @h@, must be admissible and 
---               -- consistent, this precondition is /not/ checked!
---   -> Hypergraph v l w i 
---               -- ^ The hypergraph @G@ in which the search is performed
---   -> [(T.Tree (Hyperedge v l w i), w)] 
---               -- ^ A List of @k@ best derivations, with their weights
--- kbest = error "not imp"
-  
+test = t2
+
+
+------------------------------------------------------------------------------
+-- Stuff that might still be useful ------------------------------------------
+------------------------------------------------------------------------------
+
 -- -- | Helper function assigning to each node the list of edges with this
 -- --   node in their tail, together with the according index.
 -- --   Hopefully, this speeds things up.
@@ -302,14 +336,3 @@ t2 = t test2 'g' heur1 100
 --         fwd e = [(eTail e !! i, [(e, i)]) | i <- [0 .. pred . length . eTail $ e]]
 --         -- perhaps the strict versions of fold and insert make this more
 --         -- efficient... We will see.
-
-
-
--- Control.Exception.catch (fromJust Nothing) (\e -> print $ ("asdf" ++  show (e::Control.Exception.SomeException)))
---lol
-
-
-
-------------------------------------------------------------------------------
-
-  
