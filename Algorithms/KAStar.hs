@@ -14,6 +14,7 @@ module Algorithms.KAStar
 
 import Control.Monad.State
 import qualified Data.Map as M
+import Data.Map ((!))
 import qualified Data.Tree as T
 import qualified Data.Heap as H 
 import qualified Data.List as L
@@ -132,8 +133,8 @@ chart `contains` r@(Ranked (K v _ _ _) _) = r `elem` rankedAssignments chart v
 --   present inside and outside items are overwritten at the moment instead of 
 --   raising an error or an exception. Ranked items are annotated with their 
 --   corresponding rank upon insertion.
-chartInsert :: Ord v => Assignment v l w i -> Chart v l w i -> Chart v l w i
-chartInsert ass c = M.alter (Just . update ass) (node ass) c
+chartInsert :: Ord v => Assignment v l w i -> Chart v l w i -> (Chart v l w i, Assignment v l w i)
+chartInsert ass c = (M.alter (Just . update ass) (node ass) c, rk ass)
   where update a@(Inside _ _)  Nothing   = CE [a] [] []
         update a@(Outside _ _) Nothing   = CE [] [a] []
         update a@(Ranked _ _)  Nothing   = CE [] [] [rk a]
@@ -165,6 +166,26 @@ initialAssignments graph h
                       p = w * (h . eHead $ e)
                   in (p, Inside (I . eHead $ e) w)
 
+
+-- The specialize pragma makes GHC additionally compile instantiated, therefore faster,
+-- versions of the supplied function
+{-# SPECIALIZE newAssignments 
+  :: Chart Char Char Double () 
+  -> Hypergraph Char Char Double () 
+  -> Assignment Char Char Double () 
+  -> Char 
+  -> (Char -> Double) 
+  -> M.Map Char [(Hyperedge Char Char Double (), Int)]
+  -> M.Map Char [(Hyperedge Char Char Double (), Int)]
+  -> [(Double, Assignment Char Char Double ())]#-}
+{-# SPECIALIZE newAssignments :: Chart Char String Double () 
+ -> Hypergraph Char String Double () 
+ -> Assignment Char String Double () 
+ -> Char 
+ -> (Char -> Double) 
+ -> M.Map Char [(Hyperedge Char String Double (), Int)]
+ -> M.Map Char [(Hyperedge Char String Double (), Int)]
+ -> [(Double, Assignment Char String Double ())]#-}
 -- | creates those new prioritized assignments to be put on the agenda that 
 --   are using the last popped assignment. 
 --   TODO: maybe prune edges which are not related to lastAss via 
@@ -176,53 +197,57 @@ newAssignments
   -> Assignment v l w i 
   -> v 
   -> (v -> w) 
+  -> M.Map v [(Hyperedge v l w i, Int)]
+  -> M.Map v [(Hyperedge v l w i, Int)]
   -> [(w, Assignment v l w i)]
-newAssignments chart graph lastAss goal h 
-  = switch ++ ins ++ outs ++ builds 
-  where
-    switch = do
-      guard $ isInside lastAss && node lastAss == goal
-      ig <- insideAssignments chart goal
-      return (weight ig, Outside (O goal) 1)
-    ins = apply inhelper
-    outs = apply outhelper
-    builds = apply buildhelper
-    apply f = concatMap f . concat . M.elems . edgesM $ graph
-    -- inhelper e = do
-    --   ibs <- mapM (insideAssignments chart) (eTail e)
-    --   guard (lastAss `elem` ibs)
-    --   let w = eWeight e * (product . map weight $ ibs)
-    --   let p = h (eHead e) * w
-    --   return (p, Inside (I (eHead e)) w)
-    inhelper e = [(p, Inside (I (eHead e)) w)
-                  | ibs <- mapM (insideAssignments chart) (eTail e)
-                  , lastAss `elem` ibs
-                  , let w = eWeight e * (product . map weight $ ibs)
-                  , let p = h (eHead e) * w
-                 ]
-    outhelper e = do
-      ibs <- mapM (insideAssignments chart) (eTail e)
-      oa <- outsideAssignments chart $ eHead e
-      let assmts = oa : ibs 
-      guard $ lastAss `elem` assmts
-      i <- [0 .. (length ibs - 1)]
-      let w = eWeight e * weight oa
-                * (product . map weight $ take i ibs) -- drop i-th element
-                * (product . map weight $ drop (i + 1) ibs)
-      let p = w * weight (ibs !! i)
-      return (p, Outside (O (eTail e !! i)) w)
-    buildhelper e = do
-      oa <- outsideAssignments chart $ eHead e
-      -- case distinction because list monad treats x <- [] as "failure"
-      ibs <- if null $ eTail e
-             then return []
-             else mapM (rankedAssignments chart) (eTail e)
-      let assmts = oa : ibs
-      guard $ lastAss `elem` assmts
-      let w = eWeight e * (product . map weight $ ibs)
-      let p = w * weight oa
-      let bps = map rank ibs
-      return (p, Ranked (K (eHead e) e 0 bps) w)
+newAssignments chart graph lastAss goal h inEdges otherEdges
+  = case lastAss of 
+      (Inside  _ _) -> switch ++ ins ++ outs
+      (Outside _ _) -> outs ++ builds
+      (Ranked  _ _) -> builds
+    where
+      switch = do
+        guard $ isInside lastAss && node lastAss == goal
+        ig <- insideAssignments chart goal
+        return (weight ig, Outside (O goal) 1)
+      ins = {-# SCC "ins" #-} concatMap inhelper (inEdges ! node lastAss)
+      outs = {-# SCC "outs" #-} concatMap outhelper (otherEdges ! node lastAss)
+      builds = {-# SCC "builds" #-} concatMap buildhelper (otherEdges ! node lastAss)
+      inhelper (e, r) = [(p, Inside (I (eHead e)) w)
+                        | ibsl <- mapM (insideAssignments chart) . take r $ eTail e
+                        , ibsr <- mapM (insideAssignments chart) . drop (r + 1) $ eTail e
+                        , let ibs = ibsl ++ [lastAss] ++ ibsr
+                        , let w = eWeight e * (product . map weight $ ibs)
+                        , let p = h (eHead e) * w
+                        ]
+      -- Put on your protective googles, the following code is weird.
+      -- outhelper :: (Hyperedge v l w i, Int) -> [(w, Assignment v l w i)]
+      outhelper (e, r) = do
+        (oa, ibs) <- if r == 0
+                     then liftM2 (,) [lastAss] (mapM (insideAssignments chart) (eTail e))
+                     else do
+                       ibsl <- mapM (insideAssignments chart) . take (r - 1) $ eTail e
+                       ibsr <- mapM (insideAssignments chart) . drop r $ eTail e
+                       liftM2 (,) (outsideAssignments chart $ eHead e) [ibsl ++ [lastAss] ++ ibsr]
+        i <- [0 .. (length ibs - 1)]
+        let w = eWeight e * weight oa
+                  * (product . map weight $ take i ibs) -- drop i-th element
+                  * (product . map weight $ drop (i + 1) ibs)
+        let p = w * weight (ibs !! i)
+        return (p, Outside (O (eTail e !! i)) w)
+      buildhelper (e, r) = do
+        (oa, ibs) <- if null $ eTail e
+                     then liftM2 (,) [lastAss] (return [])
+                     else if r == 0 
+                          then liftM2 (,) [lastAss] (mapM (rankedAssignments chart) (eTail e))
+                          else do 
+                            ibsl <- mapM (rankedAssignments chart) . take (r - 1) $ eTail e
+                            ibsr <- mapM (rankedAssignments chart) . drop r $ eTail e
+                            liftM2 (,) (outsideAssignments chart $ eHead e) [ibsl ++ [lastAss] ++ ibsr]
+        let w = eWeight e * (product . map weight $ ibs)
+        let p = w * weight oa
+        let bps = map rank ibs
+        return (p, Ranked (K (eHead e) e 0 bps) w)
 
 --maybe wrap this into state monad
 kastar
@@ -248,19 +273,22 @@ kastar k graph g h
                        (chart', agenda'') 
                          = if chart `contains` popped
                            then (chart, agenda')
-                           else let chart'' = chartInsert popped chart --ugly
+                           else let (chart'', lastAss) = chartInsert popped chart --ugly
                                 in ( chart''
                                    , agendaInsert (newAssignments chart''
                                                                   graph
-                                                                  popped
+                                                                  lastAss
                                                                   g
-                                                                  h) 
+                                                                  h
+                                                                  (fst edgeMap)
+                                                                  (snd edgeMap)) 
                                                    agenda' -- ugliER!! ^^
                                    )
                    in execute chart' agenda''
         done chart agenda = length (rankedAssignments chart g) >= k
                               || H.isEmpty agenda
         agendaInsert as a = L.foldl' (flip H.insert) a as
+        edgeMap = edgesForward graph
                                       
 
 traceBackpointers 
@@ -315,8 +343,12 @@ t1 = t test1 'g' heur1 20
 
 t2 = t test2 'g' heur1 400
 
+t3 = kastar 400 test2 'g' heur1
 
+
+test :: IO ()
 test = t2
+--test = t3 `seq` return ()
 
 
 ------------------------------------------------------------------------------
@@ -336,3 +368,15 @@ test = t2
 --         fwd e = [(eTail e !! i, [(e, i)]) | i <- [0 .. pred . length . eTail $ e]]
 --         -- perhaps the strict versions of fold and insert make this more
 --         -- efficient... We will see.
+
+edgesForward
+  :: Ord v
+  => Hypergraph v l w i
+  -> ( M.Map v [(Hyperedge v l w i, Int)]
+     , M.Map v [(Hyperedge v l w i, Int)])
+edgesForward graph 
+  = (compute ins, compute others)
+    where compute f = L.foldl' (\m (a, b) -> M.insertWith' (++) a b m) M.empty . concatMap f $ edges
+          ins e = [(eTail e !! i, [(e, i)]) | i <- [0 .. pred . length . eTail $ e]]
+          others e = (eHead e, [(e, 0)]) : [(eTail e !! i, [(e, i + 1)]) | i <- [0 .. pred. length . eTail $ e]]
+          edges = concat . M.elems . edgesM $ graph
