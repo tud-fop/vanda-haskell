@@ -19,7 +19,7 @@ import qualified Data.Tree as T
 import qualified Data.Heap as H 
 import qualified Data.List as L
 import Data.Maybe (fromJust, mapMaybe)
---import Debug.Trace
+import Debug.Trace
 
 
 import Data.Hypergraph
@@ -112,7 +112,7 @@ outsideAssignments chart v = maybe [] ceOutside $ M.lookup v chart
 rankedAssignments :: Ord v => Chart v l w i -> v -> [Assignment v l w i]
 rankedAssignments chart v = maybe [] ceRanked $ M.lookup v chart
 
--- TODO: mak abstract so that kbest and kworst possible
+-- TODO: make abstract so that kbest and kworst possible
 type Agenda v l w i = H.MaxPrioHeap w (Assignment v l w i)
 
 
@@ -147,6 +147,9 @@ chartInsert ass c = (M.alter (Just . update ass) (node ass) c, rk ass)
           = Ranked (K v e (succ . length $ rankedAssignments c v) bps) w
         rk x = x
 
+chartSize :: Chart v l w i -> Int
+chartSize = M.fold ls 0
+  where ls it l = (length $ ceInside it) + (length $ ceOutside it) + (length $ ceRanked it) + l
 
 ------------------------------------------------------------------------------
 -- KA* Algorithm -------------------------------------------------------------
@@ -188,8 +191,6 @@ initialAssignments graph h
  -> [(Double, Assignment Char String Double ())]#-}
 -- | creates those new prioritized assignments to be put on the agenda that 
 --   are using the last popped assignment. 
---   TODO: maybe prune edges which are not related to lastAss via 
---   precomputation
 newAssignments 
   :: (Num w, Ord v, Eq l, Eq i)
   => Chart v l w i 
@@ -209,17 +210,17 @@ newAssignments chart graph lastAss goal h inEdges otherEdges
       switch = do
         guard $ isInside lastAss && node lastAss == goal
         ig <- insideAssignments chart goal
-        return (weight ig, Outside (O goal) 1)
+        return $! (weight ig, Outside (O goal) 1)
       ins = {-# SCC "ins" #-} concatMap inhelper (inEdges ! node lastAss)
       outs = {-# SCC "outs" #-} concatMap outhelper (otherEdges ! node lastAss)
       builds = {-# SCC "builds" #-} concatMap buildhelper (otherEdges ! node lastAss)
-      inhelper (e, r) = [(p, Inside (I (eHead e)) w)
-                        | ibsl <- mapM (insideAssignments chart) . take r $ eTail e
-                        , ibsr <- mapM (insideAssignments chart) . drop (r + 1) $ eTail e
-                        , let ibs = ibsl ++ [lastAss] ++ ibsr
-                        , let w = eWeight e * (product . map weight $ ibs)
-                        , let p = h (eHead e) * w
-                        ]
+      inhelper (e, r) = do
+        ibsl <- mapM (insideAssignments chart) . take r $ eTail e
+        ibsr <- mapM (insideAssignments chart) . drop (r + 1) $ eTail e
+        let ibs = ibsl ++ [lastAss] ++ ibsr
+        let w = eWeight e * (product . map weight $ ibs)
+        let p = h (eHead e) * w
+        return $! (p, Inside (I (eHead e)) w)
       -- Put on your protective googles, the following code is weird.
       -- outhelper :: (Hyperedge v l w i, Int) -> [(w, Assignment v l w i)]
       outhelper (e, r) = do
@@ -234,7 +235,7 @@ newAssignments chart graph lastAss goal h inEdges otherEdges
                   * (product . map weight $ take i ibs) -- drop i-th element
                   * (product . map weight $ drop (i + 1) ibs)
         let p = w * weight (ibs !! i)
-        return (p, Outside (O (eTail e !! i)) w)
+        return $! (p, Outside (O (eTail e !! i)) w)
       buildhelper (e, r) = do
         (oa, ibs) <- if null $ eTail e
                      then liftM2 (,) [lastAss] (return [])
@@ -247,7 +248,7 @@ newAssignments chart graph lastAss goal h inEdges otherEdges
         let w = eWeight e * (product . map weight $ ibs)
         let p = w * weight oa
         let bps = map rank ibs
-        return (p, Ranked (K (eHead e) e 0 bps) w)
+        return $! (p, Ranked (K (eHead e) e 0 bps) w)
 
 --maybe wrap this into state monad
 kastar
@@ -268,7 +269,7 @@ kastar k graph g h
         --                                     = undefined
         execute chart agenda 
             = if done chart agenda
-              then chart
+              then trace ("|chart| = " ++ show (chartSize chart) ++ ", |agenda| = " ++ show (H.size agenda) ++ "\n") chart
               else let ((p, popped), agenda') = fromJust $ H.view agenda
                        (chart', agenda'') 
                          = if chart `contains` popped
@@ -347,8 +348,8 @@ t3 = kastar 400 test2 'g' heur1
 
 
 test :: IO ()
-test = t2
---test = t3 `seq` return ()
+--test = t2
+test = t3 `seq` return ()
 
 
 ------------------------------------------------------------------------------
@@ -380,3 +381,6 @@ edgesForward graph
           ins e = [(eTail e !! i, [(e, i)]) | i <- [0 .. pred . length . eTail $ e]]
           others e = (eHead e, [(e, 0)]) : [(eTail e !! i, [(e, i + 1)]) | i <- [0 .. pred. length . eTail $ e]]
           edges = concat . M.elems . edgesM $ graph
+
+
+--ghc -O2 -fexcess-precision -fvia-C -optc-O2 --make Main.hs
