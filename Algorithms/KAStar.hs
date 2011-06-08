@@ -224,9 +224,12 @@ newAssignments chart graph lastAss goal h inEdges otherEdges
       -- Put on your protective googles, the following code is weird.
       -- outhelper :: (Hyperedge v l w i, Int) -> [(w, Assignment v l w i)]
       outhelper (e, r) = do
-        (oa, ibs) <- if r == 0
-                     then liftM2 (,) [lastAss] (mapM (insideAssignments chart) (eTail e))
+        (oa, ibs) <- if r == 0 
+                     then do
+                       guard $ isOutside lastAss
+                       liftM2 (,) [lastAss] (mapM (insideAssignments chart) (eTail e))
                      else do
+                       guard $ isInside lastAss
                        ibsl <- mapM (insideAssignments chart) . take (r - 1) $ eTail e
                        ibsr <- mapM (insideAssignments chart) . drop r $ eTail e
                        liftM2 (,) (outsideAssignments chart $ eHead e) [ibsl ++ [lastAss] ++ ibsr]
@@ -240,8 +243,11 @@ newAssignments chart graph lastAss goal h inEdges otherEdges
         (oa, ibs) <- if null $ eTail e
                      then liftM2 (,) [lastAss] (return [])
                      else if r == 0 
-                          then liftM2 (,) [lastAss] (mapM (rankedAssignments chart) (eTail e))
+                          then do
+                            guard $ isOutside lastAss
+                            liftM2 (,) [lastAss] (mapM (rankedAssignments chart) (eTail e))
                           else do 
+                            guard $ isRanked lastAss
                             ibsl <- mapM (rankedAssignments chart) . take (r - 1) $ eTail e
                             ibsr <- mapM (rankedAssignments chart) . drop r $ eTail e
                             liftM2 (,) (outsideAssignments chart $ eHead e) [ibsl ++ [lastAss] ++ ibsr]
