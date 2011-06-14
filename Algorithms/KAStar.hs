@@ -9,10 +9,13 @@
 -- of Programming.
 -- ---------------------------------------------------------------------------
 
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 module Algorithms.KAStar 
   where
 
 import Control.Monad.State
+import Control.Monad.Reader
 import qualified Data.Map as M
 import Data.Map ((!))
 import qualified Data.Tree as T
@@ -23,6 +26,116 @@ import Debug.Trace
 
 
 import Data.Hypergraph
+
+------------------------------------------------------------------------------
+-- Algorithm State -----------------------------------------------------------
+------------------------------------------------------------------------------
+
+newtype KAStar v l w i a = KAStar {
+      runK :: ReaderT (KAConfig v l w i) (State (KAState v l w i)) a
+    } deriving (Monad, MonadReader (KAConfig v l w i), MonadState (KAState v l w i))
+
+data KAConfig v l w i = KAConfig { 
+      cfgNumDeriv   :: Int
+    , cfgGraph      :: Hypergraph v l w i
+    , cfgGoal       :: v
+    , cfgInEdges    :: M.Map v [(Hyperedge v l w i, Int)]
+    , cfgOtherEdges :: M.Map v [(Hyperedge v l w i, Int)]
+    }
+
+data KAState v l w i = KAState { 
+      stChart          :: Chart v l w i
+    , stAgenda         :: Agenda v l w i
+    , stItemsPopped    :: Int
+    , stItemsGenerated :: Int
+    }
+
+runKAStar :: KAStar v l w i a
+          -> Int 
+          -> Hypergraph v l w i
+          -> v
+          -> M.Map v [(Hyperedge v l w i, Int)]
+          -> M.Map v [(Hyperedge v l w i, Int)]
+          -> (a, KAState v l w i)
+runKAStar kst k graph goal ins others =
+    let cfg   = KAConfig k graph goal ins others
+        state = KAState M.empty (H.empty::Agenda v l w i) 0 0
+    in runState (runReaderT (runK kst) cfg) state
+
+
+numDeriv :: KAStar v l w i Int
+numDeriv = cfgNumDeriv `liftM` ask
+
+
+graph :: KAStar v l w i (Hypergraph v l w i)
+graph = cfgGraph `liftM` ask
+
+
+goal :: KAStar v l w i v
+goal = cfgGoal `liftM` ask
+
+
+chart :: KAStar v l w i (Chart v l w i)
+chart = stChart `liftM` get
+
+
+putChart :: Chart v l w i -> KAStar v l w i ()
+putChart c = do
+  st <- get
+  put st{stChart = c}
+
+
+putAgenda :: Agenda v l w i -> KAStar v l w i ()
+putAgenda a = do
+  st <- get
+  put st{stAgenda = a}
+
+
+agenda :: KAStar v l w i (Agenda v l w i)
+agenda = stAgenda `liftM` get
+
+
+incItemsPopped :: KAStar v l w i ()
+incItemsPopped = do 
+  st <- get
+  put st{stItemsPopped = stItemsPopped st + 1}
+
+
+incItemsGenerated :: KAStar v l w i ()
+incItemsGenerated = do
+  st <- get
+  put st{stItemsGenerated = stItemsGenerated st + 1}
+
+
+done :: Ord v => KAStar v l w i Bool
+done = do
+  e <- H.isEmpty `liftM` agenda
+  l <- length `liftM` (liftM2 rankedAssignments chart goal)
+  k <- numDeriv
+  return $ e || l >= k
+
+
+process :: (Ord v, Ord w, Eq i, Eq l) => KAStar v l w i (Maybe (Assignment v l w i))
+process = do
+  d <- done
+  if d then return Nothing 
+  else do -- agenda != empty
+    ((p, popped), agenda') <- fromJust `liftM` (H.view `liftM` agenda)
+    putAgenda agenda'
+    trigger <- chartInsert' popped
+    case trigger of
+      Nothing -> process
+      _       -> return trigger
+
+
+chartInsert' :: (Ord v, Eq i, Eq w, Eq l) => Assignment v l w i -> KAStar v l w i (Maybe (Assignment v l w i))
+chartInsert' assgmt = do
+  c <- chart
+  if c `contains` assgmt then return Nothing
+  else do 
+    let (c', a) = chartInsert assgmt c
+    putChart c'
+    return $ Just a
 
 
 ------------------------------------------------------------------------------
