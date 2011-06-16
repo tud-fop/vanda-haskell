@@ -348,23 +348,12 @@ initialAssignments = do
 
 -- The specialize pragma makes GHC additionally compile instantiated, therefore faster,
 -- versions of the supplied function
--- {-# SPECIALIZE newAssignments 
---   :: Chart Char Char Double () 
---   -> Hypergraph Char Char Double () 
---   -> Assignment Char Char Double () 
---   -> Char 
---   -> (Char -> Double) 
---   -> M.Map Char [(Hyperedge Char Char Double (), Int)]
---   -> M.Map Char [(Hyperedge Char Char Double (), Int)]
---   -> [(Double, Assignment Char Char Double ())]#-}
--- {-# SPECIALIZE newAssignments :: Chart Char String Double () 
---  -> Hypergraph Char String Double () 
---  -> Assignment Char String Double () 
---  -> Char 
---  -> (Char -> Double) 
---  -> M.Map Char [(Hyperedge Char String Double (), Int)]
---  -> M.Map Char [(Hyperedge Char String Double (), Int)]
---  -> [(Double, Assignment Char String Double ())]#-}
+{-# SPECIALIZE newAssignments 
+  :: Assignment Char Char Double () 
+  -> KAStar Char Char Double () [(Double, Assignment Char Char Double ())]#-}
+{-# SPECIALIZE newAssignments
+ :: Assignment Char String Double () 
+ -> KAStar Char String Double () [(Double, Assignment Char String Double ())]#-}
 -- | creates those new prioritized assignments to be put on the agenda that 
 --   are using the last popped assignment. 
 newAssignments 
@@ -382,9 +371,9 @@ newAssignments trigger = do
              (Outside _ _) -> outs c trigger os ++ builds c trigger os
              (Ranked  _ _) -> builds c trigger os
     where
-      ins c h trigger is  = concatMap (inRule c h trigger) is
-      outs c trigger os   = concatMap (outRule c trigger) os
-      builds c trigger os = concatMap (buildRule c trigger) os
+      ins c h trigger = concatMap (inRule c h trigger)
+      outs c trigger = concatMap (outRule c trigger)
+      builds c trigger = concatMap (buildRule c trigger)
 
 
 switchRule
@@ -499,16 +488,13 @@ test2 = hypergraph [ hyperedge 'a' ""   "alpha"   1.0 ()
                    , hyperedge 'b' "g"  "epsilon" 0.8 ()
                    ]
 
+t graph goal h k = do
+  putStrLn $ drawHypergraph graph
+  mapM_ (putStrLn . uncurry str) $ kastar graph goal h k
+    where str t w = "w = " ++ show w ++ "\n" 
+                    ++ (T.drawTree . fmap drawHyperedge $ t)
 
-
--- t graph goal h k = do
---   putStrLn $ drawHypergraph graph
---   mapM_ (putStrLn . uncurry str) $ kastar k graph goal h
---     where str t w = "w = " ++ show w ++ "\n" 
---                     ++ (T.drawTree . fmap drawHyperedge $ t)
-
-
--- t1 = t test1 'g' heur1 20
+t1 = t test1 'g' heur1 20
 
 
 t2 = t test2 'g' heur1 400
@@ -520,17 +506,3 @@ test :: IO ()
 test = t2
 --test = t3 `seq` return ()
 
-t graph goal h k = do
-  putStrLn $ drawHypergraph graph
-  mapM_ (putStrLn . uncurry str) $ kastar graph goal h k
-    where str t w = "w = " ++ show w ++ "\n" 
-                    ++ (T.drawTree . fmap drawHyperedge $ t)
-
-
-
-------------------------------------------------------------------------------
--- Stuff that might still be useful ------------------------------------------
-------------------------------------------------------------------------------
-
-
---ghc -O2 -fexcess-precision -fvia-C -optc-O2 --make Main.hs
