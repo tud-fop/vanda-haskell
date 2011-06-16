@@ -40,7 +40,7 @@ data KAConfig v l w i = KAConfig {
     cfgNumDeriv   :: Int
   , cfgGraph      :: Hypergraph v l w i
   , cfgGoal       :: v
-  , cfgHeuristic :: v -> w
+  , cfgHeuristic  :: v -> w
   , cfgInEdges    :: M.Map v [(Hyperedge v l w i, Int)]
   , cfgOtherEdges :: M.Map v [(Hyperedge v l w i, Int)]
   }
@@ -48,7 +48,7 @@ data KAConfig v l w i = KAConfig {
 data KAState v l w i = KAState { 
       stChart          :: Chart v l w i
     , stAgenda         :: Agenda v l w i
-    , stItemsPopped    :: Int
+    , stItemsInserted  :: Int
     , stItemsGenerated :: Int
     }
 
@@ -106,16 +106,16 @@ agenda :: KAStar v l w i (Agenda v l w i)
 agenda = stAgenda `liftM` get
 
 
-incItemsPopped :: KAStar v l w i ()
-incItemsPopped = do 
+incItemsInserted :: KAStar v l w i ()
+incItemsInserted = do 
   st <- get
-  put st{stItemsPopped = stItemsPopped st + 1}
+  put st{stItemsInserted = stItemsInserted st + 1}
 
 
-incItemsGenerated :: KAStar v l w i ()
-incItemsGenerated = do
+incItemsGenerated :: Int -> KAStar v l w i ()
+incItemsGenerated n = do
   st <- get
-  put st{stItemsGenerated = stItemsGenerated st + 1}
+  put st{stItemsGenerated = stItemsGenerated st + n}
 
 
 done :: Ord v => KAStar v l w i Bool
@@ -141,10 +141,47 @@ process = do
 
 chartInsert' :: (Ord v, Eq i, Eq w, Eq l) => Assignment v l w i -> KAStar v l w i (Maybe (Assignment v l w i))
 chartInsert' assgmt = do
-  c <- chart
   b <- chartContains assgmt
   if b then return Nothing
-       else Just `liftM` chartInsert assgmt
+       else do
+         incItemsInserted
+         Just `liftM` chartInsert assgmt
+
+agendaInsert :: (Ord v, Ord w) => [(w, Assignment v l w i)] -> KAStar v l w i ()
+agendaInsert as = do 
+  incItemsGenerated $ length as
+  putAgenda =<< flip (L.foldl' (flip H.insert)) as `liftM` agenda
+         
+
+kastar graph g h k = reverse $ mapMaybe (traceBackpointers res) $ rankedAssignments res g
+  where res = fst $ runKAStar kst k graph g h ins others
+        (ins, others) = edgesForward graph
+        kst = do
+          agendaInsert =<< initialAssignments
+          loop
+        loop = do
+          m <- process
+          case m of
+            Nothing -> chart
+            (Just trigger) -> (agendaInsert =<< newAssignments trigger) >> loop
+                 
+traceBackpointers 
+  :: Ord v 
+  => Chart v l w i
+  -> Assignment v l w i 
+  -> Maybe (T.Tree (Hyperedge v l w i), w)
+traceBackpointers c a@(Ranked _  w) = do
+  t <- helper a
+  return (t, w)
+  where helper (Ranked (K _ e _ bps) _) = T.Node e `fmap` mapM
+          (\(rank, idx) 
+             -> let precs = rankedAssignments c (eTail e !! idx)
+                in helper (precs !! (length precs - rank)))
+          (zip bps [0..])
+        helper _ = Nothing
+          
+        
+  
 
 
 ------------------------------------------------------------------------------
@@ -298,15 +335,15 @@ chartSize = M.fold ls 0 `liftM` chart
 --   on the agenda,
 initialAssignments
   :: (Num w, Ord v, Eq l, Eq i)
-  => Hypergraph v l w i
-  -> (v -> w)
-  -> [(w, Assignment v l w i)]
-initialAssignments graph h
-  = map ins . filter ((==0) . length . eTail) 
-      . concat . M.elems . edgesM $ graph
-    where ins e = let w = eWeight e
-                      p = w * (h . eHead $ e)
-                  in (p, Inside (I . eHead $ e) w)
+  => KAStar v l w i [(w, Assignment v l w i)]
+initialAssignments = do
+  g <- graph
+  h <- heuristic
+  return $ map (ins h) . filter ((==0) . length . eTail) 
+      . concat . M.elems . edgesM $ g
+    where ins h e = let w = eWeight e
+                        p = w * (h . eHead $ e)
+                    in (p, Inside (I . eHead $ e) w)
 
 
 -- The specialize pragma makes GHC additionally compile instantiated, therefore faster,
@@ -334,139 +371,110 @@ newAssignments
   :: (Num w, Ord v, Eq l, Eq i)
   => Assignment v l w i 
   -> KAStar v l w i [(w, Assignment v l w i)]
-newAssignments trigger
-  = concat `liftM` sequence $ case trigger of 
-      (Inside  _ _) -> [runListT (switch trigger), ins, outs]
-      (Outside _ _) -> [outs, builds]
-      (Ranked  _ _) -> [builds]
+newAssignments trigger = do 
+  h <- heuristic
+  g <- goal
+  c <- chart
+  is <- inEdges $ node trigger
+  os <- otherEdges $ node trigger
+  return $ case trigger of 
+             (Inside  _ _) -> switchRule c g trigger ++ ins c h trigger is ++ outs c trigger os
+             (Outside _ _) -> outs c trigger os ++ builds c trigger os
+             (Ranked  _ _) -> builds c trigger os
     where
-      ins = do
-        es <- inEdges $ node trigger
-        concat `liftM` mapM (runListT . inhelper trigger) es
-      outs = do
-        es <- otherEdges $ node trigger
-        concat `liftM` mapM (runListT . outhelper trigger) es
-      builds = do
-        es <- otherEdges $ node trigger
-        concat `liftM` mapM (runListT . buildhelper trigger) es
+      ins c h trigger is  = concatMap (inRule c h trigger) is
+      outs c trigger os   = concatMap (outRule c trigger) os
+      builds c trigger os = concatMap (buildRule c trigger) os
 
 
-switch 
+switchRule
   :: (Num w, Ord v, Eq l, Eq i) 
-  => Assignment v l w i
-  -> ListT (KAStar v l w i) (w, Assignment v l w i)
-switch trigger = do
-  guard $ isInside trigger && node trigger == goal
-  ig <- insideM `liftM` goal
-  return $! (weight ig, Outside (O goal) 1)
+  => Chart v l w i
+  -> v
+  -> Assignment v l w i
+  -> [(w, Assignment v l w i)]
+switchRule c g trigger = do
+  guard $ isInside trigger && node trigger == g
+  ig <- insideAssignments c g
+  return $! (weight ig, Outside (O g) 1)
 
 
-inhelper
+inRule
   :: (Num w, Ord v, Eq l, Eq i)
-  => Assignment v l w i
+  => Chart v l w i
+  -> (v -> w)
+  -> Assignment v l w i
   -> (Hyperedge v l w i, Int)
-  -> ListT (KAStar v l w i) (w, Assignment v l w i)
-inhelper trigger (e, r) = do
-        ibsl <- mapM insideM . take r $ eTail e
-        ibsr <- mapM insideM . drop (r + 1) $ eTail e
-        h <- heuristic
+  -> [(w, Assignment v l w i)]
+inRule c h trigger (e, r) = do
+        ibsl <- mapM (insideAssignments c) . take r $ eTail e
+        ibsr <- mapM (insideAssignments c) . drop (r + 1) $ eTail e
         let ibs = ibsl ++ [trigger] ++ ibsr
         let w = eWeight e * (product . map weight $ ibs)
         let p = h (eHead e) * w
         return $! (p, Inside (I (eHead e)) w)
 
 
--- Put on your protective googles, the following code is weird.
--- outhelper :: (Hyperedge v l w i, Int) -> [(w, Assignment v l w i)]
-outhelper lastAss (e, r) = do
+-- Put on your protective goggles, the following code is weird.
+outRule 
+  :: (Num w, Ord v, Eq l, Eq i)
+  => Chart v l w i 
+  -> Assignment v l w i 
+  -> (Hyperedge v l w i, Int) 
+  -> [(w, Assignment v l w i)]
+outRule c trigger (e, r) = do
         (oa, ibs) <- if r == 0 
                      then do
-                       guard $ isOutside lastAss
-                       liftM2 (,) [lastAss] (mapM (insideAssignments chart) (eTail e))
+                       guard $ isOutside trigger
+                       liftM2 (,) [trigger] (mapM (insideAssignments c) (eTail e))
                      else do
-                       guard $ isInside lastAss
-                       ibsl <- mapM (insideAssignments chart) . take (r - 1) $ eTail e
-                       ibsr <- mapM (insideAssignments chart) . drop r $ eTail e
-                       liftM2 (,) (outsideAssignments chart $ eHead e) [ibsl ++ [lastAss] ++ ibsr]
+                       guard $ isInside trigger
+                       ibsl <- mapM (insideAssignments c) . take (r - 1) $ eTail e
+                       ibsr <- mapM (insideAssignments c) . drop r $ eTail e
+                       liftM2 (,) (outsideAssignments c $ eHead e) [ibsl ++ [trigger] ++ ibsr]
         i <- [0 .. (length ibs - 1)]
         let w = eWeight e * weight oa
                   * (product . map weight $ take i ibs) -- drop i-th element
                   * (product . map weight $ drop (i + 1) ibs)
         let p = w * weight (ibs !! i)
         return $! (p, Outside (O (eTail e !! i)) w)
-buildhelper lastAss (e, r) = do
+
+buildRule
+  :: (Num w, Ord v, Eq l, Eq i)
+  => Chart v l w i 
+  -> Assignment v l w i 
+  -> (Hyperedge v l w i, Int) 
+  -> [(w, Assignment v l w i)]
+buildRule c trigger (e, r) = do
         (oa, ibs) <- if null $ eTail e
-                     then liftM2 (,) [lastAss] (return [])
+                     then liftM2 (,) [trigger] (return [])
                      else if r == 0 
                           then do
-                            guard $ isOutside lastAss
-                            liftM2 (,) [lastAss] (mapM (rankedAssignments chart) (eTail e))
+                            guard $ isOutside trigger
+                            liftM2 (,) [trigger] (mapM (rankedAssignments c) (eTail e))
                           else do 
-                            guard $ isRanked lastAss
-                            ibsl <- mapM (rankedAssignments chart) . take (r - 1) $ eTail e
-                            ibsr <- mapM (rankedAssignments chart) . drop r $ eTail e
-                            liftM2 (,) (outsideAssignments chart $ eHead e) [ibsl ++ [lastAss] ++ ibsr]
+                            guard $ isRanked trigger
+                            ibsl <- mapM (rankedAssignments c) . take (r - 1) $ eTail e
+                            ibsr <- mapM (rankedAssignments c) . drop r $ eTail e
+                            liftM2 (,) (outsideAssignments c $ eHead e) [ibsl ++ [trigger] ++ ibsr]
         let w = eWeight e * (product . map weight $ ibs)
         let p = w * weight oa
         let bps = map rank ibs
         return $! (p, Ranked (K (eHead e) e 0 bps) w)
 
---maybe wrap this into state monad
--- kastar
---   :: (Num w, Ord w, Ord v, Eq l, Eq i)
---   => Int
---   -> Hypergraph v l w i
---   -> v
---   -> (v -> w)
---   -> [(T.Tree (Hyperedge v l w i), w)]
---   -- -> Chart v l w i
--- kastar k graph g h 
---   = reverse $ mapMaybe (traceBackpointers res) $ rankedAssignments res g
---   --kastar k graph g h = res
---   where res = execute M.empty $ agendaInsert (initialAssignments graph h) 
---                                              (H.empty::Agenda v l w i)
---         --execute chart agenda | trace ("c: " ++ show chart 
---         --                       ++ "\na: " ++ show agenda ++"\n") False 
---         --                                     = undefined
---         execute chart agenda 
---             = if done chart agenda
---               then trace ("|chart| = " ++ show (chartSize chart) ++ ", |agenda| = " ++ show (H.size agenda) ++ "\n") chart
---               else let ((p, popped), agenda') = fromJust $ H.view agenda
---                        (chart', agenda'') 
---                          = if chart `contains` popped
---                            then (chart, agenda')
---                            else let (chart'', lastAss) = chartInsert popped chart --ugly
---                                 in ( chart''
---                                    , agendaInsert (newAssignments chart''
---                                                                   graph
---                                                                   lastAss
---                                                                   g
---                                                                   h
---                                                                   (fst edgeMap)
---                                                                   (snd edgeMap)) 
---                                                    agenda' -- ugliER!! ^^
---                                    )
---                    in execute chart' agenda''
---         done chart agenda = length (rankedAssignments chart g) >= k
---                               || H.isEmpty agenda
---         agendaInsert as a = L.foldl' (flip H.insert) a as
---         edgeMap = edgesForward graph
-                                      
 
--- traceBackpointers 
---   :: Ord v 
---   => Chart v l w i
---   -> Assignment v l w i 
---   -> Maybe (T.Tree (Hyperedge v l w i), w)
--- traceBackpointers c a@(Ranked _  w) = do
---   t <- helper a
---   return (t, w)
---   where helper (Ranked (K _ e _ bps) _) = T.Node e `fmap` mapM
---           (\(rank, idx) 
---              -> let precs = rankedAssignments c (eTail e !! idx)
---                 in helper (precs !! (length precs - rank)))
---           (zip bps [0..])
---         helper _ = Nothing
+edgesForward
+  :: Ord v
+  => Hypergraph v l w i
+  -> ( M.Map v [(Hyperedge v l w i, Int)]
+     , M.Map v [(Hyperedge v l w i, Int)])
+edgesForward graph 
+  = (compute ins, compute others)
+    where compute f = L.foldl' (\m (a, b) -> M.insertWith' (++) a b m) M.empty . concatMap f $ edges
+          ins e = [(eTail e !! i, [(e, i)]) | i <- [0 .. pred . length . eTail $ e]]
+          others e = (eHead e, [(e, 0)]) : [(eTail e !! i, [(e, i + 1)]) | i <- [0 .. pred. length . eTail $ e]]
+          edges = concat . M.elems . edgesM $ graph
+
 
 
 ------------------------------------------------------------------------------
@@ -503,45 +511,26 @@ test2 = hypergraph [ hyperedge 'a' ""   "alpha"   1.0 ()
 -- t1 = t test1 'g' heur1 20
 
 
--- t2 = t test2 'g' heur1 400
+t2 = t test2 'g' heur1 400
 
--- t3 = kastar 400 test2 'g' heur1
+t3 = kastar test2 'g' heur1 400
 
 
--- test :: IO ()
--- --test = t2
--- test = t3 `seq` return ()
+test :: IO ()
+test = t2
+--test = t3 `seq` return ()
+
+t graph goal h k = do
+  putStrLn $ drawHypergraph graph
+  mapM_ (putStrLn . uncurry str) $ kastar graph goal h k
+    where str t w = "w = " ++ show w ++ "\n" 
+                    ++ (T.drawTree . fmap drawHyperedge $ t)
+
 
 
 ------------------------------------------------------------------------------
 -- Stuff that might still be useful ------------------------------------------
 ------------------------------------------------------------------------------
-
--- -- | Helper function assigning to each node the list of edges with this
--- --   node in their tail, together with the according index.
--- --   Hopefully, this speeds things up.
--- edgesForward 
---   :: Ord v
---   => Hypergraph v l w i 
---   -> M.Map v [(Hyperedge v l w i, Int)]
--- edgesForward graph 
---   = L.foldl' (\m (a, b) -> M.insertWith' (++) a b m) M.empty . concatMap fwd $ edges
---   where edges = concat . M.elems . edgesM $ graph
---         fwd e = [(eTail e !! i, [(e, i)]) | i <- [0 .. pred . length . eTail $ e]]
---         -- perhaps the strict versions of fold and insert make this more
---         -- efficient... We will see.
-
-edgesForward
-  :: Ord v
-  => Hypergraph v l w i
-  -> ( M.Map v [(Hyperedge v l w i, Int)]
-     , M.Map v [(Hyperedge v l w i, Int)])
-edgesForward graph 
-  = (compute ins, compute others)
-    where compute f = L.foldl' (\m (a, b) -> M.insertWith' (++) a b m) M.empty . concatMap f $ edges
-          ins e = [(eTail e !! i, [(e, i)]) | i <- [0 .. pred . length . eTail $ e]]
-          others e = (eHead e, [(e, 0)]) : [(eTail e !! i, [(e, i + 1)]) | i <- [0 .. pred. length . eTail $ e]]
-          edges = concat . M.elems . edgesM $ graph
 
 
 --ghc -O2 -fexcess-precision -fvia-C -optc-O2 --make Main.hs
