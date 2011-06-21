@@ -27,15 +27,19 @@ import qualified Random as R
 
 -- ---------------------------------------------------------------------------
 -- | Apply a function to the first component of a pair.
+-- Uses irrefutable pattern such that e. g. @fst (mapFst (const 1) undefined)@
+-- is defined as @1@.
 {-# INLINE mapFst #-}
 mapFst :: (a -> c) -> (a, b) -> (c, b)
-mapFst f = \ (x, y) -> (f x, y)
+mapFst f = \ ~(x, y) -> (f x, y)
 
 
 -- | Apply a function to the second component of a pair.
+-- Uses irrefutable pattern such that e. g. @snd (mapSnd (const 1) undefined)@
+-- is defined as @1@.
 {-# INLINE mapSnd #-}
 mapSnd :: (b -> c) -> (a, b) -> (a, c)
-mapSnd f = \ (x, y) -> (x, f y)
+mapSnd f = \ ~(x, y) -> (x, f y)
 
 -- ---------------------------------------------------------------------------
 -- | @mapRandomR r f xs g == (ys, g')@, where @ys@ is the list obtained by
