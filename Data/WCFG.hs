@@ -44,7 +44,7 @@ data Production v t w i = Production
   , pRight  :: [Either v t]
   , pWeight :: w
   , pId     :: i
-  }
+  } deriving (Read, Show)
 
 
 data WCFG v t w i = WCFG
@@ -52,7 +52,7 @@ data WCFG v t w i = WCFG
     initial               :: v
   , -- | Get the 'Hypergraph' which represents the 'Production's of a 'WCFG'.
     productionsHypergraph :: Hypergraph v [Either v t] w i
-  }
+  } deriving (Read, Show)
 
 
 -- | Create a 'WCFG' from an initial nonterminal and a list of 'Production's.
