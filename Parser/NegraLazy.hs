@@ -47,9 +47,9 @@ errorS _ cs
   = error $ "Parse error: " ++ cs
 
 
-parseNegra :: String -> [Sentence]
+parseNegra :: String -> Negra
 parseNegra cs
-  = parseLines (error "Parse error: Negra format version not defined")
+  = parseLines (Context $ error "Parse error: Negra format version not defined")
   . S
   . filter (\ (_, l) -> not (all C.isSpace l || L.isPrefixOf "%%" l))
   . zip [1 ..]
@@ -57,24 +57,55 @@ parseNegra cs
   $ cs
 
 
-parseLines :: (S -> ([SentenceData], S)) -> S -> [Sentence]
-parseLines parseSentence s
+data Context = Context
+    { parseSentence :: S -> ([SentenceData], S)
+    }
+
+parseLines :: Context -> S -> Negra
+parseLines c s
   = case fmap wordsComment $ currentLine s of
       Nothing ->
-        []
+        Negra [] []
       Just (["#FORMAT", version], _) ->
         case version of
-          "3" -> parseLines parseSentenceV3 $ nextState s
-          "4" -> parseLines parseSentenceV4 $ nextState s
+          "3" -> parseLines c{parseSentence = parseSentenceV3} $ nextState s
+          "4" -> parseLines c{parseSentence = parseSentenceV4} $ nextState s
           _   -> errorS s "Unknown Negra format version"
+      Just (["#BOT", "WORDTAG"], _) ->
+        parseTableWordtag c $ nextState s
       Just ("#BOT" : _, _) ->
-        parseLines parseSentence $ parseTable $ nextState s
+        parseLines c $ parseTable $ nextState s
       Just (["#BOS", num, editorId, date, originId], comment) ->
-        let (sd, s') = parseSentence $ nextState s
-        in Sentence (read num) (read editorId) date (read originId) comment sd
-        : parseLines parseSentence s'
+--         let (sd, s') = parseSentence c $ nextState s
+--             Negra a b = parseLines c s'
+--         in Negra a (Sentence (read num) (read editorId) date (read originId)
+--                            comment sd : b)
+        let (sd, s') = parseSentence c $ nextState s
+        in alter
+            (Sentence (read num) (read editorId) date (read originId) comment sd :)
+            (parseLines c s')
       _ ->
         errorS s "Expected #FORMAT, #BOT or #BOS"
+  where
+    alter f ~(Negra ws ss) = Negra ws (f ss)
+
+
+parseTableWordtag :: Context -> S -> Negra
+parseTableWordtag c s
+  = case fmap (wordsN 3) $ currentLine s of
+      Just ["#EOT", "WORDTAG"] ->
+        alter (const []) $ parseLines c $ nextState s
+      Just [tagId, tag, bound, descr] ->
+        let bound' = case bound of
+                      "Y" -> True
+                      "N" -> False
+                      _   -> errorS s "Expected Y or N"
+        in alter (Wordtag (read tagId) tag bound' descr :)
+        $ parseTableWordtag c $ nextState s
+      _ ->
+        errorS s "Expected #EOT WORDTAG or wordtag table data"
+  where
+    alter f ~(Negra ws ss) = Negra (f ws) ss
 
 
 parseTable :: S -> S
@@ -139,6 +170,15 @@ parseSecEdges _ s
   = errorS s "Expected secondary edge parent"
 
 
+wordsN :: Int -> String -> [String]
+wordsN 0 s = [dropWhile C.isSpace s]
+wordsN n s
+  = case dropWhile {-partain:Char.-}C.isSpace s of
+      "" -> []
+      s' -> w : wordsN (n - 1) s''
+            where (w, s'') = break {-partain:Char.-}C.isSpace s'
+
+
 wordsComment :: String -> ([String], Maybe String)
 wordsComment s
   = case dropWhile {-partain:Char.-}C.isSpace s of
@@ -169,4 +209,4 @@ main
   =   getArgs
   >>= readFileLatin1 . head
   >>= \ x -> let y = parseNegra x
-      in {-rnf y `seq`-} print (length y)
+      in {-rnf y `seq`-} print (length $ wordtags y)

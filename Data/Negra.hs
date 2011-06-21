@@ -25,6 +25,18 @@ import qualified Data.Tree as T
 import Data.Word (Word8)
 
 
+data Negra = Negra
+    { wordtags  :: [Wordtag]
+    , sentences :: [Sentence]
+    } deriving Show
+
+data Wordtag = Wordtag
+    { wtId :: Int
+    , wtTag :: String
+    , wtBound :: Bool
+    , wtDescr :: String
+    } deriving Show
+
 data Sentence = Sentence
     { sId :: Int
     , sEditorId :: Int
@@ -152,7 +164,7 @@ pointerTreeToCrossedTree ptrTree = f 0 ptrTree
       = case IntMap.lookup num pt of
             Just ([lab], children) -> T.Node (Just lab, []) (map (g pt) children)
             Just ([], children) -> T.Node (Nothing, []) (map (g pt) children)
-            Nothing -> error ("PointerTree malformed: pointer " ++ show pt ++ " does not exists:\n" ++ show ptrTree)
+            Nothing -> error ("PointerTree malformed: pointer " ++ show num ++ " does not exists:\n" ++ show pt)
             _ -> error "Parser.Negra.pointerTreeToCrossedTree"
     g pt (Left num) = f num pt
     g _ (Right (leaf, pos)) = T.Node (Just leaf, [(pos, pos)]) []
