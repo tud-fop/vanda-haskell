@@ -67,14 +67,17 @@ newAssignments trigger = do
   c <- chart
   is <- inEdges $ node trigger
   os <- otherEdges $ node trigger
+  inE <- cfgInEdges `liftM` ask
   return $ case trigger of 
              (Inside  _ _) -> switchRule c g trigger ++ ins c h trigger is ++ outs c trigger os
-             (Outside _ _) -> outs c trigger os ++ builds c trigger os
-             (Ranked  _ _) -> builds c trigger os
+             (Outside _ _) -> outs c trigger os ++ builds c trigger inE os
+             (Ranked  _ _) -> builds c trigger inE os
     where
-      ins c h trigger  = concatMap (inRule c h trigger)
-      outs c trigger   = concatMap (outRule c trigger)
-      builds c trigger = concatMap (buildRule c trigger)
+      ins c h trigger        = concatMap (inRule c h trigger)
+      outs c trigger         = concatMap (outRule c trigger)
+      builds c trigger is os = concatMap (buildRuleO c trigger) os 
+                               ++ buildRuleL c trigger is
+                               ++ buildRuleR c trigger
 
 
 -- | The Switch-rule generates the initial outside item for the goal node @g@,
@@ -135,30 +138,79 @@ outRule c trigger (e, r) = do
             p = w * weight (ibs !! i)
         return $! (p, Outside (O (eTail e !! i)) w)
 
-
-buildRule
+-- | buildRuleO is triggered by an outside assignment for node @v@. We then find 
+--   all edges with @v@ as head node and combine the 1-best derivations of their
+--   tail nodes.
+buildRuleO
   :: (Num w, Ord v, Eq l, Eq i)
   => Chart v l w i 
   -> Assignment v l w i 
   -> (Hyperedge v l w i, Int) 
   -> [(w, Assignment v l w i)]
-buildRule c trigger (e, r) = do
-        (oa, ibs) <- if null $ eTail e
-                     then liftM2 (,) [trigger] (return [])
-                     else if r == 0 
-                          then do
-                            guard $ isOutside trigger
-                            liftM2 (,) [trigger] (mapM (rankedAssignments c) (eTail e))
-                          else do 
-                            guard $ isRanked trigger
-                            ibsl <- mapM (rankedAssignments c) . take (r - 1) $ eTail e
-                            ibsr <- mapM (rankedAssignments c) . drop r $ eTail e
-                            liftM2 (,) (outsideAssignments c $ eHead e) [ibsl ++ [trigger] ++ ibsr]
-        let w = eWeight e * (product . map weight $ ibs)
-            p = w * weight oa
-            bps = map rank ibs
-        return $! (p, Ranked (K (eHead e) e 0 bps) w)
+buildRuleO c trigger@(Outside _ _) (e, 0) = do
+  as <- mapM (flip (nthRankedAssignment c) 1) (eTail e)
+  let w   = eWeight e * (product . map weight $ as)
+      p   = w * weight trigger
+      bps = map rank as
+  return $! (p, Ranked (K (eHead e) e 0 bps) w)
+buildRuleO c trigger@(Ranked _ _) (e, r) = do
+  guard $ r /= 0
+  oa <- outsideAssignments c $ eHead e
+  asl <- zipWithM (nthRankedAssignment c) (take (r - 1) $ eTail e) (repeat 1)
+  asr <- zipWithM (nthRankedAssignment c) (drop r $ eTail e) (repeat 1)
+  let as  = asl ++ [trigger] ++ asr
+      w   = eWeight e * (product . map weight $ as)
+      p   = w * weight oa
+      bps = map rank as
+  return $! (p, Ranked (K (eHead e) e 0 bps) w)
+buildRuleO _ _ _ = []
 
+
+-- | buildRuleL is triggered by an @r@-ranked derivation assignment for node 
+--   @v@. We find all assignments with @(r-1)@-backpointers to @v@ and
+--   combine them with the trigger.
+buildRuleL 
+  :: (Num w, Ord v, Eq l, Eq i) 
+  => Chart v l w i 
+  -> Assignment v l w i 
+  -> M.Map v [(Hyperedge v l w i, Int)]
+  -> [(w, Assignment v l w i)]
+buildRuleL c trigger@(Ranked _ _) inEdges = concatMap rule (inEdges ! node trigger)
+  where 
+    rule (e, s) = do
+      Ranked (K _ e' _ bps) _ <- rankedAssignments c (eHead e)
+      guard $ e' == e && bps !! s == rank trigger - 1
+      asl <- zipWithM (nthRankedAssignment c) (eTail e) (take s bps)
+      asr <- zipWithM (nthRankedAssignment c) (eTail e) (drop (s + 1) bps)
+      oa <- outsideAssignments c (eHead e)
+      let as = asl ++ [trigger] ++ asr
+          w  = eWeight e * (product . map weight $ as)
+          p  = w * weight oa
+          bps = map rank as
+      return $! (p, Ranked (K (eHead e) e 0 bps) w)
+buildRuleL _ _ _ = []
+
+-- | buildRuleR is triggered by a ranked derivation assignment for node @v@
+--   with backpointers @bps@. We try for all of those backpointers if the
+--   next-best ranked assignment was inserted and return the newly generated
+--   assignments.
+buildRuleR 
+  :: (Num w, Ord v, Eq l, Eq i) 
+  => Chart v l w i 
+  -> Assignment v l w i 
+  -> [(w, Assignment v l w i)]
+buildRuleR c trigger@(Ranked (K _ e _ bps) _) = do
+  r <- [1 .. length bps]
+  let bps' = zipWith (+) bps (unit (length bps) r)
+  as <- zipWithM (nthRankedAssignment c) (eTail e) bps'
+  oa <- outsideAssignments c (eHead e)
+  let w = eWeight e * (product . map weight $ as)
+      p = w * weight oa
+  return $! (p, Ranked (K (eHead e) e 0 bps') w)
+  where
+    -- r-th unit vector of dimension n
+    unit n r = replicate (r - 1) 0 ++ [1] ++ replicate (n - r) 0
+buildRuleR _ _ = []
 
 -----------------------------------------------------------------------------
 -- Algorithm State -----------------------------------------------------------
@@ -365,14 +417,15 @@ process = do
 -- | @kastar graph g h k@ finds the @k@ best derivations of the goal node @g@
 -- in @graph@, applying the heuristic function @h@.
 kastar
-  :: (Ord v, Num w, Eq l, Eq i, Ord w) 
+  :: (Ord v, Num w, Eq l, Eq i, Ord w, Show v, Show l, Show i) --TODO: delete show
   => Hypergraph v l w i
   -> v
   -> (v -> w)
   -> Int
   -> [(T.Tree (Hyperedge v l w i), w)]
 kastar graph g h k 
-  = reverse $ mapMaybe (traceBackpointers res) $ rankedAssignments res g
+  = trace ("Chart: " ++ show res)
+    (reverse $ mapMaybe (traceBackpointers res) $ rankedAssignments res g)
   where res = fst $ runKAStar kst k graph g h ins others
         (ins, others) = edgesForward graph
         kst = do
@@ -487,6 +540,12 @@ rank (Ranked (K _ _ r _) _) = r
 rank a = error "Tried to compute rank of non-ranked assignment " -- ++ show a
 -- Or should I do this with maybe? I will have to signal error somewhere...
 
+-- | Returns backpointers of an asssignment
+--   /Nota bene:/ raises error if assignment doesn't contain a rank!
+backpointers :: Assignment v l w i -> [Int]
+backpointers (Ranked (K _ _ _ bps) _) = bps
+backpointers _ = error "Tried to compute rank of non-ranked assignment "
+
 
 -- | Chart of already explored items with their weights.
 --   Implemented as a map assigning nodes to their corresponding inside,
@@ -519,6 +578,15 @@ outsideAssignments c v = maybe [] ceOutside $ M.lookup v c
 rankedAssignments :: Ord v => Chart v l w i -> v -> [Assignment v l w i]
 rankedAssignments c v = maybe [] ceRanked $ M.lookup v c
 
+
+nthRankedAssignment :: Ord v => Chart v l w i -> v -> Int -> [Assignment v l w i]
+nthRankedAssignment c v n = as !!! (l - n)
+  where 
+    as           = rankedAssignments c v
+    l            = length as
+    []     !!! _ = []
+    (x:_)  !!! 0 = [x]
+    (_:xs) !!! n = xs !!! (n-1)
 
 -- | @insideAssignments@ lifted into KAStar monad
 insideM :: Ord v => v -> KAStar v l w i [Assignment v l w i]
