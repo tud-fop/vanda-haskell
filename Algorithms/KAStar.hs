@@ -579,6 +579,10 @@ rankedAssignments :: Ord v => Chart v l w i -> v -> [Assignment v l w i]
 rankedAssignments c v = maybe [] ceRanked $ M.lookup v c
 
 
+-- | @nthRankedAssignment c v n@ gets the @n@-ranked assignment for 
+--   the node @v@ from chart @c@, returned in a singleton list.
+--   If there is no such assignment, the function returns @[]@.
+--   Useful for code in the list monad.
 nthRankedAssignment :: Ord v => Chart v l w i -> v -> Int -> [Assignment v l w i]
 nthRankedAssignment c v n = as !!! (l - n)
   where 
