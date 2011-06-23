@@ -32,7 +32,7 @@ import Data.Hypergraph
 -- Deduction rules -----------------------------------------------------------
 ------------------------------------------------------------------------------
 
--- | creates the initial assignments together with their priorities to be put 
+-- | Create the initial assignments together with their priorities to be put 
 --   on the agenda,
 initialAssignments
   :: (Num w, Ord v, Eq l, Eq i)
@@ -55,8 +55,8 @@ initialAssignments = do
 {-# SPECIALIZE newAssignments
  :: Assignment Char String Double () 
  -> KAStar Char String Double () [(Double, Assignment Char String Double ())]#-}
--- | creates those new prioritized assignments to be put on the agenda that 
---   are using the last popped assignment. 
+-- | Create those new prioritized assignments to be put on the agenda that 
+--   are using the last popped assignment, the /trigger/.
 newAssignments 
   :: (Num w, Ord v, Eq l, Eq i)
   => Assignment v l w i 
@@ -77,7 +77,7 @@ newAssignments trigger = do
       builds c trigger = concatMap (buildRule c trigger)
 
 
--- | The Switch-rule, generating the initial outside item for the goal node @g@,
+-- | The Switch-rule generates the initial outside item for the goal node @g@,
 --   triggered by an inside assignment for @g@.
 switchRule
   :: (Num w, Ord v, Eq l, Eq i) 
@@ -203,7 +203,7 @@ data KAState v l w i = KAState {
     }
 
 
--- | runs the KAStar monad, similar to runState
+-- | Runs the KAStar monad, similar to runState
 runKAStar :: KAStar v l w i a
           -> Int 
           -> Hypergraph v l w i
@@ -218,67 +218,67 @@ runKAStar kst k graph goal heuristic ins others =
     in runState (runReaderT (runK kst) cfg) state
 
 
--- | returns number of derivations searched for
+-- | Returns number of derivations searched for
 numDeriv :: KAStar v l w i Int
 numDeriv = cfgNumDeriv `liftM` ask
 
 
--- | returns underlying graph
+-- | Returns underlying graph
 graph :: KAStar v l w i (Hypergraph v l w i)
 graph = cfgGraph `liftM` ask
 
 
--- | returns goal node
+-- | Returns goal node
 goal :: KAStar v l w i v
 goal = cfgGoal `liftM` ask
 
 
--- | returns supplied heuristic
+-- | Returns supplied heuristic
 heuristic :: KAStar v l w i (v -> w)
 heuristic = cfgHeuristic `liftM` ask
 
 
--- | returns in-edges data structure, see 'cfgInEdges'
+-- | Returns in-edges data structure, see 'cfgInEdges'
 inEdges :: Ord v => v -> KAStar v l w i [(Hyperedge v l w i, Int)]
 inEdges v = ((!v) . cfgInEdges) `liftM` ask
 
 
--- | returns other-edges, see 'cfgOtherEdges'
+-- | Returns other-edges, see 'cfgOtherEdges'
 otherEdges :: Ord v => v -> KAStar v l w i [(Hyperedge v l w i, Int)]
 otherEdges v = ((!v) . cfgOtherEdges) `liftM` ask
 
 
--- | returns momentary chart
+-- | Returns momentary chart
 chart :: KAStar v l w i (Chart v l w i)
 chart = stChart `liftM` get
 
--- | returns the agenda
+-- | Returns the agenda
 agenda :: KAStar v l w i (Agenda v l w i)
 agenda = stAgenda `liftM` get
 
 
--- | sets the chart
+-- | Set the chart
 putChart :: Chart v l w i -> KAStar v l w i ()
 putChart c = do
   st <- get
   put st{stChart = c}
 
 
--- | sets the agenda
+-- | Set the agenda
 putAgenda :: Agenda v l w i -> KAStar v l w i ()
 putAgenda a = do
   st <- get
   put st{stAgenda = a}
 
 
--- | increment number of inserted assignments
+-- | Increment number of inserted assignments
 incItemsInserted :: KAStar v l w i ()
 incItemsInserted = do 
   st <- get
   put st{stItemsInserted = stItemsInserted st + 1}
 
 
--- | increment number of generated assignments by @n@
+-- | Increment number of generated assignments by @n@
 incItemsGenerated :: Int -> KAStar v l w i ()
 incItemsGenerated n = do
   st <- get
@@ -326,7 +326,7 @@ chartContains (Outside (O v) _) = (not . null) `liftM` outsideM v
 chartContains r@(Ranked (K v _ _ _) _) = (r `elem`) `liftM` rankedM v
 
 
--- | @agendaInsert as@ insertes the list @as@ of prioritized assignments
+-- | @agendaInsert as@ inserts the list @as@ of prioritized assignments
 --   into the current agenda, updating the number of generated assignments
 --   accordingly.
 agendaInsert :: (Ord v, Ord w) => [(w, Assignment v l w i)] -> KAStar v l w i ()
@@ -336,8 +336,10 @@ agendaInsert as = do
          
 
 -- | @process@ pops assignments until
+--
 --   (1) there are none left or we have found the necessary number of
 --       derivations of @g@, returning @Nothing@ OR
+--
 --   (2) the popped assignment is not contained in the chart. In this case,
 --       it is inserted and returned with its according rank.
 process 
@@ -458,20 +460,20 @@ isRanked (Ranked _ _) = True
 isRanked _ = False
 
 
--- | weight of an assignment
+-- | Weight of an assignment
 weight :: Assignment v l w i -> w
 weight (Inside _ w)   = w
 weight (Outside  _ w) = w
 weight (Ranked _ w)   = w
 
 
--- | returns edge for ranked assignments, @Nothing@ else
+-- | Returns edge for ranked assignments, @Nothing@ else
 edge :: Assignment v l w i -> Maybe (Hyperedge v l w i)
 edge (Ranked (K _ e _ _ ) _) = Just e
 edge _                       = Nothing
 
 
--- | returns the node contained in the assignment
+-- | Returns the node contained in the assignment
 node :: Assignment v l w i -> v
 node (Inside (I v) _)       = v
 node (Outside (O v) _)      = v
@@ -548,6 +550,8 @@ chartSize = M.fold ls 0 `liftM` chart
 -- Helper functions ----------------------------------------------------------
 ------------------------------------------------------------------------------
 
+-- | Computes data structures for efficient association of tail nodes with
+--   their respective hyperedges.
 edgesForward
   :: Ord v
   => Hypergraph v l w i
