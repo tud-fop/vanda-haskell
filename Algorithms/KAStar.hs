@@ -33,7 +33,7 @@ import Data.Hypergraph
 ------------------------------------------------------------------------------
 
 -- | Create the initial assignments together with their priorities to be put 
---   on the agenda,
+--   on the agenda
 initialAssignments
   :: (Num w, Ord v, Eq l, Eq i)
   => KAStar v l w i [(w, Assignment v l w i)]
@@ -47,14 +47,16 @@ initialAssignments = do
                     in (p, Inside (I . eHead $ e) w)
 
 
--- The specialize pragma makes GHC additionally compile instantiated, therefore faster,
--- versions of the supplied function
+-- The specialize pragma makes GHC additionally compile instantiated, 
+-- therefore maybe faster versions of the supplied function
 {-# SPECIALIZE newAssignments 
   :: Assignment Char Char Double () 
-  -> KAStar Char Char Double () [(Double, Assignment Char Char Double ())]#-}
+  -> KAStar Char Char Double () 
+     [(Double, Assignment Char Char Double ())] #-}
 {-# SPECIALIZE newAssignments
  :: Assignment Char String Double () 
- -> KAStar Char String Double () [(Double, Assignment Char String Double ())]#-}
+ -> KAStar Char String Double () 
+    [(Double, Assignment Char String Double ())] #-}
 -- | Create those new prioritized assignments to be put on the agenda that 
 --   are using the last popped assignment, the /trigger/.
 newAssignments 
@@ -69,8 +71,11 @@ newAssignments trigger = do
   os <- otherEdges $ node trigger
   inE <- cfgInEdges `liftM` ask
   return $ case trigger of 
-             (Inside  _ _) -> switchRule c g trigger ++ ins c h trigger is ++ outs c trigger os
-             (Outside _ _) -> outs c trigger os ++ builds c trigger inE os
+             (Inside  _ _) -> switchRule c g trigger 
+                              ++ ins c h trigger is 
+                              ++ outs c trigger os
+             (Outside _ _) -> outs c trigger os 
+                              ++ builds c trigger inE os
              (Ranked  _ _) -> builds c trigger inE os
     where
       ins c h trigger        = concatMap (inRule c h trigger)
@@ -94,7 +99,7 @@ switchRule c g trigger = do
   return $! (weight ig, Outside (O g) 1)
 
 
--- | The In-rule generates a new inside assignment from the inside assignments 
+-- | The In-rule generates a new inside assignment from the inside assignments
 --   for its tail nodes. Only triggered by an inside assignment.
 inRule
   :: (Num w, Ord v, Eq l, Eq i)
@@ -122,25 +127,26 @@ outRule
   -> (Hyperedge v l w i, Int) 
   -> [(w, Assignment v l w i)]
 outRule c trigger (e, r) = do
-        (oa, ibs) <- if r == 0 
-                     then do
-                       guard $ isOutside trigger
-                       liftM2 (,) [trigger] (mapM (insideAssignments c) (eTail e))
-                     else do
-                       guard $ isInside trigger
-                       ibsl <- mapM (insideAssignments c) . take (r - 1) $ eTail e
-                       ibsr <- mapM (insideAssignments c) . drop r $ eTail e
-                       liftM2 (,) (outsideAssignments c $ eHead e) [ibsl ++ [trigger] ++ ibsr]
-        i <- [0 .. (length ibs - 1)]
-        let w = eWeight e * weight oa
-                  * (product . map weight $ take i ibs) -- drop i-th element
-                  * (product . map weight $ drop (i + 1) ibs)
-            p = w * weight (ibs !! i)
-        return $! (p, Outside (O (eTail e !! i)) w)
+  (oa, ibs) <- if r == 0 
+               then do
+                 guard $ isOutside trigger
+                 liftM2 (,) [trigger] (mapM (insideAssignments c) (eTail e))
+               else do
+                 guard $ isInside trigger
+                 ibsl <- mapM (insideAssignments c) . take (r - 1) $ eTail e
+                 ibsr <- mapM (insideAssignments c) . drop r $ eTail e
+                 liftM2 (,) (outsideAssignments c $ eHead e) 
+                            [ibsl ++ [trigger] ++ ibsr]
+  i <- [0 .. (length ibs - 1)]
+  let w = eWeight e * weight oa
+          * (product . map weight $ take i ibs) -- drop i-th element
+          * (product . map weight $ drop (i + 1) ibs)
+      p = w * weight (ibs !! i)
+  return $! (p, Outside (O (eTail e !! i)) w)
 
--- | buildRuleO is triggered by an outside assignment for node @v@. We then find 
---   all edges with @v@ as head node and combine the 1-best derivations of their
---   tail nodes.
+-- | buildRuleO is triggered by an outside assignment for node @v@. We then 
+--   find all edges with @v@ as head node and combine the 1-best derivations
+--   of their tail nodes.
 buildRuleO
   :: (Num w, Ord v, Eq l, Eq i)
   => Chart v l w i 
@@ -154,7 +160,7 @@ buildRuleO c trigger@(Outside _ _) (e, 0) = do
       bps = map rank as
   return $! (p, Ranked (K (eHead e) e 0 bps) w)
 buildRuleO c trigger@(Ranked _ _) (e, r) = do
-  guard $ r /= 0
+  guard $ r /= 0 && rank trigger == 1
   oa <- outsideAssignments c $ eHead e
   asl <- zipWithM (nthRankedAssignment c) (take (r - 1) $ eTail e) (repeat 1)
   asr <- zipWithM (nthRankedAssignment c) (drop r $ eTail e) (repeat 1)
@@ -175,7 +181,8 @@ buildRuleL
   -> Assignment v l w i 
   -> M.Map v [(Hyperedge v l w i, Int)]
   -> [(w, Assignment v l w i)]
-buildRuleL c trigger@(Ranked _ _) inEdges = concatMap rule (inEdges ! node trigger)
+buildRuleL c trigger@(Ranked _ _) inEdges 
+  = concatMap rule (inEdges ! node trigger)
   where 
     rule (e, s) = do
       Ranked (K _ e' _ bps) _ <- rankedAssignments c (eHead e)
@@ -191,7 +198,7 @@ buildRuleL c trigger@(Ranked _ _) inEdges = concatMap rule (inEdges ! node trigg
 buildRuleL _ _ _ = []
 
 -- | buildRuleR is triggered by a ranked derivation assignment for node @v@
---   with backpointers @bps@. We try for all of those backpointers if the
+--   with backpointers @bps@. We decide for all of those backpointers if the
 --   next-best ranked assignment was inserted and return the newly generated
 --   assignments.
 buildRuleR 
@@ -212,7 +219,7 @@ buildRuleR c trigger@(Ranked (K _ e _ bps) _) = do
     unit n r = replicate (r - 1) 0 ++ [1] ++ replicate (n - r) 0
 buildRuleR _ _ = []
 
------------------------------------------------------------------------------
+------------------------------------------------------------------------------
 -- Algorithm State -----------------------------------------------------------
 ------------------------------------------------------------------------------
 
@@ -372,7 +379,9 @@ chartInsert assgmt = do
 -- | @chartContains a@ checks whether the chart already contains an 
 --   assignment that is equal to @a@ (with no respect paid to the rank 
 --   of ranked items).
-chartContains :: (Eq v, Ord v, Eq l, Eq w, Eq i) => Assignment v l w i -> KAStar v l w i Bool
+chartContains 
+  :: (Eq v, Ord v, Eq l, Eq w, Eq i) 
+  => Assignment v l w i -> KAStar v l w i Bool
 chartContains (Inside (I v) _) = (not . null) `liftM` insideM v
 chartContains (Outside (O v) _) = (not . null) `liftM` outsideM v
 chartContains r@(Ranked (K v _ _ _) _) = (r `elem`) `liftM` rankedM v
@@ -424,9 +433,9 @@ kastar
   -> Int
   -> [(T.Tree (Hyperedge v l w i), w)]
 kastar graph g h k 
-  = trace ("Chart: " ++ show res)
-    (reverse $ mapMaybe (traceBackpointers res) $ rankedAssignments res g)
-  where res = fst $ runKAStar kst k graph g h ins others
+  = --trace ("Inserted " ++ (show . stItemsInserted . snd $ res) ++ " assignments, generated " ++ (show . stItemsGenerated . snd $ res) ++ "assignments.\n")
+    (reverse $ mapMaybe (traceBackpointers $ fst res) $ rankedAssignments (fst res) g)
+  where res = runKAStar kst k graph g h ins others
         (ins, others) = edgesForward graph
         kst = do
           agendaInsert =<< initialAssignments
@@ -537,7 +546,7 @@ node (Ranked (K v _ _ _) _) = v
 --   /Nota bene:/ raises error if assignment doesn't contain a rank!
 rank :: Assignment v l w i -> Int
 rank (Ranked (K _ _ r _) _) = r
-rank a = error "Tried to compute rank of non-ranked assignment " -- ++ show a
+rank a = error "Tried to compute rank of non-ranked assignment"
 -- Or should I do this with maybe? I will have to signal error somewhere...
 
 -- | Returns backpointers of an asssignment
@@ -583,7 +592,8 @@ rankedAssignments c v = maybe [] ceRanked $ M.lookup v c
 --   the node @v@ from chart @c@, returned in a singleton list.
 --   If there is no such assignment, the function returns @[]@.
 --   Useful for code in the list monad.
-nthRankedAssignment :: Ord v => Chart v l w i -> v -> Int -> [Assignment v l w i]
+nthRankedAssignment 
+  :: Ord v => Chart v l w i -> v -> Int -> [Assignment v l w i]
 nthRankedAssignment c v n = as !!! (l - n)
   where 
     as           = rankedAssignments c v
@@ -612,10 +622,10 @@ type Agenda v l w i = H.MaxPrioHeap w (Assignment v l w i)
 
 
 -- TODO: maybe delete this
--- | Helper function computing the size of the chart
-chartSize :: KAStar v l w i Int
-chartSize = M.fold ls 0 `liftM` chart
-  where ls it l = length (ceInside it) + length (ceOutside it) + length (ceRanked it) + l
+-- -- | Helper function computing the size of the chart
+-- chartSize :: KAStar v l w i Int
+-- chartSize = M.fold ls 0 `liftM` chart
+--   where ls it l = length (ceInside it) + length (ceOutside it) + length (ceRanked it) + l
 
 
 ------------------------------------------------------------------------------
