@@ -12,7 +12,7 @@
 
 module Main where
 
-import qualified Data.WTAid as WTA
+import qualified Data.WTA as WTA
 import qualified Data.WSA as WSA
 import Data.Hypergraph
 import qualified Parser.Negra as Negra
@@ -20,6 +20,7 @@ import qualified Algorithms.WTABarHillelTopDownBinarizing as BHB
 import Data.List (nub)
 
 import Control.DeepSeq
+import qualified Data.Map as M
 import qualified Data.Tree as T
 import Text.Parsec.String (parseFromFile)
 import System(getArgs)
@@ -73,8 +74,8 @@ tdbhStats args
   = tdbhHelper args
       ( \ wsa wta -> do
         let wta' = BHB.intersect wsa wta
-        let target' = (fst $ head $ WTA.finalWeights wta')
-        let wta'' = WTA.fromHypergraph target'
+        let target' = fst $ head $ M.toList $ WTA.finalWeights wta'
+        let wta'' = WTA.WTA (M.singleton target' 1)
                   $ dropUnreachables target'
                   $ WTA.toHypergraph
                   $ wta'
@@ -96,7 +97,7 @@ tdbhStats args
 
 printWTA :: [String] -> IO ()
 printWTA args
-  = tdbhHelper args (const WTA.printWTA)
+  = tdbhHelper args $ const $ putStr . WTA.drawWTA
 
 
 readWTA :: [String] -> IO ()
@@ -110,10 +111,11 @@ tdbhHelper
   -> (WSA.WSA Int String w -> WTA.WTA Int String Double Int -> IO a)
   -> IO a
 tdbhHelper args f = do
-  g <-  fmap (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
+  g <-  fmap (snd . mapAccumIds (\ i _ -> {-i `seq`-} (i + 1, i)) 0)
+    $   fmap (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
     $   readFile (args !! 0)
   let yld = read (args !! 1) :: [String]
-  f (WSA.fromList 1 yld) (WTA.addId $ WTA.fromHypergraph {-("ROOT", 0)-}0 g)
+  f (WSA.fromList 1 yld) (WTA.WTA (M.singleton {-("ROOT", 0)-}0 1) g)
 
 
 manySentencesZigZag :: [String] -> IO ()
@@ -121,7 +123,7 @@ manySentencesZigZag args = do
   g <-  fmap (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
     $   readFile (args !! 0)
   let ylds = read (args !! 1) :: [[String]]
-  let wta = WTA.addId $ WTA.fromHypergraph {-("ROOT", 0)-}0 g
+  let wta = WTA.WTA (M.singleton {-("ROOT", 0)-}0 1) g
   let wsa = combineWSAs $ map (WSA.fromList 1) ylds
   putStrLn $ unlines $ map show $ WSA.transitions wsa
   putStrLn $ unlines $ map show $ WSA.initialWeights wsa
@@ -141,7 +143,7 @@ evenSentencelength args = do
     $   readFile (args !! 0)
   let ylds = read (args !! 1) :: [String]
   let redundancy = read (args !! 2) :: Int
-  let wta = WTA.addId $ WTA.fromHypergraph {-("ROOT", 0)-}0 g
+  let wta = WTA.WTA (M.singleton {-("ROOT", 0)-}0 1) g
   let wsa = WSA.create
               ( flip concatMap (nub ylds) $ \ x ->
                   flip concatMap [1 .. redundancy] $ \ n ->
@@ -178,10 +180,10 @@ yield (T.Node r []) = [r]
 yield (T.Node _ ts) = concatMap yield ts
 
 
-printWTAStatistic :: WTA.WTA q t w i -> IO ()
+printWTAStatistic :: (Ord q) => WTA.WTA q t w i -> IO ()
 printWTAStatistic wta = do
-  putStr   $ show $ length $ WTA.transitions  wta
+  putStr   $ show $ length $ edges $ WTA.toHypergraph  wta
   putStr "\t"
   putStr   $ show $ length $ WTA.states       wta
   putStr "\t"
-  putStrLn $ show $ length $ WTA.finalWeights wta
+  putStrLn $ show $ M.size $ WTA.finalWeights wta

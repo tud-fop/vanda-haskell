@@ -20,6 +20,7 @@ import qualified Algorithms.StateSplit as SPG
 import TestData.TestHypergraph
 import TestData.TestWTA
 
+import Data.Map as M
 import qualified Data.Tree as T
 import           Text.Parsec.String (parseFromFile)
 import qualified Random as R
@@ -28,14 +29,15 @@ import qualified Random as R
 -- WTA related
 
 
-demoWTA1 :: (Num w) => WTA.WTA Char Char w
+demoWTA1 :: (Num w) => WTA.WTA Char Char w ()
 demoWTA1 = testWTAs !! 10
 
 
 -- | Print an example WTA.
 demo1_1 :: IO ()
 demo1_1
-  = WTA.printWTA
+  = putStr
+  $ WTA.drawWTA
     demoWTA1
 
 
@@ -47,6 +49,7 @@ demo1_2 n
   . fmap (fmap show)
   . take n
   . WTA.generate
+  . WTA.toHypergraph
   $ demoWTA1
 
 
@@ -58,6 +61,7 @@ demo1_3 n
   . fmap (fmap show)
   . take n
   . WTA.generate'
+  . WTA.toHypergraph
   $ demoWTA1
 
 
@@ -67,6 +71,7 @@ demo1_4 n
   = fmap (WTA.weightTree demoWTA1)
   . take n
   . WTA.generate
+  . WTA.toHypergraph
   $ demoWTA1
 
 -- -------------------------------------------------------------------
@@ -107,8 +112,10 @@ demo2_2 i
 demo3_1 :: IO ()
 demo3_1
   = demo2_help
-  $ WTA.printWTA
-  . RE.extractWTA
+  $ putStrLn
+  . WTA.drawWTA
+  . WTA.WTA M.empty
+  . RE.extractHypergraph
   . concatMap (
       fmap (fmap (maybe "ROOT" Negra.showSentenceData . fst . fst))
     . Negra.negraToForest

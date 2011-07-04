@@ -12,7 +12,6 @@
 module Algorithms.RuleExtraction where
 
 import Data.Hypergraph
-import qualified Data.WTA as WTA
 
 import qualified Data.Map  as M
 import qualified Data.Tree as T
@@ -24,17 +23,6 @@ extractHypergraph forest
   = properize
   . hypergraph
   . map (\((hd, tl), c) -> hyperedge hd tl hd c ())
-  . M.toList
-  . extract
-  $ forest
-
-
-extractWTA
-  :: (Ord q, Fractional w) => T.Forest q -> WTA.WTA q q w
-extractWTA forest
-  = WTA.properize
-  . flip WTA.create []
-  . map (\((x, xs), c) -> WTA.Transition x x xs c)
   . M.toList
   . extract
   $ forest

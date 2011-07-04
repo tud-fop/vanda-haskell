@@ -17,6 +17,7 @@ import Data.Hypergraph
 import qualified Algorithms.WTABarHillelComplete as BH
 
 import Control.DeepSeq
+import qualified Data.Map as M
 import System(getArgs)
 
 
@@ -71,20 +72,20 @@ readWTA args
 tdbhHelper
   :: (Num w)
   => [String]
-  -> (WSA.WSA Int String w -> WTA.WTA Int String Double -> IO a)
+  -> (WSA.WSA Int String w -> WTA.WTA Int String Double () -> IO a)
   -> IO a
 tdbhHelper args f = do
   g <-  fmap (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
     $   readFile (args !! 0)
   let yld = read (args !! 1) :: [String]
-  f (WSA.fromList 1 yld) (WTA.fromHypergraph {-("ROOT", 0)-}0 g)
+  f (WSA.fromList 1 yld) (WTA.WTA (M.singleton {-("ROOT", 0)-}0 1) g)
 
 
 
-printWTAStatistic :: WTA.WTA q t w -> IO ()
+printWTAStatistic :: (Ord q) => WTA.WTA q t w i -> IO ()
 printWTAStatistic wta = do
-  putStr   $ show $ length $ WTA.transitions  wta
+  putStr   $ show $ length $ edges $ WTA.toHypergraph  wta
   putStr "\t"
   putStr   $ show $ length $ WTA.states       wta
   putStr "\t"
-  putStrLn $ show $ length $ WTA.finalWeights wta
+  putStrLn $ show $ M.size $ WTA.finalWeights wta

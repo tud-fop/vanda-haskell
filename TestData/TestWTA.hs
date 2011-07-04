@@ -11,97 +11,98 @@
 
 module TestData.TestWTA where
 
+import Data.Hypergraph
 import Data.WTA
 
 
-testWTAs :: (Num w) => [WTA Char Char w]
+testWTAs :: (Num w) => [WTA Char Char w ()]
 testWTAs =
-    [ create  -- 0
+    [ wtaCreate  -- 0
         []
         []
-    , create  -- 1
-        [ Transition 'a' 'q' ""   2
-        , Transition 'b' 'q' ""   3
-        , Transition 'a' 'f' "qf" 1
-        , Transition 'a' 'f' "qq" 1
-        ]
+    , wtaCreate  -- 1
         [('f', 1)]
-    , create  -- 2
-        [ Transition 'a' 'q' ""   2
-        , Transition 'b' 'r' ""   3
-        , Transition 'd' 'r' "q"  1
-        , Transition 'g' 'q' "r"  1
-        , Transition 'h' 'q' "q"  1
-        , Transition 's' 'q' "qq" 1
-        , Transition 's' 'r' "rr" 1
+        [ hyperedge 'q' ""   'a' 2 ()
+        , hyperedge 'q' ""   'b' 3 ()
+        , hyperedge 'f' "qf" 'a' 1 ()
+        , hyperedge 'f' "qq" 'a' 1 ()
         ]
+    , wtaCreate  -- 2
         [('q', 1), ('r', 1)]
-    , create  -- 3
-        [ Transition 'a' 'q' ""   2
-        , Transition 'b' 'q' ""   3
-        , Transition 'd' 'q' "q"  1
-        , Transition 'g' 'r' "r"  1
-        , Transition 's' 'r' "qq" 1
-        , Transition 's' 'r' "qr" 1
+        [ hyperedge 'q' ""   'a' 2 ()
+        , hyperedge 'r' ""   'b' 3 ()
+        , hyperedge 'r' "q"  'd' 1 ()
+        , hyperedge 'q' "r"  'g' 1 ()
+        , hyperedge 'q' "q"  'h' 1 ()
+        , hyperedge 'q' "qq" 's' 1 ()
+        , hyperedge 'r' "rr" 's' 1 ()
         ]
+    , wtaCreate  -- 3
         [('q', 1), ('r', 1)]
-    , create  -- 4
-        [ Transition 'g' 'r' "ssr" 2
-        , Transition 's' 'r' "sr"  3
-        , Transition 'a' 'r' "r"   1
-        , Transition 'a' 'r' "s"   1
-        , Transition 'a' 's' ""    1
-        , Transition 'b' 's' ""    1
+        [ hyperedge 'q' ""   'a' 2 ()
+        , hyperedge 'q' ""   'b' 3 ()
+        , hyperedge 'q' "q"  'd' 1 ()
+        , hyperedge 'r' "r"  'g' 1 ()
+        , hyperedge 'r' "qq" 's' 1 ()
+        , hyperedge 'r' "qr" 's' 1 ()
         ]
+    , wtaCreate  -- 4
         [('s', 1), ('r', 1)]
-    , create  -- 5
-        [ Transition 'a' 'a' ""   2
-        , Transition 'b' 'b' ""   3
-        , Transition 'c' 'a' "aa" 1
-        , Transition 'c' 'b' "bb" 1
-        , Transition 'c' 'f' "ba" 1
-        , Transition 'c' 'f' "bf" 1
-        , Transition 'c' 'f' "fa" 1
+        [ hyperedge 'r' "ssr" 'g' 2 ()
+        , hyperedge 'r' "sr"  's' 3 ()
+        , hyperedge 'r' "r"   'a' 1 ()
+        , hyperedge 'r' "s"   'a' 1 ()
+        , hyperedge 's' ""    'a' 1 ()
+        , hyperedge 's' ""    'b' 1 ()
         ]
+    , wtaCreate  -- 5
         [('f', 1)]
-    , create  -- 6
-        [ Transition 'a' 'q' ""    2
-        , Transition 'b' 'q' ""    3
-        , Transition '2' 'q' "qq"  1
-        , Transition '3' 'q' "qqq" 1
+        [ hyperedge 'a' ""   'a' 2 ()
+        , hyperedge 'b' ""   'b' 3 ()
+        , hyperedge 'a' "aa" 'c' 1 ()
+        , hyperedge 'b' "bb" 'c' 1 ()
+        , hyperedge 'f' "ba" 'c' 1 ()
+        , hyperedge 'f' "bf" 'c' 1 ()
+        , hyperedge 'f' "fa" 'c' 1 ()
         ]
+    , wtaCreate  -- 6
         [('q', 1)]
-    , create  -- 7
-        [ Transition 'a' 'q' ""   2
-        , Transition 'a' 'l' ""   2
-        , Transition 'a' 'r' ""   2
-        , Transition 'l' 'l' "lr" 1
-        , Transition 'r' 'r' "lr" 1
+        [ hyperedge 'q' ""    'a' 2 ()
+        , hyperedge 'q' ""    'b' 3 ()
+        , hyperedge 'q' "qq"  '2' 1 ()
+        , hyperedge 'q' "qqq" '3' 1 ()
         ]
+    , wtaCreate  -- 7
         [('l', 1), ('r', 1)]
-    , create  -- 8
-        [ Transition 'a' 'q' ""   2
-        , Transition 'a' 'y' ""   2
-        , Transition 'b' 'q' ""   3
-        , Transition 'a' 'f' "qf" 1
-        , Transition 'a' 'f' "fq" 1
-        , Transition 'a' 'f' "qq" 1
-        , Transition 'a' 'f' "qw" 1
+        [ hyperedge 'q' ""   'a' 2 ()
+        , hyperedge 'l' ""   'a' 2 ()
+        , hyperedge 'r' ""   'a' 2 ()
+        , hyperedge 'l' "lr" 'l' 1 ()
+        , hyperedge 'r' "lr" 'r' 1 ()
         ]
+    , wtaCreate  -- 8
         [('f', 1)]
-    , create  -- 9
-        [ Transition 'a' '0' ""   2
-        , Transition 'b' '1' "0"  2
-        , Transition 'c' '2' "1"  3
-        , Transition 'd' '3' "21" 1
-        , Transition 'd' '3' "12" 1
+        [ hyperedge 'q' ""   'a' 2 ()
+        , hyperedge 'y' ""   'a' 2 ()
+        , hyperedge 'q' ""   'b' 3 ()
+        , hyperedge 'f' "qf" 'a' 1 ()
+        , hyperedge 'f' "fq" 'a' 1 ()
+        , hyperedge 'f' "qq" 'a' 1 ()
+        , hyperedge 'f' "qw" 'a' 1 ()
         ]
+    , wtaCreate  -- 9
         [('f', 1)]
-    , create  -- 10
-        [ Transition 'l' 'f' ""   2
-        , Transition 'l' 'q' ""   3
-        , Transition 'n' 'f' "qf" 1
-        , Transition 'n' 'f' "qq" 1
+        [ hyperedge '0' ""   'a' 2 ()
+        , hyperedge '1' "0"  'b' 2 ()
+        , hyperedge '2' "1"  'c' 3 ()
+        , hyperedge '3' "21" 'd' 1 ()
+        , hyperedge '3' "12" 'd' 1 ()
         ]
+    , wtaCreate  -- 10
         [('f', 1)]
+        [ hyperedge 'f' ""   'l' 2 ()
+        , hyperedge 'q' ""   'l' 3 ()
+        , hyperedge 'f' "qf" 'n' 1 ()
+        , hyperedge 'f' "qq" 'n' 1 ()
+        ]
     ]
