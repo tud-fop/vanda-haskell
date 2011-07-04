@@ -14,7 +14,7 @@ module Main where
 import qualified Data.WTA as WTA
 import qualified Data.WSA as WSA
 import Data.Hypergraph
-import qualified Parser.NegraLazy as Negra
+import qualified Parser.NegraLazy as N
 import qualified Algorithms.RuleExtraction as RE
 import qualified Algorithms.StateSplit as SPG
 import qualified Algorithms.WTABarHillelTopDown as BH
@@ -29,7 +29,6 @@ import Data.Maybe (fromMaybe)
 import qualified Data.Tree as T
 import qualified Random as R
 import System(getArgs)
-import Text.Parsec (ParseError ())
 
 
 main :: IO ()
@@ -63,28 +62,27 @@ printFileHG args
     . (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
 
 
-getData :: IO (Either ParseError [Negra.Sentence])
+getData :: IO [T.Tree String]
 getData
-  = fmap (Right . Negra.sentences . Negra.parseNegra)
-  $ Negra.readFileLatin1 "/var/local/share/gdp/nlp/resources/tigercorpus2.1/corpus/tiger_release_aug07.export"
---   = parseFromFile
---       Negra.p_negra
---       "../test-data/tiger_release_aug07_notable_2000_utf-8.export"
+  = fmap (convertNegra . N.parseNegra)
+  $ N.readFileLatin1
+      "/var/local/share/gdp/nlp/resources/tigercorpus2.1/corpus/tiger_release_aug07.export"
 
 
 printYields :: a -> IO ()
-printYields _ = do
-  Right dta <- getData
-  putStr $ unlines $ map (show . reverse . yield . onlyPreterminals) $ negrasToTrees dta
+printYields _
+  =   getData
+  >>= putStr
+    . unlines
+    . map (show . yield . defoliate)
 
 
 train :: [String] -> IO ()
 train args = do
   let its = read (args !! 0)
   let exs = read (args !! 1)
-  Right dta <- getData
-  let ts = take exs $ negrasToTrees dta
-  let trains = map onlyPreterminals ts
+  ts <- fmap (take exs) getData
+  let trains = map defoliate ts
   let exPretermToTerm = mapIds (const []) $ SPG.initialize $ RE.extractHypergraph $ concatMap terminalBranches ts
   let gsgens
         = take (its + 1)
@@ -119,12 +117,11 @@ test :: [String] -> IO ()
 test args = do
   let hgFile = args !! 0
   let treeIndex = read $ args !! 1 :: Int
-  let f = if length args >= 3 then onlyPreterminals else id
+  let f = if length args >= 3 then map defoliate else id
   g <-  fmap (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
     $   readFile hgFile
   -- putStrLn $ drawHypergraph g
-  Right dta <- getData
-  let ts = {-filter ((< 15) . length . yield) $-} drop treeIndex $ map f (negrasToTrees dta)
+  ts <- fmap ({-filter ((< 15) . length . yield) $-} drop treeIndex . f) getData
   let wta = WTA.WTA (M.singleton {-("ROOT", 0)-}0 1) g
   flip mapM_ ts $ \ t -> do
     let target' = (0, {-("ROOT", 0)-}0, length $ yield t)
@@ -366,19 +363,28 @@ evenSentencelength args = do
   rnf (BH.intersect wsa wta) `seq` return ()
 
 
-negrasToTrees :: [Negra.Sentence] -> [T.Tree String]
-negrasToTrees
-  = concatMap
-      ( fmap Negra.negraTreeToTree
-      . Negra.negraToForest
-      . Negra.filterPunctuation
-      . Negra.sData
-      )
+-- | Convert a corpus in NEGRA format to a list of 'Data.Tree's with pos tags
+-- as leaves.
+convertNegra :: N.Negra -> [T.Tree String]
+convertNegra n
+  = map N.negraTreeToTree
+  . concatMap N.negraToForest
+  . filter (not . null)
+  . map (filter fltr)
+  . map N.sData
+  $ N.sentences n
+  where
+    -- unbound = ["UNKNOWN","--","$,","$.","$("]
+    unbound = map N.wtTag $ filter (not . N.wtBound) $ N.wordtags n
+    fltr N.SentenceWord{N.sdPostag = tag} = notElem tag unbound
+    fltr _ = True
 
 
-onlyPreterminals :: T.Tree a -> T.Tree a
-onlyPreterminals (T.Node x [T.Node _ []]) = T.Node x []
-onlyPreterminals (T.Node x ts) = T.Node x (map onlyPreterminals ts)
+-- | Remove the leaves from a 'T.Tree'.
+defoliate :: T.Tree t -> T.Tree t
+defoliate (T.Node _ []) = error "Cannot defoliate a leaf-only tree."
+defoliate (T.Node x xs)
+  = T.Node x $ map defoliate $ filter (not . null . T.subForest) xs
 
 
 yield :: T.Tree a -> [a]
