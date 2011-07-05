@@ -18,7 +18,6 @@ import Control.Monad.State
 import Control.Monad.Reader
 import Control.Monad.List
 import qualified Data.Map as M
-import Data.Map ((!))
 import qualified Data.Tree as T
 import qualified Data.Heap as H 
 import qualified Data.List as L
@@ -188,7 +187,7 @@ buildRuleL
   -> M.Map v [(Hyperedge v l w i, Int)]
   -> [(w, Assignment v l w i)]
 buildRuleL c trigger@(Ranked _ _) inEdges 
-  = concatMap rule (inEdges ! node trigger)
+  = concatMap rule (M.findWithDefault [] (node trigger) inEdges)
   where 
     rule (e, s) = do
       Ranked (K _ e' _ bps) _ <- rankedAssignments c (eHead e)
@@ -308,12 +307,12 @@ heuristic = cfgHeuristic `liftM` ask
 
 -- | Returns in-edges data structure, see 'cfgInEdges'
 inEdges :: Ord v => v -> KAStar p v l w i [(Hyperedge v l w i, Int)]
-inEdges v = ((!v) . cfgInEdges) `liftM` ask
+inEdges v = (M.findWithDefault [] v . cfgInEdges) `liftM` ask
 
 
 -- | Returns other-edges, see 'cfgOtherEdges'
 otherEdges :: Ord v => v -> KAStar p v l w i [(Hyperedge v l w i, Int)]
-otherEdges v = ((!v) . cfgOtherEdges) `liftM` ask
+otherEdges v = (M.findWithDefault [] v . cfgOtherEdges) `liftM` ask
 
 
 -- | Returns momentary chart
