@@ -11,6 +11,8 @@
 
 {-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleContexts #-}
 
+--TODO: do something about non-decreasing loops
+
 module Algorithms.KAStar
   where
 
