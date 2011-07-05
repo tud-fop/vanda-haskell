@@ -25,8 +25,8 @@ import qualified Data.List as L
 import Data.Maybe (fromJust, mapMaybe)
 import Debug.Trace
 
-
 import Data.Hypergraph
+import qualified TestData.TestHypergraph as Test
 
 ------------------------------------------------------------------------------
 -- Deduction rules -----------------------------------------------------------
@@ -709,6 +709,14 @@ t graph goal h k = do
                     ++ (T.drawTree . fmap drawHyperedge $ t)
 
 
+-- Let's check the reference implementation
+t' graph goal k = do
+  putStrLn $ drawHypergraph graph
+  mapM_ (putStrLn . uncurry str) $ nBest' k goal graph
+    where str t w = "w = " ++ show w ++ "\n" 
+                    ++ (T.drawTree . fmap drawHyperedge $ t)
+
+
 t1 = t test1 'g' heur1 20
 
 
@@ -717,8 +725,40 @@ t2 = t test2 'g' heur1 400
 
 t3 = kbest test2 'g' heur1 400
 
+t4 = t (Test.testHypergraphs !! 1) 'S' heur1 10
+
+comparison 
+  :: (Fractional w, Ord v, Ord w, Eq i, Eq l, Show i, Show l, Show v) 
+  => Hypergraph v l w i -> v -> (v -> w) -> Int -> IO Bool
+comparison graph goal heur k = zipWithM put mine others >>= return . and
+  where put w1 w2 = do 
+          putStrLn $ show w1 ++ "\t" ++ show w2
+          return $ w1 == w2
+        mine = map snd $ kbest graph goal heur k
+        others = nBest k goal graph
+
+diff
+  :: (Fractional w, Ord v, Ord w, Eq i, Eq l, Show i, Show l, Show v) 
+  => Hypergraph v l w i 
+  -> v 
+  -> (v -> w) 
+  -> Int 
+  -> [((T.Tree (Hyperedge v l w i), w), (T.Tree (Hyperedge v l w i), w))]
+diff graph goal heur k = filter neq $ zip mine others
+  where neq ((_, w1), (_, w2)) = w1 /= w2
+        mine = kbest graph goal heur k
+        others = nBest' k goal graph
 
 test :: IO ()
-test = t2
+--test = comparison (Test.testHypergraphs !! 1) 'S' heur1 10 >>= putStrLn . show
 --test = t3 `seq` return ()
-
+--test = t' (Test.testHypergraphs !! 1) 'S' 10
+test = mapM_ (uncurry pr) $ diff (Test.testHypergraphs !! 1) 'S' heur1 20
+  where 
+    pr l r = do
+      putStrLn "===MINE==="
+      putStrLn . uncurry str $ l
+      putStrLn "===OTHER==="
+      putStrLn . uncurry str $ r
+    str t w = "w = " ++ show w ++ "\n" 
+              ++ (T.drawTree . fmap drawHyperedge $ t)
