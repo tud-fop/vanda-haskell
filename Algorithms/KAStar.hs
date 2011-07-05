@@ -144,6 +144,10 @@ outRule c trigger (e, r) = do
       p = w * weight (ibs !! i)
   return $! (p, Outside (O (eTail e !! i)) w)
 
+assert :: Eq v => [Assignment v l w i] -> Hyperedge v l w i -> Bool
+assert as e = and (zipWith f as $ eTail e) && length as == length (eTail e)
+  where f a v = node a == v
+
 -- | buildRuleO is triggered by an outside assignment for node @v@. We then 
 --   find all edges with @v@ as head node and combine the 1-best derivations
 --   of their tail nodes.
@@ -155,6 +159,7 @@ buildRuleO
   -> [(w, Assignment v l w i)]
 buildRuleO c trigger@(Outside _ _) (e, 0) = do
   as <- mapM (flip (nthRankedAssignment c) 1) (eTail e)
+  unless (assert as e) (error "error in buildRuleO") --TODO:remove
   let w   = eWeight e * (product . map weight $ as)
       p   = w * weight trigger
       bps = map rank as
@@ -168,6 +173,7 @@ buildRuleO c trigger@(Ranked _ _) (e, r) = do
       w   = eWeight e * (product . map weight $ as)
       p   = w * weight oa
       bps = map rank as
+  unless (assert as e) (error "error in buildRuleO") --TODO:remove
   return $! (p, Ranked (K (eHead e) e 0 bps) w)
 buildRuleO _ _ _ = []
 
@@ -176,7 +182,7 @@ buildRuleO _ _ _ = []
 --   @v@. We find all assignments with @(r-1)@-backpointers to @v@ and
 --   combine them with the trigger.
 buildRuleL 
-  :: (Num w, Ord v, Eq l, Eq i) 
+  :: (Num w, Ord v, Eq l, Eq i)
   => Chart v l w i 
   -> Assignment v l w i 
   -> M.Map v [(Hyperedge v l w i, Int)]
@@ -187,13 +193,14 @@ buildRuleL c trigger@(Ranked _ _) inEdges
     rule (e, s) = do
       Ranked (K _ e' _ bps) _ <- rankedAssignments c (eHead e)
       guard $ e' == e && bps !! s == rank trigger - 1
-      asl <- zipWithM (nthRankedAssignment c) (eTail e) (take s bps)
-      asr <- zipWithM (nthRankedAssignment c) (eTail e) (drop (s + 1) bps)
+      asl <- take s `liftM` zipWithM (nthRankedAssignment c) (eTail e) bps
+      asr <- drop (s+1) `liftM` zipWithM (nthRankedAssignment c) (eTail e) bps
       oa <- outsideAssignments c (eHead e)
       let as = asl ++ [trigger] ++ asr
           w  = eWeight e * (product . map weight $ as)
           p  = w * weight oa
           bps = map rank as
+      unless (assert as e) (error "error in buildRuleL") --TODO: remove
       return $! (p, Ranked (K (eHead e) e 0 bps) w)
 buildRuleL _ _ _ = []
 
@@ -211,6 +218,7 @@ buildRuleR c trigger@(Ranked (K _ e _ bps) _) = do
   let bps' = zipWith (+) bps (unit (length bps) r)
   as <- zipWithM (nthRankedAssignment c) (eTail e) bps'
   oa <- outsideAssignments c (eHead e)
+  unless (assert as e) (error "error in buildRuleO") --TODO: remove
   let w = eWeight e * (product . map weight $ as)
       p = w * weight oa
   return $! (p, Ranked (K (eHead e) e 0 bps') w)
@@ -462,7 +470,7 @@ kastar agenda graph g h k
   = --trace ("Inserted " ++ (show . stItemsInserted $ info) 
     --  ++ " assignments, generated " ++ (show . stItemsGenerated $ info) 
     --  ++ "assignments.\n")
-    (reverse $ mapMaybe (traceBackpointers res) $ rankedAssignments res g)
+    reverse $ mapMaybe (traceBackpointers res) $ rankedAssignments res g
   where (res, info) = runKAStar kst agenda k graph g h ins others
         (ins, others) = edgesForward graph
         kst = do
@@ -499,6 +507,9 @@ traceBackpointers _ _ = Nothing
 ------------------------------------------------------------------------------
 -- Data Structures -----------------------------------------------------------
 ------------------------------------------------------------------------------
+
+-- | The agenda we store yet-to-be-processed assignments on
+type Agenda p v l w i = H.Heap p (w, Assignment v l w i)
 
 -- | Assignments associate an item with a weight. Used as data structure in
 --   agenda and chart.
@@ -645,18 +656,6 @@ rankedM :: Ord v => v -> KAStar p v l w i [Assignment v l w i]
 rankedM v = flip rankedAssignments v `liftM` chart
 
 
--- TODO: make abstract so that kbest and kworst possible
-type Agenda p v l w i = H.Heap p (w, Assignment v l w i)
-
-
--- TODO: maybe delete this
--- -- | Helper function computing the size of the chart
--- chartSize :: KAStar p v l w i Int
--- chartSize = M.fold ls 0 `liftM` chart
---   where ls it l = length (ceInside it) + length (ceOutside it) 
---                   + length (ceRanked it) + l
-
-
 ------------------------------------------------------------------------------
 -- Helper functions ----------------------------------------------------------
 ------------------------------------------------------------------------------
@@ -730,7 +729,7 @@ t4 = t (Test.testHypergraphs !! 1) 'S' heur1 10
 comparison 
   :: (Fractional w, Ord v, Ord w, Eq i, Eq l, Show i, Show l, Show v) 
   => Hypergraph v l w i -> v -> (v -> w) -> Int -> IO Bool
-comparison graph goal heur k = zipWithM put mine others >>= return . and
+comparison graph goal heur k = and `liftM` zipWithM put mine others
   where put w1 w2 = do 
           putStrLn $ show w1 ++ "\t" ++ show w2
           return $ w1 == w2
@@ -744,7 +743,7 @@ diff
   -> (v -> w) 
   -> Int 
   -> [((T.Tree (Hyperedge v l w i), w), (T.Tree (Hyperedge v l w i), w))]
-diff graph goal heur k = filter neq $ zip mine others
+diff graph goal heur k = filter neq $  zip mine others
   where neq ((_, w1), (_, w2)) = w1 /= w2
         mine = kbest graph goal heur k
         others = nBest' k goal graph
@@ -752,9 +751,10 @@ diff graph goal heur k = filter neq $ zip mine others
 test :: IO ()
 --test = comparison (Test.testHypergraphs !! 1) 'S' heur1 10 >>= putStrLn . show
 --test = t3 `seq` return ()
---test = t' (Test.testHypergraphs !! 1) 'S' 10
-test = mapM_ (uncurry pr) $ diff (Test.testHypergraphs !! 1) 'S' heur1 20
-  where 
+test = t (Test.testHypergraphs !! 0) 'A' heur1 10
+--test = mapM_ (uncurry go) (zip Test.testHypergraphs "AStt")
+  where
+    go graph start = mapM_ (uncurry pr) $ diff graph start heur1 50
     pr l r = do
       putStrLn "===MINE==="
       putStrLn . uncurry str $ l
