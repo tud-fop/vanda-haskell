@@ -11,8 +11,6 @@
 
 {-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleContexts #-}
 
---TODO: do something about non-decreasing loops
-
 module Algorithms.KAStar
   where
 
@@ -65,11 +63,11 @@ newAssignments
   => Assignment v l w i 
   -> KAStar p v l w i [(w, Assignment v l w i)]
 newAssignments trigger = do 
-  h <- heuristic
-  g <- goal
-  c <- chart
-  is <- inEdges $ node trigger
-  os <- otherEdges $ node trigger
+  h   <- heuristic
+  g   <- goal
+  c   <- chart
+  is  <- inEdges $ node trigger
+  os  <- otherEdges $ node trigger
   inE <- cfgInEdges `liftM` ask
   return $ case trigger of 
              (Inside  _ _) -> switchRule c g trigger 
@@ -145,6 +143,9 @@ outRule c trigger (e, r) = do
       p = w * weight (ibs !! i)
   return $! (p, Outside (O (eTail e !! i)) w)
 
+-- | Checks whether the nodes of the supplied assignments are compatible
+--   with the tail nodes of the supplied hyperedge.
+--   May be removed later.
 assert :: Eq v => [Assignment v l w i] -> Hyperedge v l w i -> Bool
 assert as e = and (zipWith f as $ eTail e) && length as == length (eTail e)
   where f a v = node a == v
@@ -167,7 +168,7 @@ buildRuleO c trigger@(Outside _ _) (e, 0) = do
   return $! (p, Ranked (K (eHead e) e 0 bps) w)
 buildRuleO c trigger@(Ranked _ _) (e, r) = do
   guard $ r /= 0 && rank trigger == 1
-  oa <- outsideAssignments c $ eHead e
+  oa  <- outsideAssignments c $ eHead e
   asl <- zipWithM (nthRankedAssignment c) (take (r - 1) $ eTail e) (repeat 1)
   asr <- zipWithM (nthRankedAssignment c) (drop r $ eTail e) (repeat 1)
   let as  = asl ++ [trigger] ++ asr
@@ -196,10 +197,10 @@ buildRuleL c trigger@(Ranked _ _) inEdges
       guard $ e' == e && bps !! s == rank trigger - 1
       asl <- take s `liftM` zipWithM (nthRankedAssignment c) (eTail e) bps
       asr <- drop (s+1) `liftM` zipWithM (nthRankedAssignment c) (eTail e) bps
-      oa <- outsideAssignments c (eHead e)
-      let as = asl ++ [trigger] ++ asr
-          w  = eWeight e * (product . map weight $ as)
-          p  = w * weight oa
+      oa  <- outsideAssignments c (eHead e)
+      let as  = asl ++ [trigger] ++ asr
+          w   = eWeight e * (product . map weight $ as)
+          p   = w * weight oa
           bps = map rank as
       unless (assert as e) (error "error in buildRuleL") --TODO: remove
       return $! (p, Ranked (K (eHead e) e 0 bps) w)
@@ -363,11 +364,15 @@ chartInsert
   => Assignment v l w i 
   -> KAStar p v l w i (Maybe (Assignment v l w i))
 chartInsert assgmt = do
-  b <- chartContains assgmt
-  if b then return Nothing
-       else do
-         incItemsInserted
-         Just `liftM` insert assgmt
+  enough <- case assgmt of
+    (Ranked (K v _ _ _) _) -> liftM2 (>) (length `liftM` rankedM v) numDeriv
+    _                      -> return False
+  contained <- chartContains assgmt
+  if enough || contained 
+    then return Nothing
+    else do
+      incItemsInserted
+      Just `liftM` insert assgmt
   where
     insert a = do
       c <- chart
@@ -377,10 +382,8 @@ chartInsert assgmt = do
     update c a@(Outside _ _) Nothing   = CE [] [a] []
     update c a@(Ranked _ _)  Nothing   = CE [] [] [rk c a]
     update c a@(Inside _ _)  (Just ce) = ce{ceInside = [a]} 
-    --maybe exception when already non-nil
     update c a@(Outside _ _) (Just ce) = ce{ceOutside = [a]}
     update c a@(Ranked _ _)  (Just ce) = ce{ceRanked = rk c a:ceRanked ce}
-    -- the above is ugly, perhaps it can be simplified with monadic mojo
     rk c (Ranked (K v e r bps) w) = 
       Ranked (K v e (succ . length $ rankedAssignments c v) bps) w
     rk _ x = x
@@ -411,7 +414,7 @@ agendaInsert as = do
 -- | @process@ pops assignments until
 --
 --   (1) there are none left or we have found the necessary number of
---       derivations of @g@, returning @Nothing@ OR
+--       derivations of @g@, returning @Nothing@ /or/
 --
 --   (2) the popped assignment is not contained in the chart. In this case,
 --       it is inserted and returned with its according rank.
@@ -470,9 +473,9 @@ kastar
 kastar agenda graph g h k 
   = --trace ("Inserted " ++ (show . stItemsInserted $ info) 
     --  ++ " assignments, generated " ++ (show . stItemsGenerated $ info) 
-    --  ++ "assignments.\n")
+    --  ++ "assignments.\n") $
     reverse $ mapMaybe (traceBackpointers res) $ rankedAssignments res g
-  where (res, info) = runKAStar kst agenda k graph g h ins others
+  where (res, info)   = runKAStar kst agenda k graph g h ins others
         (ins, others) = edgesForward graph
         kst = do
           agendaInsert =<< initialAssignments
@@ -480,7 +483,7 @@ kastar agenda graph g h k
         loop = do
           m <- process  -- try to pop new assignment
           case m of
-            Nothing -> chart  -- we're done, return the chart
+            Nothing        -> chart  -- we're done, return the chart
             (Just trigger) -> (agendaInsert =<< newAssignments trigger) 
                               >> loop -- generate new assignments and continue
 
@@ -699,6 +702,8 @@ test2 = hypergraph [ hyperedge 'a' ""   "alpha"   1.0 ()
                    , hyperedge 'g' "ab" "sigma"   0.8 ()
                    , hyperedge 'a' "g"  "delta"   0.9 ()
                    , hyperedge 'b' "g"  "epsilon" 0.8 ()
+                   , hyperedge 'g' "g"  "loop"    1.0 ()
+                   , hyperedge 'x' "g"  "horst"   0.5 ()
                    ]
 
 
@@ -720,7 +725,7 @@ t' graph goal k = do
 t1 = t test1 'g' heur1 20
 
 
-t2 = t test2 'g' heur1 400
+t2 = t test2 'x' heur1 20
 
 
 t3 = kbest test2 'g' heur1 400
@@ -752,8 +757,8 @@ diff graph goal heur k = filter neq $  zip mine others
 test :: IO ()
 --test = comparison (Test.testHypergraphs !! 1) 'S' heur1 10 >>= putStrLn . show
 --test = t3 `seq` return ()
-test = t (Test.testHypergraphs !! 0) 'A' heur1 10
---test = mapM_ (uncurry go) (zip Test.testHypergraphs "AStt")
+--test = t (Test.testHypergraphs !! 0) 'A' heur1 10
+test = mapM_ (uncurry go) (tail $ zip Test.testHypergraphs "AStt")
   where
     go graph start = mapM_ (uncurry pr) $ diff graph start heur1 50
     pr l r = do
