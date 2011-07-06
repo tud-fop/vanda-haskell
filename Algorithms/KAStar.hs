@@ -727,8 +727,11 @@ t1 = t test1 'g' heur1 20
 
 t2 = t test2 'x' heur1 20
 
+t3 :: [(T.Tree (Hyperedge Char Char Double ()), Double)]
+t3 = kbest (Test.testHypergraphs !! 1) 'S' heur1 1000
 
-t3 = kbest test2 'g' heur1 400
+t3' :: [(T.Tree (Hyperedge Char Char Double ()), Double)]
+t3' = nBest' 1000 'S' (Test.testHypergraphs !! 1)
 
 t4 = t (Test.testHypergraphs !! 1) 'S' heur1 10
 
@@ -756,9 +759,9 @@ diff graph goal heur k = filter neq $  zip mine others
 
 test :: IO ()
 --test = comparison (Test.testHypergraphs !! 1) 'S' heur1 10 >>= putStrLn . show
---test = t3 `seq` return ()
---test = t (Test.testHypergraphs !! 0) 'A' heur1 10
-test = mapM_ (uncurry go) (tail $ zip Test.testHypergraphs "AStt")
+test = t3 `deepseq` return ()
+--test = t (Test.testHypergraphs !! 1) 'S' heur1 500
+--test = mapM_ (uncurry go) (tail $ zip Test.testHypergraphs "AStt")
   where
     go graph start = mapM_ (uncurry pr) $ diff graph start heur1 50
     pr l r = do
