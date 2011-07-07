@@ -399,9 +399,12 @@ chartInsert assgmt = do
 chartContains 
   :: (Ord v, Eq l, Eq w, Eq i) 
   => Assignment v l w i -> KAStar p v l w i Bool
-chartContains (Inside (I v) _) = (not . null) `liftM` insideM v
-chartContains (Outside (O v) _) = (not . null) `liftM` outsideM v
-chartContains r@(Ranked (K v _ _ _) _) = (r `elem`) `liftM` rankedM v
+chartContains (Inside (I v) _) 
+  = (not . null . flip insideAssignments v) `liftM` chart
+chartContains (Outside (O v) _) 
+  = (not . null . flip outsideAssignments v) `liftM` chart
+chartContains r@(Ranked (K v _ _ _) _) 
+  = (r `elem`) `liftM` (flip rankedAssignments v `liftM` chart)
 
 
 -- | @agendaInsert as@ inserts the list @as@ of prioritized assignments
@@ -673,21 +676,6 @@ rankedWithBackpointer :: (Ord v, Ord l, Ord w, Ord i)
                       -> Int -> Int -> [Assignment v l w i]
 rankedWithBackpointer c e bp val = M.findWithDefault [] (e, bp, val) (cBPMap c)
 
--- | @insideAssignments@ lifted into KAStar monad
-insideM :: Ord v => v -> KAStar p v l w i [Assignment v l w i]
-insideM v = flip insideAssignments v `liftM` chart
-
-
--- | @outsideAssignments@ lifted into KAStar monad
-outsideM :: Ord v => v -> KAStar p v l w i [Assignment v l w i]
-outsideM v = flip outsideAssignments v `liftM` chart
-
-
--- | @rankedAssignments@ lifted into KAStar monad
-rankedM :: Ord v => v -> KAStar p v l w i [Assignment v l w i]
-rankedM v = flip rankedAssignments v `liftM` chart
-
-
 ------------------------------------------------------------------------------
 -- Helper functions ----------------------------------------------------------
 ------------------------------------------------------------------------------
@@ -789,10 +777,10 @@ test :: IO ()
 --test = comparison (Test.testHypergraphs !! 1) 'S' heur1 10 >>= putStrLn . show
 --test = t3 `deepseq` return ()
 --test = t (Test.testHypergraphs !! 1) 'S' heur1 500
-{-test = (zipWith (\graph goal -> kbest graph goal (heur1::Char->Double) 200) 
+test = (zipWith (\graph goal -> kbest graph goal (heur1::Char->Double) 1000) 
                 Test.testHypergraphs "AStt")
-       `deepseq` return ()-}
-test = mapM_ (uncurry go) (tail $ zip Test.testHypergraphs "AStt")
+       `deepseq` return ()
+--test = mapM_ (uncurry go) (tail $ zip Test.testHypergraphs "AStt")
   where
     go graph start = mapM_ (uncurry pr) $ diff graph start heur1 50
     pr l r = do
