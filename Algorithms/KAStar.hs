@@ -27,6 +27,8 @@ import Debug.Trace
 import Data.Hypergraph
 import qualified TestData.TestHypergraph as Test
 
+import Control.DeepSeq
+
 ------------------------------------------------------------------------------
 -- Deduction rules -----------------------------------------------------------
 ------------------------------------------------------------------------------
@@ -59,7 +61,7 @@ initialAssignments = do
 -- | Create those new prioritized assignments to be put on the agenda that 
 --   are using the last popped assignment, the /trigger/.
 newAssignments 
-  :: (Num w, Ord v, Eq l, Eq i)
+  :: (Num w, Ord v, Ord l, Ord w, Ord i)
   => Assignment v l w i 
   -> KAStar p v l w i [(w, Assignment v l w i)]
 newAssignments trigger = do 
@@ -184,7 +186,7 @@ buildRuleO _ _ _ = []
 --   @v@. We find all assignments with @(r-1)@-backpointers to @v@ and
 --   combine them with the trigger.
 buildRuleL 
-  :: (Num w, Ord v, Eq l, Eq i)
+  :: (Num w, Ord v, Ord l, Ord w, Ord i)
   => Chart v l w i 
   -> Assignment v l w i 
   -> M.Map v [(Hyperedge v l w i, Int)]
@@ -193,8 +195,11 @@ buildRuleL c trigger@(Ranked _ _) inEdges
   = concatMap rule (M.findWithDefault [] (node trigger) inEdges)
   where 
     rule (e, s) = do
-      Ranked (K _ e' _ bps) _ <- rankedAssignments c (eHead e)
-      guard $ e' == e && bps !! s == rank trigger - 1
+      Ranked (K _ e' _ bps) _ <- rankedWithBackpointer c e (s+1) (rank trigger - 1)
+      unless (e' == e && bps !! s == rank trigger - 1) $
+        error "the goggles they do nuthin"
+      --Ranked (K _ e' _ bps) _ <- rankedAssignments c (eHead e)
+      --guard (e' == e && bps !! s == rank trigger - 1) 
       asl <- take s `liftM` zipWithM (nthRankedAssignment c) (eTail e) bps
       asr <- drop (s+1) `liftM` zipWithM (nthRankedAssignment c) (eTail e) bps
       oa  <- outsideAssignments c (eHead e)
@@ -360,7 +365,7 @@ incItemsGenerated n = do
 --   Ranked items are annotated with their corresponding rank upon insertion.
 --   The number of inserted assignments is updated accordingly.
 chartInsert 
-  :: (Ord v, Eq l, Eq w, Eq i) 
+  :: (Ord v, Ord l, Ord w, Ord i) 
   => Assignment v l w i 
   -> KAStar p v l w i (Maybe (Assignment v l w i))
 chartInsert assgmt = do
@@ -372,9 +377,17 @@ chartInsert assgmt = do
     then return Nothing
     else do
       incItemsInserted
-      Just `liftM` insert assgmt
+      bpInsert assgmt
+      Just `liftM` eInsert assgmt
   where
-    insert a = do
+    bpInsert a@(Ranked (K _ e _ bps) _) = do
+      c <- chart
+      let bc' = foldl (\m k -> M.insertWith' (++) k [a] m) (cBPMap c) 
+                [(e, bp, val) | bp <- [1 .. length bps]
+                              , let val = bps !! (bp - 1)]
+      putChart c{cBPMap = bc'}
+    bpInsert _ = return ()
+    eInsert a = do
       c <- chart
       putChart c{cEdgeMap = M.alter (Just . update c a) (node a) (cEdgeMap c)}
       return $ rk c a
@@ -419,7 +432,7 @@ agendaInsert as = do
 --   (2) the popped assignment is not contained in the chart. In this case,
 --       it is inserted and returned with its according rank.
 process 
-  :: (Ord v, Ord w, Eq i, Eq l, H.HeapItem p (w, Assignment v l w i)) 
+  :: (Ord v, Ord w, Ord i, Ord l, H.HeapItem p (w, Assignment v l w i)) 
   => KAStar p v l w i (Maybe (Assignment v l w i))
 process = do
   d <- done
@@ -440,7 +453,7 @@ process = do
 -- | @kbest graph g h k@ finds the @k@ best derivations of the goal 
 -- node @g@ in @graph@, applying the heuristic function @h@.
 kbest 
-  :: (Num w, Ord v, Ord w, Eq l, Eq i)
+  :: (Num w, Ord v, Ord w, Ord l, Ord i)
   => Hypergraph v l w i
   -> v
   -> (v -> w)
@@ -451,7 +464,7 @@ kbest = kastar (H.empty :: H.MaxPrioHeap w (Assignment v l w i))
 -- | @kworst graph g h k@ finds the @k@ worst derivations of the goal 
 -- node @g@ in @graph@, applying the heuristic function @h@.
 kworst
-  :: (Num w, Ord v, Ord w, Eq l, Eq i)
+  :: (Num w, Ord v, Ord w, Ord l, Ord i)
   => Hypergraph v l w i
   -> v
   -> (v -> w)
@@ -463,7 +476,7 @@ kworst = kastar (H.empty :: H.MinPrioHeap w (Assignment v l w i))
 -- node @g@ in @graph@, applying the heuristic function @h@. "Best" thereby
 -- means best with respect to the order induced by the @agenda@.
 kastar
-  :: (Num w, Ord v, Ord w, Eq l, Eq i, H.HeapItem p (w, Assignment v l w i))
+  :: (Num w, Ord v, Ord w, Ord l, Ord i, H.HeapItem p (w, Assignment v l w i))
   => Agenda p v l w i
   -> Hypergraph v l w i
   -> v
@@ -598,24 +611,25 @@ backpointers _ = error "Tried to compute rank of non-ranked assignment "
 
 -- | Hyperedges must have an order to work as keys for 'Data.Map'.
 instance (Ord v, Ord l, Ord w, Ord i) => Ord (Hyperedge v l w i) where
-  e <= e'= let (h, h') = (eHead e, eHead e')
-               (t, t') = (eTail e, eTail e')
+  e <= e'= let (h, h') = (eHead e,  eHead e')
+               (t, t') = (eTail e,  eTail e')
                (l, l') = (eLabel e, eLabel e')
-               (w, w') = (eLabel e, eLabel e')
-               (i, i') = (eId e, eId e')
+               (w, w') = (eWeight e, eWeight e')
+               (i, i') = (eId e,    eId e')
            in    h < h' 
               || h == h' && t < t' 
               || h == h' && t == t' && l < l'
               || h == h' && t == t' && l == l' && w < w'
               || h == h' && t == t' && l == l' && w == w'&& i <= i'
 
+
 -- | Chart of already explored items with their weights.
 --   Implemented as a map assigning nodes to their corresponding inside,
 --   outside, etc., items. Lists are sorted by /increasing/ weights.
 data Chart v l w i = C { cEdgeMap :: M.Map v (EdgeMapEntry v l w i)
-                          , cBPMap   :: M.Map (Hyperedge v l w i, Int, Int) 
-                                              [Assignment v l w i] -- xth bp == y
-                          }
+                       , cBPMap   :: M.Map (Hyperedge v l w i, Int, Int) 
+                                           [Assignment v l w i] -- xth bp == y
+                       }
 
 
 -- | Entry of the chart, with inside, outside and ranked assignments for the
@@ -755,7 +769,7 @@ t3' = nBest' 1000 'S' (Test.testHypergraphs !! 1)
 t4 = t (Test.testHypergraphs !! 1) 'S' heur1 10
 
 comparison 
-  :: (Fractional w, Ord v, Ord w, Eq i, Eq l, Show i, Show l, Show v) 
+  :: (Fractional w, Ord v, Ord w, Ord i, Ord l, Show i, Show l, Show v) 
   => Hypergraph v l w i -> v -> (v -> w) -> Int -> IO Bool
 comparison graph goal heur k = and `liftM` zipWithM put mine others
   where put w1 w2 = do 
@@ -765,7 +779,7 @@ comparison graph goal heur k = and `liftM` zipWithM put mine others
         others = nBest k goal graph
 
 diff
-  :: (Fractional w, Ord v, Ord w, Eq i, Eq l, Show i, Show l, Show v) 
+  :: (Fractional w, Ord v, Ord w, Ord i, Ord l, Show i, Show l, Show v) 
   => Hypergraph v l w i 
   -> v 
   -> (v -> w) 
@@ -780,7 +794,9 @@ test :: IO ()
 --test = comparison (Test.testHypergraphs !! 1) 'S' heur1 10 >>= putStrLn . show
 --test = t3 `deepseq` return ()
 --test = t (Test.testHypergraphs !! 1) 'S' heur1 500
-test = mapM_ (uncurry go) (tail $ zip Test.testHypergraphs "AStt")
+test = (zipWith (\graph goal -> kbest graph goal (heur1::Char->Double) 1000) Test.testHypergraphs "AStt")
+       `deepseq` return ()
+--test = mapM_ (uncurry go) (tail $ zip Test.testHypergraphs "AStt")
   where
     go graph start = mapM_ (uncurry pr) $ diff graph start heur1 50
     pr l r = do
