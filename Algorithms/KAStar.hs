@@ -284,7 +284,7 @@ runKAStar :: KAStar p v l w i a
           -> (a, KAState p v l w i)
 runKAStar kst agenda k graph goal heuristic ins others =
     let cfg   = KAConfig k graph goal heuristic ins others
-        state = KAState M.empty agenda 0 0
+        state = KAState (C M.empty M.empty) agenda 0 0
     in runState (runReaderT (runK kst) cfg) state
 
 
@@ -376,14 +376,14 @@ chartInsert assgmt = do
   where
     insert a = do
       c <- chart
-      putChart $ M.alter (Just . update c a) (node a) c
+      putChart c{cEdgeMap = M.alter (Just . update c a) (node a) (cEdgeMap c)}
       return $ rk c a
-    update c a@(Inside _ _)  Nothing   = CE [a] [] []
-    update c a@(Outside _ _) Nothing   = CE [] [a] []
-    update c a@(Ranked _ _)  Nothing   = CE [] [] [rk c a]
-    update c a@(Inside _ _)  (Just ce) = ce{ceInside = [a]} 
-    update c a@(Outside _ _) (Just ce) = ce{ceOutside = [a]}
-    update c a@(Ranked _ _)  (Just ce) = ce{ceRanked = rk c a:ceRanked ce}
+    update c a@(Inside _ _)  Nothing   = EM [a] [] []
+    update c a@(Outside _ _) Nothing   = EM [] [a] []
+    update c a@(Ranked _ _)  Nothing   = EM [] [] [rk c a]
+    update c a@(Inside _ _)  (Just ce) = ce{emInside = [a]} 
+    update c a@(Outside _ _) (Just ce) = ce{emOutside = [a]}
+    update c a@(Ranked _ _)  (Just ce) = ce{emRanked = rk c a:emRanked ce}
     rk c (Ranked (K v e r bps) w) = 
       Ranked (K v e (succ . length $ rankedAssignments c v) bps) w
     rk _ x = x
@@ -500,9 +500,7 @@ traceBackpointers c a@(Ranked _  w) = do
   t <- helper a
   return (t, w)
   where helper (Ranked (K _ e _ bps) _) = T.Node e `fmap` mapM
-          (\(rank, idx) 
-             -> let precs = rankedAssignments c (eTail e !! idx)
-                in helper (precs !! (length precs - rank)))
+          (\(rank, idx) -> helper . head $ nthRankedAssignment c (eTail e !! idx) rank)
           (zip bps [0..])
         helper _ = Nothing
 traceBackpointers _ _ = Nothing
@@ -598,45 +596,61 @@ backpointers :: Assignment v l w i -> [Int]
 backpointers (Ranked (K _ _ _ bps) _) = bps
 backpointers _ = error "Tried to compute rank of non-ranked assignment "
 
+-- | Hyperedges must have an order to work as keys for 'Data.Map'.
+instance (Ord v, Ord l, Ord w, Ord i) => Ord (Hyperedge v l w i) where
+  e <= e'= let (h, h') = (eHead e, eHead e')
+               (t, t') = (eTail e, eTail e')
+               (l, l') = (eLabel e, eLabel e')
+               (w, w') = (eLabel e, eLabel e')
+               (i, i') = (eId e, eId e')
+           in    h < h' 
+              || h == h' && t < t' 
+              || h == h' && t == t' && l < l'
+              || h == h' && t == t' && l == l' && w < w'
+              || h == h' && t == t' && l == l' && w == w'&& i <= i'
 
 -- | Chart of already explored items with their weights.
 --   Implemented as a map assigning nodes to their corresponding inside,
 --   outside, etc., items. Lists are sorted by /increasing/ weights.
-type Chart v l w i = M.Map v (ChartEntry v l w i)
+data Chart v l w i = C { cEdgeMap :: M.Map v (EdgeMapEntry v l w i)
+                          , cBPMap   :: M.Map (Hyperedge v l w i, Int, Int) 
+                                              [Assignment v l w i] -- xth bp == y
+                          }
 
 
 -- | Entry of the chart, with inside, outside and ranked assignments for the
 --   node.
-data ChartEntry v l w i = CE { ceInside  :: [Assignment v l w i]
-                             , ceOutside :: [Assignment v l w i]
-                             , ceRanked  :: [Assignment v l w i]
-                             } deriving Show
+data EdgeMapEntry v l w i = EM { emInside  :: [Assignment v l w i]
+                               , emOutside :: [Assignment v l w i]
+                               , emRanked  :: [Assignment v l w i]
+                               } deriving Show
 
 
 -- | @insideAssignments c v@ returns inside assignments for the node @v@ 
 --   in chart @c@
 insideAssignments :: Ord v => Chart v l w i ->  v -> [Assignment v l w i]
-insideAssignments c v = maybe [] ceInside $ M.lookup v c
+insideAssignments c v = maybe [] emInside . M.lookup v $ cEdgeMap c
 
 
 -- | @outsideAssignments c v@ returns outside assignments for the node @v@ 
 --   in chart @c@
 outsideAssignments :: Ord v => Chart v l w i -> v -> [Assignment v l w i]
-outsideAssignments c v = maybe [] ceOutside $ M.lookup v c
+outsideAssignments c v = maybe [] emOutside . M.lookup v $ cEdgeMap c
 
 
 -- | @rankedAssignments c v@ returns ranked assignments for the node @v@ 
 --   in chart @c@
 rankedAssignments :: Ord v => Chart v l w i -> v -> [Assignment v l w i]
-rankedAssignments c v = maybe [] ceRanked $ M.lookup v c
+rankedAssignments c v = maybe [] emRanked . M.lookup v $ cEdgeMap c
 
 
 -- | @nthRankedAssignment c v n@ gets the @n@-ranked assignment for 
 --   the node @v@ from chart @c@, returned in a singleton list.
 --   If there is no such assignment, the function returns @[]@.
 --   Useful for code in the list monad.
-nthRankedAssignment 
-  :: Ord v => Chart v l w i -> v -> Int -> [Assignment v l w i]
+nthRankedAssignment :: Ord v 
+                    => Chart v l w i -> v 
+                    -> Int -> [Assignment v l w i]
 nthRankedAssignment c v n = as !!! (l - n)
   where 
     as           = rankedAssignments c v
@@ -644,6 +658,11 @@ nthRankedAssignment c v n = as !!! (l - n)
     []     !!! _ = []
     (x:_)  !!! 0 = [x]
     (_:xs) !!! n = xs !!! (n-1)
+
+rankedWithBackpointer :: (Ord v, Ord l, Ord w, Ord i) 
+                      => Chart v l w i -> (Hyperedge v l w i) 
+                      -> Int -> Int -> [Assignment v l w i]
+rankedWithBackpointer c e bp val = M.findWithDefault [] (e, bp, val) (cBPMap c)
 
 -- | @insideAssignments@ lifted into KAStar monad
 insideM :: Ord v => v -> KAStar p v l w i [Assignment v l w i]
@@ -759,9 +778,9 @@ diff graph goal heur k = filter neq $  zip mine others
 
 test :: IO ()
 --test = comparison (Test.testHypergraphs !! 1) 'S' heur1 10 >>= putStrLn . show
-test = t3 `deepseq` return ()
+--test = t3 `deepseq` return ()
 --test = t (Test.testHypergraphs !! 1) 'S' heur1 500
---test = mapM_ (uncurry go) (tail $ zip Test.testHypergraphs "AStt")
+test = mapM_ (uncurry go) (tail $ zip Test.testHypergraphs "AStt")
   where
     go graph start = mapM_ (uncurry pr) $ diff graph start heur1 50
     pr l r = do
