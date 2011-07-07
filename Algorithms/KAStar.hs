@@ -21,6 +21,9 @@ import qualified Data.Map as M
 import qualified Data.Tree as T
 import qualified Data.Heap as H 
 import qualified Data.List as L
+import qualified Data.Sequence as S
+import Data.Sequence ((<|), (|>))
+import Data.Foldable (toList)
 import Data.Maybe (fromJust, mapMaybe)
 import Debug.Trace
 
@@ -48,16 +51,6 @@ initialAssignments = do
                     in (p, Inside (I . eHead $ e) w)
 
 
--- The specialize pragma makes GHC additionally compile instantiated, 
--- therefore maybe faster versions of the supplied function
--- {-# SPECIALIZE newAssignments 
---   :: Assignment Char Char Double () 
---   -> KAStar Char Char Double () 
---      [(Double, Assignment Char Char Double ())] #-}
--- {-# SPECIALIZE newAssignments
---  :: Assignment Char String Double () 
---  -> KAStar Char String Double () 
---     [(Double, Assignment Char String Double ())] #-}
 -- | Create those new prioritized assignments to be put on the agenda that 
 --   are using the last popped assignment, the /trigger/.
 newAssignments 
@@ -197,9 +190,7 @@ buildRuleL c trigger@(Ranked _ _) inEdges
     rule (e, s) = do
       Ranked (K _ e' _ bps) _ <- rankedWithBackpointer c e (s+1) (rank trigger - 1)
       unless (e' == e && bps !! s == rank trigger - 1) $
-        error "the goggles they do nuthin"
-      --Ranked (K _ e' _ bps) _ <- rankedAssignments c (eHead e)
-      --guard (e' == e && bps !! s == rank trigger - 1) 
+        error "error with rankedWithBackpointer in buildRuleL" --TODO: remove
       asl <- take s `liftM` zipWithM (nthRankedAssignment c) (eTail e) bps
       asr <- drop (s+1) `liftM` zipWithM (nthRankedAssignment c) (eTail e) bps
       oa  <- outsideAssignments c (eHead e)
@@ -370,7 +361,7 @@ chartInsert
   -> KAStar p v l w i (Maybe (Assignment v l w i))
 chartInsert assgmt = do
   enough <- case assgmt of
-    (Ranked (K v _ _ _) _) -> liftM2 (>) (length `liftM` rankedM v) numDeriv
+    (Ranked (K v _ _ _) _) -> liftM2 (>) ((flip numRanked v) `liftM` chart) numDeriv
     _                      -> return False
   contained <- chartContains assgmt
   if enough || contained 
@@ -382,7 +373,7 @@ chartInsert assgmt = do
   where
     bpInsert a@(Ranked (K _ e _ bps) _) = do
       c <- chart
-      let bc' = foldl (\m k -> M.insertWith' (++) k [a] m) (cBPMap c) 
+      let bc' = foldl (\m k -> M.insertWith' (++) k [rk c a] m) (cBPMap c) 
                 [(e, bp, val) | bp <- [1 .. length bps]
                               , let val = bps !! (bp - 1)]
       putChart c{cBPMap = bc'}
@@ -391,14 +382,14 @@ chartInsert assgmt = do
       c <- chart
       putChart c{cEdgeMap = M.alter (Just . update c a) (node a) (cEdgeMap c)}
       return $ rk c a
-    update c a@(Inside _ _)  Nothing   = EM [a] [] []
-    update c a@(Outside _ _) Nothing   = EM [] [a] []
-    update c a@(Ranked _ _)  Nothing   = EM [] [] [rk c a]
+    update c a@(Inside _ _)  Nothing   = EM [a] [] S.empty
+    update c a@(Outside _ _) Nothing   = EM [] [a] S.empty
+    update c a@(Ranked _ _)  Nothing   = EM [] []  (S.singleton $ rk c a)
     update c a@(Inside _ _)  (Just ce) = ce{emInside = [a]} 
     update c a@(Outside _ _) (Just ce) = ce{emOutside = [a]}
-    update c a@(Ranked _ _)  (Just ce) = ce{emRanked = rk c a:emRanked ce}
+    update c a@(Ranked _ _)  (Just ce) = ce{emRanked = rk c a <| emRanked ce}
     rk c (Ranked (K v e r bps) w) = 
-      Ranked (K v e (succ . length $ rankedAssignments c v) bps) w
+      Ranked (K v e (succ $ numRanked c v) bps) w
     rk _ x = x
 
 
@@ -446,7 +437,7 @@ process = do
            _       -> return trigger
   where done = do
           e <- H.isEmpty `liftM` agenda
-          l <- length `liftM` (rankedM =<< goal)
+          l <- liftM2 numRanked chart goal
           k <- numDeriv
           return $ e || l >= k
 
@@ -604,7 +595,7 @@ rank a = error "Tried to compute rank of non-ranked assignment"
 -- Or should I do this with maybe? I will have to signal error somewhere...
 
 -- | Returns backpointers of an asssignment
---   /Nota bene:/ raises error if assignment doesn't contain a rank!
+--   /Nota bene:/ raises error if assignment doesn't contain backpointers!
 backpointers :: Assignment v l w i -> [Int]
 backpointers (Ranked (K _ _ _ bps) _) = bps
 backpointers _ = error "Tried to compute rank of non-ranked assignment "
@@ -624,11 +615,13 @@ instance (Ord v, Ord l, Ord w, Ord i) => Ord (Hyperedge v l w i) where
 
 
 -- | Chart of already explored items with their weights.
---   Implemented as a map assigning nodes to their corresponding inside,
+--   'cEdgeMap' is a map assigning nodes to their corresponding inside,
 --   outside, etc., items. Lists are sorted by /increasing/ weights.
+--   'cBPMap' holds for each key @(e, i, v)@ those ranked assignments with
+--   edge @e@ whose @i@-th backpointer has rank @v@.
 data Chart v l w i = C { cEdgeMap :: M.Map v (EdgeMapEntry v l w i)
                        , cBPMap   :: M.Map (Hyperedge v l w i, Int, Int) 
-                                           [Assignment v l w i] -- xth bp == y
+                                           [Assignment v l w i]
                        }
 
 
@@ -636,9 +629,8 @@ data Chart v l w i = C { cEdgeMap :: M.Map v (EdgeMapEntry v l w i)
 --   node.
 data EdgeMapEntry v l w i = EM { emInside  :: [Assignment v l w i]
                                , emOutside :: [Assignment v l w i]
-                               , emRanked  :: [Assignment v l w i]
+                               , emRanked  :: S.Seq (Assignment v l w i)
                                } deriving Show
-
 
 -- | @insideAssignments c v@ returns inside assignments for the node @v@ 
 --   in chart @c@
@@ -655,23 +647,26 @@ outsideAssignments c v = maybe [] emOutside . M.lookup v $ cEdgeMap c
 -- | @rankedAssignments c v@ returns ranked assignments for the node @v@ 
 --   in chart @c@
 rankedAssignments :: Ord v => Chart v l w i -> v -> [Assignment v l w i]
-rankedAssignments c v = maybe [] emRanked . M.lookup v $ cEdgeMap c
+rankedAssignments c v = maybe [] (toList . emRanked) . M.lookup v $ cEdgeMap c
+
+-- | @numRanked c v@ returns the number of assignments for node @v@ in 
+--   chart @c@
+numRanked :: Ord v => Chart v l w i -> v -> Int
+numRanked c v = maybe 0 (S.length . emRanked) . M.lookup v $ cEdgeMap c
 
 
 -- | @nthRankedAssignment c v n@ gets the @n@-ranked assignment for 
 --   the node @v@ from chart @c@, returned in a singleton list.
 --   If there is no such assignment, the function returns @[]@.
---   Useful for code in the list monad.
+--   This is useful for code in the list monad.
 nthRankedAssignment :: Ord v 
                     => Chart v l w i -> v 
                     -> Int -> [Assignment v l w i]
-nthRankedAssignment c v n = as !!! (l - n)
-  where 
-    as           = rankedAssignments c v
-    l            = length as
-    []     !!! _ = []
-    (x:_)  !!! 0 = [x]
-    (_:xs) !!! n = xs !!! (n-1)
+nthRankedAssignment c v n = if n >= 1 && n <= S.length s
+                            then [s `S.index` (S.length s - n)]
+                            else []
+  where s = maybe S.empty emRanked . M.lookup v $ cEdgeMap c
+
 
 rankedWithBackpointer :: (Ord v, Ord l, Ord w, Ord i) 
                       => Chart v l w i -> (Hyperedge v l w i) 
@@ -794,9 +789,10 @@ test :: IO ()
 --test = comparison (Test.testHypergraphs !! 1) 'S' heur1 10 >>= putStrLn . show
 --test = t3 `deepseq` return ()
 --test = t (Test.testHypergraphs !! 1) 'S' heur1 500
-test = (zipWith (\graph goal -> kbest graph goal (heur1::Char->Double) 1000) Test.testHypergraphs "AStt")
-       `deepseq` return ()
---test = mapM_ (uncurry go) (tail $ zip Test.testHypergraphs "AStt")
+{-test = (zipWith (\graph goal -> kbest graph goal (heur1::Char->Double) 200) 
+                Test.testHypergraphs "AStt")
+       `deepseq` return ()-}
+test = mapM_ (uncurry go) (tail $ zip Test.testHypergraphs "AStt")
   where
     go graph start = mapM_ (uncurry pr) $ diff graph start heur1 50
     pr l r = do
