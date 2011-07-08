@@ -85,7 +85,10 @@ inside' c w g
     go m
       = {-trace "Ding!" $-}
         let m' = insideStep w m
-        in if checkMapsOn fst c m m'
+            seqInsides ((x, _) : xs) y = x `seq` seqInsides xs y
+            seqInsides [] y = y
+        in seqInsides (M.elems m') $
+        if checkMapsOn fst c m m'
         then m'
         else go m'
 
