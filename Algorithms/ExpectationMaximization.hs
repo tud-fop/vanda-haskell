@@ -42,7 +42,7 @@ iter = iter' 0 where
 
 -- | Execute the forest-EM algorithm, i.e., iterate the EM step.
 forestEM
-  :: (Converging w, Floating w, Ord i, Ord v)
+  :: (Converging w, RealFloat w, Ord i, Ord v)
   => [[i]]                -- ^ partition of the ids for normalization
   -> [(v, Hypergraph v l w j, w)]
                           -- ^ a list of training example derivation forests
@@ -58,7 +58,7 @@ forestEM part gs exId p i
 -- | Compute the list of EM estimates for a given corpus.
 -- Use 'take' or '!!' to access a prefix or an element, respectively.
 forestEMlist
-  :: (Converging w, Floating w, Ord i, Ord v)
+  :: (Converging w, RealFloat w, Ord i, Ord v)
   => [[i]]                -- ^ partition of the ids for normalization
   -> [(v, Hypergraph v l w j, w)]
                           -- ^ a list of training example derivation forests
@@ -73,18 +73,24 @@ forestEMlist part gs exId i
 -- relative-frequency estimation, only that the corpus is partitioned,
 -- that is, it actually represents a bunch of corpora.
 normalize
-  :: (Floating w, Ord i)
+  :: (RealFloat w, Ord i)
   => [[i]]
   -> M.Map i w
   -> M.Map i w
-normalize part m = M.fromList (concatMap handleClass part) where
-  handleClass c = zip c (map ((1/(sum c1))*) c1) where
-    c1 = map (\i -> maybe 0 id $ M.lookup i m) c
+normalize part m
+  = M.fromList (concatMap handleClass part)
+  where
+    handleClass is
+      | isInfinite factor = zip is ws
+      | otherwise         = zip is (map (factor *) ws)
+      where
+        ws = map (\ i -> M.findWithDefault 0 i m) is
+        factor = recip (sum ws)
 
 -- | Do an EM-step. The arguments are as for 'forestEM', only without the
 -- stopping condition.
 forestEMstep
-  :: (Converging w, Floating w, Ord i, Ord v)
+  :: (Converging w, RealFloat w, Ord i, Ord v)
   => [[i]]                -- ^ partition of the ids for normalization
   -> [(v, Hypergraph v l w j, w)]
                           -- ^ a list of training-example derivation forests

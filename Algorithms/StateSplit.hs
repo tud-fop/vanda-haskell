@@ -45,7 +45,7 @@ import qualified Random as R
 train
   :: ( Ord v
      , Ord l
-     , Converging w, Floating w, Ord w, R.Random w
+     , Converging w, RealFloat w, R.Random w
      , Num i, Ord i
      , Num n, Ord n
      , R.RandomGen gen
@@ -70,7 +70,7 @@ train maxIt ts target g gen = go maxIt $ train' ts target g gen
 train'
   :: ( Ord v
      , Ord l
-     , Converging w, Floating w, Ord w, R.Random w
+     , Converging w, RealFloat w, R.Random w
      , Num i, Ord i
      , Num n, Ord n
      , R.RandomGen gen
@@ -100,7 +100,7 @@ train' ts target g0 gen0
 splitMergeStep
   :: ( Ord v
      , Ord l
-     , Converging w, Floating w, Ord w, R.Random w
+     , Converging w, RealFloat w, R.Random w
      , Num i, Ord i
      , Num n, Ord n
      , R.RandomGen gen
