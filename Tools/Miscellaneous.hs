@@ -67,7 +67,7 @@ mapRandom' :: (g -> (r, g)) -> (a -> r -> b) -> [a] -> g -> ([b], g)
 mapRandom' random f (x:xs) g
   = let (r , g' ) = random g
         (ys, g'') = mapRandom' random f xs g'
-    in  (f x r : ys, g'')
+    in  r `seq` (f x r : ys, g'')
 mapRandom' _ _ [] g
   = ([], g)
 
