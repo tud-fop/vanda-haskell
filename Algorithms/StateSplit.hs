@@ -46,16 +46,15 @@ train
   :: ( Ord v
      , Ord l
      , Converging w, RealFloat w, R.Random w
-     , Num i, Ord i
      , Num n, Ord n
      , R.RandomGen gen
      )
   => Int                  -- ^ maximum number of iterations
   -> [Tree l]             -- ^ training 'T.Tree's
   -> v                    -- ^ target vertex
-  -> Hypergraph v l w i'  -- ^ initial 'Hypergraph'
+  -> Hypergraph v l w i   -- ^ initial 'Hypergraph'
   -> gen                  -- ^ random number generator
-  -> (Hypergraph (v, n) l w [i], gen)
+  -> (Hypergraph (v, n) l w [Int], gen)
 train maxIt ts target g gen = go maxIt $ train' ts target g gen
   where
     go 0 (x:_)  = x
@@ -71,15 +70,14 @@ train'
   :: ( Ord v
      , Ord l
      , Converging w, RealFloat w, R.Random w
-     , Num i, Ord i
      , Num n, Ord n
      , R.RandomGen gen
      )
   => [Tree l]             -- ^ training 'T.Tree's
   -> v                    -- ^ target vertex
-  -> Hypergraph v l w i'  -- ^ initial 'Hypergraph'
+  -> Hypergraph v l w i   -- ^ initial 'Hypergraph'
   -> gen                  -- ^ random number generator
-  -> [(Hypergraph (v, n) l w [i], gen)]
+  -> [(Hypergraph (v, n) l w [Int], gen)]
 train' ts target g0 gen0
   = go 0 1 (mapIds (const []) $ initialize g0) gen0
   where
@@ -101,23 +99,22 @@ splitMergeStep
   :: ( Ord v
      , Ord l
      , Converging w, RealFloat w, R.Random w
-     , Num i, Ord i
      , Num n, Ord n
      , R.RandomGen gen
      )
   => n                        -- ^ split offset
   -> [T.Tree l]               -- ^ training 'T.Tree's
   -> (v, n)                   -- ^ target vertex
-  -> Hypergraph (v, n) l w i' -- ^ initial 'Hypergraph'
+  -> Hypergraph (v, n) l w i  -- ^ initial 'Hypergraph'
   -> gen                      -- ^ random number generator
-  -> (Hypergraph (v, n) l w [i], gen)
+  -> (Hypergraph (v, n) l w [Int], gen)
 splitMergeStep offset ts target g0 gen
   = {-trace "splitMergeStep" $-}
     let
     (_, (g1, gen'))
       = mapSnd (mapFst properize)
       $ mapSnd (flip (randomizeWeights 10) gen)
-      $ mapAccumIds (\ i _ -> {-i `seq`-} (i + 1, i)) 0
+      $ mapAccumIds (\ (i : is) _ -> (is, i)) [0 ..]
       $ split offset (target ==) g0
     training
       = map (\ t -> ((target, []), parseTree target t g1, 1)) ts
@@ -266,11 +263,10 @@ maxSplit = maximum . map snd . vertices
 
 -- | Partition a list with respect to a function; e.g.
 --
--- > partition (flip mod 3) [0 .. 9] 
--- > == fromList [(0,[0,3,6,9]), (1,[1,4,7]), (2,[2,5,8])]
+-- > partition (flip mod 3) [0 .. 9]
+-- > == fromList [(0,[9,6,3,0]), (1,[7,4,1]), (2,[8,5,2])]
 partition :: (Ord k) => (a -> k) -> [a] -> M.Map k [a]
-partition f = foldr step M.empty
-    where step x = M.insertWith (++) (f x) [x]
+partition f = M.fromListWith (++) . map (\ x -> (f x, [x]))
 
 -- ---------------------------------------------------------------------------
 
