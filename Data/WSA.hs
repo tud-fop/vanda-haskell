@@ -16,6 +16,9 @@ module Data.WSA(Transition(Transition), transTerminal, transStateIn,
 
 import Tools.FastNub(nub)
 
+import Control.DeepSeq
+
+
 data Transition state terminal weight = Transition
     { transTerminal :: terminal
     , transStateIn  :: state
@@ -68,3 +71,11 @@ justTerminals wsa
               map (\t -> t {transTerminal = Just (transTerminal t)})
                   (transitions wsa)
         }
+
+-- ---------------------------------------------------------------------------
+
+instance (NFData p, NFData t, NFData w) => NFData (Transition p t w) where
+  rnf (Transition t s s' w) = rnf t `seq` rnf s `seq` rnf s' `seq` rnf w
+
+instance (NFData p, NFData t, NFData w) => NFData (WSA p t w) where
+  rnf (WSA ss ts is fs) = rnf ts `seq` rnf is `seq` rnf fs `seq` rnf ss
