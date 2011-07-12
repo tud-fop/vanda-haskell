@@ -365,6 +365,10 @@ showItemLaTeX i
         ++ ", "
         ++ show (wsaStateSnd i)
         ++ "]"
---
---intersectionIntemCount wsa wta
---  = length $ iter Just (initState (const False) wsa wta)
+
+
+intersectionItemCount
+  :: (Show p, Show q, Show t, Num w, Ord p, Ord i, Ord q, Ord t, Ord w)
+  => WSA.WSA p t w -> WTA.WTA q t w i -> Int
+intersectionItemCount wsa wta
+ = (\ (Queue _ _ s) -> Set.size s) $ itemq $ iter $ initState (const False) wsa wta
