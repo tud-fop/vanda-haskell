@@ -58,11 +58,11 @@ deq (Queue []     []      ) = error "Cannot dequeue from empty queue."
 
 
 enqList :: [a] -> Queue a -> Queue a
-enqList xs q = foldr enq q xs
+enqList zs (Queue xs ys) = Queue xs (foldr (:) ys zs)
 
 
 enqListWith :: (b -> a) -> [b] -> Queue a -> Queue a
-enqListWith f xs q = foldr (enq . f) q xs
+enqListWith f zs (Queue xs ys) = Queue xs (foldr ((:) . f) ys zs)
 
 
 toList :: Queue a -> [a]
