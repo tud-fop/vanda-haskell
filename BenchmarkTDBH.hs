@@ -18,15 +18,18 @@ import qualified Parser.NegraLazy as N
 import qualified Algorithms.RuleExtraction as RE
 import qualified Algorithms.StateSplit as SPG
 import qualified Algorithms.WTABarHillelTopDown as BH
+import qualified Algorithms.WTABarHillelTopDownBinarizing as BHB
 import qualified Algorithms.WTABarHillelComplete as BHC
-import Tools.Miscellaneous (mapFst)
-import TestData.TestHypergraph
+import Tools.Miscellaneous (mapFst, mapSnd)
 
 import Control.DeepSeq
+import qualified Data.IntMap as IM
 import Data.List (nub)
+import qualified Data.List as L
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
 import qualified Data.Tree as T
+import Data.Traversable (Traversable, mapAccumL)
 import qualified Random as R
 import System(getArgs)
 
@@ -34,24 +37,27 @@ import System(getArgs)
 main :: IO ()
 main = do
   args <- getArgs
-  case head args of
-    "print" -> printFileHG (tail args)
-    "printYields" -> printYields (tail args)
-    "train" -> train (tail args)
-    "test" -> test (tail args)
-    "test2" -> test2 (tail args)
-    "convert" -> convert (tail args)
-    "convert2" -> convert2 (tail args)
-    "binarize" -> binarizeHypergraph (tail args)
-    "tdbh" ->  tdbh (tail args)
-    "tdbhStats" ->  tdbhStats (tail args)
-    "printWTA" -> printWTA (tail args)
-    "readWTA" -> readWTA (tail args)
-    -- "example" -> example (tail args)
-    "manySentences" -> manySentences (tail args)
-    "manySentencesZigZag" -> manySentencesZigZag (tail args)
-    "evenSentencelength" -> evenSentencelength (tail args)
-    _ -> putStrLn "Unknown action."
+  case args of
+    ("print" : xs) -> printFileHG xs
+    ["printYields"] -> printYields
+    ["printRandomYields", drp, n] -> printRandomYields (read drp) (read n)
+    ["calcIntDict"] -> calcIntDict
+    ("train" : xs) -> train xs
+    ["test", hgFile, treeIndex, defol] ->
+      test hgFile (read treeIndex) (read defol)
+    ("manySentences" : xs) -> manySentences xs
+    ("manySentencesZigZag" : xs) -> manySentencesZigZag xs
+    ("evenSentencelength" : xs) -> evenSentencelength xs
+    ["memTestString"] -> memTestString
+    ["memTestInt"] -> memTestInt
+    ["preprocess", hgFile] -> preprocess hgFile
+    ["synthBench", m, n, bin, action, algo] ->
+      synthBench (read m) (read n) (read bin) action algo
+    ["synthBench2", n, bin, action, algo] ->
+      synthBench2 (read n) (read bin) action algo
+    ["benchmark", hgFile, yieldFile, yieldNr, action, algo] ->
+      benchmark hgFile yieldFile (read yieldNr) action algo
+    _ -> putStrLn "Unknown action or wrong number of arguments."
 
 
 printFileHG :: [String] -> IO ()
@@ -69,29 +75,93 @@ getData
       "/var/local/share/gdp/nlp/resources/tigercorpus2.1/corpus/tiger_release_aug07.export"
 
 
-printYields :: a -> IO ()
-printYields _
+memTestString :: IO ()
+memTestString = do
+  dta <- {-fmap (take 20000)-} getData
+  print $ rnf dta
+  print $ L.foldl' (+) 0 [1 :: Int .. 10000000]
+  print $ rnf dta
+
+
+memTestInt :: IO ()
+memTestInt = do
+  dta <- fmap (corpusToInt {-. take 20000-}) getData
+  print $ rnf (snd dta)
+  print $ rnf dta
+--   putStr $ unlines $ map (T.drawTree . fmap show) $ snd dta
+  print $ L.foldl' (+) 0 [1 :: Int .. 10000000]
+  print $ rnf dta
+
+
+corpusToInt
+  :: (Ord k, Traversable a, Traversable b)
+  => a (b k) -> (M.Map k Int, a (b Int))
+corpusToInt
+  = mapAccumL
+      ( mapAccumL
+        (\ m k -> let s = M.size m
+                  in maybe (M.insert k s m, s) ((,) m) (M.lookup k m)
+        )
+      )
+      M.empty
+
+
+printYields :: IO ()
+printYields
   =   getData
   >>= putStr
     . unlines
     . map (show . yield . defoliate)
+    . snd
+    . corpusToInt
+
+
+printRandomYields :: Int -> Int -> IO ()
+printRandomYields drp n = do
+  ys <- fmap (map yield . map defoliate . snd . corpusToInt) getData
+  rnf ys `seq` return ()
+  putStr
+    $ unlines
+    $ map show
+    $ concatMap snd
+    $ snd
+    $ mapAccumL
+        (\ g (l, xs) -> let (g', rs) = rands (0, length xs - 1) g n
+            in (g', (l, map (xs !!) rs)))
+        (R.mkStdGen 0)
+    $ map (mapSnd nub)
+    $ M.toList
+    $ M.fromListWith (++) [(length y, [y]) | y <- drop drp ys]
+  where
+    rands (lo, hi) g0 m = if hi - lo < m then (g0, [lo .. hi]) else go m g0 []
+      where
+        go 0 g xs = (g, xs)
+        go i g xs = let (x, g') = R.randomR (lo, hi) g
+                    in if elem x xs then go i g' xs else go (i - 1) g' (x : xs)
+
+
+calcIntDict :: IO ()
+calcIntDict = do
+  (m, ts) <- fmap corpusToInt getData
+  rnf ts `seq`
+    writeFile "IntDict.txt" (show $ map (\ (x, y) -> (y, x)) $ M.toList m)
 
 
 train :: [String] -> IO ()
 train args = do
   let its = read (args !! 0)
   let exs = read (args !! 1)
-  ts <- fmap (take exs) getData
+  ts <- fmap (take exs . snd . corpusToInt) getData
   let trains = map defoliate ts
   let exPretermToTerm = mapIds (const []) $ SPG.initialize $ RE.extractHypergraph $ concatMap terminalBranches ts
   let gsgens
         = take (its + 1)
         $ SPG.train'
             trains
-            "ROOT"
-            (RE.extractHypergraph trains :: Hypergraph String String Double ())
+            0 {-"ROOT"-}
+            (RE.extractHypergraph trains :: Hypergraph Int Int Double ())
             (R.mkStdGen 0)
-        :: [(Hypergraph (String, Int) String Double [Int], R.StdGen)]
+        :: [(Hypergraph (Int, Int) Int Double [Int], R.StdGen)]
   flip mapM_ (zip [(0 :: Int) ..] gsgens) $ \ (n, (g, _)) -> do
     writeFile ("hg_" ++ show exs ++ "_" ++ show n ++ ".txt") (show $ mapIds (const ()) g)
     writeFile ("hg_" ++ show exs ++ "_" ++ show n ++ "_withTerminals.txt")
@@ -113,189 +183,42 @@ train args = do
         else [e]
 
 
-test :: [String] -> IO ()
-test args = do
-  let hgFile = args !! 0
-  let treeIndex = read $ args !! 1 :: Int
-  let f = if length args >= 3 then map defoliate else id
-  g <-  fmap (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
+test :: String -> Int -> Bool -> IO ()
+test hgFile treeIndex defol = do
+  let target = 0
+  let f = if defol then map defoliate else id
+  g <-  fmap (read :: String -> Hypergraph Int Int Double Int)
     $   readFile hgFile
-  -- putStrLn $ drawHypergraph g
-  ts <- fmap ({-filter ((< 15) . length . yield) $-} drop treeIndex . f) getData
-  let wta = WTA.WTA (M.singleton {-("ROOT", 0)-}0 1) g
-  flip mapM_ ts $ \ t -> do
-    let target' = (0, {-("ROOT", 0)-}0, length $ yield t)
+  ts <- fmap (f . snd . corpusToInt) getData
+  intDict <- fmap (IM.fromList . read :: String -> IM.IntMap String) $ readFile "IntDict.txt"
+  let intDictLookup v = IM.findWithDefault (show v) v intDict
+  let wta = WTA.WTA (M.singleton target 1) g
+  print $ rnf $ take treeIndex ts
+  flip mapM_ (drop treeIndex ts) $ \ t -> do
+    let target' = (0, target, length $ yield t)
     let g' = dropUnreachables target'
            $ WTA.toHypergraph
            $ BH.intersect (WSA.fromList 1 $ yield t) wta
     let wta' = WTA.WTA (M.singleton target' 1) g'
     let ts'  = map (mapFst (fmap eLabel))
               $ nBest' 3 target' g'
-    print $ yield t
+    print $ fmap intDictLookup $ yield t
     -- putStrLn $ WTA.showWTA $ wta'
+    putStrLn $ rnf g' `seq` "Intersection calculated."
     if null (vertices g')
       then putStrLn "---!!! no parse !!!---"
       else do
         putStrLn $ "correct tree:"
         putStrLn $ "weight (in input wta):      " ++ show (WTA.weightTree wta t)
         putStrLn $ "weight (in Bar-Hillel wta): " ++ show (WTA.weightTree wta' t)
-        putStrLn $ T.drawTree t
+        putStrLn $ T.drawTree $ fmap intDictLookup t
         flip mapM_ ts' $ \ (t', w) -> do
           putStrLn $ "weight (n-best):            " ++ show w
           putStrLn $ "weight (in input wta):      " ++ show (WTA.weightTree wta t')
           putStrLn $ "weight (in Bar-Hillel wta): " ++ show (WTA.weightTree wta' t')
-          putStrLn $ T.drawTree t'
+          putStrLn $ T.drawTree $ fmap intDictLookup t'
     putStrLn (replicate 80 '=')
 
-
-test2 :: [String] -> IO ()
-test2 _ = do
-  flip mapM_ (tail testHypergraphs :: [Hypergraph Char Char Double ()]) $ \ g -> do
-    flip mapM_ (vertices g) $ \ target -> do
-      let ts  = map (mapFst (fmap eLabel))
-              $ nBest' 5 target g
-      putStrLn $ drawHypergraph g
-      putStrLn $ "target: " ++ show target
-      putStrLn ""
-      flip mapM_ ts $ \ (t, w) -> do
-        putStrLn $ "weight (n-best):            " ++ show w
-        putStrLn $ "weight (in input wta):      " ++ show (WTA.weightTree (WTA.WTA (M.singleton target 1) g) t)
-        putStrLn $ T.drawTree $ fmap show t
-      putStrLn (replicate 80 '=')
-
-
-convert :: [String] -> IO ()
-convert args = do
-  let hgFile = args !! 0
-  g <-  fmap (mapIds (const ()) . (read :: String -> Hypergraph (String, Int) String Double [Int]))
-    $   readFile hgFile
-  let gRev = mapTails reverse g
-  let hgFile' = reverse . drop 4  . reverse $ hgFile
-  writeFile ("noId/" ++ hgFile) (show g)
-  writeFile ("noId/" ++ hgFile' ++ "_reverse.txt") (show gRev)
-
-
-convert2 :: [String] -> IO ()
-convert2 args = do
-  let hgFile = args !! 0
-  g <-  fmap (read :: String -> Hypergraph (String, Int) String Double ())
-    $   readFile hgFile
-  writeFile ("IntVertices/" ++ hgFile) (show $ snd $ verticesToInt ("ROOT", 0) g)
-
-
-binarizeHypergraph :: [String] -> IO ()
-binarizeHypergraph args = do
-  let hgFile = args !! 0
-  g <-  fmap (read :: String -> Hypergraph (String, Int) String Double ())
-    $   readFile hgFile
-  let g'  = snd
-          $ verticesToInt [("ROOT", 0)] -- mapVertices (flip (,) 0 . show)
-          $ mapLabels (fromMaybe "@")
-          $ binarize g
-  let hgFile' = reverse . drop 4  . reverse $ hgFile
-  writeFile ("binarized/" ++ hgFile' ++ "_binarized.txt") (show g')
---   putStrLn $ drawHypergraph g'
-
-
-tdbh :: [String] -> IO ()
-tdbh args
-  = tdbhHelper args
-      (\ wsa wta -> rnf (BH.intersect wsa wta) `seq` return ())
-
-
-tdbhStats :: [String] -> IO ()
-tdbhStats args
-  = tdbhHelper args
-      ( \ wsa wta -> do
-        let wta' = BH.intersect wsa wta
-        let target' = fst $ head $ M.toList $ WTA.finalWeights wta'
-        let wta'' = WTA.WTA (M.singleton target' 1)
-                  $ dropUnreachables target'
-                  $ WTA.toHypergraph
-                  $ wta'
-        putStr "yield-length:              "
-        putStrLn $ show $ length $ (read (args !! 1) :: [String])
-        putStr "tdbh-trans-states-finals:  "
-        printWTAStatistic wta'
-        putStr "tdbh-unreachables-dropped: "
-        printWTAStatistic wta''  -- putStrLn "-1\t-1\t-1"
-        putStr "item-count:                "
-        putStrLn  -- "-1"
-          $ show
-          $ length
-          $ BH.getIntersectItems (const False) wsa wta
-        putStr "complete-Bar-Hillel-trans: "
-        putStrLn $ show $ BHC.intersectTransitionCount wsa wta
-      )
-
-
-printWTA :: [String] -> IO ()
-printWTA args
-  = tdbhHelper args $ const $ putStr . WTA.drawWTA
-
-
-readWTA :: [String] -> IO ()
-readWTA args
-  = tdbhHelper args (\ _ wta -> rnf wta `seq` return ())
-
-
-tdbhHelper
-  :: (Num w)
-  => [String]
-  -> (WSA.WSA Int String w -> WTA.WTA Int String Double () -> IO a)
-  -> IO a
-tdbhHelper args f = do
-  g <-  fmap (read :: String -> Hypergraph {-(String, Int)-}Int String Double ())
-    $   readFile (args !! 0)
-  let yld = read (args !! 1) :: [String]
-  f (WSA.fromList 1 yld) (WTA.WTA (M.singleton {-("ROOT", 0)-}0 1) g)
-
-{-
-example :: a -> IO ()
-example _ = do
-  let wta' = BHC.intersect wsa wta
-  let ts = WTA.transitions wta'
-  flip mapM_ (WTA.states wta') $ \ v ->
-     putStrLn
-      $   "\\node[state] ("
-      ++  stateLab v
-      ++  ") {$\\mathit{"
-      ++  stateLab v
-      ++  "}/"
-      ++  maybe "0" show (L.lookup v (WTA.finalWeights wta'))
-      ++ "$};"
-  flip mapM_ ts $ \ t ->
-    putStrLn $ "\\node[edge] (" ++ transLab t ++ ") {};"
-  flip mapM_ ts $ \ t@(WTA.Transition l _ _ w) ->
-    putStrLn
-      $   "\\path ("
-      ++  transLab t
-      ++  ") node[above=\\ab] {$"
-      ++  l
-      ++  "/"
-      ++  show w
-      ++  "$};"
-  flip mapM_ ts $ \ t@(WTA.Transition _ hd tl _) -> do
-    putStrLn $ "\\draw[->] (" ++ transLab t ++ ") to (" ++ stateLab hd ++ ");"
-    flip mapM_ tl $ \ v ->
-      putStrLn $ "\\draw[->] (" ++ stateLab v ++ ") to (" ++ transLab t ++ ");"
-  where
-    stateLab (p, q, p') = [p, q, p']
-    transLab (WTA.Transition _ hd tl _)
-      = stateLab hd ++ "-" ++ concat (L.intersperse "_" (map stateLab tl))
-    wta = WTA.create
-            [ WTA.Transition "\\sigma" 'f' "qf" (1 :: Int)
-            , WTA.Transition "\\alpha" 'f' ""   2
-            , WTA.Transition "\\alpha" 'q' ""   2
-            ]
-            [ ('f', 1) ]
-    wsa = WSA.create
-            [ WSA.Transition "\\alpha" 'p' 'r' (1 :: Int)
-            , WSA.Transition "\\alpha" 'r' 'p' 1
-            ]
-            [ ('p', 1) ]
-            [ ('r', 1) ]
--}
 
 manySentences :: [String] -> IO ()
 manySentences args = do
@@ -362,6 +285,126 @@ evenSentencelength args = do
 --   print $ length $ WTA.transitions $ BH.intersect wsa wta
   rnf (BH.intersect wsa wta) `seq` return ()
 
+
+preprocess :: FilePath -> IO ()
+preprocess hgFile = do
+  g <-  fmap (read :: String -> Hypergraph (Int, Int) Int Double ())
+    $   readFile hgFile
+  let gInt = snd $ mapAccumIds (\ (i : is) _ -> (is, i)) [0 :: Int ..]
+           $ snd $ verticesToInt (0, 0) g
+  let gBin = snd $ mapAccumIds (\ (i : is) _ -> (is, i)) [0 :: Int ..]
+           $ snd $ verticesToInt [0]
+           $ mapLabels (fromMaybe (-1))
+           $ binarize gInt
+  let file = reverse . tail . dropWhile ('.' /=) . reverse $ hgFile
+  writeFile (file ++ "_IntVertices.txt") $ show gInt
+  writeFile (file ++ "_IntVertices_binarized.txt") $ show gBin
+
+
+benchmark :: FilePath -> FilePath -> Int -> [Char] -> [Char] -> IO ()
+benchmark hgFile yieldFile yieldNr action algo = do
+  g <-  fmap (read :: String -> Hypergraph Int Int Double Int)
+    $   readFile hgFile
+  y <-  fmap ((read :: String -> [Int]) . (!! yieldNr) . lines)
+    $   readFile yieldFile
+  benchmark'1 algo action (WSA.fromList 1 y) (WTA.WTA (M.singleton 0 1) g)
+
+
+synthBench :: Int -> Int -> Bool -> String -> String -> IO ()
+synthBench m n bin action algo
+  = if bin
+    then benchmark'1 algo action wsaB wtaB
+    else benchmark'1 algo action wsa  wta
+  where
+    w   = 1 / fromIntegral n :: Double
+    wta = WTA.wtaCreate
+            [((), 1)]
+            [hyperedge () (replicate i ()) i w i | i <- 0 : [2 .. n]]
+    wsa = WSA.fromList 1 (replicate m 0)
+    wtaB = WTA.WTA (M.singleton [()] 1)
+         $ snd
+         $ mapAccumIds (\ (i : is) _ -> (is, i)) [0 :: Int ..]
+         $ binarize' (WTA.toHypergraph wta)
+    wsaB = WSA.justTerminals wsa
+
+
+synthBench2 :: Int -> Bool -> String -> String -> IO ()
+synthBench2 n bin action algo
+  = if bin
+    then benchmark'1 algo action wsaB wtaB
+    else benchmark'1 algo action wsa  wta
+  where
+    wta = WTA.wtaCreate
+            [(0, 1)]
+            [ hyperedge 0 [] 0 0.5 0 :: Hyperedge Int Int Double Int
+            , hyperedge 0 [0, 1] 1 0.25 1
+            , hyperedge 0 [1, 0] 2 0.25 2
+            , hyperedge 1 [] 0 1 3
+            ]
+    wsa = WSA.fromList 1 (replicate n 0)
+    wtaB = WTA.WTA (M.singleton [0] 1)
+         $ snd
+         $ mapAccumIds (\ (i : is) _ -> (is, i)) [0 :: Int ..]
+         $ binarize' (WTA.toHypergraph wta)
+    wsaB = WSA.justTerminals wsa
+
+
+benchmark'1
+  :: ( Ord p, Ord q, Ord t, Ord i, Ord w
+     , Num w
+     , Show p, Show q, Show t, Show i
+     , NFData p, NFData t, NFData w, NFData q, NFData i
+     )
+  => String
+  -> String
+  -> WSA.WSA p t w
+  -> WTA.WTA q t w i
+  -> IO ()
+benchmark'1 algo action wsa wta
+  = case algo of
+      "bha" ->
+        benchmark'2 action BH.intersect BH.intersectionItemCount wsa wta
+      "bhb" ->
+        benchmark'2 action BHB.intersect BHB.intersectionItemCount wsa wta
+      "bhc" ->
+        benchmark'2 action BHC.intersect (const . const (0 :: Int)) wsa wta
+      _ ->
+        putStrLn $ "Unknown intersection algorithm: " ++ algo
+
+
+benchmark'2
+  ::  ( Ord q'
+      , Show q, Show q', Show t, Show t', Show w, Show i
+      , NFData p, NFData q, NFData q', NFData t, NFData t', NFData w, NFData i
+      )
+  => String
+  -> (WSA.WSA p t w -> WTA.WTA q t w i -> WTA.WTA q' t' w i)
+  -> (WSA.WSA p t w -> WTA.WTA q t w i -> Int)
+  -> WSA.WSA p t w
+  -> WTA.WTA q t w i
+  -> IO ()
+benchmark'2 action inter itemCounter wsa wta
+  = case action of
+      "print" -> do
+        putStr $ WTA.drawWTA wta
+        putStr $ WTA.drawWTA $ inter wsa wta
+      "pretend" ->
+        rnf wsa `seq` rnf wta `seq` return ()
+      "bench" ->
+        rnf wsa `seq` rnf wta `seq` rnf (inter wsa wta) `seq` return ()
+      "stats" ->
+        let wta' = inter wsa wta
+        in print $
+            [ ("wsaStates", show $ length $ WSA.states wsa)
+            , ("wsaEdges" , show $ length $ WSA.transitions wsa)
+            , ("states", show $ length $ WTA.states wta')
+            , ("edges" , show $ length $ edges $ WTA.toHypergraph wta')
+            , ("items" , show $ itemCounter wsa wta)
+            ]
+      _ -> putStrLn $ "Unknown synthBench action: " ++ action
+
+
+-- ---------------------------------------------------------------------------
 
 -- | Convert a corpus in NEGRA format to a list of 'Data.Tree's with pos tags
 -- as leaves.
