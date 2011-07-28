@@ -23,7 +23,7 @@ module Data.WCFG (
 , pLeft, pRight, pWeight, pId
 -- ** Decomposition of 'WCFG's
 , initial
-, productions
+, productions, productionsHypergraph
 , terminals, nonterminals
 -- * Properties of 'WCFG's and related structures
 , cnf
