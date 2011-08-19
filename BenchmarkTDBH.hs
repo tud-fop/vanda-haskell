@@ -21,6 +21,7 @@ import qualified Algorithms.WTABarHillelTopDown as BH
 import qualified Algorithms.WTABarHillelTopDownBinarizing as BHB
 import qualified Algorithms.WTABarHillelComplete as BHC
 import Tools.Miscellaneous (mapFst, mapSnd)
+import Tools.Timestamps (printTimestamp)
 
 import Control.DeepSeq
 import qualified Data.IntMap as IM
@@ -151,6 +152,7 @@ calcIntDict = do
 train :: [String] -> IO ()
 train args = do
   hSetBuffering stdout NoBuffering
+  printTimestamp; putStrLn "Start."
   let its = read (args !! 0)
   let exs = read (args !! 1)
   ts <- fmap (take exs . snd . corpusToInt) getData
@@ -173,6 +175,7 @@ train args = do
           (  filter (null . eTail) (edges exPretermToTerm)
           ++ concatMap (extendEdge (edgesM exPretermToTerm)) (edges g)
           )
+    printTimestamp
     putStrLn $ "running state-split iteration " ++ show (n + 1) ++ " ..."
   where
     terminalBranches t@(T.Node _ [T.Node _ []]) = [t]
