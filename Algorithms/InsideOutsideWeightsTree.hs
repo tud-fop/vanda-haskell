@@ -57,6 +57,7 @@ fromListWith3 f
   . map (\ ((k1, k2, k3), x) -> (k1, [(k2, [(k3, x)])]))
 
 
+foo :: (Ord l, Ord v) => Hypergraph v l w i -> IM.IntMap (M.Map l (M.Map v [Hyperedge v l w i]))
 foo g = fromListWith3 (++) [ ((length (eTail e), eLabel e, eHead e), [e]) | e <- edges g ]
 -}
 
@@ -64,32 +65,28 @@ foo g = fromListWith3 (++) [ ((length (eTail e), eLabel e, eHead e), [e]) | e <-
 -- executions of the given 'Hypergraph' beginning at any of the given target
 -- nodes and resulting in the given 'Tree'.
 --
+-- Instead of passing the 'Hypergraph' directly, a hyperedge lookup function
+-- is required.
+--
 -- A naive construction would result in a 'Hypergraph' with vertices which are
 -- pairs of vertices of the given 'Hypergraph' and positions of the given
 -- 'Tree'.
---
 -- This construction ommits the construction of many useless 'Hyperedge's.
 -- Moreover, the resulting 'Hypergraph' is represented by an edge tree, which
--- reuses the 'Hyperedge's of the given 'Hypergraph'.
+-- reuses the given 'Hyperedge's.
 edgeTree
   :: (Ord v, Eq l)
-  => {-(Int -> l -> M.Map v (Hyperedge v l w i))
-  ->-} [v]                       -- ^ target vertices
-  -> Hypergraph v l w i
-  -> Tree l
-  -> Tree [Hyperedge v l w i]  -- ^ output edge tree
-edgeTree targets g tree = goT tree targets
+  => (Int -> l -> M.Map v [Hyperedge v l w i])  -- ^ hyperedge lookup function
+  -> [v]                                        -- ^ target vertices
+  -> Tree l                                     -- ^ 'Tree' to be parsed
+  -> Tree [Hyperedge v l w i]                   -- ^ output edge tree
+edgeTree f targets tree = goT tree targets
   where
-    find l len q
-      = {-# SCC "edgeTreeFind" #-}
-        maybe [] (filter (\ e -> eLabel e == l && length (eTail e) == len))
-      $ M.lookup q
-      $ edgesM g
     goT (Node l ts) qs
-      = let len = length ts
+      = let eM = f (length ts) l
             (es, ts') = goF ts
                       $ map (\ e -> (eTail e, e))
-                      $ concatMap (find l len) qs
+                      $ concatMap (\ q -> M.findWithDefault [] q eM) qs
         in Node es ts'
     goF [] xs = (map snd xs, [])
     goF (t : ts) xs
@@ -99,7 +96,7 @@ edgeTree targets g tree = goT tree targets
             fltr ((v : vs, e) : ys)
               | S.member v vS = (vs, e) : fltr ys
               | otherwise     = fltr ys
-            fltr _ = error "edgeTree.goF.fltr"
+            fltr _ = error "Algorithms.InsideOutsideWeightsTree.edgeTree.goF.fltr"
         in mapSnd (t' :) $ goF ts $ fltr xs
 
 
@@ -123,42 +120,52 @@ dropUnreach targets (Node es ts)
 
 -- | Compute the inside weights of the 'Hypergraph' represented by an edge
 -- tree. In the result the lacking positions in the vertices are represented
--- by the position in the tree.
-inside :: (Num w, Ord v) => Tree [Hyperedge v l w i] -> Tree (M.Map v w)
-inside (Node es ts)
+-- by the position in the output 'Tree'.
+inside
+  :: (Num w, Ord v)
+  => (Hyperedge v l w' i -> w)  -- ^ hyperedge weight accessor function
+  -> Tree [Hyperedge v l w' i]  -- ^ edge tree
+  -> Tree (M.Map v w)           -- ^ inside weights
+inside eW (Node es ts)
   = Node
       ( M.fromListWith (+)
-      $ map (\ e -> (eHead e, go ts' (eTail e) (eWeight e))) es
+      $ map (\ e -> (eHead e, go ts' (eTail e) (eW e))) es
       )
       ts'
   where
-    ts' = map inside ts
+    ts' = map (inside eW) ts
     go (x : xs) (v : vs) p
-      = let p' = p * (rootLabel x M.! v) in p' `seq` go xs vs p'
+      = let p' = p * M.findWithDefault err v (rootLabel x)
+              where err = error "Algorithms.InsideOutsideWeightsTree.inside.go.p'"
+        in p' `seq` go xs vs p'
     go [] [] p = p
-    go _  _  _ = error "inside.go: Tree malformed."
+    go _  _  _ = error "Algorithms.InsideOutsideWeightsTree.inside.go"
 
 
 -- | Compute the outside weights of the 'Hypergraph' represented by an edge
 -- tree, based on the given inside weights. In the result the lacking
--- positions in the vertices are represented by the position in the tree.
+-- positions in the vertices are represented by the position in the output
+-- 'Tree'.
 outside
   :: (Num w, Ord v)
-  => Tree (M.Map v w)          -- ^ inside weights
-  -> Tree [Hyperedge v l w i]  -- ^ input edge tree
-  -> M.Map v w                 -- ^ outside weight(s) of the target node(s)
-  -> Tree (M.Map v w)          -- ^ outside weights
-outside (Node _ is) (Node es ts) om
+  => (Hyperedge v l w' i -> w)  -- ^ hyperedge weight accessor function
+  -> Tree (M.Map v w)           -- ^ inside weights
+  -> Tree [Hyperedge v l w' i]  -- ^ input edge tree
+  -> M.Map v w                  -- ^ outside weight(s) of the target node(s)
+  -> Tree (M.Map v w)           -- ^ outside weights
+outside eW (Node _ is) (Node es ts) om
   = Node om
-  $ zipWith3 outside is ts
+  $ zipWith3 (outside eW) is ts
   $ map (M.fromListWith (+))
   $ L.transpose
   $ flip map es
-    (\ e -> let w = om M.! (eHead e) * (eWeight e)
-                ws = zipWith ((M.!) . rootLabel) is (eTail e)
-                ls = scanl (*) 1 ws
-                rs = scanr (*) 1 ws
-            in zipWith3 (\ v l r -> (v, w * l * r)) (eTail e) ls (tail rs)
+    (\ e ->
+      let w = M.findWithDefault 0 (eHead e) om * eW e  -- 0 if unreachable
+          ws = zipWith (flip (M.findWithDefault err) . rootLabel) is (eTail e)
+            where err = error "Algorithms.InsideOutsideWeightsTree.outside.ws"
+          ls = scanl (*) 1 ws
+          rs = scanr (*) 1 ws
+      in zipWith3 (\ v l r -> (v, w * l * r)) (eTail e) ls (tail rs)
     )
 
 {-
