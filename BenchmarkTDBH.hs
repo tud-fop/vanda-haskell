@@ -32,6 +32,7 @@ import qualified Data.Tree as T
 import Data.Traversable (Traversable, mapAccumL)
 import qualified Random as R
 import System(getArgs)
+import System.IO (hSetBuffering, stdout, BufferMode(..))
 
 
 main :: IO ()
@@ -149,6 +150,7 @@ calcIntDict = do
 
 train :: [String] -> IO ()
 train args = do
+  hSetBuffering stdout NoBuffering
   let its = read (args !! 0)
   let exs = read (args !! 1)
   ts <- fmap (take exs . snd . corpusToInt) getData
@@ -171,6 +173,7 @@ train args = do
           (  filter (null . eTail) (edges exPretermToTerm)
           ++ concatMap (extendEdge (edgesM exPretermToTerm)) (edges g)
           )
+    putStrLn $ "running state-split iteration " ++ show (n + 1) ++ " ..."
   where
     terminalBranches t@(T.Node _ [T.Node _ []]) = [t]
     terminalBranches (T.Node _ ts) = concatMap terminalBranches ts
