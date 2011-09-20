@@ -12,7 +12,20 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleContexts #-}
 
 module Algorithms.KAStar.State
-  where
+  (
+    KAStar ()
+  , runKAStar
+  , graph
+  , goal
+  , heuristic
+  , inEdges
+  , otherEdges
+  , inEdgesMap
+  , chart
+  , agenda
+  , agendaInsert
+  , process
+  ) where
 
 import Control.Monad.State
 import Control.Monad.Reader
@@ -108,14 +121,19 @@ heuristic :: KAStar p v l w i (v -> w)
 heuristic = cfgHeuristic `liftM` ask
 
 
--- | Returns in-edges data structure, see 'cfgInEdges'
+-- | Returns element from in-edges data structure, see 'cfgInEdges'
 inEdges :: Ord v => v -> KAStar p v l w i [(Hyperedge v l w i, Int)]
 inEdges v = (M.findWithDefault [] v . cfgInEdges) `liftM` ask
 
 
--- | Returns other-edges, see 'cfgOtherEdges'
+-- | Returns element from other-edges structure, see 'cfgOtherEdges'
 otherEdges :: Ord v => v -> KAStar p v l w i [(Hyperedge v l w i, Int)]
 otherEdges v = (M.findWithDefault [] v . cfgOtherEdges) `liftM` ask
+
+
+-- | Returns the whole in-edges data structure, see 'cfgOtherEdges'
+inEdgesMap :: KAStar p v l w i (M.Map v [(Hyperedge v l w i, Int)])
+inEdgesMap = cfgInEdges `liftM` ask
 
 
 -- | Returns momentary chart

@@ -12,6 +12,10 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Algorithms.KAStar
+  (
+    kbest
+  , kworst
+  )
   where
 
 import Control.Monad
@@ -24,9 +28,6 @@ import Data.Maybe (mapMaybe)
 import Debug.Trace
 
 import Data.Hypergraph
-import qualified TestData.TestHypergraph as Test
-
-import Control.DeepSeq
 
 import Algorithms.KAStar.State
 import Algorithms.KAStar.Data
@@ -62,7 +63,7 @@ newAssignments trigger = do
   c   <- chart
   is  <- inEdges $ node trigger
   os  <- otherEdges $ node trigger
-  inE <- cfgInEdges `liftM` ask
+  inE <- inEdgesMap
   return $ case trigger of 
              (Inside  _ _) -> switchRule c g trigger 
                               ++ ins c h trigger is 
@@ -225,6 +226,9 @@ buildRuleR c trigger@(Ranked (K _ e _ bps) _) = do
 buildRuleR _ _ = []
 
 
+------------------------------------------------------------------------------
+-- KAStar --------------------------------------------------------------------
+------------------------------------------------------------------------------
 
 -- | @kbest graph g h k@ finds the @k@ best derivations of the goal 
 -- node @g@ in @graph@, applying the heuristic function @h@.
@@ -279,8 +283,6 @@ kastar agenda graph g h k
                               >> loop -- generate new assignments and continue
 
 
-
-
 ------------------------------------------------------------------------------
 -- Helper functions ----------------------------------------------------------
 ------------------------------------------------------------------------------
@@ -303,95 +305,21 @@ edgesForward graph = (compute ins, compute others)
     edges = concat . M.elems . edgesM $ graph
 
 
-------------------------------------------------------------------------------
--- Test cases ----------------------------------------------------------------
-------------------------------------------------------------------------------
-
-test1 = hypergraph [ hyperedge 'g' "ab" ' ' 1.0 ()
-                   , hyperedge 'a' ""   ' ' 1.0 ()
-                   , hyperedge 'b' ""   ' ' 1.0 ()
-                   , hyperedge 'g' "g"  ' ' 0.9 ()
-                   ]
-
-
-heur1 :: Fractional w => Char -> w
-heur1 _ = 1.0
-
-
-test2 = hypergraph [ hyperedge 'a' ""   "alpha"   1.0 ()
-                   , hyperedge 'b' ""   "beta"    1.0 ()
-                   , hyperedge 'g' "ab" "sigma"   0.8 ()
-                   , hyperedge 'a' "g"  "delta"   0.9 ()
-                   , hyperedge 'b' "g"  "epsilon" 0.8 ()
-                   , hyperedge 'g' "g"  "loop"    1.0 ()
-                   , hyperedge 'x' "g"  "horst"   0.5 ()
-                   ]
+-- | @traceBackpointers chart a@ reconstructs a derivation from the backpointers
+--   contained in the ranked derivation assignment @a@. If @a@ is not such an
+--   assignment, it returns @Nothing@.
+traceBackpointers 
+  :: Ord v 
+  => Chart v l w i
+  -> Assignment v l w i 
+  -> Maybe (T.Tree (Hyperedge v l w i), w)
+traceBackpointers c a@(Ranked _  w) = do
+  t <- helper a
+  return (t, w)
+  where helper (Ranked (K _ e _ bps) _) = T.Node e `fmap` mapM
+          (\(rank, idx) -> helper . head $ nthRankedAssignment c (eTail e !! idx) rank)
+          (zip bps [0..])
+        helper _ = Nothing
+traceBackpointers _ _ = Nothing
 
 
-t graph goal h k = do
-  putStrLn $ drawHypergraph graph
-  mapM_ (putStrLn . uncurry str) $ kbest graph goal h k
-    where str t w = "w = " ++ show w ++ "\n" 
-                    ++ (T.drawTree . fmap drawHyperedge $ t)
-
-
--- Let's check the reference implementation
-t' graph goal k = do
-  putStrLn $ drawHypergraph graph
-  mapM_ (putStrLn . uncurry str) $ nBest' k goal graph
-    where str t w = "w = " ++ show w ++ "\n" 
-                    ++ (T.drawTree . fmap drawHyperedge $ t)
-
-
-t1 = t test1 'g' heur1 20
-
-
-t2 = t test2 'x' heur1 20
-
-t3 :: [(T.Tree (Hyperedge Char Char Double ()), Double)]
-t3 = kbest (Test.testHypergraphs !! 1) 'S' heur1 1000
-
-t3' :: [(T.Tree (Hyperedge Char Char Double ()), Double)]
-t3' = nBest' 1000 'S' (Test.testHypergraphs !! 1)
-
-t4 = t (Test.testHypergraphs !! 1) 'S' heur1 10
-
-comparison 
-  :: (Fractional w, Ord v, Ord w, Ord i, Ord l, Show i, Show l, Show v) 
-  => Hypergraph v l w i -> v -> (v -> w) -> Int -> IO Bool
-comparison graph goal heur k = and `liftM` zipWithM put mine others
-  where put w1 w2 = do 
-          putStrLn $ show w1 ++ "\t" ++ show w2
-          return $ w1 == w2
-        mine = map snd $ kbest graph goal heur k
-        others = nBest k goal graph
-
-diff
-  :: (Fractional w, Ord v, Ord w, Ord i, Ord l, Show i, Show l, Show v) 
-  => Hypergraph v l w i 
-  -> v 
-  -> (v -> w) 
-  -> Int 
-  -> [((T.Tree (Hyperedge v l w i), w), (T.Tree (Hyperedge v l w i), w))]
-diff graph goal heur k = filter neq $  zip mine others
-  where neq ((_, w1), (_, w2)) = w1 /= w2
-        mine = kbest graph goal heur k
-        others = nBest' k goal graph
-
-test :: IO ()
-test = comparison (Test.testHypergraphs !! 1) 'S' heur1 10 >>= putStrLn . show
---test = t3 `deepseq` return ()
---test = t (Test.testHypergraphs !! 1) 'S' heur1 500
---test = (zipWith (\graph goal -> kbest graph goal (heur1::Char->Double) 1000) 
---                Test.testHypergraphs "AStt")
---       `deepseq` return ()
---test = mapM_ (uncurry go) (tail $ zip Test.testHypergraphs "AStt")
-  -- where
-  --   go graph start = mapM_ (uncurry pr) $ diff graph start heur1 50
-  --   pr l r = do
-  --     putStrLn "===MINE==="
-  --     putStrLn . uncurry str $ l
-  --     putStrLn "===OTHER==="
-  --     putStrLn . uncurry str $ r
-  --   str t w = "w = " ++ show w ++ "\n" 
-  --             ++ (T.drawTree . fmap drawHyperedge $ t)

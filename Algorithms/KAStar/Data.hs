@@ -10,7 +10,28 @@
 -- ---------------------------------------------------------------------------
 
 module Algorithms.KAStar.Data
-  where
+  (
+    Agenda
+  , Assignment (..)
+  , I (..)
+  , O (..)
+  , K (..)
+  , isInside
+  , isOutside
+  , isRanked
+  , weight
+  , edge
+  , node
+  , rank
+  , Chart (..)
+  , EdgeMapEntry (..)
+  , insideAssignments
+  , outsideAssignments
+  , rankedAssignments
+  , numRanked
+  , nthRankedAssignment
+  , rankedWithBackpointer
+  ) where
 
 import qualified Data.Map as M
 import qualified Data.Tree as T
@@ -53,7 +74,7 @@ data K v l w i = K { kNode         :: v
                    } deriving (Show)
 
 
--- When we check if the chart contains a ranked item, we disregard its rank.
+-- When we check if the chart already contains a ranked item, we disregard its rank.
 instance (Eq v, Eq l, Eq w, Eq i) => Eq (K v l w i) where
   (K v e _ bps) == (K v' e' _ bps') = v == v' && e == e' && bps == bps'
 
@@ -101,7 +122,7 @@ node (Ranked (K v _ _ _) _) = v
 rank :: Assignment v l w i -> Int
 rank (Ranked (K _ _ r _) _) = r
 rank a = error "Tried to compute rank of non-ranked assignment"
--- Or should I do this with maybe? I will have to signal error somewhere...
+-- TODO: Or should I do this with maybe? I will have to signal error somewhere...
 
 
 -- | Returns backpointers of an asssignment
@@ -180,27 +201,11 @@ nthRankedAssignment c v n = if n >= 1 && n <= S.length s
   where s = maybe S.empty emRanked . M.lookup v $ cEdgeMap c
 
 
+-- | @rankedWithBackpointer c e i v@ returns all ranked assignments 
+--   constructed from hyperedge @e@ whose @i$-th backpointer
+--   points to the corresponding @v@-ranked assignment, with chart @c@.
 rankedWithBackpointer :: (Ord v, Ord l, Ord w, Ord i) 
                       => Chart v l w i -> (Hyperedge v l w i) 
                       -> Int -> Int -> [Assignment v l w i]
 rankedWithBackpointer c e bp val = M.findWithDefault [] (e, bp, val) (cBPMap c)
-
-
--- | @traceBackpoiners chart a@ reconstructs a derivation from the backpointers
---   contained in the ranked derivation assignment @a@. If @a@ is not such an
---   assignment, it returns @Nothing@.
-traceBackpointers 
-  :: Ord v 
-  => Chart v l w i
-  -> Assignment v l w i 
-  -> Maybe (T.Tree (Hyperedge v l w i), w)
-traceBackpointers c a@(Ranked _  w) = do
-  t <- helper a
-  return (t, w)
-  where helper (Ranked (K _ e _ bps) _) = T.Node e `fmap` mapM
-          (\(rank, idx) -> helper . head $ nthRankedAssignment c (eTail e !! idx) rank)
-          (zip bps [0..])
-        helper _ = Nothing
-traceBackpointers _ _ = Nothing
-
 

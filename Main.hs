@@ -33,7 +33,7 @@ import Demo
 -- import qualified Data.Set  as S
 -- import qualified Data.Tree as T
 -- import Text.Parsec.String (parseFromFile)
-import Algorithms.KAStar as KA
+import Algorithms.KAStar.Test as KA
 
 
 main :: IO ()
