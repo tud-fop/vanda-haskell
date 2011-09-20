@@ -9,28 +9,27 @@
 -- of Programming.
 -- ---------------------------------------------------------------------------
 
-{-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Algorithms.KAStar
   where
 
-import Control.Monad.State
-import Control.Monad.Reader
-import Control.Monad.List
+import Control.Monad
+import Control.Monad.Reader (ask)
 import qualified Data.Map as M
 import qualified Data.Tree as T
 import qualified Data.Heap as H 
-import qualified Data.List as L
-import qualified Data.Sequence as S
-import Data.Sequence ((<|), (|>))
-import Data.Foldable (toList)
-import Data.Maybe (fromJust, mapMaybe)
+import Data.List (foldl')
+import Data.Maybe (mapMaybe)
 import Debug.Trace
 
 import Data.Hypergraph
 import qualified TestData.TestHypergraph as Test
 
 import Control.DeepSeq
+
+import Algorithms.KAStar.State
+import Algorithms.KAStar.Data
 
 ------------------------------------------------------------------------------
 -- Deduction rules -----------------------------------------------------------
@@ -225,224 +224,7 @@ buildRuleR c trigger@(Ranked (K _ e _ bps) _) = do
     unit n r = replicate (r - 1) 0 ++ [1] ++ replicate (n - r) 0
 buildRuleR _ _ = []
 
-------------------------------------------------------------------------------
--- Algorithm State -----------------------------------------------------------
-------------------------------------------------------------------------------
 
--- | Monad stack for state and configuration of the KA* algorithm
-newtype KAStar p v l w i a = KAStar {
-      runK :: ReaderT (KAConfig v l w i) (State (KAState p v l w i)) a
-    } deriving ( Monad
-               , MonadReader (KAConfig v l w i)
-               , MonadState (KAState p v l w i)
-               )
-
-
--- | Holds configuration for KA*
-data KAConfig v l w i = KAConfig { 
-    cfgNumDeriv   :: Int 
-    -- ^ number @k@ of derivations to be searched for
-  , cfgGraph      :: Hypergraph v l w i 
-    -- ^ underlying graph
-  , cfgGoal       :: v 
-    -- ^ goal node whose derivations are searched
-  , cfgHeuristic  :: v -> w 
-    -- ^ the supplied heuristic function
-  , cfgInEdges    :: M.Map v [(Hyperedge v l w i, Int)] 
-    -- ^ assigns tail-nodes to their hyperedge, together with their position
-  , cfgOtherEdges :: M.Map v [(Hyperedge v l w i, Int)]
-    -- ^ as 'cfgInEdges', but also for the edge's head node
-  }
-
-
--- | Data structure holding run-time state of KA*
-data KAState p v l w i = KAState { 
-      stChart          :: Chart v l w i 
-      -- ^ chart holds processed assignments
-    , stAgenda         :: Agenda p v l w i 
-      -- ^ pqueue with prioritized assignments waiting to be processed
-    , stItemsInserted  :: Int
-      -- ^ number of assignments inserted into chart
-    , stItemsGenerated :: Int
-      -- ^ number of assignments inserted into agenda
-    }
-
-
--- | Runs the KAStar monad, similar to runState
-runKAStar :: KAStar p v l w i a
-          -> Agenda p v l w i
-          -> Int 
-          -> Hypergraph v l w i
-          -> v
-          -> (v -> w)
-          -> M.Map v [(Hyperedge v l w i, Int)]
-          -> M.Map v [(Hyperedge v l w i, Int)]
-          -> (a, KAState p v l w i)
-runKAStar kst agenda k graph goal heuristic ins others =
-    let cfg   = KAConfig k graph goal heuristic ins others
-        state = KAState (C M.empty M.empty) agenda 0 0
-    in runState (runReaderT (runK kst) cfg) state
-
-
--- | Returns number of derivations searched for
-numDeriv :: KAStar p v l w i Int
-numDeriv = cfgNumDeriv `liftM` ask
-
-
--- | Returns underlying graph
-graph :: KAStar p v l w i (Hypergraph v l w i)
-graph = cfgGraph `liftM` ask
-
-
--- | Returns goal node
-goal :: KAStar p v l w i v
-goal = cfgGoal `liftM` ask
-
-
--- | Returns supplied heuristic
-heuristic :: KAStar p v l w i (v -> w)
-heuristic = cfgHeuristic `liftM` ask
-
-
--- | Returns in-edges data structure, see 'cfgInEdges'
-inEdges :: Ord v => v -> KAStar p v l w i [(Hyperedge v l w i, Int)]
-inEdges v = (M.findWithDefault [] v . cfgInEdges) `liftM` ask
-
-
--- | Returns other-edges, see 'cfgOtherEdges'
-otherEdges :: Ord v => v -> KAStar p v l w i [(Hyperedge v l w i, Int)]
-otherEdges v = (M.findWithDefault [] v . cfgOtherEdges) `liftM` ask
-
-
--- | Returns momentary chart
-chart :: KAStar p v l w i (Chart v l w i)
-chart = stChart `liftM` get
-
--- | Returns the agenda
-agenda :: KAStar p v l w i (Agenda p v l w i)
-agenda = stAgenda `liftM` get
-
-
--- | Set the chart
-putChart :: Chart v l w i -> KAStar p v l w i ()
-putChart c = do
-  st <- get
-  put st{stChart = c}
-
-
--- | Set the agenda
-putAgenda :: Agenda p v l w i -> KAStar p v l w i ()
-putAgenda a = do
-  st <- get
-  put st{stAgenda = a}
-
-
--- | Increment number of inserted assignments
-incItemsInserted :: KAStar p v l w i ()
-incItemsInserted = do 
-  st <- get
-  put st{stItemsInserted = stItemsInserted st + 1}
-
-
--- | Increment number of generated assignments by @n@
-incItemsGenerated :: Int -> KAStar p v l w i ()
-incItemsGenerated n = do
-  st <- get
-  put st{stItemsGenerated = stItemsGenerated st + n}
-
-
--- | @chartInsert a@ inserts assignment @a@ into the chart, provided it does 
---   not already contain it (In this case, @Nothing@ is returned).
---   Ranked items are annotated with their corresponding rank upon insertion.
---   The number of inserted assignments is updated accordingly.
-chartInsert 
-  :: (Ord v, Ord l, Ord w, Ord i) 
-  => Assignment v l w i 
-  -> KAStar p v l w i (Maybe (Assignment v l w i))
-chartInsert assgmt = do
-  enough <- case assgmt of
-    (Ranked (K v _ _ _) _) -> liftM2 (>) ((flip numRanked v) `liftM` chart) numDeriv
-    _                      -> return False
-  contained <- chartContains assgmt
-  if enough || contained 
-    then return Nothing
-    else do
-      incItemsInserted
-      bpInsert assgmt
-      Just `liftM` eInsert assgmt
-  where
-    bpInsert a@(Ranked (K _ e _ bps) _) = do
-      c <- chart
-      let bc' = foldl (\m k -> M.insertWith' (++) k [rk c a] m) (cBPMap c) 
-                [(e, bp, val) | bp <- [1 .. length bps]
-                              , let val = bps !! (bp - 1)]
-      putChart c{cBPMap = bc'}
-    bpInsert _ = return ()
-    eInsert a = do
-      c <- chart
-      putChart c{cEdgeMap = M.alter (Just . update c a) (node a) (cEdgeMap c)}
-      return $ rk c a
-    update c a@(Inside _ _)  Nothing   = EM [a] [] S.empty
-    update c a@(Outside _ _) Nothing   = EM [] [a] S.empty
-    update c a@(Ranked _ _)  Nothing   = EM [] []  (S.singleton $ rk c a)
-    update c a@(Inside _ _)  (Just ce) = ce{emInside = [a]} 
-    update c a@(Outside _ _) (Just ce) = ce{emOutside = [a]}
-    update c a@(Ranked _ _)  (Just ce) = ce{emRanked = rk c a <| emRanked ce}
-    rk c (Ranked (K v e r bps) w) = 
-      Ranked (K v e (succ $ numRanked c v) bps) w
-    rk _ x = x
-
-
--- | @chartContains a@ checks whether the chart already contains an 
---   assignment that is equal to @a@ (with no respect paid to the rank 
---   of ranked items).
-chartContains 
-  :: (Ord v, Eq l, Eq w, Eq i) 
-  => Assignment v l w i -> KAStar p v l w i Bool
-chartContains (Inside (I v) _) 
-  = (not . null . flip insideAssignments v) `liftM` chart
-chartContains (Outside (O v) _) 
-  = (not . null . flip outsideAssignments v) `liftM` chart
-chartContains r@(Ranked (K v _ _ _) _) 
-  = (r `elem`) `liftM` (flip rankedAssignments v `liftM` chart)
-
-
--- | @agendaInsert as@ inserts the list @as@ of prioritized assignments
---   into the current agenda, updating the number of generated assignments
---   accordingly.
-agendaInsert 
-  :: (Ord v, Ord w, H.HeapItem p (w, Assignment v l w i)) 
-  => [(w, Assignment v l w i)] -> KAStar p v l w i ()
-agendaInsert as = do 
-  incItemsGenerated $ length as
-  putAgenda =<< flip (L.foldl' (flip H.insert)) as `liftM` agenda
-         
-
--- | @process@ pops assignments until
---
---   (1) there are none left or we have found the necessary number of
---       derivations of @g@, returning @Nothing@ /or/
---
---   (2) the popped assignment is not contained in the chart. In this case,
---       it is inserted and returned with its according rank.
-process 
-  :: (Ord v, Ord w, Ord i, Ord l, H.HeapItem p (w, Assignment v l w i)) 
-  => KAStar p v l w i (Maybe (Assignment v l w i))
-process = do
-  d <- done
-  if d then return Nothing 
-       else do -- agenda != empty
-         ((p, popped), agenda') <- (fromJust . H.view) `liftM` agenda
-         putAgenda agenda'
-         trigger <- chartInsert popped
-         case trigger of
-           Nothing -> process
-           _       -> return trigger
-  where done = do
-          e <- H.isEmpty `liftM` agenda
-          l <- liftM2 numRanked chart goal
-          k <- numDeriv
-          return $ e || l >= k
 
 -- | @kbest graph g h k@ finds the @k@ best derivations of the goal 
 -- node @g@ in @graph@, applying the heuristic function @h@.
@@ -455,6 +237,7 @@ kbest
   -> [(T.Tree (Hyperedge v l w i), w)]
 kbest = kastar (H.empty :: H.MaxPrioHeap w (Assignment v l w i))
 
+
 -- | @kworst graph g h k@ finds the @k@ worst derivations of the goal 
 -- node @g@ in @graph@, applying the heuristic function @h@.
 kworst
@@ -465,6 +248,7 @@ kworst
   -> Int
   -> [(T.Tree (Hyperedge v l w i), w)]
 kworst = kastar (H.empty :: H.MinPrioHeap w (Assignment v l w i))
+
 
 -- | @kastar agenda graph g h k@ finds the @k@ best derivations of the goal 
 -- node @g@ in @graph@, applying the heuristic function @h@. "Best" thereby
@@ -495,186 +279,7 @@ kastar agenda graph g h k
                               >> loop -- generate new assignments and continue
 
 
--- | @traceBackpoiners chart a@ reconstructs a derivation from the backpointers
---   contained in the ranked derivation assignment @a@. If @a@ is not such an
---   assignment, it returns @Nothing@.
-traceBackpointers 
-  :: Ord v 
-  => Chart v l w i
-  -> Assignment v l w i 
-  -> Maybe (T.Tree (Hyperedge v l w i), w)
-traceBackpointers c a@(Ranked _  w) = do
-  t <- helper a
-  return (t, w)
-  where helper (Ranked (K _ e _ bps) _) = T.Node e `fmap` mapM
-          (\(rank, idx) -> helper . head $ nthRankedAssignment c (eTail e !! idx) rank)
-          (zip bps [0..])
-        helper _ = Nothing
-traceBackpointers _ _ = Nothing
 
-
-------------------------------------------------------------------------------
--- Data Structures -----------------------------------------------------------
-------------------------------------------------------------------------------
-
--- | The agenda we store yet-to-be-processed assignments on
-type Agenda p v l w i = H.Heap p (w, Assignment v l w i)
-
--- | Assignments associate an item with a weight. Used as data structure in
---   agenda and chart.
-data Assignment v l w i = Inside (I v l w i) w
-                        | Outside (O v l w i) w
-                        | Ranked (K v l w i) w
-                          deriving (Show, Eq)
-
-
--- | Inside items of a node
-newtype I v l w i = I { iNode   :: v
-                      } deriving (Show, Eq)
-
-
--- | Outside items of a node
-newtype O v l w i = O { oNode   :: v
-                      } deriving (Show, Eq)
-
-
--- | Ranked derivation items of a node. Possess edge and backpointers for
---   derivation reconstruction as well as a rank.
-data K v l w i = K { kNode         :: v
-                   , kEdge         :: Hyperedge v l w i
-                   , kRank         :: Int
-                   , kBackpointers :: [Int]
-                   } deriving (Show)
-
-
--- When we check if the chart contains a ranked item, we disregard its rank.
-instance (Eq v, Eq l, Eq w, Eq i) => Eq (K v l w i) where
-  (K v e _ bps) == (K v' e' _ bps') = v == v' && e == e' && bps == bps'
-
-
--- | @True@ iff inside assignment
-isInside :: Assignment v l w i -> Bool
-isInside (Inside _ _) = True
-isInside _ = False
-
-
--- | @True@ iff outside assignment
-isOutside :: Assignment v l w i -> Bool
-isOutside (Outside _ _) = True
-isOutside _ = False
-
-
--- | @True@ iff ranked assignment
-isRanked :: Assignment v l w i -> Bool
-isRanked (Ranked _ _) = True
-isRanked _ = False
-
-
--- | Weight of an assignment
-weight :: Assignment v l w i -> w
-weight (Inside _ w)   = w
-weight (Outside  _ w) = w
-weight (Ranked _ w)   = w
-
-
--- | Returns edge for ranked assignments, @Nothing@ else
-edge :: Assignment v l w i -> Maybe (Hyperedge v l w i)
-edge (Ranked (K _ e _ _ ) _) = Just e
-edge _                       = Nothing
-
-
--- | Returns the node contained in the assignment
-node :: Assignment v l w i -> v
-node (Inside (I v) _)       = v
-node (Outside (O v) _)      = v
-node (Ranked (K v _ _ _) _) = v
-
-
--- | Returns rank of an asssignment
---   /Nota bene:/ raises error if assignment doesn't contain a rank!
-rank :: Assignment v l w i -> Int
-rank (Ranked (K _ _ r _) _) = r
-rank a = error "Tried to compute rank of non-ranked assignment"
--- Or should I do this with maybe? I will have to signal error somewhere...
-
--- | Returns backpointers of an asssignment
---   /Nota bene:/ raises error if assignment doesn't contain backpointers!
-backpointers :: Assignment v l w i -> [Int]
-backpointers (Ranked (K _ _ _ bps) _) = bps
-backpointers _ = error "Tried to compute rank of non-ranked assignment "
-
--- | Hyperedges must have an order to work as keys for 'Data.Map'.
-instance (Ord v, Ord l, Ord w, Ord i) => Ord (Hyperedge v l w i) where
-  e <= e'= let (h, h') = (eHead e,  eHead e')
-               (t, t') = (eTail e,  eTail e')
-               (l, l') = (eLabel e, eLabel e')
-               (w, w') = (eWeight e, eWeight e')
-               (i, i') = (eId e,    eId e')
-           in    h < h' 
-              || h == h' && t < t' 
-              || h == h' && t == t' && l < l'
-              || h == h' && t == t' && l == l' && w < w'
-              || h == h' && t == t' && l == l' && w == w'&& i <= i'
-
-
--- | Chart of already explored items with their weights.
---   'cEdgeMap' is a map assigning nodes to their corresponding inside,
---   outside, etc., items. Lists are sorted by /increasing/ weights.
---   'cBPMap' holds for each key @(e, i, v)@ those ranked assignments with
---   edge @e@ whose @i@-th backpointer has rank @v@.
-data Chart v l w i = C { cEdgeMap :: M.Map v (EdgeMapEntry v l w i)
-                       , cBPMap   :: M.Map (Hyperedge v l w i, Int, Int) 
-                                           [Assignment v l w i]
-                       }
-
-
--- | Entry of the chart, with inside, outside and ranked assignments for the
---   node.
-data EdgeMapEntry v l w i = EM { emInside  :: [Assignment v l w i]
-                               , emOutside :: [Assignment v l w i]
-                               , emRanked  :: S.Seq (Assignment v l w i)
-                               } deriving Show
-
--- | @insideAssignments c v@ returns inside assignments for the node @v@ 
---   in chart @c@
-insideAssignments :: Ord v => Chart v l w i ->  v -> [Assignment v l w i]
-insideAssignments c v = maybe [] emInside . M.lookup v $ cEdgeMap c
-
-
--- | @outsideAssignments c v@ returns outside assignments for the node @v@ 
---   in chart @c@
-outsideAssignments :: Ord v => Chart v l w i -> v -> [Assignment v l w i]
-outsideAssignments c v = maybe [] emOutside . M.lookup v $ cEdgeMap c
-
-
--- | @rankedAssignments c v@ returns ranked assignments for the node @v@ 
---   in chart @c@
-rankedAssignments :: Ord v => Chart v l w i -> v -> [Assignment v l w i]
-rankedAssignments c v = maybe [] (toList . emRanked) . M.lookup v $ cEdgeMap c
-
--- | @numRanked c v@ returns the number of assignments for node @v@ in 
---   chart @c@
-numRanked :: Ord v => Chart v l w i -> v -> Int
-numRanked c v = maybe 0 (S.length . emRanked) . M.lookup v $ cEdgeMap c
-
-
--- | @nthRankedAssignment c v n@ gets the @n@-ranked assignment for 
---   the node @v@ from chart @c@, returned in a singleton list.
---   If there is no such assignment, the function returns @[]@.
---   This is useful for code in the list monad.
-nthRankedAssignment :: Ord v 
-                    => Chart v l w i -> v 
-                    -> Int -> [Assignment v l w i]
-nthRankedAssignment c v n = if n >= 1 && n <= S.length s
-                            then [s `S.index` (S.length s - n)]
-                            else []
-  where s = maybe S.empty emRanked . M.lookup v $ cEdgeMap c
-
-
-rankedWithBackpointer :: (Ord v, Ord l, Ord w, Ord i) 
-                      => Chart v l w i -> (Hyperedge v l w i) 
-                      -> Int -> Int -> [Assignment v l w i]
-rankedWithBackpointer c e bp val = M.findWithDefault [] (e, bp, val) (cBPMap c)
 
 ------------------------------------------------------------------------------
 -- Helper functions ----------------------------------------------------------
@@ -689,7 +294,7 @@ edgesForward
      , M.Map v [(Hyperedge v l w i, Int)])
 edgesForward graph = (compute ins, compute others)
   where 
-    compute f = L.foldl' (\m (a, b) -> M.insertWith' (++) a b m) M.empty 
+    compute f = foldl' (\m (a, b) -> M.insertWith' (++) a b m) M.empty 
                 . concatMap f $ edges
     ins e = [(eTail e !! i, [(e, i)]) | i <- [0 .. pred . length . eTail $ e]]
     others e = (eHead e, [(e, 0)]) 
@@ -774,19 +379,19 @@ diff graph goal heur k = filter neq $  zip mine others
         others = nBest' k goal graph
 
 test :: IO ()
---test = comparison (Test.testHypergraphs !! 1) 'S' heur1 10 >>= putStrLn . show
+test = comparison (Test.testHypergraphs !! 1) 'S' heur1 10 >>= putStrLn . show
 --test = t3 `deepseq` return ()
 --test = t (Test.testHypergraphs !! 1) 'S' heur1 500
-test = (zipWith (\graph goal -> kbest graph goal (heur1::Char->Double) 1000) 
-                Test.testHypergraphs "AStt")
-       `deepseq` return ()
+--test = (zipWith (\graph goal -> kbest graph goal (heur1::Char->Double) 1000) 
+--                Test.testHypergraphs "AStt")
+--       `deepseq` return ()
 --test = mapM_ (uncurry go) (tail $ zip Test.testHypergraphs "AStt")
-  where
-    go graph start = mapM_ (uncurry pr) $ diff graph start heur1 50
-    pr l r = do
-      putStrLn "===MINE==="
-      putStrLn . uncurry str $ l
-      putStrLn "===OTHER==="
-      putStrLn . uncurry str $ r
-    str t w = "w = " ++ show w ++ "\n" 
-              ++ (T.drawTree . fmap drawHyperedge $ t)
+  -- where
+  --   go graph start = mapM_ (uncurry pr) $ diff graph start heur1 50
+  --   pr l r = do
+  --     putStrLn "===MINE==="
+  --     putStrLn . uncurry str $ l
+  --     putStrLn "===OTHER==="
+  --     putStrLn . uncurry str $ r
+  --   str t w = "w = " ++ show w ++ "\n" 
+  --             ++ (T.drawTree . fmap drawHyperedge $ t)

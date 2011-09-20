@@ -1,0 +1,206 @@
+-- (c) Johannes Osterholzer <oholzer@gmx.de>
+--
+-- Technische Universität Dresden / Faculty of Computer Science / Institute
+-- of Theoretical Computer Science / Chair of Foundations of Programming
+--
+-- Redistribution and use in source and binary forms, with or without
+-- modification, is ONLY permitted for teaching purposes at Technische
+-- Universität Dresden AND IN COORDINATION with the Chair of Foundations
+-- of Programming.
+-- ---------------------------------------------------------------------------
+
+module Algorithms.KAStar.Data
+  where
+
+import qualified Data.Map as M
+import qualified Data.Tree as T
+import qualified Data.Heap as H 
+import qualified Data.Sequence as S
+import Data.Sequence ((<|), (|>))
+import Data.Foldable (toList)
+
+import Data.Hypergraph
+
+
+-- | The agenda we store yet-to-be-processed assignments on
+type Agenda p v l w i = H.Heap p (w, Assignment v l w i)
+
+
+-- | Assignments associate an item with a weight. Used as data structure in
+--   agenda and chart.
+data Assignment v l w i = Inside (I v l w i) w
+                        | Outside (O v l w i) w
+                        | Ranked (K v l w i) w
+                          deriving (Show, Eq)
+
+
+-- | Inside items of a node
+newtype I v l w i = I { iNode   :: v
+                      } deriving (Show, Eq)
+
+
+-- | Outside items of a node
+newtype O v l w i = O { oNode   :: v
+                      } deriving (Show, Eq)
+
+
+-- | Ranked derivation items of a node. Possess edge and backpointers for
+--   derivation reconstruction as well as a rank.
+data K v l w i = K { kNode         :: v
+                   , kEdge         :: Hyperedge v l w i
+                   , kRank         :: Int
+                   , kBackpointers :: [Int]
+                   } deriving (Show)
+
+
+-- When we check if the chart contains a ranked item, we disregard its rank.
+instance (Eq v, Eq l, Eq w, Eq i) => Eq (K v l w i) where
+  (K v e _ bps) == (K v' e' _ bps') = v == v' && e == e' && bps == bps'
+
+
+-- | @True@ iff inside assignment
+isInside :: Assignment v l w i -> Bool
+isInside (Inside _ _) = True
+isInside _ = False
+
+
+-- | @True@ iff outside assignment
+isOutside :: Assignment v l w i -> Bool
+isOutside (Outside _ _) = True
+isOutside _ = False
+
+
+-- | @True@ iff ranked assignment
+isRanked :: Assignment v l w i -> Bool
+isRanked (Ranked _ _) = True
+isRanked _ = False
+
+
+-- | Weight of an assignment
+weight :: Assignment v l w i -> w
+weight (Inside _ w)   = w
+weight (Outside  _ w) = w
+weight (Ranked _ w)   = w
+
+
+-- | Returns edge for ranked assignments, @Nothing@ else
+edge :: Assignment v l w i -> Maybe (Hyperedge v l w i)
+edge (Ranked (K _ e _ _ ) _) = Just e
+edge _                       = Nothing
+
+
+-- | Returns the node contained in the assignment
+node :: Assignment v l w i -> v
+node (Inside (I v) _)       = v
+node (Outside (O v) _)      = v
+node (Ranked (K v _ _ _) _) = v
+
+
+-- | Returns rank of an asssignment
+--   /Nota bene:/ raises error if assignment doesn't contain a rank!
+rank :: Assignment v l w i -> Int
+rank (Ranked (K _ _ r _) _) = r
+rank a = error "Tried to compute rank of non-ranked assignment"
+-- Or should I do this with maybe? I will have to signal error somewhere...
+
+
+-- | Returns backpointers of an asssignment
+--   /Nota bene:/ raises error if assignment doesn't contain backpointers!
+backpointers :: Assignment v l w i -> [Int]
+backpointers (Ranked (K _ _ _ bps) _) = bps
+backpointers _ = error "Tried to compute rank of non-ranked assignment "
+
+
+-- | Hyperedges must have an order to work as keys for 'Data.Map'.
+instance (Ord v, Ord l, Ord w, Ord i) => Ord (Hyperedge v l w i) where
+  e <= e'= let (h, h') = (eHead e,  eHead e')
+               (t, t') = (eTail e,  eTail e')
+               (l, l') = (eLabel e, eLabel e')
+               (w, w') = (eWeight e, eWeight e')
+               (i, i') = (eId e,    eId e')
+           in    h < h' 
+              || h == h' && t < t' 
+              || h == h' && t == t' && l < l'
+              || h == h' && t == t' && l == l' && w < w'
+              || h == h' && t == t' && l == l' && w == w'&& i <= i'
+
+
+-- | Chart of already explored items with their weights.
+--   'cEdgeMap' is a map assigning nodes to their corresponding inside,
+--   outside, etc., items. Lists are sorted by /increasing/ weights.
+--   'cBPMap' holds for each key @(e, i, v)@ those ranked assignments with
+--   edge @e@ whose @i@-th backpointer has rank @v@.
+data Chart v l w i = C { cEdgeMap :: M.Map v (EdgeMapEntry v l w i)
+                       , cBPMap   :: M.Map (Hyperedge v l w i, Int, Int) 
+                                           [Assignment v l w i]
+                       }
+
+
+-- | Entry of the chart, with inside, outside and ranked assignments for the
+--   node.
+data EdgeMapEntry v l w i = EM { emInside  :: [Assignment v l w i]
+                               , emOutside :: [Assignment v l w i]
+                               , emRanked  :: S.Seq (Assignment v l w i)
+                               } deriving Show
+
+
+-- | @insideAssignments c v@ returns inside assignments for the node @v@ 
+--   in chart @c@
+insideAssignments :: Ord v => Chart v l w i ->  v -> [Assignment v l w i]
+insideAssignments c v = maybe [] emInside . M.lookup v $ cEdgeMap c
+
+
+-- | @outsideAssignments c v@ returns outside assignments for the node @v@ 
+--   in chart @c@
+outsideAssignments :: Ord v => Chart v l w i -> v -> [Assignment v l w i]
+outsideAssignments c v = maybe [] emOutside . M.lookup v $ cEdgeMap c
+
+
+-- | @rankedAssignments c v@ returns ranked assignments for the node @v@ 
+--   in chart @c@
+rankedAssignments :: Ord v => Chart v l w i -> v -> [Assignment v l w i]
+rankedAssignments c v = maybe [] (toList . emRanked) . M.lookup v $ cEdgeMap c
+
+-- | @numRanked c v@ returns the number of assignments for node @v@ in 
+--   chart @c@
+numRanked :: Ord v => Chart v l w i -> v -> Int
+numRanked c v = maybe 0 (S.length . emRanked) . M.lookup v $ cEdgeMap c
+
+
+-- | @nthRankedAssignment c v n@ gets the @n@-ranked assignment for 
+--   the node @v@ from chart @c@, returned in a singleton list.
+--   If there is no such assignment, the function returns @[]@.
+--   This is useful for code in the list monad.
+nthRankedAssignment :: Ord v 
+                    => Chart v l w i -> v 
+                    -> Int -> [Assignment v l w i]
+nthRankedAssignment c v n = if n >= 1 && n <= S.length s
+                            then [s `S.index` (S.length s - n)]
+                            else []
+  where s = maybe S.empty emRanked . M.lookup v $ cEdgeMap c
+
+
+rankedWithBackpointer :: (Ord v, Ord l, Ord w, Ord i) 
+                      => Chart v l w i -> (Hyperedge v l w i) 
+                      -> Int -> Int -> [Assignment v l w i]
+rankedWithBackpointer c e bp val = M.findWithDefault [] (e, bp, val) (cBPMap c)
+
+
+-- | @traceBackpoiners chart a@ reconstructs a derivation from the backpointers
+--   contained in the ranked derivation assignment @a@. If @a@ is not such an
+--   assignment, it returns @Nothing@.
+traceBackpointers 
+  :: Ord v 
+  => Chart v l w i
+  -> Assignment v l w i 
+  -> Maybe (T.Tree (Hyperedge v l w i), w)
+traceBackpointers c a@(Ranked _  w) = do
+  t <- helper a
+  return (t, w)
+  where helper (Ranked (K _ e _ bps) _) = T.Node e `fmap` mapM
+          (\(rank, idx) -> helper . head $ nthRankedAssignment c (eTail e !! idx) rank)
+          (zip bps [0..])
+        helper _ = Nothing
+traceBackpointers _ _ = Nothing
+
+
