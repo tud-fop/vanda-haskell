@@ -1,4 +1,4 @@
--- (c) Johannes Osterholzer <oholzer@gmx.de>
+-- (c) Johannes Osterholzer <johannes.osterholzer@gmail.com>
 --
 -- Technische Universität Dresden / Faculty of Computer Science / Institute
 -- of Theoretical Computer Science / Chair of Foundations of Programming
@@ -63,7 +63,7 @@ t1 = t test1 'g' heur1 20
 t2 = t test2 'x' heur1 20
 
 t3 :: [(T.Tree (Hyperedge Char Char Double ()), Double)]
-t3 = kbest (Test.testHypergraphs !! 1) 'S' heur1 1000
+t3 = kbest (Test.testHypergraphs !! 1) 'S' heur1 10
 
 t3' :: [(T.Tree (Hyperedge Char Char Double ()), Double)]
 t3' = nBest' 1000 'S' (Test.testHypergraphs !! 1)
@@ -87,25 +87,28 @@ diff
   -> (v -> w) 
   -> Int 
   -> [((T.Tree (Hyperedge v l w i), w), (T.Tree (Hyperedge v l w i), w))]
-diff graph goal heur k = filter neq $  zip mine others
+diff graph goal heur k = if length mine /= length others
+                         then error "different lengths in diff"
+                         else filter neq $  zip mine others
   where neq ((_, w1), (_, w2)) = w1 /= w2
         mine = kbest graph goal heur k
         others = nBest' k goal graph
 
 test :: IO ()
-test = comparison (Test.testHypergraphs !! 1) 'S' heur1 10 >>= putStrLn . show
+--test = comparison (Test.testHypergraphs !! 1) 'S' heur1 10 >>= putStrLn . show
 --test = t3 `deepseq` return ()
---test = t (Test.testHypergraphs !! 1) 'S' heur1 500
+test = t (Test.testHypergraphs !! 1) 'S' heur1 500
 --test = (zipWith (\graph goal -> kbest graph goal (heur1::Char->Double) 1000) 
 --                Test.testHypergraphs "AStt")
 --       `deepseq` return ()
---test = mapM_ (uncurry go) (tail $ zip Test.testHypergraphs "AStt")
-  -- where
-  --   go graph start = mapM_ (uncurry pr) $ diff graph start heur1 50
-  --   pr l r = do
-  --     putStrLn "===MINE==="
-  --     putStrLn . uncurry str $ l
-  --     putStrLn "===OTHER==="
-  --     putStrLn . uncurry str $ r
-  --   str t w = "w = " ++ show w ++ "\n" 
-  --             ++ (T.drawTree . fmap drawHyperedge $ t)
+{-test = mapM_ (uncurry go) (tail $ zip Test.testHypergraphs "AStt")
+  where
+    go graph start = mapM_ (uncurry pr) $ diff graph start heur1 50
+    pr l r = do
+      putStrLn "===MINE==="
+      putStrLn . uncurry str $ l
+      putStrLn "===OTHER==="
+      putStrLn . uncurry str $ r
+    str t w = "w = " ++ show w ++ "\n" 
+      ++ (T.drawTree . fmap drawHyperedge $ t)
+-}

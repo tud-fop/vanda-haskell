@@ -1,4 +1,4 @@
--- (c) Johannes Osterholzer <oholzer@gmx.de>
+-- (c) Johannes Osterholzer <johannes.osterholzer@gmail.com>
 --
 -- Technische Universität Dresden / Faculty of Computer Science / Institute
 -- of Theoretical Computer Science / Chair of Foundations of Programming

@@ -1,4 +1,4 @@
--- (c) Johannes Osterholzer <oholzer@gmx.de>
+-- (c) Johannes Osterholzer <johannes.osterholzer@gmail.com>
 --
 -- Technische Universität Dresden / Faculty of Computer Science / Institute
 -- of Theoretical Computer Science / Chair of Foundations of Programming
@@ -145,9 +145,12 @@ assert :: Eq v => [Assignment v l w i] -> Hyperedge v l w i -> Bool
 assert as e = and (zipWith f as $ eTail e) && length as == length (eTail e)
   where f a v = node a == v
 
--- | buildRuleO is triggered by an outside assignment for node @v@. We then 
---   find all edges with @v@ as head node and combine the 1-best derivations
---   of their tail nodes.
+-- | buildRuleO is either triggered by an outside assignment for node @v@. We 
+--   then find all edges with @v@ as head node and combine the 1-best 
+--   derivations of their tail nodes.
+--   Or it is triggered by a ranked derivation assignment. Then we combine
+--   this item along all hyperedges in question with the 1-best derivations
+--   of the edge's tail nodes.
 buildRuleO
   :: (Num w, Ord v, Eq l, Eq i)
   => Chart v l w i 
