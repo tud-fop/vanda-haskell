@@ -23,8 +23,8 @@ import Data.Set ( Set )
 import qualified Data.Set as Set
 import Data.Map ( Map )
 import qualified Data.Map as Map
+import Data.Maybe
 import qualified Data.Tree as T
-import Maybe
 -- import Array
 -- import System.Environment (getArgs)
 -- import Debug.Trace
