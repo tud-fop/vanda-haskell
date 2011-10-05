@@ -3,9 +3,9 @@ module Tools.Timestamps
 ) where
 
 
-import CPUTime
 import Data.Time.Clock
 import Data.Time.LocalTime ()
+import System.CPUTime
 import Text.Printf
 
 

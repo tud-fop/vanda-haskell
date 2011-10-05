@@ -34,7 +34,7 @@ import qualified Data.List as L
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Data.Tree as T
-import qualified Random as R
+import qualified System.Random as R
 
 -- import Debug.Trace
 

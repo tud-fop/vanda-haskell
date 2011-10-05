@@ -29,7 +29,7 @@ import qualified Data.Array as A
 import qualified Data.List as L
 import qualified Data.Map as M
 import qualified Data.IntMap as IM
-import System (getArgs)
+import System.Environment (getArgs)
 
 -- import Debug.Trace
 

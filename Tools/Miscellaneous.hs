@@ -23,7 +23,7 @@ module Tools.Miscellaneous(
 ) where
 
 import qualified Data.List as L
-import qualified Random as R
+import qualified System.Random as R
 
 -- ---------------------------------------------------------------------------
 -- | Apply a function to the first component of a pair.

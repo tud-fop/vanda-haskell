@@ -29,7 +29,7 @@ import Tools.PrettyPrint (putStrColumns)
 import Data.Array{-.Diff-}
 import qualified Data.List as L
 import qualified Data.Map as M
-import System (getArgs)
+import System.Environment (getArgs)
 
 -- import Debug.Trace
 

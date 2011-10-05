@@ -76,7 +76,7 @@ import qualified Data.Map as M
 import Data.Maybe
 import qualified Data.Set as S
 import qualified Data.Tree as T
-import qualified Random as R
+import qualified System.Random as R
 
 -- ---------------------------------------------------------------------------
 

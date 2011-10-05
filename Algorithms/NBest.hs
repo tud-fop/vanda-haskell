@@ -26,7 +26,7 @@ import qualified Data.Map as Map
 import qualified Data.Tree as T
 import Maybe
 -- import Array
--- import System( getArgs )
+-- import System.Environment (getArgs)
 -- import Debug.Trace
 import qualified Data.Heap as Heap
 import Data.Heap ( MinHeap )

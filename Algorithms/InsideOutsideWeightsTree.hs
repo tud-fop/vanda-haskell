@@ -34,7 +34,7 @@ import TestData.TestHypergraph
 import Control.DeepSeq
 import Data.Traversable (Traversable, mapAccumL)
 import Debug.Trace
-import System (getArgs)
+import System.Environment (getArgs)
 
 
 findWithDefault3

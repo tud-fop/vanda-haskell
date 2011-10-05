@@ -23,7 +23,7 @@ import TestData.TestWTA
 import Data.Map as M
 import qualified Data.Tree as T
 import           Text.Parsec.String (parseFromFile)
-import qualified Random as R
+import qualified System.Random as R
 
 -- -------------------------------------------------------------------
 -- WTA related

@@ -31,9 +31,9 @@ import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
 import qualified Data.Tree as T
 import Data.Traversable (Traversable, mapAccumL)
-import qualified Random as R
-import System(getArgs)
+import System.Environment (getArgs)
 import System.IO (hSetBuffering, stdout, BufferMode(..))
+import qualified System.Random as R
 
 
 main :: IO ()
