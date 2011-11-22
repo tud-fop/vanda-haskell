@@ -12,91 +12,92 @@
 module Algorithms.CYKExtended (cyk) where
 
 
+import qualified Data.Queue as Q
 import Data.WCFG
-import Tools.Miscellaneous (mapFst, mapSnd)
 
 import Data.List (tails)
-import Data.Maybe (catMaybes, mapMaybe)
-import qualified Data.Set as S
+import qualified Data.Map as M
+import Data.Maybe (mapMaybe)
 
 
 data Item v t w i = Item
-  (Production v t w i)     -- the source production
-  Int                      -- start position in input string
-  Int                      -- end position in input string
-  [Either (Int, v,Int) t]  -- new rhs
-  [Either v t]             -- rest of old rhs
+  (Production v t w i)      -- the source production
+  Int                       -- start position in input string
+  Int                       -- end position in input string
+  [Either (Int, v, Int) t]  -- new rhs (reversed)
+  [Either v t]              -- rest of old rhs
+  [t]                       -- unscanned part of input word
+  deriving (Show)
 
 
--- | Bottom up parsing for epsilon-free 'Data.WCFG.WCFG's.
--- /It is not checked if the input grammar is epsilon-free./
+-- | Bottom up parsing for 'Data.WCFG.WCFG's.
 cyk :: (Eq t, Ord v) => [t] -> WCFG v t w i -> WCFG (Int, v, Int) t w i
 cyk w g
-  = let n = length w
-        (items, prods)
-          = partitionItems
-          $ catMaybes
-              [ scan' w' $ Item p i i [] (pRight p)
-              | p <- productions g
-              , (i, w') <- zip [0 ..] $ tails w
-              ]
-        ls = S.fromList $ map pLeft prods
-     in wcfg (0, initial g, n)
-     $ prods ++ iter [0 .. n] w ls ls items
+  = wcfg (0, initial g, length w)
+  $ iter M.empty
+  $ Q.fromList
+  $ mapMaybe scan
+    [ Item p i i [] (pRight p) w'
+    | p <- productions g
+    , (i, w') <- zip [0 ..] $ tails w
+    ]
 
 
 iter
   :: (Eq t, Ord v)
-  => [Int]                -- ^ unprocessed spans
-  -> [t]                  -- ^ input string
-  -> S.Set (Int, v, Int)  -- ^ unprocessed new non-terminals for current span
-  -> S.Set (Int, v, Int)  -- ^ currently all new non-terminals
-  -> [Item v t w i]       -- ^ currently all items
+  => M.Map (Int, v) (M.Map Int [t], [Item v t w i])
+  -> Q.Queue (Item v t w i)
   -> [Production (Int, v, Int) t w i]
-iter [] _ _ _ _ = []
-iter ks@(k : ks') w ls' ls items
-  | S.null ls'
-  = iter ks' w ls ls items
-  | otherwise
-  = let (items', prods)
-          = partitionItems
-          $ mapMaybe (scan w)
-              [ Item p i j' (Left v' : r) rest
-              | Item p i j r (Left v : rest) <- items
-              , let j' = i + k
-              , let v' = (j, v, j')
-              , S.member v' ls'
-              ]
-        ls'' = S.fromList (map pLeft prods) S.\\ ls
-    in prods
-    ++ iter
-          ks
-          w
-          ls''
-          (S.union ls ls'')
-          (items' ++ items)
+iter m q
+  | Q.null q  = []
+  | otherwise = let (it, q') = Q.deq q in
+    case it of
+      Item p i j r (Left v : rest) _
+       -> let (wM, its) = M.findWithDefault (M.empty, []) (j, v) m
+          in iter (M.insert (j, v) (wM, it : its) m)
+            $ flip Q.enqList q'
+            $ flip mapMaybe (M.toList wM)
+            $ \ (k, w) -> scan $ Item p i k (Left (j, v, k) : r) rest w
+      Item p j k r [] w
+       -> let v = pLeft p
+              v' = (j, v, k)
+              (wM, its) = M.findWithDefault (M.empty, []) (j, v) m
+       in production v' (reverse r) (pWeight p) (pId p)
+        : if M.member k wM
+          then iter m q'
+          else iter (M.insert (j, v) (M.insert k w wM, its) m)
+            $ flip Q.enqList q'
+            $ flip mapMaybe its
+            $ \ (Item p' i _{-j-} r' (_{-Left v-} : rest) _)
+              -> scan $ Item p' i k (Left v' : r') rest w
+      _ -> error "Algorithms.CYKExtended.iter: Invariant violated"
 
 
-partitionItems
-  ::  [Item v t w i]
-  -> ([Item v t w i], [Production (Int, v, Int) t w i])
-partitionItems
-  = foldr f ([], [])
-  where
-    f (Item p i j r [])
-      = mapSnd (production (i, pLeft p, j) (reverse r) (pWeight p) (pId p) :)
-    f item
-      = mapFst (item :)
-
-
-scan :: (Eq t) => [t] -> Item v t w i -> Maybe (Item v t w i)
-scan w item@(Item _ _ j _ _) = scan' (drop j w) item
-
-
-scan' :: (Eq t) => [t] -> Item v t w i -> Maybe (Item v t w i)
-scan' (t : w) (Item p i j r (Right t' : rest))
-  | t == t'   = scan' w (Item p i (j + 1) (Right t' : r) rest)
+scan :: (Eq t) => Item v t w i -> Maybe (Item v t w i)
+scan (Item p i j r (Right t : rest) (t' : w))
+  | t == t'   = scan (Item p i (j + 1) (Right t : r) rest w)
   | otherwise = Nothing
-scan' _ item@(Item _ _ _ _ (Left _ : _)) = Just item
-scan' _ item@(Item _ _ _ _ []          ) = Just item
-scan' _ _                                = Nothing
+scan item@(Item _ _ _ _ (Left _ : _) _) = Just item
+scan item@(Item _ _ _ _ []           _) = Just item
+scan _                                  = Nothing
+
+
+{-
+g1 :: WCFG Char Char Int Int
+g1 = wcfg 'S'
+  [ production 'S' [Left 'A', Left 'B', Left 'D'] 0 0
+  , production 'A' [Right 'a', Left 'A'] 1 1
+  , production 'A' [] 2 2
+  , production 'B' [Left 'C', Left 'B', Left 'C', Right 'b', Left 'C'] 3 3
+  , production 'B' [Right 'b'] 4 4
+  , production 'C' [] 5 5
+  , production 'D' [Left 'C'] 6 6
+  ]
+
+
+g2 :: WCFG Char Char Int Int
+g2 = wcfg 'S'
+  [ production 'S' [Left 'S', Left 'S'] 0 0
+  , production 'S' [Right 's'] 1 1
+  ]
+-}
