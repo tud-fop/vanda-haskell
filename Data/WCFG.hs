@@ -36,6 +36,7 @@ module Data.WCFG (
 import Data.Hypergraph
 import Tools.FastNub
 
+import Control.DeepSeq
 import Data.Either (lefts, rights)
 
 
@@ -140,3 +141,14 @@ drawWCFG ::  (Show v, Show t, Show w, Show i) => WCFG v t w i -> [Char]
 drawWCFG g
   = "initial: " ++ show (initial g) ++ "\n"
   ++ drawHypergraph (productionsHypergraph g)
+
+-- ---------------------------------------------------------------------------
+
+instance (NFData v, NFData t, NFData w, NFData i)  => NFData (WCFG v t w i) where
+  rnf (WCFG ini ps) = rnf ini `seq` rnf ps
+
+
+instance
+  (NFData v, NFData t, NFData w, NFData i)
+  => NFData (Production v t w i) where
+  rnf (Production l r w i) = rnf l `seq` rnf r `seq` rnf w `seq` rnf i
