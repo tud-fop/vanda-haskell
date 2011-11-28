@@ -24,7 +24,9 @@ module Algorithms.KAStar.State
   , chart
   , agenda
   , agendaInsert
-  , process
+  , popAgenda
+  , chartInsert 
+  , numDeriv 
   ) where
 
 import Control.Monad.State
@@ -239,29 +241,10 @@ agendaInsert as = do
   incItemsGenerated $ length as
   putAgenda =<< flip (foldl' (flip H.insert)) as `liftM` agenda
          
-
--- | @process@ pops assignments until
---
---   (1) there are none left or we have found the necessary number of
---       derivations of @g@, returning @Nothing@ /or/
---
---   (2) the popped assignment is not contained in the chart. In this case,
---       it is inserted and returned with its according rank.
-process 
-  :: (Ord v, Ord w, Ord i, Ord l, H.HeapItem p (w, Assignment v l w i)) 
-  => KAStar p v l w i (Maybe (Assignment v l w i))
-process = do
-  d <- done
-  if d then return Nothing 
-       else do -- agenda != empty
-         ((p, popped), agenda') <- (fromJust . H.view) `liftM` agenda
-         putAgenda agenda'
-         trigger <- chartInsert popped
-         case trigger of
-           Nothing -> process
-           _       -> return trigger
-  where done = do
-          e <- H.isEmpty `liftM` agenda
-          l <- liftM2 numRanked chart goal
-          k <- numDeriv
-          return $ e || l >= k
+popAgenda 
+  :: H.HeapItem p (w, Assignment v l w i)
+  => KAStar p v l w i (Assignment v l w i)
+popAgenda = do
+  ((p, popped), agenda') <- (fromJust . H.view) `liftM` agenda
+  putAgenda agenda'
+  return popped

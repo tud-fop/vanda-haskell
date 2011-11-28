@@ -95,9 +95,9 @@ diff graph goal heur k = if length mine /= length others
         others = nBest' k goal graph
 
 test :: IO ()
---test = comparison (Test.testHypergraphs !! 1) 'S' heur1 10 >>= putStrLn . show
+test = comparison (Test.testHypergraphs !! 1) 'S' heur1 10 >>= putStrLn . show
 --test = t3 `deepseq` return ()
-test = t (Test.testHypergraphs !! 1) 'S' heur1 500
+--test = t (Test.testHypergraphs !! 1) 'S' heur1 500
 --test = (zipWith (\graph goal -> kbest graph goal (heur1::Char->Double) 1000) 
 --                Test.testHypergraphs "AStt")
 --       `deepseq` return ()

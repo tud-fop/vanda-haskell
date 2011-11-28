@@ -24,7 +24,7 @@ import qualified Data.Map as M
 import qualified Data.Tree as T
 import qualified Data.Heap as H 
 import Data.List (foldl')
-import Data.Maybe (mapMaybe)
+import Data.Maybe (mapMaybe, fromJust)
 import Debug.Trace
 
 import Data.Hypergraph
@@ -89,8 +89,8 @@ switchRule
   -> [(w, Assignment v l w i)]
 switchRule c g trigger = do
   guard $ isInside trigger && node trigger == g
-  ig <- insideAssignments c g
-  return $! (weight ig, Outside (O g) 1)
+--  ig <- insideAssignments c g
+  return $! (weight trigger, Outside (O g) 1)
 
 
 -- | The In-rule generates a new inside assignment from the inside assignments
@@ -272,7 +272,7 @@ kastar agenda graph g h k
   = --trace ("Inserted " ++ (show . stItemsInserted $ info) 
     --  ++ " assignments, generated " ++ (show . stItemsGenerated $ info) 
     --  ++ "assignments.\n") $
-    reverse $ mapMaybe (traceBackpointers res) $ rankedAssignments res g
+    reverse . mapMaybe (traceBackpointers res) $ rankedAssignments res g
   where (res, info)   = runKAStar kst agenda k graph g h ins others
         (ins, others) = edgesForward graph
         kst = do
@@ -284,6 +284,31 @@ kastar agenda graph g h k
             Nothing        -> chart  -- we're done, return the chart
             (Just trigger) -> (agendaInsert =<< newAssignments trigger) 
                               >> loop -- generate new assignments and continue
+
+-- | @process@ pops assignments until
+--
+--   (1) there are none left or we have found the necessary number of
+--       derivations of @g@, returning @Nothing@ /or/
+--
+--   (2) the popped assignment is not contained in the chart. In this case,
+--       it is inserted and returned with its according rank.
+process 
+  :: (Ord v, Ord w, Ord i, Ord l, H.HeapItem p (w, Assignment v l w i)) 
+  => KAStar p v l w i (Maybe (Assignment v l w i))
+process = do
+  d <- done
+  if d then return Nothing 
+       else do -- agenda != empty
+         popped <- popAgenda
+         trigger <- chartInsert popped
+         case trigger of
+           Nothing -> process
+           _       -> return trigger
+  where done = do
+          e <- H.isEmpty `liftM` agenda
+          l <- liftM2 numRanked chart goal
+          k <- numDeriv
+          return $ e || l >= k
 
 
 ------------------------------------------------------------------------------
