@@ -10,12 +10,40 @@
 -- ---------------------------------------------------------------------------
 
 module Tools.PrettyPrint
-( prettyIndentBracktes
+( lazyAlign
+, prettyIndentBracktes
 , putStrColumns
 ) where
 
 
-import Data.List (transpose)
+import Data.List (findIndex, intercalate, transpose)
+
+
+-- | Align many columns at a special character. The alignement in the columns
+-- is based on the widest entry seen so far, respectively. For example:
+--
+-- >>> putStr $ lazyAlign '.' [["1.1", "0."], ["1.11", "0."], ["1.1", "0."]]
+-- 1.1 0.
+-- 1.11 0.
+-- 1.1  0.
+lazyAlign :: Char -> [[String]] -> String
+lazyAlign c = unlines . go []
+  where
+    go _ [] = []
+    go als (ss : ls)
+      = let (als', ss') = unzip $ map align $ zip (als ++ repeat (0, 0)) ss
+        in intercalate " " ss' : go als' ls
+    align ((l, r), cs)
+      = let len = length cs in
+        case findIndex (c ==) cs of
+          Nothing -> let l' = max l len in
+            ( (l', r)
+            , replicate (l' - len) ' ' ++ cs ++ replicate (r + 1) ' '
+            )
+          Just i -> let {l' = max l i; r' = max r (len - i)} in
+            ( (l', r')
+            , replicate (l' - i) ' ' ++ cs ++ replicate (r' - len + i) ' '
+            )
 
 
 indentation :: Int -> String
