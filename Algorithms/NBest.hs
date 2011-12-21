@@ -19,9 +19,9 @@ module Algorithms.NBest
 import Tools.Miscellaneous (mapSnd)
 
 import Data.List
-import Data.Set ( Set )
+-- import Data.Set ( Set )
 import qualified Data.Set as Set
-import Data.Map ( Map )
+-- import Data.Map ( Map )
 import qualified Data.Map as Map
 -- import Data.Maybe
 import qualified Data.Tree as T
@@ -107,29 +107,56 @@ lft  (hNodes, hBack, hWeights) = (hNodes, hBack, hWeights')
 knuth
   :: (Ord hWeight, Ord hNode, Ord hEdge)
   => HGraph hNode hEdge hWeight -> hNode -> Maybe (hWeight, hEdge)
-knuth h@(hNodes, _, _)
+knuth (hNodes, hBack, hWeights)
   = flip Map.lookup
-  $ knuth' h (Set.fromList hNodes) Map.empty
-
-
-knuth'
-  :: (Ord hWeight, Ord hNode, Ord hEdge)
-  => HGraph hNode hEdge hWeight
-  -> Set hNode
-  -> Map hNode (hWeight, hEdge)
-  -> Map hNode (hWeight, hEdge)
-knuth' h@(_, hBack, hWeights) unvis bestMap
-  = if null candidates
-    then bestMap
-    else knuth' h (Set.delete v unvis) (Map.insert v m bestMap)
+  $ let
+      forwM
+        = Map.fromListWith Set.union
+            [ (v', Set.singleton sym)
+            | v <- hNodes
+            , (sym, vs@(_ : _)) <- hBack v
+            , v' <- vs
+            ]
+      unvisM
+        = Map.fromList
+            [ (sym, (Set.fromList vs, vs, v))
+            | v <- hNodes
+            , (sym, vs@(_ : _)) <- hBack v
+            ]
+      candM
+        = Map.fromListWith candMin
+            [(v, (hWeights sym [], sym)) | v <- hNodes, (sym, []) <- hBack v]
+    in go forwM unvisM candM Map.empty
   where
-    (v, m) = minimumBy (\ (_, (x, _)) (_, (x', _)) -> compare x x') candidates
-    candidates
-      = [ (v', (hWeights sym (fst $ unzip bests), sym))
-        | v' <- Set.toList unvis
-        , (sym, srcs) <- hBack v'
-        , Just bests <- [sequence $ map (flip Map.lookup bestMap) srcs]
-        ]
+    candMin x@(x', _) y@(y', _) = if x' <= y' then x else y
+    go forwM unvisM candM bestM
+      = if Map.null candM
+        then bestM
+        else go
+              forwM'
+              unvisM'
+              (Map.delete v candM')
+              bestM'
+      where
+        candCompare (_, (x, _)) (_, (x', _)) = compare x x'
+        bestM' = Map.insertWith (flip const) v m bestM
+        (v, m) = minimumBy candCompare (Map.toList candM)
+        (syms, forwM') = Map.updateLookupWithKey (\ _ _ -> Nothing) v forwM
+        (unvisM', candM')
+          = foldl' step (unvisM, candM) (maybe [] Set.toList syms)
+          where
+            step (unvisM'', candM'') sym
+              = unvisM'' `seq` candM'' `seq`
+                let (unvisS, vs, v') = unvisM'' Map.! sym
+                    unvisS' = Set.delete v unvisS
+                    w = hWeights sym (fst $ unzip $ map ((Map.!) bestM') vs)
+                in if Set.null unvisS'
+                   then ( Map.delete sym unvisM''
+                        , if Map.member v' bestM'
+                          then candM''
+                          else Map.insertWith candMin v' (w, sym) candM''
+                        )
+                   else (Map.insert sym (unvisS', vs, v') unvisM'', candM'')
 
 {-
 kknuth
