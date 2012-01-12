@@ -18,7 +18,7 @@ module Algorithms.EMTrees (
   normalize
 ) where
 
-import Data.Hypergraph
+import Data.Hypergraph hiding (parseTree)
 import Data.Hypergraph.Acyclic
 import Tools.Miscellaneous (mapSnd)
 

@@ -24,12 +24,10 @@
 module Algorithms.StateSplit where
 
 import Algorithms.EMTrees
+import Data.Hypergraph hiding (parseTree)
 import Data.Hypergraph.Acyclic
 import Tools.Miscellaneous(mapFst, mapSnd, sumWith)
 
-import Data.Hypergraph
-
-import qualified Data.IntMap as IM
 import qualified Data.List as L
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -117,15 +115,7 @@ splitMergeStep offset ts target g0 gen
       $ mapAccumIds (\ (i : is) _ -> (is, i)) [0 ..]
       $ split offset (target ==) g0
     training
-      = map (\ t -> (M.singleton target 1, edgeTree find [target] t, 1)) ts
-      where
-        find len lab
-          =  M.findWithDefault M.empty lab
-          $ IM.findWithDefault M.empty len m
-        m = IM.map (M.map (M.fromListWith (++)) . M.fromListWith (++))
-          . IM.fromListWith (++)
-          . map (\ e -> (length (eTail e), [(eLabel e, [(eHead e, [e])])]))
-          $ edges g1
+      = map (\ t -> (M.singleton target 1, parseTree g1 [target] t, 1)) ts
     wM
       = forestEM
           (map (map eId) . M.elems $ edgesM g1)
