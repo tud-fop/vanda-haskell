@@ -9,10 +9,33 @@
 -- of Programming.
 -- ---------------------------------------------------------------------------
 
+-- |
+-- Maintainer  :  Toni Dietze
+-- Stability   :  unknown
+-- Portability :  portable
+
 {-- snippet types --}
-module Data.WSA(Transition(Transition), transTerminal, transStateIn,
-    transStateOut, transWeight, WSA, states, transitions, initialWeights,
-    finalWeights, create, fromList, fromListCyclic, justTerminals) where
+module Data.WSA
+(   
+    -- * Types 
+    Transition(Transition)
+  , WSA
+    -- * Construction
+  , create
+  , fromList
+  , fromListCyclic
+    -- * Decomposition
+  , transTerminal
+  , transStateIn
+  , transStateOut
+  , transWeight
+  , states
+  , transitions
+  , initialWeights
+  , finalWeights
+    -- * Transformation
+  , justTerminals
+) where
 
 import Tools.FastNub(nub)
 
@@ -20,7 +43,7 @@ import Control.DeepSeq
 
 
 data Transition state terminal weight = Transition
-    { transTerminal :: terminal
+    { transTerminal :: terminal   
     , transStateIn  :: state
     , transStateOut :: state
     , transWeight   :: weight
@@ -33,6 +56,7 @@ data WSA state terminal weight = WSA
     , finalWeights   :: [(state, weight)]
     } deriving Show
 
+-- | Create a 'WSA' from a 'List' of 'Transition's, initial weights and final weights.
 create ::
   (Ord p) => [Transition p t w] -> [(p, w)] -> [(p, w)] -> WSA p t w
 create ts is fs
@@ -44,7 +68,7 @@ create ts is fs
     in WSA ss ts is fs
 {-- /snippet types --}
 
-
+-- | Create a 'WSA' from a word (list of terminals).
 fromList :: (Num w) => w -> [t] -> WSA Int t w
 fromList w ts
   = let l = length ts
@@ -54,7 +78,7 @@ fromList w ts
         [(0, w)]
         [(l, 1)]
 
-
+-- | Create a 'WSA' from a word (list of terminals). The 'WSA' represents the Kleene-Star of the word.
 fromListCyclic :: (Num w) => [t] -> WSA Int t w
 fromListCyclic ts
   = let l = length ts
@@ -64,7 +88,7 @@ fromListCyclic ts
         [(0, 1)]
         [(0, 1)]
 
-
+-- | transform a WSA to an equivalent WSA where the transitions are a 'Maybe'-Type
 justTerminals :: WSA p t w -> WSA p (Maybe t) w
 justTerminals wsa
   = wsa { transitions = 
