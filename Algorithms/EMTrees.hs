@@ -18,8 +18,8 @@ module Algorithms.EMTrees (
   normalize
 ) where
 
-import Algorithms.InsideOutsideWeightsTree
 import Data.Hypergraph
+import Data.Hypergraph.Acyclic
 import Tools.Miscellaneous (mapSnd)
 
 import qualified Data.List as L

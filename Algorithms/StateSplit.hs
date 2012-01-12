@@ -24,7 +24,7 @@
 module Algorithms.StateSplit where
 
 import Algorithms.EMTrees
-import Algorithms.InsideOutsideWeightsTree
+import Data.Hypergraph.Acyclic
 import Tools.Miscellaneous(mapFst, mapSnd, sumWith)
 
 import Data.Hypergraph

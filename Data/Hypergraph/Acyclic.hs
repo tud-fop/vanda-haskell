@@ -15,7 +15,7 @@
 --
 -- @[hyperedge (q, p) [(q1, p ++ [1]), ..., (qn, p ++ [n])] l w i | @
 -- the 'Tree' contains @(hyperedge q [q1, ..., qn] l w i)@ at position @p]@.
-module Algorithms.InsideOutsideWeightsTree where
+module Data.Hypergraph.Acyclic where
 
 import Data.Hypergraph
 import Tools.Miscellaneous (mapSnd)
