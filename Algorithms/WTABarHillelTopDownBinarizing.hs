@@ -10,9 +10,26 @@
 -- of Programming.
 -- ---------------------------------------------------------------------------
 
+-- |
+-- Maintainer  :  Matthias Büchse, Toni Dietze
+-- Stability   :  unbekannt
+-- Portability :  portable
+--
+-- This module computes the intersect of a 'WSA.WSA' and a 'WTA.WTA'.
+-- The resulting 'WTA.WTA' recognizes the intersection of the languages of both automata
+-- and is binarized.
+--
+-- See <http://dl.acm.org/citation.cfm?id=1697236.1697238> for theoretical informations about the Bar-Hillel-Algorithm.
+--
+-- Test 'Set.Set'
+
 {-- snippet head --}
---module WTABarHillelTopDown(intersect, intersect') where
-module Algorithms.WTABarHillelTopDownBinarizing where
+--module Algorithms.WTABarHillelTopDownBinarizing where
+module Algorithms.WTABarHillelTopDownBinarizing(
+
+  intersect
+, intersect'
+) where
 
 import Data.Hypergraph
 import qualified Data.WSA as WSA
@@ -23,11 +40,16 @@ import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 
+
 -- import Debug.Trace
 
 {-- /snippet head --}
 ----- Queue --------------------------------------------------------------------
 {-- snippet queue --}
+
+-- Queue is nearly the same as 'Data.Queue' but implements an additional
+-- set to avoid doubling 'Items' in the Queue.
+
 data Queue a = Queue [a] [a] (Set.Set a) deriving (Show)
 
 emptyq :: Queue a
@@ -65,10 +87,10 @@ toList (Queue xs ys _) = xs ++ (reverse ys)
 data Item p q t w i = Item
     { wsaStateFst  :: p
     , wsaStateSnd  :: p
-    , wtaTrans     :: Hyperedge q t w i
-    , bullet       :: Int -- redundant: bullet == length wtaTransSt
-    , wtaTransSt   :: [q]
-    , wtaTransRest :: [q]
+    , wtaTrans     :: Hyperedge q t w i                                 -- ^ The transition the item was built from
+    , bullet       :: Int -- redundant: bullet == length wtaTransSt     -- ^ Position of the bullet.
+    , wtaTransSt   :: [q]                                               -- ^ List of states of a 'WSA'.
+    , wtaTransRest :: [q]                                               -- ^ List of states after the bullet.
     , weight       :: w
     }
     -- deriving (Eq, Ord)
@@ -108,23 +130,28 @@ instance (Show p, Show q, Show t, Show w) => Show (Item p q t w i) where
 {-- /snippet Item --}
 {-- snippet State --}
 -- State wsaState wtaState terminal weight
+-- | A state represents the actual status of the algorithm.
 data State p q t w i = State
-    { itemq :: Queue (Item p q t w i)
-    , pmap  :: Map.Map q ([Hyperedge q t w i], Set.Set p)
-    , smap  :: Map.Map (p, t) [(p, w)]
-    , cmap  :: Map.Map (p, q) (Set.Set p, [Item p q t w i])
-    , epsilonTest :: t -> Bool
+    { itemq :: Queue (Item p q t w i)                           -- ^ A 'Queue' of Items.
+    , pmap  :: Map.Map q ([Hyperedge q t w i], Set.Set p)       -- ^ Map each state q of a 'WTA' to the transitions in the 'WTA' ('Hyperedge's) which use q as head vertex
+                                                                -- and to the set of states of a 'WSA' for which the transitions already have been predicted
+    , smap  :: Map.Map (p, t) [(p, w)]                          -- ^ Another representation of 'WSA'-transitions. An incoming state and a terminal are mapped to a list of outcoming states and weights.
+    , cmap  :: Map.Map (p, q) (Set.Set p, [Item p q t w i])     -- ^ Map a 'WSA' state p and a 'WTA' state q to a set of 'WSA' states and a list of 'Item's.
+    , epsilonTest :: t -> Bool                                  -- ^ Check, wether a terminal t should be interpreted as empty string or not.
     , _trans :: [Hyperedge (p,[q],p) (Maybe t) w i]
     }
 {-- /snippet State --}
 {-- snippet intersect --}
 {-- snippet head --}
+-- | Intersect a 'WSA' and a 'WTA'.
 intersect
   :: (Show p, Show q, Show t, Show w,
       Ord p, Ord i, Ord q, Ord t, Ord w, Num w)
   => WSA.WSA p t w -> WTA.WTA q t w i -> WTA.WTA (p, [q], p) (Maybe t) w i
 intersect wsa wta = intersect' (const False) wsa wta
 
+-- |  Intersect a 'WSA' and a 'WTA'. Use a boolean function to determine,
+-- wether a terminal should be interpreted as empty string or not.
 intersect'
   :: (Show p, Show q, Show t, Show w,
       Ord p, Ord i, Ord q, Ord t, Ord w, Num w)
@@ -142,6 +169,11 @@ intersect' epsTest wsa wta
     in WTA.wtaCreate finals trans
 {-- /snippet intersect --}
 {-- snippet iter --}
+
+-- | perform an iteration of the early algorithm, meaning apply complete, predict
+-- and scan to the passed 'State' and return the resulting 'State'.
+
+-- Scanning is performed in the predict'-function.
 iter
   :: (Show p, Show q, Show t, Show w,
       Ord p, Ord i, Ord q, Ord t, Ord w, Num w)
@@ -156,6 +188,7 @@ iter s
 
 ----- Initialization -----------------------------------------------------------
 {-- snippet init --}
+-- | Construct a map representing the 'WSA.Transition's of a 'WSA'.
 initScanMap ::
   (Ord p, Ord t) =>
   [WSA.Transition p t w] -> Map.Map (p, t) [(p, w)]
@@ -167,7 +200,7 @@ initScanMap ts
       | t <- ts
       ]
 
-
+-- | Construct the initial 'State'.
 initState
   :: (Show p, Show q, Show t, Show w,
       Ord p, Ord i, Ord q, Ord t, Ord w, Num w)
@@ -366,7 +399,7 @@ showItemLaTeX i
         ++ show (wsaStateSnd i)
         ++ "]"
 
-
+-- | Count the 'Item's in the 'Queue' of the last 'State' after intersection.
 intersectionItemCount
   :: (Show p, Show q, Show t, Num w, Ord p, Ord i, Ord q, Ord t, Ord w)
   => WSA.WSA p t w -> WTA.WTA q t w i -> Int
