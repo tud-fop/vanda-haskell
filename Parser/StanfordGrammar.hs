@@ -23,7 +23,10 @@ import           Text.Parsec.String
 
 -- import Debug.Trace
 
--- Main grammar parser, parses whole file
+-- Main grammar parser, parses whole file. Note: in this parser, the
+-- order of blocks is assumed to be fixed. This could be changed by
+-- modifying p_block to select the correct parser after block
+-- beginning
 p_grammar :: GenParser Char st ([(String, String, Double)], [(String, String, String, Double)])
 p_grammar =
   (,) <$> (p_block "OPTIONS" p_options
@@ -31,7 +34,7 @@ p_grammar =
       *>  p_block "WORD_INDEX" p_wordIndex
       *>  p_block "TAG_INDEX" p_tagIndex
       *>  p_block "LEXICON" p_lexicon
-      *>  many p_smooth
+      *>  many p_smooth -- lolz
       *>  p_block "UNARY_GRAMMAR" p_unaryGrammar)
       <*> p_block "BINARY_GRAMMAR" p_binaryGrammar
 
@@ -43,6 +46,8 @@ p_block s p = string ("BEGIN " ++ s)
               *> many (p <* newline)
               <* spaces
 
+-- throw away smoothing factors loitering about in the middle of the
+-- file
 p_smooth = string "smooth" >> many (noneOf "\n") >> newline >> return ()
 
 -- The following parsers each parse one line of the corresponding block
