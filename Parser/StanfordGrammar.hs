@@ -16,28 +16,34 @@ module Parser.StanfordGrammar where
 
 import Tools.Miscellaneous(mapFst, mapSnd)
 
-import           Control.Applicative
-import           Control.DeepSeq
-import           Text.Parsec   hiding (many, (<|>))
-import           Text.Parsec.String
+import Data.WCFG
+
+import Control.Applicative
+import Control.Arrow
+import Control.DeepSeq
+import Text.Parsec   hiding (many, (<|>))
+import Text.Parsec.String
 
 -- import Debug.Trace
+
+parseGrammar :: FilePath -> IO (Either ParseError (WCFG String String Double Int))
+parseGrammar fp = parseFromFile p_grammar fp
 
 -- Main grammar parser, parses whole file. Note: in this parser, the
 -- order of blocks is assumed to be fixed. This could be changed by
 -- modifying p_block to select the correct parser after block
 -- beginning
-p_grammar :: GenParser Char st ([(String, String, Double)], [(String, String, String, Double)])
+p_grammar :: GenParser Char st (WCFG String String Double Int)
 p_grammar =
-  (,) <$> (p_block "OPTIONS" p_options
-      *>  p_block "STATE_INDEX" p_stateIndex
-      *>  p_block "WORD_INDEX" p_wordIndex
-      *>  p_block "TAG_INDEX" p_tagIndex
-      *>  p_block "LEXICON" p_lexicon
-      *>  many p_smooth -- lolz
-      *>  p_block "UNARY_GRAMMAR" p_unaryGrammar)
-      <*> p_block "BINARY_GRAMMAR" p_binaryGrammar
-
+  create <$> (p_block "OPTIONS" p_options
+              *>  p_block "STATE_INDEX" p_stateIndex)
+         <*> (p_block "WORD_INDEX" p_wordIndex
+              *>  p_block "TAG_INDEX" p_tagIndex
+              *>  p_block "LEXICON" p_lexicon
+              *>  many p_smooth -- lolz
+              *>  p_block "UNARY_GRAMMAR" p_unaryGrammar)
+         <*> p_block "BINARY_GRAMMAR" p_binaryGrammar
+  where create s u b = wcfg (snd . head $ s) (u ++ b)
 
 -- Parses top level blocks
 p_block :: String -> GenParser Char st a -> GenParser Char st [a]
@@ -54,8 +60,8 @@ p_smooth = string "smooth" >> many (noneOf "\n") >> newline >> return ()
 p_options :: GenParser Char st String
 p_options = many1 (noneOf "\n")
 
-p_wordIndex :: GenParser Char st (String, String)
-p_wordIndex = (,) <$> many1 digit
+p_wordIndex :: GenParser Char st (Int, String)
+p_wordIndex = (,) <$> (read <$> many1 digit)
                   <*> (char '=' *> many1 (noneOf "\n"))
 
 p_tagIndex = p_wordIndex
@@ -67,16 +73,18 @@ p_lexicon = (,,,) <$> (p_quotedIdent <* p_arr)
                   <*> (p_seen <* spaces1)
                   <*> p_num
 
-p_unaryGrammar :: GenParser Char st (String, String, Double)
-p_unaryGrammar = (,,) <$> (p_quotedIdent <* p_arr)
-                      <*> (p_quotedIdent <* spaces1)
-                      <*> p_num
+p_unaryGrammar :: GenParser Char st (Production String String Double Int)
+p_unaryGrammar = p <$> (p_quotedIdent <* p_arr)
+                   <*> (p_quotedIdent <* spaces1)
+                   <*> p_num
+  where p l r w = production l [Left r] (2 ** negate w) 0 --TODO: make up an ID
 
-p_binaryGrammar :: GenParser Char st (String, String, String, Double)
-p_binaryGrammar = (,,,) <$> (p_quotedIdent <* p_arr)
-                        <*> (p_quotedIdent <* spaces1)
-                        <*> (p_quotedIdent <* spaces1)
-                        <*> p_num
+p_binaryGrammar :: GenParser Char st (Production String String Double Int)
+p_binaryGrammar = p <$> (p_quotedIdent <* p_arr)
+                    <*> (p_quotedIdent <* spaces1)
+                    <*> (p_quotedIdent <* spaces1)
+                    <*> p_num
+  where p l r1 r2 w = production l [Left r1, Left r2] (2 ** negate w) 0
 
 -- Auxiliary parsers
 spaces1 :: GenParser Char st ()
@@ -84,7 +92,7 @@ spaces1 = space >> spaces
 
 p_seen = (string "SEEN" >> return True) <|> (string "UNSEEN" >> return False)
 
-p_num :: (Read a, Floating a) => GenParser Char st a  -- not really sure about the typeclass
+p_num :: GenParser Char st Double  -- tried typeclass first, caused head
 p_num = many (digit <|> oneOf ".-E") >>= return . read
 
 p_arr = spaces >> string "->" >> spaces >> return ()
