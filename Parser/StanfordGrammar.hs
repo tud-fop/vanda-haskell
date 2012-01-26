@@ -18,31 +18,80 @@ import Tools.Miscellaneous(mapFst, mapSnd)
 
 import           Control.Applicative
 import           Control.DeepSeq
-import qualified Data.Binary   as B
-import           Data.ByteString.Lazy (ByteString)
-import           Data.Char     (ord)
-import qualified Data.IntMap   as IntMap
-import qualified Data.List     as L
-import           Data.Ord      (comparing)
-import qualified Data.Tree     as T
-import           Data.Word     (Word8)
 import           Text.Parsec   hiding (many, (<|>))
 import           Text.Parsec.String
 
 -- import Debug.Trace
 
---p_emptyline = spaces >> newline >> return ()
+-- Main grammar parser, parses whole file
+p_grammar :: GenParser Char st ([(String, String, Double)], [(String, String, String, Double)])
+p_grammar =
+  (,) <$> (p_block "OPTIONS" p_options
+      *>  p_block "STATE_INDEX" p_stateIndex
+      *>  p_block "WORD_INDEX" p_wordIndex
+      *>  p_block "TAG_INDEX" p_tagIndex
+      *>  p_block "LEXICON" p_lexicon
+      *>  many p_smooth
+      *>  p_block "UNARY_GRAMMAR" p_unaryGrammar)
+      <*> p_block "BINARY_GRAMMAR" p_binaryGrammar
 
-p_block s p = string ("BEGIN " ++ s) >> p `manyTill` (try $ lookAhead $ string "BEGIN")
+
+-- Parses top level blocks
+p_block :: String -> GenParser Char st a -> GenParser Char st [a]
+p_block s p = string ("BEGIN " ++ s)
+              *> newline
+              *> many (p <* newline)
+              <* spaces
+
+p_smooth = string "smooth" >> many (noneOf "\n") >> newline >> return ()
+
+-- The following parsers each parse one line of the corresponding block
+p_options :: GenParser Char st String
+p_options = many1 (noneOf "\n")
+
+p_wordIndex :: GenParser Char st (String, String)
+p_wordIndex = (,) <$> many1 digit
+                  <*> (char '=' *> many1 (noneOf "\n"))
+
+p_tagIndex = p_wordIndex
+
+p_stateIndex = p_wordIndex
+
+p_lexicon = (,,,) <$> (p_quotedIdent <* p_arr)
+                  <*> (p_quotedIdent <* spaces1)
+                  <*> (p_seen <* spaces1)
+                  <*> p_num
+
+p_unaryGrammar :: GenParser Char st (String, String, Double)
+p_unaryGrammar = (,,) <$> (p_quotedIdent <* p_arr)
+                      <*> (p_quotedIdent <* spaces1)
+                      <*> p_num
+
+p_binaryGrammar :: GenParser Char st (String, String, String, Double)
+p_binaryGrammar = (,,,) <$> (p_quotedIdent <* p_arr)
+                        <*> (p_quotedIdent <* spaces1)
+                        <*> (p_quotedIdent <* spaces1)
+                        <*> p_num
+
+-- Auxiliary parsers
+spaces1 :: GenParser Char st ()
+spaces1 = space >> spaces
+
+p_seen = (string "SEEN" >> return True) <|> (string "UNSEEN" >> return False)
+
+p_num :: (Read a, Floating a) => GenParser Char st a  -- not really sure about the typeclass
+p_num = many (digit <|> oneOf ".-E") >>= return . read
+
+p_arr = spaces >> string "->" >> spaces >> return ()
+
+p_quotedIdent = char '"' *> many1 p_quotedChar <* char '"'
+
+p_quotedChar =
+  noneOf "\"\\"
+  <|> try (char '\\' >> ((char '"' *> return '"') <|> (char '\\' *> return '\\')))
+  -- <|> try (string "\\\\" >> return '\\')
 
 
-p_grammar :: GenParser Char st (String, String)
-p_grammar = do
-  (,) <$> (p_block "OPTIONS" anyChar
-           *> p_block "STATE_INDEX" anyChar
-           *> p_block "WORD_INDEX" anyChar
-           *> p_block "TAG_INDEX" anyChar
-           *> p_block "LEXICON" anyChar
-           *> p_block "UNARY_GRAMMAR" anyChar)
-           <*> p_block "BINARY_GRAMMAR" anyChar
 
+test = parseFromFile p_grammar "/home/gdp/oholzer/build/stanford-parser-2012-01-06/gram.txt"
+test3 = parseFromFile p_grammar "/home/gdp/oholzer/build/stanford-parser-2012-01-06/gram3.txt"
