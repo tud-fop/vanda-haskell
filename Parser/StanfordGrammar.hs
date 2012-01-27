@@ -17,12 +17,18 @@ module Parser.StanfordGrammar where
 import Tools.Miscellaneous(mapFst, mapSnd)
 
 import Data.WCFG
+import Data.Hypergraph
+import Algorithms.InsideOutsideWeights
 
 import Control.Applicative
 import Control.Arrow
 import Control.DeepSeq
 import Text.Parsec   hiding (many, (<|>))
 import Text.Parsec.String
+import Data.Time.Clock
+
+import qualified Data.Map as M
+import qualified Algorithms.KAStar as K
 
 -- import Debug.Trace
 
@@ -112,3 +118,27 @@ test3 = parseFromFile p_grammar "/home/gdp/oholzer/build/stanford-parser-2012-01
 properTestGraph = test >>=
                   (\(Right x) ->
                      return $ (initial &&& properize . productionsHypergraph)  x)
+
+testNBest n = do
+  getCurrentTime >>= putStr . show
+  putStrLn ": Computation started"
+  (goal, graph) <- properTestGraph
+  goal `deepseq` graph `deepseq` (getCurrentTime >>= putStr . show)
+  putStrLn ": Graph computed"
+  xyz <- uncurry (nBest' n) `fmap` properTestGraph
+  xyz `deepseq` (getCurrentTime >>= putStr . show)
+  putStrLn ": Comp. finished"
+  return xyz
+
+testKBest n r = do
+  getCurrentTime >>= putStr . show
+  putStrLn ": Computation started"
+  (goal, graph) <- properTestGraph
+  let wm = weightMap goal graph r
+  goal `deepseq` graph `deepseq` (getCurrentTime >>= putStr . show)
+  putStrLn ": Graph computed"
+  wm `deepseq` (getCurrentTime >>= putStr . show)
+  putStrLn ": Outside Weights computed"
+  return $ K.kbest graph goal (\node -> M.findWithDefault 0.0 node wm) n
+  where
+    weightMap goal graph r = M.map (\p -> r * snd p + 1 - r) $ insideOutside eWeight goal graph
