@@ -39,11 +39,11 @@ p_grammar =
               *>  p_block "STATE_INDEX" p_stateIndex)
          <*> (p_block "WORD_INDEX" p_wordIndex
               *>  p_block "TAG_INDEX" p_tagIndex
-              *>  p_block "LEXICON" p_lexicon
-              *>  many p_smooth -- lolz
+              *>  p_block "LEXICON" p_lexicon)
+         <*> (many p_smooth -- lolz
               *>  p_block "UNARY_GRAMMAR" p_unaryGrammar)
          <*> p_block "BINARY_GRAMMAR" p_binaryGrammar
-  where create s u b = wcfg (snd . head $ s) (u ++ b)
+  where create s l u b = wcfg (snd . head $ s) (l ++ u ++ b)
 
 -- Parses top level blocks
 p_block :: String -> GenParser Char st a -> GenParser Char st [a]
@@ -54,7 +54,7 @@ p_block s p = string ("BEGIN " ++ s)
 
 -- throw away smoothing factors loitering about in the middle of the
 -- file
-p_smooth = string "smooth" >> many (noneOf "\n") >> newline >> return ()
+p_smooth = string "smooth" >> many (noneOf "\n") >> spaces >> return ()
 
 -- The following parsers each parse one line of the corresponding block
 p_options :: GenParser Char st String
@@ -68,23 +68,24 @@ p_tagIndex = p_wordIndex
 
 p_stateIndex = p_wordIndex
 
-p_lexicon = (,,,) <$> (p_quotedIdent <* p_arr)
-                  <*> (p_quotedIdent <* spaces1)
-                  <*> (p_seen <* spaces1)
-                  <*> p_num
+p_lexicon = p <$> (p_quotedIdent <* p_arr)
+              <*> (p_quotedIdent <* spaces1)
+              <*> (p_seen <* spaces1)
+              <*> p_num
+  where p l r _ w = production l [Right r] w 0
 
 p_unaryGrammar :: GenParser Char st (Production String String Double Int)
 p_unaryGrammar = p <$> (p_quotedIdent <* p_arr)
                    <*> (p_quotedIdent <* spaces1)
                    <*> p_num
-  where p l r w = production l [Left r] (2 ** negate w) 0 --TODO: make up an ID
+  where p l r w = production l [Left r] (2 ** w) 0 --TODO: make up an ID
 
 p_binaryGrammar :: GenParser Char st (Production String String Double Int)
 p_binaryGrammar = p <$> (p_quotedIdent <* p_arr)
                     <*> (p_quotedIdent <* spaces1)
                     <*> (p_quotedIdent <* spaces1)
                     <*> p_num
-  where p l r1 r2 w = production l [Left r1, Left r2] (2 ** negate w) 0
+  where p l r1 r2 w = production l [Left r1, Left r2] (2 ** w) 0
 
 -- Auxiliary parsers
 spaces1 :: GenParser Char st ()
@@ -104,7 +105,10 @@ p_quotedChar =
   <|> try (char '\\' >> ((char '"' *> return '"') <|> (char '\\' *> return '\\')))
   -- <|> try (string "\\\\" >> return '\\')
 
-
-
 test = parseFromFile p_grammar "/home/gdp/oholzer/build/stanford-parser-2012-01-06/gram.txt"
 test3 = parseFromFile p_grammar "/home/gdp/oholzer/build/stanford-parser-2012-01-06/gram3.txt"
+
+-- This fails if grammar cannot be parsed
+properTestGraph = test >>=
+                  (\(Right x) ->
+                     return $ (initial &&& properize . productionsHypergraph)  x)
