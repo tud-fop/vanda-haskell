@@ -52,6 +52,8 @@ module Data.Hypergraph (
 , dropUnreachables
 , dropZeroWeighted
 , verticesToInt
+, binarize
+, binarize'
 -- * Parsing
 , parseTree
 , nBest
@@ -64,6 +66,7 @@ module Data.Hypergraph (
 
 import qualified Algorithms.NBest as NBest
 import qualified Data.Queue as Q
+import Tools.FastNub (nub)
 import Tools.Miscellaneous (mapFst, mapSnd, sumWith, mapRandomR)
 
 import Control.DeepSeq
@@ -73,7 +76,7 @@ import qualified Data.Map as M
 import Data.Maybe
 import qualified Data.Set as S
 import qualified Data.Tree as T
-import qualified Random as R
+import qualified System.Random as R
 
 -- ---------------------------------------------------------------------------
 
@@ -356,6 +359,30 @@ verticesToInt target g
         )
         g
     )
+
+
+binarize :: (Ord q, Num w) => Hypergraph q t w i -> Hypergraph [q] (Maybe t) w ()
+binarize g
+  =   hypergraph
+  $   [ Hyperedge [q] (if null qs then [] else [qs]) (Just t) w ()
+      | Hyperedge q qs t w _ <- edges g
+      ]
+  ++  [ Hyperedge qqs [[q], qs] Nothing 1 ()
+      | qqs@(q:qs@(_:_))
+          <- nub $ concatMap (L.tails . eTail) $ edges g
+      ]
+
+
+binarize' :: (Ord q, Num w) => Hypergraph q t w i -> Hypergraph [q] (Maybe t) w ()
+binarize' g
+  =   hypergraph
+  $   [ Hyperedge [q] (if null qs then [] else [reverse qs]) (Just t) w ()
+      | Hyperedge q qs t w _ <- edges g
+      ]
+  ++  [ Hyperedge qqs [qs, [q]] Nothing 1 ()
+      | qqs@(q:qs@(_:_))
+          <- nub $ concatMap (L.tails . reverse . eTail) $ edges g
+      ]
 
 -- ---------------------------------------------------------------------------
 

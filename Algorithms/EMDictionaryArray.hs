@@ -29,7 +29,7 @@ import Tools.PrettyPrint (putStrColumns)
 import Data.Array{-.Diff-}
 import qualified Data.List as L
 import qualified Data.Map as M
-import System (getArgs)
+import System.Environment (getArgs)
 
 -- import Debug.Trace
 
@@ -140,7 +140,9 @@ main = do
   args <- getArgs
   case args of
     ["best", delta, corpus]
-      -> mainTrain (read delta) corpus
+      -> mainTrain False (read delta) corpus
+    ["bestSwap", delta, corpus]
+      -> mainTrain True (read delta) corpus
     ["csv", delta, corpus]
       -> mainSteps (read delta) corpus
     ["generate-test-corpus", wordCnt, wordCntPerSentence]
@@ -154,8 +156,8 @@ main = do
           putStrLn "  csv <maximal delta> <corpus file>"
 
 
-mainTrain :: Double -> String -> IO ()
-mainTrain delta corpus
+mainTrain :: Bool -> Double -> String -> IO ()
+mainTrain swap delta corpus
   = parseCorpus corpus
   >>= putStrColumns [" | "]
     . (\ (x, y, z) -> ["e" : x, "f" : y, "p(f|e)" : z])
@@ -163,6 +165,7 @@ mainTrain delta corpus
     . fmap (\ ((e, f), w) -> (e, f, show w))
     . filter ((<) 0.1 . snd)
     . train delta
+    . (if swap then map (\ (a, b) -> (b, a)) else id)
 
 
 mainSteps :: Double -> String -> IO ()

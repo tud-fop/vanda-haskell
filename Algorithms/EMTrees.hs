@@ -10,7 +10,7 @@
 -- of Programming.
 -- ---------------------------------------------------------------------------
 
-module Algorithms.ExpectationMaximization (
+module Algorithms.EMTrees (
   forestEM,
   forestEMlist,
   forestEMstep,
@@ -18,13 +18,14 @@ module Algorithms.ExpectationMaximization (
   normalize
 ) where
 
-import Algorithms.InsideOutsideWeights
-import Data.Hypergraph
+import Data.Hypergraph hiding (parseTree)
+import Data.Hypergraph.Acyclic
 import Tools.Miscellaneous (mapSnd)
-import Data.Maybe (fromJust)
 
 import qualified Data.List as L
 import qualified Data.Map as M
+import Data.Tree as T
+
 
 -- | Canonical iter function.
 iter
@@ -40,11 +41,12 @@ iter = iter' 0 where
         then fa
         else iter' (i+1) f p fa
 
+
 -- | Execute the forest-EM algorithm, i.e., iterate the EM step.
 forestEM
-  :: (Converging w, RealFloat w, Ord i, Ord v)
+  :: (RealFloat w, Ord i, Ord v)
   => [[i]]                -- ^ partition of the ids for normalization
-  -> [(v, Hypergraph v l w j, w)]
+  -> [(M.Map v w, Tree [Hyperedge v l w j], w)]
                           -- ^ a list of training example derivation forests
   -> (Hyperedge v l w j -> i)
                           -- ^ function extracting the id from a 'Hyperedge'
@@ -55,12 +57,13 @@ forestEM part gs exId p i
   = snd $ iter (forestEMstep part gs exId) p' (0,i) where
     p' (l1,_) (l2,_) it = p (abs (l2-l1)) it
 
+
 -- | Compute the list of EM estimates for a given corpus.
 -- Use 'take' or '!!' to access a prefix or an element, respectively.
 forestEMlist
-  :: (Converging w, RealFloat w, Ord i, Ord v)
+  :: (RealFloat w, Ord i, Ord v)
   => [[i]]                -- ^ partition of the ids for normalization
-  -> [(v, Hypergraph v l w j, w)]
+  -> [(M.Map v w, Tree [Hyperedge v l w j], w)]
                           -- ^ a list of training example derivation forests
   -> (Hyperedge v l w j -> i)
                           -- ^ function extracting the id from a 'Hyperedge'
@@ -68,6 +71,7 @@ forestEMlist
   -> [(w, M.Map i w)]     -- ^ list of (log-likelihood, estimate) pairs
 forestEMlist part gs exId i
   = (0,i) : map (forestEMstep part gs exId) (forestEMlist part gs exId i)
+
 
 -- | Normalize a map according to a partition. Very similar to
 -- relative-frequency estimation, only that the corpus is partitioned,
@@ -87,12 +91,13 @@ normalize part m
         ws = map (\ i -> M.findWithDefault 0 i m) is
         factor = recip (sum ws)
 
+
 -- | Do an EM-step. The arguments are as for 'forestEM', only without the
 -- stopping condition.
 forestEMstep
-  :: (Converging w, RealFloat w, Ord i, Ord v)
+  :: (RealFloat w, Ord i, Ord v)
   => [[i]]                -- ^ partition of the ids for normalization
-  -> [(v, Hypergraph v l w j, w)]
+  -> [(M.Map v w, Tree [Hyperedge v l w j], w)]
                           -- ^ a list of training-example derivation forests
   -> (Hyperedge v l w j -> i)
                           -- ^ function extracting the id from a 'Hyperedge'
@@ -104,47 +109,53 @@ forestEMstep part gs exId theta
       (+)
       (L.foldl' (\ m (k, v) -> M.insertWith' (+) k v m))
       (0, M.empty)
-  $ forestEMstepList gs exId theta where
+  $ forestEMstepList gs exId theta
+  where
     foldl'Special f g
       = L.foldl'
-        (\ (x, y) (x', y', _, _) -> x `seq` y `seq` (f x x', g y y'))
+        (\ (x, y) (x', y') -> x `seq` y `seq` (f x x', g y y'))
     -- ( sum . fst . unzip $ list
     -- , normalize part $ M.fromListWith (+) (concat . snd . unzip $ list)
     -- )
 
+
 -- | Compile a list of everything that is necessary to complete an EM step.
 -- Each entry corresponds to a training example (a forest), and it consists of
--- the log-likelihood contribution of that forest, a list of id-weight pairs
--- for later id-specific summation, and the inner and outer vectors for
--- that forest (not strictly necessary for further processing, but nice for
--- documentation).
+-- the log-likelihood contribution of that forest and a list of id-weight
+-- pairs for later id-specific summation.
 forestEMstepList
-  :: (Converging w, Floating w, Ord i, Ord v)
-  => [(v, Hypergraph v l w j, w)]
+  :: (Floating w, Ord i, Ord v)
+  => [(M.Map v w, Tree [Hyperedge v l w j], w)]
                           -- ^ a list of training-example derivation forests
   -> (Hyperedge v l w j -> i)
                           -- ^ function extracting the id from a 'Hyperedge'
   -> (w, M.Map i w)       -- ^ log-likelihood and weight vector prior to step
-  -> [(w, [(i, w)], M.Map v w, M.Map v w)] -- ^ (see general info)
-forestEMstepList gs exId (_,theta)
+  -> [(w, [(i, w)])]
+forestEMstepList gs exId (_, theta)
   = [
-      ( w * log innerv0 -- contribution to log-likelihood
-      , [ -- a list of id/weight pairs for upcoming id-specific summation
-          ( exId e
-          , factor
-            * M.findWithDefault 0 (eHead e) outer
-            * exweight e
-            * (product [ M.findWithDefault 0 v inner | v <- eTail e ])
-          )
-        | e <- edges g -- for each hyperedge in the forest
-        ]
-      , inner -- for debug/documentation purposes (teaching)
-      , outer -- for debug/documentation purposes (teaching)
+      ( w * log inner0
+      , go g inner outer
       )
-    | (v0, g, w) <- gs -- for each forest
-    , let inner = inside exweight g -- compute inside weights
-    , let outer = outside exweight inner v0 g -- compute outside weights
-    , let innerv0 = fromJust $ M.lookup v0 inner -- inner of target node
-    , let factor = w/innerv0 -- example-specific factor for id significance
-    ] where
-    exweight e = M.findWithDefault 0 (exId e) theta
+    | let exweight e = M.findWithDefault 0 (exId e) theta
+    , (w0, g, w) <- gs
+    , let inner = inside exweight g
+    , let outer = outside exweight inner g w0
+    , let inner0  -- inner of target node(s)
+            = sum
+            $ map (\ (v, w') ->  w' * M.findWithDefault 0 v (rootLabel inner))
+            $ M.toList w0
+    , let factor = w / inner0  -- example-specific factor for id significance
+    , let go (Node es ts) (Node _ is) (Node oM os)
+            = map f es ++ concat (zipWith3 go ts is os)
+            where f e = (exId e
+                        ,   factor
+                          * M.findWithDefault 0 (eHead e) oM
+                          * exweight e
+                          * product
+                            ( zipWith
+                                (\ v -> M.findWithDefault 0 v . rootLabel)
+                                (eTail e)
+                                is
+                            )
+                        )
+    ]

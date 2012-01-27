@@ -15,6 +15,7 @@ module TestData.TestHypergraph where
 import Data.Hypergraph
 
 import Data.Tree
+import Random
 
 
 testHypergraphs :: (Fractional w) => [Hypergraph Char Char w ()]
@@ -79,3 +80,26 @@ testTreess
             : map (\ t -> Node 's' [Node 'a' [], Node 's' [Node 'a' [], t]]) f
       in (take 4 $ map (Node 't' . (: [])) f) {-++ [Node 't' [Node 's' [Node 'a' [], Node 's' [Node 'a' [], Node 'b' []]]]]-}
     ]
+
+
+randomHypergraph
+  :: (RandomGen t)
+  => Int -> Int -> Int -> t -> (Hypergraph Int Char Double Int, t)
+randomHypergraph vCount eCount maxRank gen
+  = let (es, gen') = go eCount gen in (properize $ hypergraph es, gen')
+  where
+    go i gen0
+      = if i < 1
+        then ([], gen0)
+        else let (k     , gen1) = randomR   (0  , maxRank   )         gen0
+                 (v : vs, gen2) = randomRs' (0  , vCount - 1) (k + 1) gen1
+                 (l     , gen3) = randomR   ('A', 'Z'       )         gen2
+                 (w     , gen4) = randomR   (0  , 1         )         gen3
+                 (es    , gen5) = go (i - 1)                       gen4
+             in (hyperedge v vs l w i : es, gen5)
+    randomRs' r count gen0
+      = if count < 1
+        then ([], gen0)
+        else let (rnd , gen1) = randomR r gen0
+                 (rnds, gen2) = randomRs' r (count - 1) gen1
+             in (rnd : rnds, gen2)

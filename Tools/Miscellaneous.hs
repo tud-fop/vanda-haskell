@@ -23,19 +23,23 @@ module Tools.Miscellaneous(
 ) where
 
 import qualified Data.List as L
-import qualified Random as R
+import qualified System.Random as R
 
 -- ---------------------------------------------------------------------------
 -- | Apply a function to the first component of a pair.
+-- Uses irrefutable pattern such that e. g. @fst (mapFst (const 1) undefined)@
+-- is defined as @1@.
 {-# INLINE mapFst #-}
 mapFst :: (a -> c) -> (a, b) -> (c, b)
-mapFst f = \ (x, y) -> (f x, y)
+mapFst f = \ ~(x, y) -> (f x, y)
 
 
 -- | Apply a function to the second component of a pair.
+-- Uses irrefutable pattern such that e. g. @snd (mapSnd (const 1) undefined)@
+-- is defined as @1@.
 {-# INLINE mapSnd #-}
 mapSnd :: (b -> c) -> (a, b) -> (a, c)
-mapSnd f = \ (x, y) -> (x, f y)
+mapSnd f = \ ~(x, y) -> (x, f y)
 
 -- ---------------------------------------------------------------------------
 -- | @mapRandomR r f xs g == (ys, g')@, where @ys@ is the list obtained by
@@ -63,7 +67,7 @@ mapRandom' :: (g -> (r, g)) -> (a -> r -> b) -> [a] -> g -> ([b], g)
 mapRandom' random f (x:xs) g
   = let (r , g' ) = random g
         (ys, g'') = mapRandom' random f xs g'
-    in  (f x r : ys, g'')
+    in  r `seq` (f x r : ys, g'')
 mapRandom' _ _ [] g
   = ([], g)
 

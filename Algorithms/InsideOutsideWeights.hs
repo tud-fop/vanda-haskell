@@ -85,7 +85,10 @@ inside' c w g
     go m
       = {-trace "Ding!" $-}
         let m' = insideStep w m
-        in if checkMapsOn fst c m m'
+            seqInsides ((x, _) : xs) y = x `seq` seqInsides xs y
+            seqInsides [] y = y
+        in seqInsides (M.elems m') $
+        if checkMapsOn fst c m m'
         then m'
         else go m'
 
@@ -96,23 +99,12 @@ insideStep
   => (Hyperedge v l w' i -> w)
   -> M.Map v (w, [Hyperedge v l w' i])
   -> M.Map v (w, [Hyperedge v l w' i])
-insideStep w m = M.map (\ (_, es) -> (insideHead w m es, es)) m
-
-
-insideHead
-  :: (Num w, Ord v)
-  => (Hyperedge v l w' i -> w) -> M.Map v (w, a) -> [Hyperedge v l w' i] -> w
-insideHead w m es
-  = sum [ w e * insideTail m (eTail e) | e <- es ]
-  -- = let step s e = s + w e * insideTail m (eTail e)
-  --   in L.foldl' step 0 es
-
-
-insideTail :: (Num w, Ord v) => M.Map v (w, a) -> [v] -> w
-insideTail m vs
-  = product [ maybe 0 fst (M.lookup v m) | v <- vs ]
-  -- = let step p v = p * maybe 0 fst (M.lookup v m)
-  --   in L.foldl' step 1 vs
+insideStep w m
+  = let inH (e : es) s = s `seq` inH es (s + w e * inT (eTail e) 1)
+        inH []       s = s
+        inT (v : vs) p = p `seq` inT vs (p * maybe 0 fst (M.lookup v m))
+        inT []       p = p
+    in M.map (\ (_, es) -> (inH es 0, es)) m
 
 
 -- Outside Weights -----------------------------------------------------------
@@ -157,13 +149,9 @@ outsideStep
   => M.Map v (w, [(v, w)])
   -> M.Map v (w, [(v, w)])
 outsideStep m
-  = M.map
-      (\ (_, xs) ->
-        ( sum [ maybe 0 fst (M.lookup v m) * w | (v, w) <- xs ]
-          -- L.foldl' (\ s (v, w) -> s + maybe 0 fst (M.lookup v m) * w) 0 xs
-        , xs)
-      )
-      m
+  = let f ((v, w) : xs) s = s `seq` f xs (s + maybe 0 fst (M.lookup v m) * w)
+        f [] s = s
+    in M.map (\ (_, xs) -> (f xs 0, xs)) m
 
 
 -- | Initialize the data structure used for computing the outside weights.

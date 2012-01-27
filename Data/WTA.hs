@@ -1,4 +1,4 @@
--- (c) 2010-2011 Toni Dietze <Toni.Dietze@tu-dresden.de>
+-- (c) 2011 Toni Dietze <Toni.Dietze@tu-dresden.de>
 --
 -- Technische Universität Dresden / Faculty of Computer Science / Institute
 -- of Theoretical Computer Science / Chair of Foundations of Programming
@@ -9,247 +9,117 @@
 -- of Programming.
 -- ---------------------------------------------------------------------------
 
-{-- snippet types --}
-module Data.WTA(
-  Transition(..)
-, WTA
+-- |
+-- Maintainer  :  Toni Dietze
+-- Stability   :  unknown
+-- Portability :  portable
+
+module Data.WTA
+( 
+  -- * Types
+  WTA(..)
+  -- * Construction
+, wtaCreate
+  -- * Decomposition
 , states
-, transitions
-, finalWeights
-, create
-, fromHypergraph
-, toHypergraph
-, transIsLeaf
-, binarize
-, properize
-, randomizeWeights
+  -- * Map
 , mapStates
-, showTransition
-, printTransition
-, showWTA
-, printWTA
+  -- * Pretty Printing 
+, drawWTA
+  -- * Computation
 , weightTree
 , generate
 , generate'
 ) where
 
-import Data.Hypergraph hiding (properize, randomizeWeights)
-import Tools.FastNub(nub)
-import Tools.Miscellaneous(mapFst, mapRandomR)
+import Data.Hypergraph
 
 import Control.DeepSeq
+import qualified Data.List as L
 import qualified Data.Map as M
-import qualified Random as R
+import qualified Data.Set as S
 import qualified Data.Tree as T
-import Data.Maybe(fromJust)
 
-data Transition q t w = Transition
-    { transTerminal :: t
-    , transState    :: q
-    , transStates   :: [q]
-    , transWeight   :: w
-    } deriving (Eq, Ord, Show)
 
-data WTA q t w = WTA
-    { states       :: [q]
-    , transitions  :: [Transition q t w]
-    , finalWeights :: [(q, w)]
+data WTA q t w i = WTA
+    { finalWeights :: M.Map q w
+    , toHypergraph :: Hypergraph q t w i
     } deriving Show
 
-create :: (Ord q) => [Transition q t w] -> [(q, w)] -> WTA q t w
-create ts fs
-  = let ss = nub $
-             map fst fs ++
-             concatMap (\t -> transState t : transStates t) ts
-    in WTA ss ts fs
-{-- /snippet types --}
+-- | Create a 'WTA'  from a list (state,final weight) and a 'Hypergraph'.
+wtaCreate :: (Ord q, Num w) => [(q, w)] -> [Hyperedge q t w i] -> WTA q t w i
+wtaCreate fs ts = WTA (M.fromListWith (+) fs) (hypergraph ts)
 
+-- | Create a list of all states from a 'WTA'
+states :: (Ord q) => WTA q t w i -> [q]
+states a
+  = S.toList
+  $ L.foldl' (flip S.insert) (verticesS $ toHypergraph a)
+  $ M.keys
+  $ finalWeights a
 
-fromHypergraph :: (Num w) => v -> Hypergraph v l w i -> WTA v l w
-fromHypergraph target g
-  = WTA
-      (vertices g)
-      ( map (\ e -> Transition (eLabel e) (eHead e) (eTail e) (eWeight e))
-      $ edges g
-      )
-      [(target, 1)]
+-- | Apply a state-transforming function to the states of a 'WTA'. The final weights of states, that were different before applying but equal after, would be added.
+mapStates :: (Ord q, Num w) => (p -> q) -> WTA p t w i -> WTA q t w i
+mapStates f (WTA fs g) = WTA (M.mapKeysWith (+) f fs) (mapVertices f g)
 
-
-toHypergraph :: (Ord q) => WTA q t w -> Hypergraph q t w ()
-toHypergraph wta
-  = hypergraph
-  . map (\ t -> hyperedge (transState t) (transStates t) (transTerminal t) (transWeight t) ())
-  . transitions
-  $ wta
-
-
-transIsLeaf :: Transition q t w -> Bool
-transIsLeaf (Transition {transStates = []}) = True
-transIsLeaf _                               = False
-
-
-binarize :: (Ord q, Num w) => WTA q t w -> WTA [q] (Maybe t) w
-binarize wta
-  = let qs     = nub $
-                 -- map (:[]) (states wta) ++
-                 map ((:[]) . transState) (transitions wta) ++
-                 concat
-                 [ tailsNonempty w
-                 | w <- map transStates (transitions wta)
-                 ]
-        trans  = [ Transition (Just t) [q] [] w
-                 | Transition       t   q  [] w <- transitions wta
-                 ] ++
-                 [ Transition (Just t) [q] [qs']       w
-                 | Transition       t   q   qs'@(_:_)  w <- transitions wta
-                 ] ++
-                 [ Transition Nothing qqs [[q], qs'] 1
-                 | qqs@(q:qs'@(_:_)) <- qs
-                 ]
-        finals = map (mapFst (:[])) (finalWeights wta)
-    in WTA qs trans finals
-
-
-tailsNonempty :: [a] -> [[a]]
-tailsNonempty []         =  []
-tailsNonempty xxs@(_:xs) =  xxs : tailsNonempty xs
-
-
-properize :: (Ord q, Fractional w) => WTA q t w -> WTA q t w
-properize wta@WTA{transitions = ts}
-  = let counts =
-              M.fromListWith (+)
-            . map (\t -> (transState t, transWeight t))
-            $ ts
-        normalize t =
-            t{transWeight =
-              transWeight t / fromJust (M.lookup (transState t) counts)
-            }
-    in wta{transitions = map normalize ts}
-
-
--- | @randomizeWeights r wta g@ multiplies every weight of @wta@ by a
--- random number in the range @(1-r, 1+r)@.
-randomizeWeights
-  :: (Num w, R.Random w, R.RandomGen g)
-  => w -> WTA q t w -> g -> (WTA q t w, g)
-randomizeWeights r wta g = mapWeightsRandomR (1-r, 1+r) (*) wta g
-
-
--- | 'mapRandomR' for the weights of a 'WTA'.
-mapWeightsRandomR
-  :: (R.Random r, R.RandomGen g)
-  => (r, r) -> (w -> r -> w') -> WTA q t w -> g -> (WTA q t w', g)
-mapWeightsRandomR r f wta g
-  = let (ts, g' ) = mapRandomR
-                      r
-                      (\t r' -> t{transWeight = f (transWeight t) r'})
-                      (transitions wta)
-                      g
-        (fs, g'') = mapRandomR
-                      r
-                      (\(q, w) r' -> (q, f w r'))
-                      (finalWeights wta)
-                      g'
-    in (wta{transitions = ts, finalWeights = fs}, g'')
-  -- where
-  --   h :: (a -> b) -> (b -> c -> (d, e)) -> (a -> d -> f) -> a -> c -> (f, e)
-  --   h unpack f pack x g = let (y, g') = f (unpack x) g in (pack x y, g')
-
-
-mapStates :: (Ord q) => (p -> q) -> WTA p t w -> WTA q t w
-mapStates f wta
-  = create
-    (map
-      (\t -> t
-        { transState  =     f (transState  t)
-        , transStates = map f (transStates t)
-        }
-      )
-      (transitions wta)
-    )
-    (map (mapFst f) (finalWeights wta))
-
-
-showTransition :: (Show q, Show t, Show w) => Transition q t w -> String
-showTransition t
-  =   show (transState t)
-  ++  " -> "
-  ++  show (transTerminal t)
-  ++  "-"
-  ++  show (transStates t)
-  ++  " ("
-  ++  show (transWeight t)
-  ++  ")"
-
-
-printTransition :: (Show q, Show t, Show w) => Transition q t w -> IO ()
-printTransition t = putStrLn . showTransition $ t
-
-
-showWTA :: (Show q, Show t, Show w) => WTA q t w -> String
-showWTA wta
+-- | Represent a WTA as a String
+drawWTA :: (Show q, Show t, Show w, Show i) => WTA q t w i -> String
+drawWTA (WTA fs g)
   =   "Transitions:\n"
-  ++  (unlines . map showTransition . transitions $ wta)
-  ++  "\nStates:\n"
-  ++  (unlines . map show . states $ wta)
+  ++  drawHypergraph g
   ++  "\nFinal Weights:\n"
-  ++  (unlines . map show . finalWeights $ wta)
+  ++  (unlines . map show $ M.toList fs)
 
-
-printWTA :: (Show q, Show t, Show w) => WTA q t w -> IO ()
-printWTA wta = putStr . showWTA $ wta
-
-
-weightTree :: (Eq q, Eq t, Num w) => WTA q t w -> T.Tree t -> w
-weightTree wta tree
+-- | Compute the weight of a derivation tree of a 'WTA' 
+weightTree :: (Eq q, Eq t, Num w, Ord q) => WTA q t w i -> T.Tree t -> w
+weightTree (WTA fs g) tree
   = sum
-  . map (\(q, w) -> weightTree' wta q tree * w)
-  $ finalWeights wta
+  . map (\(q, w) -> weightTree' g q tree * w)
+  $ M.toList fs
 
-
-weightTree' :: (Eq q, Eq t, Num w) => WTA q t w -> q -> T.Tree t -> w
-weightTree' wta q tree
+-- | Compute the weight of a tree in state q
+weightTree'
+  :: (Eq q, Eq t, Num w, Ord q) => Hypergraph q t w i -> q -> T.Tree t -> w
+weightTree' g q tree
   = sum
-      [ product (zipWith (weightTree' wta) qs trees) * transWeight t
+      [ product (zipWith (weightTree' g) qs trees) * eWeight t
       | let root = T.rootLabel tree
       , let trees = T.subForest tree
       , let lTrees = length trees
-      , t <- transitions wta
-      , transState    t == q
-      , transTerminal t == root
-      , let qs = transStates t
+      , t <- M.findWithDefault [] q (edgesM g)
+      , eLabel t == root
+      , let qs = eTail t
       , lTrees == length qs
       ]
 
-
-generate :: (Ord q) => WTA q t w -> [T.Tree t]
+-- | create a list of all (possibly incomplete) trees that can be derived by the 'Hypergraph'. The nodes of a tree represent the label of a 'Hyperedge'
+generate :: (Ord q) => Hypergraph q t w i -> [T.Tree t]
 generate = fmap (fmap (\(_, t, _) -> t)) . generate'
 
+-- | create a list of all (possibly incomplete) trees that can be derived by the 'Hypergraph'. The nodes of a tree represent a 'Hyperedge'
+generate' :: (Ord q) => Hypergraph q t w i -> [T.Tree (q, t, w)]
+generate' g = map fst $ generateHeight g 0 M.empty
 
-generate' :: (Ord q) => WTA q t w -> [T.Tree (q, t, w)]
-generate' wta = map fst $ generateHeight wta 0 M.empty
-
-
+-- create a list of all (possibly incomplete) trees with height > h that can be derived by the Hypergraph (and the height of the tree)  
 generateHeight
   :: (Ord q)
-  => WTA q t w
-  -> Int
-  -> M.Map q [(T.Tree (q, t, w), Int)]
+  => Hypergraph q t w i                 
+  -> Int                                -- height (can be seen as a running index)
+  -> M.Map q [(T.Tree (q, t, w), Int)]  -- list of all (possibly incomplete) derivation trees per state with a height < h, represented as M.Map with values (tree, height of tree)
   -> [(T.Tree (q, t, w), Int)]
-generateHeight wta h m
-  = let trees
-          = [ ( T.Node (transState t, transTerminal t, transWeight t) trees'
+generateHeight g h m
+  = let trees                           -- list of all trees having height h+1
+          = [ ( T.Node (eHead t, eLabel t, eWeight t) trees'
               , h + 1 )
-            | t <- transitions wta
-            , (trees', h') <- generateSubs (transStates t) m
+            | t <- edges g
+            , (trees', h') <- generateSubs (eTail t) m
             , h' == h
             ]
     in if null trees
     then []
     else trees
       ++ generateHeight
-          wta
+          g
           (h + 1)
           (foldr
             (\x@(t, _) ->
@@ -262,7 +132,7 @@ generateHeight wta h m
             trees
           )
 
-
+-- create a list of all possible derivation-subtree-combinations for a given tail of a hyperedge
 generateSubs :: (Num h, Ord h, Ord q) => [q] -> M.Map q [(t, h)] -> [([t], h)]
 generateSubs (q:qs) m
   = let tss = generateSubs qs m
@@ -311,8 +181,5 @@ split (x:xs) = it [] x xs
 
 -- ---------------------------------------------------------------------------
 
-instance (NFData q, NFData t, NFData w) => NFData (Transition q t w) where
-  rnf (Transition l hd tl w) = rnf l `seq` rnf hd `seq` rnf tl `seq` rnf w
-
-instance (NFData q, NFData t, NFData w) => NFData (WTA q t w) where
-  rnf (WTA s t f) = rnf s `seq` rnf t `seq` rnf f
+instance (NFData q, NFData t, NFData w, NFData i) => NFData (WTA q t w i) where
+  rnf (WTA fs g) = rnf fs `seq` rnf g

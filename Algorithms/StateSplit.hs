@@ -23,18 +23,16 @@
 
 module Algorithms.StateSplit where
 
-import Algorithms.ExpectationMaximization
-import Algorithms.InsideOutsideWeights
+import Algorithms.EMTrees
+import Data.Hypergraph hiding (parseTree)
+import Data.Hypergraph.Acyclic
 import Tools.Miscellaneous(mapFst, mapSnd, sumWith)
-
-import Data.Hypergraph
 
 import qualified Data.List as L
 import qualified Data.Map as M
-import Data.Maybe (fromJust, fromMaybe)
 import qualified Data.Set as S
 import Data.Tree as T
-import qualified Random as R
+import qualified System.Random as R
 
 -- import Debug.Trace
 
@@ -45,17 +43,16 @@ import qualified Random as R
 train
   :: ( Ord v
      , Ord l
-     , Converging w, Floating w, Ord w, R.Random w
-     , Num i, Ord i
+     , RealFloat w, R.Random w
      , Num n, Ord n
      , R.RandomGen gen
      )
   => Int                  -- ^ maximum number of iterations
   -> [Tree l]             -- ^ training 'T.Tree's
   -> v                    -- ^ target vertex
-  -> Hypergraph v l w i'  -- ^ initial 'Hypergraph'
+  -> Hypergraph v l w i   -- ^ initial 'Hypergraph'
   -> gen                  -- ^ random number generator
-  -> (Hypergraph (v, n) l w [i], gen)
+  -> (Hypergraph (v, n) l w [Int], gen)
 train maxIt ts target g gen = go maxIt $ train' ts target g gen
   where
     go 0 (x:_)  = x
@@ -70,16 +67,15 @@ train maxIt ts target g gen = go maxIt $ train' ts target g gen
 train'
   :: ( Ord v
      , Ord l
-     , Converging w, Floating w, Ord w, R.Random w
-     , Num i, Ord i
+     , RealFloat w, R.Random w
      , Num n, Ord n
      , R.RandomGen gen
      )
   => [Tree l]             -- ^ training 'T.Tree's
   -> v                    -- ^ target vertex
-  -> Hypergraph v l w i'  -- ^ initial 'Hypergraph'
+  -> Hypergraph v l w i   -- ^ initial 'Hypergraph'
   -> gen                  -- ^ random number generator
-  -> [(Hypergraph (v, n) l w [i], gen)]
+  -> [(Hypergraph (v, n) l w [Int], gen)]
 train' ts target g0 gen0
   = go 0 1 (mapIds (const []) $ initialize g0) gen0
   where
@@ -100,27 +96,26 @@ train' ts target g0 gen0
 splitMergeStep
   :: ( Ord v
      , Ord l
-     , Converging w, Floating w, Ord w, R.Random w
-     , Num i, Ord i
+     , RealFloat w, R.Random w
      , Num n, Ord n
      , R.RandomGen gen
      )
   => n                        -- ^ split offset
   -> [T.Tree l]               -- ^ training 'T.Tree's
   -> (v, n)                   -- ^ target vertex
-  -> Hypergraph (v, n) l w i' -- ^ initial 'Hypergraph'
+  -> Hypergraph (v, n) l w i  -- ^ initial 'Hypergraph'
   -> gen                      -- ^ random number generator
-  -> (Hypergraph (v, n) l w [i], gen)
+  -> (Hypergraph (v, n) l w [Int], gen)
 splitMergeStep offset ts target g0 gen
   = {-trace "splitMergeStep" $-}
     let
     (_, (g1, gen'))
       = mapSnd (mapFst properize)
       $ mapSnd (flip (randomizeWeights 10) gen)
-      $ mapAccumIds (\ i _ -> {-i `seq`-} (i + 1, i)) 0
+      $ mapAccumIds (\ (i : is) _ -> (is, i)) [0 ..]
       $ split offset (target ==) g0
     training
-      = map (\ t -> ((target, []), parseTree target t g1, 1)) ts
+      = map (\ t -> (M.singleton target 1, parseTree g1 [target] t, 1)) ts
     wM
       = forestEM
           (map (map eId) . M.elems $ edgesM g1)
@@ -129,9 +124,10 @@ splitMergeStep offset ts target g0 gen
           (\ w n -> w < 0.0001 || n > 100)
           (M.fromList . map (\ e -> (eId e, eWeight e)) $ edges g1)
     getWeight
-      = fromJust . flip M.lookup wM . eId
+      = flip (M.findWithDefault err) wM . eId
+      where err = error "Algorithms.StateSplit.splitMergeStep.getWeight"
     ios
-      = map (\ (target', g, _) -> insideOutside getWeight target' g) training
+      = map (\ (m, g, _) -> let im = inside getWeight g in (im, outside getWeight im g m)) training
     toMerge
       = S.fromList
       $ map fst
@@ -168,34 +164,40 @@ splitMergeStep offset ts target g0 gen
   $ trace "=== Merged Hypergraph ============================================"
   $ trace (drawHypergraph $ g3)
   $ trace "=================================================================="
-  $ -}(g3, gen')
+  $ -} (g3, gen')
 
 
 deltasLikelihood
-  :: (Ord v, Fractional w, Num n, Ord n, Ord p)
-  => n -> (v, n) -> [M.Map ((v, n), p) (w, w)] -> M.Map (v, n) w
+  :: (Ord v, Fractional w, Num n, Ord n)
+  => n
+  -> (v, n)
+  -> [(T.Tree (M.Map (v, n) w), T.Tree (M.Map (v, n) w))]
+  -> M.Map (v, n) w
 deltasLikelihood offset target ios
-  = for M.empty ios $ \ m io ->
-      for m (M.keys io) $ \ m' v1 ->
-        if snd (fst v1) >= offset || fst v1 == target
-        then m'
-        else
-          let v2 = mapFst (mapSnd (offset +)) v1
-              s = sum
-                    [ i * o
-                    | v <- M.keys io
-                    , snd v == snd v1
-                    , v /= v1
-                    , v /= v2
-                    , let (i, o) = fromMaybe (0, 0) $ M.lookup v io
-                    ]
-              (i1, o1) = M.findWithDefault (0, 0) v1 io
-              (i2, o2) = M.findWithDefault (0, 0) v2 io
-              p = (s + 0.5 * (i1 + i2) * (o1 + o2)) / (s + i1 * o1 + i2 * o2)
-                      -- in the paper special factors are used instead of 0.5
-          in M.insertWith' (*) (fst v2) p m'
+  = for M.empty ios $ \ m'' (ti, to) ->
+      forT m'' (zipT ti to) $ \ m' (im, om) ->
+        for m' (M.keys om) $ \ m v1 ->
+          if snd v1 >= offset || v1 == target
+          then m
+          else
+            let v2 = mapSnd (offset +) v1
+                s = sum
+                      [ M.findWithDefault 0 v im * M.findWithDefault 0 v om
+                      | v <- M.keys om
+                      , v /= v1
+                      , v /= v2
+                      ]
+                i1 = M.findWithDefault 0 v1 im
+                o1 = M.findWithDefault 0 v1 om
+                i2 = M.findWithDefault 0 v2 im
+                o2 = M.findWithDefault 0 v2 om
+                p = (s + 0.5 * (i1 + i2) * (o1 + o2)) / (s + i1 * o1 + i2 * o2)
+                        -- in the paper special factors are used instead of 0.5
+            in M.insertWith' (*) v2 p m
   where
     for x ys f = L.foldl' f x ys
+    zipT (T.Node l1 f1) (T.Node l2 f2) = Node (l1, l2) $ zipWith zipT f1 f2
+    forT x t f = go x t where go acc (T.Node l ts) = L.foldl' go (f acc l) ts
 
 -- ---------------------------------------------------------------------------
 
@@ -266,11 +268,10 @@ maxSplit = maximum . map snd . vertices
 
 -- | Partition a list with respect to a function; e.g.
 --
--- > partition (flip mod 3) [0 .. 9] 
--- > == fromList [(0,[0,3,6,9]), (1,[1,4,7]), (2,[2,5,8])]
+-- > partition (flip mod 3) [0 .. 9]
+-- > == fromList [(0,[9,6,3,0]), (1,[7,4,1]), (2,[8,5,2])]
 partition :: (Ord k) => (a -> k) -> [a] -> M.Map k [a]
-partition f = foldr step M.empty
-    where step x = M.insertWith (++) (f x) [x]
+partition f = M.fromListWith (++) . map (\ x -> (f x, [x]))
 
 -- ---------------------------------------------------------------------------
 
