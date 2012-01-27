@@ -15,7 +15,7 @@ module TestData.TestHypergraph where
 import Data.Hypergraph
 
 import Data.Tree
-import Random
+import System.Random
 
 
 testHypergraphs :: (Fractional w) => [Hypergraph Char Char w ()]
