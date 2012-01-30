@@ -19,11 +19,11 @@ module Algorithms.NBest
 import Tools.Miscellaneous (mapSnd)
 
 import Data.List
-import Data.Set ( Set )
+-- import Data.Set ( Set )
 import qualified Data.Set as Set
-import Data.Map ( Map )
+-- import Data.Map ( Map )
 import qualified Data.Map as Map
-import Data.Maybe
+-- import Data.Maybe
 import qualified Data.Tree as T
 -- import Array
 -- import System.Environment (getArgs)
@@ -107,43 +107,56 @@ lft  (hNodes, hBack, hWeights) = (hNodes, hBack, hWeights')
 knuth
   :: (Ord hWeight, Ord hNode, Ord hEdge)
   => HGraph hNode hEdge hWeight -> hNode -> Maybe (hWeight, hEdge)
-knuth h@(hNodes, _, _)
-  = (Map.!)
-  $ knuth' h
-      ( Map.fromList [(v, Nothing) | v <- hNodes]
-      , Set.fromList hNodes
-      , Set.empty
-      )
-
-
-knuth'
-  :: (Ord hWeight, Ord hNode, Ord hEdge)
-  => HGraph hNode hEdge hWeight
-  -> (Map hNode (Maybe (hWeight, hEdge)), Set hNode, Set hNode)
-  -> Map hNode (Maybe (hWeight, hEdge))
-knuth' h@(_, hBack, hWeights) (oldMap, unvis, vis)
-  | Set.null unvis
-    = oldMap
-  | otherwise
-    = knuth' h
-        ( Map.insert v m oldMap
-        , Set.delete v unvis
-        , Set.insert v vis
-        )
+knuth (hNodes, hBack, hWeights)
+  = flip Map.lookup
+  $ let
+      forwM
+        = Map.fromListWith Set.union
+            [ (v', Set.singleton sym)
+            | v <- hNodes
+            , (sym, vs@(_ : _)) <- hBack v
+            , v' <- vs
+            ]
+      unvisM
+        = Map.fromList
+            [ (sym, (Set.fromList vs, vs, v))
+            | v <- hNodes
+            , (sym, vs@(_ : _)) <- hBack v
+            ]
+      candM
+        = Map.fromListWith candMin
+            [(v, (hWeights sym [], sym)) | v <- hNodes, (sym, []) <- hBack v]
+    in go forwM unvisM candM Map.empty
   where
-    f sym weights = do
-      b <- sequence weights
-      let (ws, _) = unzip b
-      return (hWeights sym ws, sym)
-    list
-      = [ (v', f sym (map ((Map.!) oldMap) srcs))
-        | v' <- Set.toList unvis
-        , (sym, srcs) <- hBack v'
-        , Set.isSubsetOf (Set.fromList srcs) vis
-        ]
-    list' = filter (\ (_, m') -> isJust m') list
-    (v, m)
-      = minimumBy (\ (_, Just (x, _)) (_, Just (x', _)) -> compare x x') list'
+    candMin x@(x', _) y@(y', _) = if x' <= y' then x else y
+    go forwM unvisM candM bestM
+      = if Map.null candM
+        then bestM
+        else go
+              forwM'
+              unvisM'
+              (Map.delete v candM')
+              bestM'
+      where
+        candCompare (_, (x, _)) (_, (x', _)) = compare x x'
+        bestM' = Map.insertWith (flip const) v m bestM
+        (v, m) = minimumBy candCompare (Map.toList candM)
+        (syms, forwM') = Map.updateLookupWithKey (\ _ _ -> Nothing) v forwM
+        (unvisM', candM')
+          = foldl' step (unvisM, candM) (maybe [] Set.toList syms)
+          where
+            step (unvisM'', candM'') sym
+              = unvisM'' `seq` candM'' `seq`
+                let (unvisS, vs, v') = unvisM'' Map.! sym
+                    unvisS' = Set.delete v unvisS
+                    w = hWeights sym (fst $ unzip $ map ((Map.!) bestM') vs)
+                in if Set.null unvisS'
+                   then ( Map.delete sym unvisM''
+                        , if Map.member v' bestM'
+                          then candM''
+                          else Map.insertWith candMin v' (w, sym) candM''
+                        )
+                   else (Map.insert sym (unvisS', vs, v') unvisM'', candM'')
 
 {-
 kknuth
@@ -199,27 +212,18 @@ q :: (Ord hWeight, Ord hNode, Ord hEdge)
   -> hNode
   -> [hWeight]
 q h@(hNodes, hBack, hWeights) kn
-  = (Map.!) m
-  where
-    m = Map.fromList [(hNode, q' hNode) | hNode <- hNodes]
-    q' v
-      = case kn v of
-          Nothing -> []
-          Just (w, edge) ->
-              w
-            : p (Heap.fromList (
-                    [ topconcat (hWeights sym) (map (q h kn) srcs)
-                    | (sym, srcs) <- hBack v
-                    , sym /= edge
-                    ]
-                ++  ( mytail
-                    $ head
-                      [ topconcat (hWeights sym) (map (q h kn) srcs)
-                      | (sym, srcs) <- hBack v
-                      , sym == edge
-                      ]
-                    )
-                ))
+  = flip (Map.findWithDefault [])
+  $ Map.fromList
+    [ ( hNode
+      , w : (p . Heap.fromList . concat)
+        [ if sym /= edge then [tc] else mytail tc
+        | (sym, srcs) <- hBack hNode
+        , let tc = topconcat (hWeights sym) (map (q h kn) srcs)
+        ]
+      )
+    | hNode <- hNodes
+    , Just (w, edge) <- [kn hNode]
+    ]
 
 
 p :: (Ord hWeight) => MinHeap (M hWeight) -> [hWeight]
