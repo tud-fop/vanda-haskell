@@ -361,26 +361,38 @@ verticesToInt target g
     )
 
 
-binarize :: (Ord q, Num w) => Hypergraph q t w i -> Hypergraph [q] (Maybe t) w ()
+-- | Right-binarize a 'Hypergraph', i.e. replace every
+-- @hyperedge v [v1, ..., vn] l w i@ by
+-- @hyperedge [v] [[v1, ..., vn]] (Just l) w ()@ and
+-- @hyperedge [vi, ..., vn] [[vi], [v(i+1), ..., vn]] Nothing 1 ()@
+-- for every @i@ in @[1 .. n - 1]@.
+binarize
+  :: (Ord v, Num w) => Hypergraph v l w i -> Hypergraph [v] (Maybe l) w ()
 binarize g
   =   hypergraph
-  $   [ Hyperedge [q] (if null qs then [] else [qs]) (Just t) w ()
-      | Hyperedge q qs t w _ <- edges g
+  $   [ Hyperedge [v] (if null vs then [] else [vs]) (Just l) w ()
+      | Hyperedge v vs l w _ <- edges g
       ]
-  ++  [ Hyperedge qqs [[q], qs] Nothing 1 ()
-      | qqs@(q:qs@(_:_))
+  ++  [ Hyperedge vvs [[v], vs] Nothing 1 ()
+      | vvs@(v:vs@(_:_))
           <- nub $ concatMap (L.tails . eTail) $ edges g
       ]
 
 
-binarize' :: (Ord q, Num w) => Hypergraph q t w i -> Hypergraph [q] (Maybe t) w ()
+-- | Left-binarize a 'Hypergraph', i.e. replace every
+-- @hyperedge v [v1, ..., vn] l w i@ by
+-- @hyperedge [v] [[vn, ..., v1]] (Just l) w ()@ and
+-- @hyperedge [vi, ..., v1] [[v(i-1), ..., v1], [vi]] Nothing 1 ()@
+-- for every @i@ in @[2 .. n]@.
+binarize'
+  :: (Ord v, Num w) => Hypergraph v l w i -> Hypergraph [v] (Maybe l) w ()
 binarize' g
   =   hypergraph
-  $   [ Hyperedge [q] (if null qs then [] else [reverse qs]) (Just t) w ()
-      | Hyperedge q qs t w _ <- edges g
+  $   [ Hyperedge [v] (if null vs then [] else [reverse vs]) (Just l) w ()
+      | Hyperedge v vs l w _ <- edges g
       ]
-  ++  [ Hyperedge qqs [qs, [q]] Nothing 1 ()
-      | qqs@(q:qs@(_:_))
+  ++  [ Hyperedge vvs [vs, [v]] Nothing 1 ()
+      | vvs@(v:vs@(_:_))
           <- nub $ concatMap (L.tails . reverse . eTail) $ edges g
       ]
 
