@@ -110,13 +110,6 @@ knuth
 knuth (hNodes, hBack, hWeights)
   = flip Map.lookup
   $ let
-      forwM
-        = Map.fromListWith Set.union
-            [ (v', Set.singleton sym)
-            | v <- hNodes
-            , (sym, vs) <- hBack v
-            , v' <- vs
-            ]
       unvisM
         = Map.fromList
             [ (sym, (Set.fromList vs, vs, v))
@@ -126,24 +119,33 @@ knuth (hNodes, hBack, hWeights)
       candH
         = (Heap.fromList :: Ord prio => [(prio, val)] -> Heap.MinPrioHeap prio val)
             [(hWeights sym [], (v, sym)) | v <- hNodes, (sym, []) <- hBack v]
-    in go forwM unvisM Map.empty candH
+    in go unvisM Map.empty candH
   where
-    go forwM unvisM bestM candH
-      = maybe bestM (go' forwM unvisM bestM) $ Heap.view candH
-    go' forwM unvisM bestM ((w, (v, sym)), candH)
-      = go forwM' unvisM' bestM' candH'
+    forwM
+      = Map.map (Set.toList . Set.fromList)
+      $ Map.fromListWith (++)
+          [ (v', [sym])
+          | v <- hNodes
+          , (sym, vs) <- hBack v
+          , v' <- vs
+          ]
+    go unvisM bestM candH
+      = maybe bestM (go' unvisM bestM) $ Heap.view candH
+    go' unvisM bestM ((w, (v, sym)), candH)
+      = if Map.member v bestM
+        then go unvisM bestM candH
+        else go unvisM' bestM' candH'
       where
-        bestM' = Map.insertWith (flip const) v (w, sym) bestM
-        (syms, forwM') = Map.updateLookupWithKey (\ _ _ -> Nothing) v forwM
+        bestM' = Map.insert v (w, sym) bestM
         (unvisM', candH')
-          = foldl' step (unvisM, candH) (maybe [] Set.toList syms)
+          = foldl' step (unvisM, candH) $ Map.findWithDefault [] v forwM
         step (unvisM'', candH'') sym'
           = unvisM'' `seq` candH'' `seq`
             let (unvisS, vs, v') = unvisM'' Map.! sym'
                 unvisS' = Set.delete v unvisS
                 w' = hWeights sym' (fst $ unzip $ map ((Map.!) bestM') vs)
             in if Set.null unvisS'
-              then ( Map.delete sym' unvisM''
+              then ( unvisM''
                     , if Map.member v' bestM'
                       then candH''
                       else Heap.insert (w', (v', sym')) candH''
