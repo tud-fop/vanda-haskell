@@ -192,7 +192,7 @@ buildRuleL c trigger@(Ranked _ _) inEdges
   where
     rule (e, s) = do
       Ranked (K _ e' _ bps) _ <- rankedWithBackpointer c e (s+1) (rank trigger - 1)
-      unless (e' == e && bps !! s == rank trigger - 1) $
+      unless (eqHyperedges e e' && bps !! s == rank trigger - 1) $
         error "error with rankedWithBackpointer in buildRuleL" --TODO: remove
       asl <- take s `liftM` zipWithM (nthRankedAssignment c) (eTail e) bps
       asr <- drop (s+1) `liftM` zipWithM (nthRankedAssignment c) (eTail e) bps
@@ -235,6 +235,7 @@ buildRuleR _ _ = []
 
 -- | @kbest graph g h k@ finds the @k@ best derivations of the goal
 -- node @g@ in @graph@, applying the heuristic function @h@.
+-- /Watch out:/ Hyperedge IDs need to be unique for KA* to work as intended!
 kbest
   :: (Num w, Ord v, Ord w, Ord l, Ord i)
   => Hypergraph v l w i
@@ -247,6 +248,7 @@ kbest = kastar (H.empty :: H.MaxPrioHeap w (Assignment v l w i))
 
 -- | @kworst graph g h k@ finds the @k@ worst derivations of the goal
 -- node @g@ in @graph@, applying the heuristic function @h@.
+-- /Watch out:/ Hyperedge IDs need to be unique for KA* to work as intended!
 kworst
   :: (Num w, Ord v, Ord w, Ord l, Ord i)
   => Hypergraph v l w i
@@ -260,6 +262,7 @@ kworst = kastar (H.empty :: H.MinPrioHeap w (Assignment v l w i))
 -- | @kastar agenda graph g h k@ finds the @k@ best derivations of the goal
 -- node @g@ in @graph@, applying the heuristic function @h@. "Best" thereby
 -- means best with respect to the order induced by the @agenda@.
+-- /Watch out:/ Hyperedge IDs need to be unique for KA* to work as intended!
 kastar
   :: (Num w, Ord v, Ord w, Ord l, Ord i, H.HeapItem p (w, Assignment v l w i))
   => Agenda p v l w i

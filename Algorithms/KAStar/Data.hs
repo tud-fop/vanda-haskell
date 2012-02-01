@@ -31,6 +31,7 @@ module Algorithms.KAStar.Data
   , numRanked
   , nthRankedAssignment
   , rankedWithBackpointer
+  , eqHyperedges
   ) where
 
 import qualified Data.Map as M
@@ -76,7 +77,7 @@ data K v l w i = K { kNode         :: v
 
 -- When we check if the chart already contains a ranked item, we disregard its rank.
 instance (Eq v, Eq l, Eq w, Eq i) => Eq (K v l w i) where
-  (K v e _ bps) == (K v' e' _ bps') = v == v' && e == e' && bps == bps'
+  (K v e _ bps) == (K v' e' _ bps') = v == v' && eqHyperedges e e' && bps == bps'
 
 
 -- | @True@ iff inside assignment
@@ -132,27 +133,13 @@ backpointers (Ranked (K _ _ _ bps) _) = bps
 backpointers _ = error "Tried to compute rank of non-ranked assignment "
 
 
--- | Hyperedges must have an order to work as keys for 'Data.Map'.
-instance (Ord v, Ord l, Ord w, Ord i) => Ord (Hyperedge v l w i) where
-  e <= e'= let (h, h') = (eHead e,  eHead e')
-               (t, t') = (eTail e,  eTail e')
-               (l, l') = (eLabel e, eLabel e')
-               (w, w') = (eWeight e, eWeight e')
-               (i, i') = (eId e,    eId e')
-           in    h < h'
-              || h == h' && t < t'
-              || h == h' && t == t' && l < l'
-              || h == h' && t == t' && l == l' && w < w'
-              || h == h' && t == t' && l == l' && w == w'&& i <= i'
-
-
 -- | Chart of already explored items with their weights.
 --   'cEdgeMap' is a map assigning nodes to their corresponding inside,
 --   outside, etc., items. Lists are sorted by /increasing/ weights.
 --   'cBPMap' holds for each key @(e, i, v)@ those ranked assignments with
 --   edge @e@ whose @i@-th backpointer has rank @v@.
 data Chart v l w i = C { cEdgeMap :: M.Map v (EdgeMapEntry v l w i)
-                       , cBPMap   :: M.Map (Hyperedge v l w i, Int, Int)
+                       , cBPMap   :: M.Map (i, Int, Int)
                                            [Assignment v l w i]
                        }
 
@@ -207,5 +194,9 @@ nthRankedAssignment c v n = if n >= 1 && n <= S.length s
 rankedWithBackpointer :: (Ord v, Ord l, Ord w, Ord i)
                       => Chart v l w i -> (Hyperedge v l w i)
                       -> Int -> Int -> [Assignment v l w i]
-rankedWithBackpointer c e bp val = M.findWithDefault [] (e, bp, val) (cBPMap c)
+rankedWithBackpointer c e bp val = M.findWithDefault [] (eId e, bp, val) (cBPMap c)
+
+-- | checks two `Hyperedge`s for equality. Note that we only compare IDs.
+eqHyperedges :: Eq i => Hyperedge v l w i -> Hyperedge v l w i -> Bool
+eqHyperedges e1 e2 = eId e1 == eId e2
 

@@ -137,7 +137,6 @@ otherEdges v = (M.findWithDefault [] v . cfgOtherEdges) `liftM` ask
 inEdgesMap :: KAStar p v l w i (M.Map v [(Hyperedge v l w i, Int)])
 inEdgesMap = cfgInEdges `liftM` ask
 
-
 -- | Returns momentary chart
 chart :: KAStar p v l w i (Chart v l w i)
 chart = stChart `liftM` get
@@ -198,7 +197,7 @@ chartInsert assgmt = do
     bpInsert a@(Ranked (K _ e _ bps) _) = do
       c <- chart
       let bc' = foldl (\m k -> M.insertWith' (++) k [rk c a] m) (cBPMap c)
-                [(e, bp, val) | bp <- [1 .. length bps]
+                [(eId e, bp, val) | bp <- [1 .. length bps]
                               , let val = bps !! (bp - 1)]
       putChart c{cBPMap = bc'}
     bpInsert _ = return ()
