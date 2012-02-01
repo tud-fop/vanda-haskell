@@ -22,12 +22,15 @@ module Algorithms.InsideOutsideWeights (
 -- * Fixpoint convergence
 , Converging(..)
 , convergedRatio
+, viterbiInsideOutside
 ) where
 
 
 import Data.Hypergraph
 
 import qualified Data.Map  as M
+
+import Control.Arrow
 
 -- import Debug.Trace
 
@@ -242,4 +245,30 @@ instance Converging Float where
   converged = convergedRealFloat
 
 instance Converging Double where
-  converged = convergedRealFloat
+--  converged = convergedRealFloat
+  converged = convergedRatio 0.0001
+
+-- | This wrapper should allow us to use the same fixpoint computation
+-- we used to compute inside/outside sums in order to calculate
+-- Viterbi scores.
+newtype Viterbi a = Viterbi { unViterbi :: a } deriving (Eq, Ord, Show)
+
+instance (Ord a, Num a) => Num (Viterbi a) where
+  a + b       = Viterbi (unViterbi a `max` unViterbi b)
+  (-)         = undefined
+  a * b       = Viterbi (unViterbi a * unViterbi b)
+  abs         = Viterbi . abs . unViterbi
+  fromInteger = Viterbi . fromInteger
+  signum      = Viterbi . signum . unViterbi
+
+instance Converging a => Converging (Viterbi a) where
+  a `converged` b = unViterbi a `converged` unViterbi b
+
+viterbiInsideOutside
+  :: (Ord v, Converging w, Ord w, Num w)
+  => (Hyperedge v l w' i -> w)
+                -- ^ this function is used do get the weight of an 'Hyperedge'
+  -> v          -- ^ target node
+  -> Hypergraph v l w' i
+  -> M.Map v (w, w)        -- ^ maps a vertex to its inside and outside weight
+viterbiInsideOutside f n g = M.map (unViterbi *** unViterbi) $ insideOutside (Viterbi . f) n g
