@@ -1,4 +1,4 @@
--- (c) Johannes Osterholzer <johannes.osterholzer@gmail.com>
+-- (c) Johannes Osterholzer <Johannes.Osterholzer@tu-dresden.de>
 --
 -- Technische Universität Dresden / Faculty of Computer Science / Institute
 -- of Theoretical Computer Science / Chair of Foundations of Programming
@@ -35,7 +35,7 @@ module Algorithms.KAStar.Data
 
 import qualified Data.Map as M
 import qualified Data.Tree as T
-import qualified Data.Heap as H 
+import qualified Data.Heap as H
 import qualified Data.Sequence as S
 import Data.Sequence ((<|), (|>))
 import Data.Foldable (toList)
@@ -139,8 +139,8 @@ instance (Ord v, Ord l, Ord w, Ord i) => Ord (Hyperedge v l w i) where
                (l, l') = (eLabel e, eLabel e')
                (w, w') = (eWeight e, eWeight e')
                (i, i') = (eId e,    eId e')
-           in    h < h' 
-              || h == h' && t < t' 
+           in    h < h'
+              || h == h' && t < t'
               || h == h' && t == t' && l < l'
               || h == h' && t == t' && l == l' && w < w'
               || h == h' && t == t' && l == l' && w == w'&& i <= i'
@@ -152,7 +152,7 @@ instance (Ord v, Ord l, Ord w, Ord i) => Ord (Hyperedge v l w i) where
 --   'cBPMap' holds for each key @(e, i, v)@ those ranked assignments with
 --   edge @e@ whose @i@-th backpointer has rank @v@.
 data Chart v l w i = C { cEdgeMap :: M.Map v (EdgeMapEntry v l w i)
-                       , cBPMap   :: M.Map (Hyperedge v l w i, Int, Int) 
+                       , cBPMap   :: M.Map (Hyperedge v l w i, Int, Int)
                                            [Assignment v l w i]
                        }
 
@@ -165,35 +165,35 @@ data EdgeMapEntry v l w i = EM { emInside  :: [Assignment v l w i]
                                } deriving Show
 
 
--- | @insideAssignments c v@ returns inside assignments for the node @v@ 
+-- | @insideAssignments c v@ returns inside assignments for the node @v@
 --   in chart @c@
 insideAssignments :: Ord v => Chart v l w i ->  v -> [Assignment v l w i]
 insideAssignments c v = maybe [] emInside . M.lookup v $ cEdgeMap c
 
 
--- | @outsideAssignments c v@ returns outside assignments for the node @v@ 
+-- | @outsideAssignments c v@ returns outside assignments for the node @v@
 --   in chart @c@
 outsideAssignments :: Ord v => Chart v l w i -> v -> [Assignment v l w i]
 outsideAssignments c v = maybe [] emOutside . M.lookup v $ cEdgeMap c
 
 
--- | @rankedAssignments c v@ returns ranked assignments for the node @v@ 
+-- | @rankedAssignments c v@ returns ranked assignments for the node @v@
 --   in chart @c@
 rankedAssignments :: Ord v => Chart v l w i -> v -> [Assignment v l w i]
 rankedAssignments c v = maybe [] (toList . emRanked) . M.lookup v $ cEdgeMap c
 
--- | @numRanked c v@ returns the number of assignments for node @v@ in 
+-- | @numRanked c v@ returns the number of assignments for node @v@ in
 --   chart @c@
 numRanked :: Ord v => Chart v l w i -> v -> Int
 numRanked c v = maybe 0 (S.length . emRanked) . M.lookup v $ cEdgeMap c
 
 
--- | @nthRankedAssignment c v n@ gets the @n@-ranked assignment for 
+-- | @nthRankedAssignment c v n@ gets the @n@-ranked assignment for
 --   the node @v@ from chart @c@, returned in a singleton list.
 --   If there is no such assignment, the function returns @[]@.
 --   This is useful for code in the list monad.
-nthRankedAssignment :: Ord v 
-                    => Chart v l w i -> v 
+nthRankedAssignment :: Ord v
+                    => Chart v l w i -> v
                     -> Int -> [Assignment v l w i]
 nthRankedAssignment c v n = if n >= 1 && n <= S.length s
                             then [s `S.index` (S.length s - n)]
@@ -201,11 +201,11 @@ nthRankedAssignment c v n = if n >= 1 && n <= S.length s
   where s = maybe S.empty emRanked . M.lookup v $ cEdgeMap c
 
 
--- | @rankedWithBackpointer c e i v@ returns all ranked assignments 
+-- | @rankedWithBackpointer c e i v@ returns all ranked assignments
 --   constructed from hyperedge @e@ whose @i$-th backpointer
 --   points to the corresponding @v@-ranked assignment, with chart @c@.
-rankedWithBackpointer :: (Ord v, Ord l, Ord w, Ord i) 
-                      => Chart v l w i -> (Hyperedge v l w i) 
+rankedWithBackpointer :: (Ord v, Ord l, Ord w, Ord i)
+                      => Chart v l w i -> (Hyperedge v l w i)
                       -> Int -> Int -> [Assignment v l w i]
 rankedWithBackpointer c e bp val = M.findWithDefault [] (e, bp, val) (cBPMap c)
 

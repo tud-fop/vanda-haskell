@@ -1,4 +1,4 @@
--- (c) Johannes Osterholzer <johannes.osterholzer@gmail.com>
+-- (c) Johannes Osterholzer <Johannes.Osterholzer@tu-dresden.de>
 --
 -- Technische Universität Dresden / Faculty of Computer Science / Institute
 -- of Theoretical Computer Science / Chair of Foundations of Programming
@@ -25,15 +25,15 @@ module Algorithms.KAStar.State
   , agenda
   , agendaInsert
   , popAgenda
-  , chartInsert 
-  , numDeriv 
+  , chartInsert
+  , numDeriv
   ) where
 
 import Control.Monad.State
 import Control.Monad.Reader
 import Control.Monad.List
 import qualified Data.Map as M
-import qualified Data.Heap as H 
+import qualified Data.Heap as H
 import qualified Data.Sequence as S
 import Data.List (foldl')
 import Data.Sequence ((<|), (|>))
@@ -58,16 +58,16 @@ newtype KAStar p v l w i a = KAStar {
 
 
 -- | Holds configuration for KA*
-data KAConfig v l w i = KAConfig { 
-    cfgNumDeriv   :: Int 
+data KAConfig v l w i = KAConfig {
+    cfgNumDeriv   :: Int
     -- ^ number @k@ of derivations to be searched for
-  , cfgGraph      :: Hypergraph v l w i 
+  , cfgGraph      :: Hypergraph v l w i
     -- ^ underlying graph
-  , cfgGoal       :: v 
+  , cfgGoal       :: v
     -- ^ goal node whose derivations are searched
-  , cfgHeuristic  :: v -> w 
+  , cfgHeuristic  :: v -> w
     -- ^ the supplied heuristic function
-  , cfgInEdges    :: M.Map v [(Hyperedge v l w i, Int)] 
+  , cfgInEdges    :: M.Map v [(Hyperedge v l w i, Int)]
     -- ^ assigns tail-nodes to their hyperedge, together with their position
   , cfgOtherEdges :: M.Map v [(Hyperedge v l w i, Int)]
     -- ^ as 'cfgInEdges', but also for the edge's head node
@@ -75,10 +75,10 @@ data KAConfig v l w i = KAConfig {
 
 
 -- | Data structure holding run-time state of KA*
-data KAState p v l w i = KAState { 
-      stChart          :: Chart v l w i 
+data KAState p v l w i = KAState {
+      stChart          :: Chart v l w i
       -- ^ chart holds processed assignments
-    , stAgenda         :: Agenda p v l w i 
+    , stAgenda         :: Agenda p v l w i
       -- ^ pqueue with prioritized assignments waiting to be processed
     , stItemsInserted  :: Int
       -- ^ number of assignments inserted into chart
@@ -90,7 +90,7 @@ data KAState p v l w i = KAState {
 -- | Runs the KAStar monad, similar to runState
 runKAStar :: KAStar p v l w i a
           -> Agenda p v l w i
-          -> Int 
+          -> Int
           -> Hypergraph v l w i
           -> v
           -> (v -> w)
@@ -163,7 +163,7 @@ putAgenda a = do
 
 -- | Increment number of inserted assignments
 incItemsInserted :: KAStar p v l w i ()
-incItemsInserted = do 
+incItemsInserted = do
   st <- get
   put st{stItemsInserted = stItemsInserted st + 1}
 
@@ -175,20 +175,20 @@ incItemsGenerated n = do
   put st{stItemsGenerated = stItemsGenerated st + n}
 
 
--- | @chartInsert a@ inserts assignment @a@ into the chart, provided it does 
+-- | @chartInsert a@ inserts assignment @a@ into the chart, provided it does
 --   not already contain it (In this case, @Nothing@ is returned).
 --   Ranked items are annotated with their corresponding rank upon insertion.
 --   The number of inserted assignments is updated accordingly.
-chartInsert 
-  :: (Ord v, Ord l, Ord w, Ord i) 
-  => Assignment v l w i 
+chartInsert
+  :: (Ord v, Ord l, Ord w, Ord i)
+  => Assignment v l w i
   -> KAStar p v l w i (Maybe (Assignment v l w i))
 chartInsert assgmt = do
   enough <- case assgmt of
     (Ranked (K v _ _ _) _) -> liftM2 (>) ((flip numRanked v) `liftM` chart) numDeriv
     _                      -> return False
   contained <- chartContains assgmt
-  if enough || contained 
+  if enough || contained
     then return Nothing
     else do
       incItemsInserted
@@ -197,7 +197,7 @@ chartInsert assgmt = do
   where
     bpInsert a@(Ranked (K _ e _ bps) _) = do
       c <- chart
-      let bc' = foldl (\m k -> M.insertWith' (++) k [rk c a] m) (cBPMap c) 
+      let bc' = foldl (\m k -> M.insertWith' (++) k [rk c a] m) (cBPMap c)
                 [(e, bp, val) | bp <- [1 .. length bps]
                               , let val = bps !! (bp - 1)]
       putChart c{cBPMap = bc'}
@@ -209,39 +209,39 @@ chartInsert assgmt = do
     update c a@(Inside _ _)  Nothing   = EM [a] [] S.empty
     update c a@(Outside _ _) Nothing   = EM [] [a] S.empty
     update c a@(Ranked _ _)  Nothing   = EM [] []  (S.singleton $ rk c a)
-    update c a@(Inside _ _)  (Just ce) = ce{emInside = [a]} 
+    update c a@(Inside _ _)  (Just ce) = ce{emInside = [a]}
     update c a@(Outside _ _) (Just ce) = ce{emOutside = [a]}
     update c a@(Ranked _ _)  (Just ce) = ce{emRanked = rk c a <| emRanked ce}
-    rk c (Ranked (K v e r bps) w) = 
+    rk c (Ranked (K v e r bps) w) =
       Ranked (K v e (succ $ numRanked c v) bps) w
     rk _ x = x
 
 
--- | @chartContains a@ checks whether the chart already contains an 
---   assignment that is equal to @a@ (with no respect paid to the rank 
+-- | @chartContains a@ checks whether the chart already contains an
+--   assignment that is equal to @a@ (with no respect paid to the rank
 --   of ranked items).
-chartContains 
-  :: (Ord v, Eq l, Eq w, Eq i) 
+chartContains
+  :: (Ord v, Eq l, Eq w, Eq i)
   => Assignment v l w i -> KAStar p v l w i Bool
-chartContains (Inside (I v) _) 
+chartContains (Inside (I v) _)
   = (not . null . flip insideAssignments v) `liftM` chart
-chartContains (Outside (O v) _) 
+chartContains (Outside (O v) _)
   = (not . null . flip outsideAssignments v) `liftM` chart
-chartContains r@(Ranked (K v _ _ _) _) 
+chartContains r@(Ranked (K v _ _ _) _)
   = (r `elem`) `liftM` (flip rankedAssignments v `liftM` chart)
 
 
 -- | @agendaInsert as@ inserts the list @as@ of prioritized assignments
 --   into the current agenda, updating the number of generated assignments
 --   accordingly.
-agendaInsert 
-  :: (Ord v, Ord w, H.HeapItem p (w, Assignment v l w i)) 
+agendaInsert
+  :: (Ord v, Ord w, H.HeapItem p (w, Assignment v l w i))
   => [(w, Assignment v l w i)] -> KAStar p v l w i ()
-agendaInsert as = do 
+agendaInsert as = do
   incItemsGenerated $ length as
   putAgenda =<< flip (foldl' (flip H.insert)) as `liftM` agenda
-         
-popAgenda 
+
+popAgenda
   :: H.HeapItem p (w, Assignment v l w i)
   => KAStar p v l w i (Assignment v l w i)
 popAgenda = do

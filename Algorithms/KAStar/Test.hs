@@ -1,4 +1,4 @@
--- (c) Johannes Osterholzer <johannes.osterholzer@gmail.com>
+-- (c) Johannes Osterholzer <Johannes.Osterholzer@tu-dresden.de>
 --
 -- Technische Universität Dresden / Faculty of Computer Science / Institute
 -- of Theoretical Computer Science / Chair of Foundations of Programming
@@ -45,7 +45,7 @@ test2 = hypergraph [ hyperedge 'a' ""   "alpha"   1.0 ()
 t graph goal h k = do
   putStrLn $ drawHypergraph graph
   mapM_ (putStrLn . uncurry str) $ kbest graph goal h k
-    where str t w = "w = " ++ show w ++ "\n" 
+    where str t w = "w = " ++ show w ++ "\n"
                     ++ (T.drawTree . fmap drawHyperedge $ t)
 
 
@@ -53,7 +53,7 @@ t graph goal h k = do
 t' graph goal k = do
   putStrLn $ drawHypergraph graph
   mapM_ (putStrLn . uncurry str) $ nBest' k goal graph
-    where str t w = "w = " ++ show w ++ "\n" 
+    where str t w = "w = " ++ show w ++ "\n"
                     ++ (T.drawTree . fmap drawHyperedge $ t)
 
 
@@ -70,22 +70,22 @@ t3' = nBest' 1000 'S' (Test.testHypergraphs !! 1)
 
 t4 = t (Test.testHypergraphs !! 1) 'S' heur1 10
 
-comparison 
-  :: (Fractional w, Ord v, Ord w, Ord i, Ord l, Show i, Show l, Show v) 
+comparison
+  :: (Fractional w, Ord v, Ord w, Ord i, Ord l, Show i, Show l, Show v)
   => Hypergraph v l w i -> v -> (v -> w) -> Int -> IO Bool
 comparison graph goal heur k = and `liftM` zipWithM put mine others
-  where put w1 w2 = do 
+  where put w1 w2 = do
           putStrLn $ show w1 ++ "\t" ++ show w2
           return $ w1 == w2
         mine = map snd $ kbest graph goal heur k
         others = nBest k goal graph
 
 diff
-  :: (Fractional w, Ord v, Ord w, Ord i, Ord l, Show i, Show l, Show v) 
-  => Hypergraph v l w i 
-  -> v 
-  -> (v -> w) 
-  -> Int 
+  :: (Fractional w, Ord v, Ord w, Ord i, Ord l, Show i, Show l, Show v)
+  => Hypergraph v l w i
+  -> v
+  -> (v -> w)
+  -> Int
   -> [((T.Tree (Hyperedge v l w i), w), (T.Tree (Hyperedge v l w i), w))]
 diff graph goal heur k = if length mine /= length others
                          then error "different lengths in diff"
@@ -98,7 +98,7 @@ test :: IO ()
 test = comparison (Test.testHypergraphs !! 1) 'S' heur1 10 >>= putStrLn . show
 --test = t3 `deepseq` return ()
 --test = t (Test.testHypergraphs !! 1) 'S' heur1 500
---test = (zipWith (\graph goal -> kbest graph goal (heur1::Char->Double) 1000) 
+--test = (zipWith (\graph goal -> kbest graph goal (heur1::Char->Double) 1000)
 --                Test.testHypergraphs "AStt")
 --       `deepseq` return ()
 {-test = mapM_ (uncurry go) (tail $ zip Test.testHypergraphs "AStt")
@@ -109,6 +109,6 @@ test = comparison (Test.testHypergraphs !! 1) 'S' heur1 10 >>= putStrLn . show
       putStrLn . uncurry str $ l
       putStrLn "===OTHER==="
       putStrLn . uncurry str $ r
-    str t w = "w = " ++ show w ++ "\n" 
+    str t w = "w = " ++ show w ++ "\n"
       ++ (T.drawTree . fmap drawHyperedge $ t)
 -}
