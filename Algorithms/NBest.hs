@@ -110,53 +110,47 @@ knuth
 knuth (hNodes, hBack, hWeights)
   = flip Map.lookup
   $ let
-      forwM
-        = Map.fromListWith Set.union
-            [ (v', Set.singleton sym)
-            | v <- hNodes
-            , (sym, vs@(_ : _)) <- hBack v
-            , v' <- vs
-            ]
       unvisM
         = Map.fromList
             [ (sym, (Set.fromList vs, vs, v))
             | v <- hNodes
             , (sym, vs@(_ : _)) <- hBack v
             ]
-      candM
-        = Map.fromListWith candMin
-            [(v, (hWeights sym [], sym)) | v <- hNodes, (sym, []) <- hBack v]
-    in go forwM unvisM candM Map.empty
+      candH
+        = (Heap.fromList :: Ord prio => [(prio, val)] -> Heap.MinPrioHeap prio val)
+            [(hWeights sym [], (v, sym)) | v <- hNodes, (sym, []) <- hBack v]
+    in go unvisM Map.empty candH
   where
-    candMin x@(x', _) y@(y', _) = if x' <= y' then x else y
-    go forwM unvisM candM bestM
-      = if Map.null candM
-        then bestM
-        else go
-              forwM'
-              unvisM'
-              (Map.delete v candM')
-              bestM'
+    forwM
+      = Map.map (Set.toList . Set.fromList)
+      $ Map.fromListWith (++)
+          [ (v', [sym])
+          | v <- hNodes
+          , (sym, vs) <- hBack v
+          , v' <- vs
+          ]
+    go unvisM bestM candH
+      = maybe bestM (go' unvisM bestM) $ Heap.view candH
+    go' unvisM bestM ((w, (v, sym)), candH)
+      = if Map.member v bestM
+        then go unvisM bestM candH
+        else go unvisM' bestM' candH'
       where
-        candCompare (_, (x, _)) (_, (x', _)) = compare x x'
-        bestM' = Map.insertWith (flip const) v m bestM
-        (v, m) = minimumBy candCompare (Map.toList candM)
-        (syms, forwM') = Map.updateLookupWithKey (\ _ _ -> Nothing) v forwM
-        (unvisM', candM')
-          = foldl' step (unvisM, candM) (maybe [] Set.toList syms)
-          where
-            step (unvisM'', candM'') sym
-              = unvisM'' `seq` candM'' `seq`
-                let (unvisS, vs, v') = unvisM'' Map.! sym
-                    unvisS' = Set.delete v unvisS
-                    w = hWeights sym (fst $ unzip $ map ((Map.!) bestM') vs)
-                in if Set.null unvisS'
-                   then ( Map.delete sym unvisM''
-                        , if Map.member v' bestM'
-                          then candM''
-                          else Map.insertWith candMin v' (w, sym) candM''
-                        )
-                   else (Map.insert sym (unvisS', vs, v') unvisM'', candM'')
+        bestM' = Map.insert v (w, sym) bestM
+        (unvisM', candH')
+          = foldl' step (unvisM, candH) $ Map.findWithDefault [] v forwM
+        step (unvisM'', candH'') sym'
+          = unvisM'' `seq` candH'' `seq`
+            let (unvisS, vs, v') = unvisM'' Map.! sym'
+                unvisS' = Set.delete v unvisS
+                w' = hWeights sym' (fst $ unzip $ map ((Map.!) bestM') vs)
+            in if Set.null unvisS'
+              then ( unvisM''
+                    , if Map.member v' bestM'
+                      then candH''
+                      else Heap.insert (w', (v', sym')) candH''
+                    )
+              else (Map.insert sym' (unvisS', vs, v') unvisM'', candH'')
 
 {-
 kknuth
