@@ -19,6 +19,7 @@ import Tools.Miscellaneous(mapFst, mapSnd)
 import Data.WCFG
 import Data.Hypergraph
 import Algorithms.InsideOutsideWeights
+import Algorithms.CYKExtended
 
 import Control.Applicative
 import Control.Arrow
@@ -49,7 +50,9 @@ p_grammar =
          <*> (many p_smooth -- lolz
               *>  p_block "UNARY_GRAMMAR" p_unaryGrammar)
          <*> p_block "BINARY_GRAMMAR" p_binaryGrammar
-  where create s l u b = wcfg (snd . head $ s) (l ++ u ++ b)
+  where create s l u b = wcfg "ROOT" (killCycles l ++ killCycles u ++ b)
+        --create s l u b = wcfg (snd . head $ s) (l ++ u ++ b)
+        killCycles = filter (\p -> pRight p /= [Left $ pLeft p])
 
 -- Parses top level blocks
 p_block :: String -> GenParser Char st a -> GenParser Char st [a]
@@ -78,7 +81,8 @@ p_lexicon = p <$> (p_quotedIdent <* p_arr)
               <*> (p_quotedIdent <* spaces1)
               <*> (p_seen <* spaces1)
               <*> p_num
-  where p l r _ w = production l [Right r] w 0
+  where p l ".*." _ w = production l [Left ".*."] w 0
+        p l r     _ w = production l [Right r] w 0
 
 p_unaryGrammar :: GenParser Char st (Production String String Double Int)
 p_unaryGrammar = p <$> (p_quotedIdent <* p_arr)
@@ -99,7 +103,7 @@ spaces1 = space >> spaces
 
 p_seen = (string "SEEN" >> return True) <|> (string "UNSEEN" >> return False)
 
-p_num :: GenParser Char st Double  -- tried typeclass first, caused head
+p_num :: GenParser Char st Double  -- tried typeclass first, caused headache
 p_num = many (digit <|> oneOf ".-E") >>= return . read
 
 p_arr = spaces >> string "->" >> spaces >> return ()
@@ -115,30 +119,35 @@ test = parseFromFile p_grammar "/home/gdp/oholzer/build/stanford-parser-2012-01-
 test3 = parseFromFile p_grammar "/home/gdp/oholzer/build/stanford-parser-2012-01-06/gram3.txt"
 
 -- This fails if grammar cannot be parsed
-properTestGraph = test >>=
-                  (\(Right x) ->
-                     return $ (initial &&& properize . productionsHypergraph)  x)
+properTestGraph str = test >>=
+                      (\(Right x) -> return . (initial &&& properize . productionsHypergraph)
+                       $ cyk str
+                       x)
 
-testNBest n = do
+testNBest n str = do
   getCurrentTime >>= putStr . show
   putStrLn ": Computation started"
-  (goal, graph) <- properTestGraph
+  (goal, graph) <- properTestGraph str
   goal `deepseq` graph `deepseq` (getCurrentTime >>= putStr . show)
   putStrLn ": Graph computed"
-  xyz <- uncurry (nBest' n) `fmap` properTestGraph
-  xyz `deepseq` (getCurrentTime >>= putStr . show)
+  let ret = nBest' n goal graph
+  ret `deepseq` (getCurrentTime >>= putStr . show)
   putStrLn ": Comp. finished"
-  return xyz
+  return ret
 
-testKBest n r = do
+testKBest n str r = do
   getCurrentTime >>= putStr . show
   putStrLn ": Computation started"
-  (goal, graph) <- properTestGraph
+  (goal, graph) <- properTestGraph str
   let wm = weightMap goal graph r
   goal `deepseq` graph `deepseq` (getCurrentTime >>= putStr . show)
   putStrLn ": Graph computed"
   wm `deepseq` (getCurrentTime >>= putStr . show)
   putStrLn ": Outside Weights computed"
-  return $ K.kbest graph goal (\node -> M.findWithDefault 0.0 node wm) n
+  let ret = K.kbest graph goal (\node -> M.findWithDefault 0.0 node wm) n
+  --let ret = K.kbest graph goal (const 1.0) n
+  ret `deepseq` (getCurrentTime >>= putStr . show)
+  putStrLn ": Comp. finished"
+  return ret
   where
-    weightMap goal graph r = M.map (\p -> r * snd p + 1 - r) $ insideOutside eWeight goal graph
+    weightMap goal graph r = M.map (\p -> r * snd p + 1 - r) $ viterbiInsideOutside eWeight goal graph
