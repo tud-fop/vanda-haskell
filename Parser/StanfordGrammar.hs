@@ -119,10 +119,16 @@ test = parseFromFile p_grammar "/home/gdp/oholzer/build/stanford-parser-2012-01-
 test3 = parseFromFile p_grammar "/home/gdp/oholzer/build/stanford-parser-2012-01-06/gram3.txt"
 
 -- This fails if grammar cannot be parsed
+properTestGraph :: [String] -> --IO (v, Hypergraph v l Double Int)
+                    IO
+                     ((Int, String, Int),
+                      Hypergraph
+                        (Int, String, Int) [Either (Int, String, Int) String] Double Int)
 properTestGraph str = test >>=
-                      (\(Right x) -> return . (initial &&& properize . productionsHypergraph)
+                      (\(Right x) -> return . (initial &&& uniq . properize . productionsHypergraph)
                        $ cyk str
                        x)
+  where uniq = snd . mapAccumIds (\ (i:is) _ -> (is, i)) [0 ..]
 
 testNBest n str = do
   getCurrentTime >>= putStr . show
