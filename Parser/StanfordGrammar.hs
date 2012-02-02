@@ -14,8 +14,6 @@
 module Parser.StanfordGrammar where
 
 
-import Tools.Miscellaneous(mapFst, mapSnd)
-
 import Data.WCFG
 import Data.Hypergraph
 import Algorithms.InsideOutsideWeights
@@ -52,6 +50,7 @@ p_grammar =
          <*> p_block "BINARY_GRAMMAR" p_binaryGrammar
   where create s l u b = wcfg "ROOT" (killCycles l ++ killCycles u ++ b)
         --create s l u b = wcfg (snd . head $ s) (l ++ u ++ b)
+        -- note this does disturb the probability distribution
         killCycles = filter (\p -> pRight p /= [Left $ pLeft p])
 
 -- Parses top level blocks

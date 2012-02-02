@@ -31,13 +31,11 @@ module Algorithms.KAStar.State
 
 import Control.Monad.State
 import Control.Monad.Reader
-import Control.Monad.List
 import qualified Data.Map as M
 import qualified Data.Heap as H
 import qualified Data.Sequence as S
 import Data.List (foldl')
-import Data.Sequence ((<|), (|>))
-import Data.Foldable (toList)
+import Data.Sequence ((<|))
 import Data.Maybe (fromJust)
 
 import Data.Hypergraph
@@ -205,13 +203,13 @@ chartInsert assgmt = do
       c <- chart
       putChart c{cEdgeMap = M.alter (Just . update c a) (node a) (cEdgeMap c)}
       return $ rk c a
-    update c a@(Inside _ _)  Nothing   = EM [a] [] S.empty
-    update c a@(Outside _ _) Nothing   = EM [] [a] S.empty
+    update _ a@(Inside _ _)  Nothing   = EM [a] [] S.empty
+    update _ a@(Outside _ _) Nothing   = EM [] [a] S.empty
     update c a@(Ranked _ _)  Nothing   = EM [] []  (S.singleton $ rk c a)
-    update c a@(Inside _ _)  (Just ce) = ce{emInside = [a]}
-    update c a@(Outside _ _) (Just ce) = ce{emOutside = [a]}
+    update _ a@(Inside _ _)  (Just ce) = ce{emInside = [a]}
+    update _ a@(Outside _ _) (Just ce) = ce{emOutside = [a]}
     update c a@(Ranked _ _)  (Just ce) = ce{emRanked = rk c a <| emRanked ce}
-    rk c (Ranked (K v e r bps) w) =
+    rk c (Ranked (K v e _ bps) w) =
       Ranked (K v e (succ $ numRanked c v) bps) w
     rk _ x = x
 
@@ -244,6 +242,6 @@ popAgenda
   :: H.HeapItem p (w, Assignment v l w i)
   => KAStar p v l w i (Assignment v l w i)
 popAgenda = do
-  ((p, popped), agenda') <- (fromJust . H.view) `liftM` agenda
+  ((_, popped), agenda') <- (fromJust . H.view) `liftM` agenda
   putAgenda agenda'
   return popped

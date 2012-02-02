@@ -19,13 +19,12 @@ module Algorithms.KAStar
   where
 
 import Control.Monad
-import Control.Monad.Reader (ask)
 import qualified Data.Map as M
 import qualified Data.Tree as T
 import qualified Data.Heap as H
 import Data.List (foldl')
-import Data.Maybe (mapMaybe, fromJust)
-import Debug.Trace
+import Data.Maybe (mapMaybe)
+--import Debug.Trace
 
 import Data.Hypergraph
 
