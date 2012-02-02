@@ -179,7 +179,7 @@ incItemsGenerated n = do
 --   Ranked items are annotated with their corresponding rank upon insertion.
 --   The number of inserted assignments is updated accordingly.
 chartInsert
-  :: (Ord v, Ord l, Ord w, Ord i)
+  :: (Ord v, Eq l, Eq w, Ord i)
   => Assignment v l w i
   -> KAStar p v l w i (Maybe (Assignment v l w i))
 chartInsert assgmt = do

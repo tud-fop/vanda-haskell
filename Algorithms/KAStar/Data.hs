@@ -136,8 +136,8 @@ backpointers _ = error "Tried to compute rank of non-ranked assignment "
 -- | Chart of already explored items with their weights.
 --   'cEdgeMap' is a map assigning nodes to their corresponding inside,
 --   outside, etc., items. Lists are sorted by /increasing/ weights.
---   'cBPMap' holds for each key @(e, i, v)@ those ranked assignments with
---   edge @e@ whose @i@-th backpointer has rank @v@.
+--   'cBPMap' holds for each key @(id, i, v)@ those ranked assignments with
+--   edge id @id@ whose @i@-th backpointer has rank @v@.
 data Chart v l w i = C { cEdgeMap :: M.Map v (EdgeMapEntry v l w i)
                        , cBPMap   :: M.Map (i, Int, Int)
                                            [Assignment v l w i]
@@ -191,7 +191,7 @@ nthRankedAssignment c v n = if n >= 1 && n <= S.length s
 -- | @rankedWithBackpointer c e i v@ returns all ranked assignments
 --   constructed from hyperedge @e@ whose @i$-th backpointer
 --   points to the corresponding @v@-ranked assignment, with chart @c@.
-rankedWithBackpointer :: (Ord v, Ord l, Ord w, Ord i)
+rankedWithBackpointer :: Ord i
                       => Chart v l w i -> (Hyperedge v l w i)
                       -> Int -> Int -> [Assignment v l w i]
 rankedWithBackpointer c e bp val = M.findWithDefault [] (eId e, bp, val) (cBPMap c)
