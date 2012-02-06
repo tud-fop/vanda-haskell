@@ -346,7 +346,7 @@ verticesToInt
 verticesToInt target g
   = let (_, vM) = mapSnd (M.insert target 0)
                 $ mapSnd M.fromDistinctAscList
-                $ L.mapAccumL (\ i v -> {-i `seq`-} (i + 1, (v, i))) 1
+                $ L.mapAccumL (\ (i : is) v -> (is, (v, i))) [1 ..]
                 $ S.toAscList
                 $ verticesS g
     in {-i `seq`-}
@@ -480,14 +480,15 @@ nBestHelper
 nBestHelper g
   = (h, ieA)
   where
-    (i, ieM)
-      = M.mapAccum (L.mapAccumL (\ i' e -> (i' + 1, (i', e)))) (0 :: Int) (edgesM g)
-    ieA = A.array (0, i - 1) $ concat $ M.elems ieM
-    hBackM = M.map (map $ \ ie -> (fst ie, eTail $ snd ie)) ieM
+    ieA = A.listArray (0, length (edges g) - 1) $ edges g
+    hBackM
+      = M.fromListWith (++)
+      $ map (\ (i, e) -> (eHead e, [(i, eTail e)]))
+      $ A.assocs ieA
     hWeightA = fmap eWeight ieA
     h = ( vertices g
         , \ v -> M.findWithDefault [] v hBackM
-        , \ i' ws -> product ws * (hWeightA A.! i')
+        , \ i ws -> product ws * (hWeightA A.! i)
         )
 
 -- ---------------------------------------------------------------------------
