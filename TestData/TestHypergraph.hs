@@ -15,7 +15,7 @@ module TestData.TestHypergraph where
 import Data.Hypergraph
 
 import Data.Tree
-import Random
+import System.Random
 
 
 testHypergraphs :: (Fractional w) => [Hypergraph Char Char w ()]
@@ -68,6 +68,14 @@ testHypergraphs
         , hyperedge 'q' ""   'b' 0.1 ()
         , hyperedge 'q' "rq" 's' 0.9 ()
         , hyperedge 'r' ""   'a' 1.0 ()
+        ]
+    , hypergraph
+        [ hyperedge 'g' "ab" 'g' 0.91e-1  ()
+        , hyperedge 'a' "cb" 'a' 0.92e-3  ()
+        , hyperedge 'a' ""   'd' 0.93e-2  ()
+        , hyperedge 'b' "a"  'b' 0.94e-7  ()
+        , hyperedge 'c' ""   'c' 1.0      ()
+        , hyperedge 'x' ""   'x' 0.96e-9  ()
         ]
     ]
 
