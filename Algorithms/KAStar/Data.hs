@@ -35,10 +35,8 @@ module Algorithms.KAStar.Data
   ) where
 
 import qualified Data.Map as M
-import qualified Data.Tree as T
 import qualified Data.Heap as H
 import qualified Data.Sequence as S
-import Data.Sequence ((<|), (|>))
 import Data.Foldable (toList)
 
 import Data.Hypergraph
@@ -122,7 +120,7 @@ node (Ranked (K v _ _ _) _) = v
 --   /Nota bene:/ raises error if assignment doesn't contain a rank!
 rank :: Assignment v l w i -> Int
 rank (Ranked (K _ _ r _) _) = r
-rank a = error "Tried to compute rank of non-ranked assignment"
+rank _ = error "Tried to compute rank of non-ranked assignment"
 -- TODO: Or should I do this with maybe? I will have to signal error somewhere...
 
 
