@@ -50,7 +50,7 @@ iter
   -> [Production (Int, v, Int) t w i]
 iter m q
   | Q.null q  = []
-  | otherwise = let (it, q') = Q.deq q in
+  | otherwise = m `seq` let (it, q') = Q.deq q in
     case it of
       Item p i j r (Left v : rest) _
        -> let (wM, its) = M.findWithDefault (M.empty, []) (j, v) m
