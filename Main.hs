@@ -33,22 +33,10 @@ import Demo
 -- import qualified Data.Set  as S
 -- import qualified Data.Tree as T
 -- import Text.Parsec.String (parseFromFile)
-import Data.Hypergraph
-import Algorithms.KAStar.Test as KA
-import Parser.StanfordGrammar as SG
-
-import Control.DeepSeq
-import qualified Data.Tree as T
 
 
 main :: IO ()
-main = do
-  let str = words "The big man has the ball ."
---  b <- SG.testNBest 1 str
-  b <- SG.testKBest 10 str 1.0
-  putStrLn . unlines . map (T.drawTree . fmap drawHyperedge . fst) $ b
---  b `deepseq` return ()
--- main = KA.test
+main = demo4_4
 
 -- main = testdata >>= \x -> print $ fmap (length {-. unLazyBinaryList . safeDecode-}) x
 

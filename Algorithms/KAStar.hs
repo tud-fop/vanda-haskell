@@ -24,7 +24,6 @@ import qualified Data.Tree as T
 import qualified Data.Heap as H
 import Data.List (foldl')
 import Data.Maybe (mapMaybe)
---import Debug.Trace
 
 import Data.Hypergraph
 
@@ -86,7 +85,7 @@ switchRule
   -> v
   -> Assignment v l w i
   -> [(w, Assignment v l w i)]
-switchRule c g trigger = do
+switchRule _ g trigger = do
   guard $ isInside trigger && node trigger == g
 --  ig <- insideAssignments c g
   return $! (weight trigger, Outside (O g) 1)
@@ -213,7 +212,7 @@ buildRuleR
   => Chart v l w i
   -> Assignment v l w i
   -> [(w, Assignment v l w i)]
-buildRuleR c trigger@(Ranked (K _ e _ bps) _) = do
+buildRuleR c (Ranked (K _ e _ bps) _) = do
   r <- [1 .. length bps]
   let bps' = zipWith (+) bps (unit (length bps) r)
   as <- zipWithM (nthRankedAssignment c) (eTail e) bps'

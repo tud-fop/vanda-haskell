@@ -117,9 +117,9 @@ knuth (hNodes, hBack, hWeights)
             , (sym, vs@(_ : _)) <- hBack v
             ]
       candH
-        = (Heap.fromList :: Ord prio => [(prio, val)] -> Heap.MinPrioHeap prio val)
+        = (Heap.fromList :: Ord p => [(p, a)] -> Heap.MinPrioHeap p a)
             [(hWeights sym [], (v, sym)) | v <- hNodes, (sym, []) <- hBack v]
-    in go unvisM Map.empty candH
+    in go Map.empty (unvisM, candH)
   where
     forwM
       = Map.map (Set.toList . Set.fromList)
@@ -129,28 +129,28 @@ knuth (hNodes, hBack, hWeights)
           , (sym, vs) <- hBack v
           , v' <- vs
           ]
-    go unvisM bestM candH
+    go bestM (unvisM, candH)
       = maybe bestM (go' unvisM bestM) $ Heap.view candH
     go' unvisM bestM ((w, (v, sym)), candH)
       = if Map.member v bestM
-        then go unvisM bestM candH
-        else go unvisM' bestM' candH'
+        then go bestM (unvisM, candH)
+        else go bestM'
+             $ foldl' step (unvisM, candH)
+             $ Map.findWithDefault [] v forwM
       where
         bestM' = Map.insert v (w, sym) bestM
-        (unvisM', candH')
-          = foldl' step (unvisM, candH) $ Map.findWithDefault [] v forwM
-        step (unvisM'', candH'') sym'
-          = unvisM'' `seq` candH'' `seq`
-            let (unvisS, vs, v') = unvisM'' Map.! sym'
+        step (unvisM', candH') sym'
+          = unvisM' `seq` candH' `seq`
+            let (unvisS, vs, v') = unvisM' Map.! sym'
                 unvisS' = Set.delete v unvisS
-                w' = hWeights sym' (fst $ unzip $ map ((Map.!) bestM') vs)
+                w' = hWeights sym' $ fst $ unzip $ map ((Map.!) bestM') vs
             in if Set.null unvisS'
-              then ( unvisM''
+               then ( unvisM'
                     , if Map.member v' bestM'
-                      then candH''
-                      else Heap.insert (w', (v', sym')) candH''
+                      then candH'
+                      else Heap.insert (w', (v', sym')) candH'
                     )
-              else (Map.insert sym' (unvisS', vs, v') unvisM'', candH'')
+               else (Map.insert sym' (unvisS', vs, v') unvisM', candH')
 
 {-
 kknuth

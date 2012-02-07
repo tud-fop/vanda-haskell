@@ -245,8 +245,8 @@ instance Converging Float where
   converged = convergedRealFloat
 
 instance Converging Double where
---  converged = convergedRealFloat
-  converged = convergedRatio 0.0001
+  converged = convergedRealFloat
+
 
 -- | This wrapper should allow us to use the same fixpoint computation
 -- we used to compute inside/outside sums in order to calculate
@@ -271,4 +271,5 @@ viterbiInsideOutside
   -> v          -- ^ target node
   -> Hypergraph v l w' i
   -> M.Map v (w, w)        -- ^ maps a vertex to its inside and outside weight
-viterbiInsideOutside f n g = M.map (unViterbi *** unViterbi) $ insideOutside (Viterbi . f) n g
+viterbiInsideOutside f n g
+  = M.map (unViterbi *** unViterbi) $ insideOutside (Viterbi . f) n g
