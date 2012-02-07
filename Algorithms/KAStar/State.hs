@@ -95,10 +95,10 @@ runKAStar :: KAStar p v l w i a
           -> M.Map v [(Hyperedge v l w i, Int)]
           -> M.Map v [(Hyperedge v l w i, Int)]
           -> (a, KAState p v l w i)
-runKAStar kst agenda k graph goal heuristic ins others =
-    let cfg   = KAConfig k graph goal heuristic ins others
-        state = KAState (C M.empty M.empty) agenda 0 0
-    in runState (runReaderT (runK kst) cfg) state
+runKAStar kst a k gr g h ins others =
+    let cfg   = KAConfig k gr g h ins others
+        st    = KAState (C M.empty M.empty) a 0 0
+    in runState (runReaderT (runK kst) cfg) st
 
 
 -- | Returns number of derivations searched for
