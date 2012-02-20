@@ -20,10 +20,11 @@
 -- See <http://dl.acm.org/citation.cfm?id=1697236.1697238> for theoretical informations about the Bar-Hillel-Algorithm.
 
 {-- snippet head --}
-module Algorithms.WTABarHillelTopDown(
-  -- * Intersection
-  intersect
+module Algorithms.WTABarHillelTopDown
+( intersect
 , intersect'
+, -- * Miscellaneous
+  intersectionItemCount
 ) where
 
 --module Algorithms.WTABarHillelTopDown where

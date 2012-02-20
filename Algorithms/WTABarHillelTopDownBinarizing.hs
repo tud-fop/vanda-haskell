@@ -25,10 +25,11 @@
 
 {-- snippet head --}
 --module Algorithms.WTABarHillelTopDownBinarizing where
-module Algorithms.WTABarHillelTopDownBinarizing(
-
-  intersect
+module Algorithms.WTABarHillelTopDownBinarizing
+( intersect
 , intersect'
+, -- * Miscellaneous
+  intersectionItemCount
 ) where
 
 import Data.Hypergraph
