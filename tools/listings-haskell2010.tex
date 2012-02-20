@@ -1,0 +1,92 @@
+% Requirements:
+%   \usepackage{color}
+%   \usepackage{listings}
+%
+% Defines:
+%   listing-language Haskell2010
+%   listing-style boxed
+%   listing-style coloredHaskell2010
+%
+
+\lstdefinelanguage{Haskell2010}%
+{ sensitive%
+, morecomment=[l]{--}
+, morecomment=[in]{\{-}{-\}}%
+, morecomment=[is]{--\ *}{--\ *}%haddock
+, morecomment=[is]{--\ |}{--\ |}%haddock
+, morestring=[b]"%
+% , morestring=[b]'% this would collide with identifiers containing '
+, alsodigit={'}%
+, alsoother={@\$}%
+%
+%
+% [1] reservedid
+% [2] type classes
+% [3] type constructors
+% [4] value constructors
+% [5] identifier
+%
+% http://www.haskell.org/onlinereport/haskell2010/haskellch2.html#x7-180002.4
+, morekeywords={case, class, data, default, deriving, do, else, foreign, if, import, in, infix, infixl, infixr, instance, let, module, newtype, of, then, type, where}%
+%
+% http://www.haskell.org/onlinereport/haskell2010/haskellch9.html#x16-1710009
+, morekeywords=[2]{Eq, Ord, Enum, Bounded, Num, Real, Integral, Fractional, Floating, RealFrac, RealFloat, Monad, Functor}%
+, morekeywords=[3]{Bool, Maybe, Either, Ordering, Char, String, Int, Integer, Float, Double, Rational, IO}%
+, morekeywords=[4]{False, True, Nothing, Just, Left, Right, LT, EQ, GT}%
+, morekeywords=[5]{compare, max, min, succ, pred, toEnum, fromEnum, enumFrom, enumFromThen, enumFromTo, enumFromThenTo, minBound, maxBound, negate, abs, signum, fromInteger, toRational, quot, rem, div, mod, quotRem, divMod, toInteger, recip, fromRational, pi, exp, log, sqrt, logBase, sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, asinh, acosh, atanh, properFraction, truncate, round, ceiling, floor, floatRadix, floatDigits, floatRange, decodeFloat, encodeFloat, exponent, significand, scaleFloat, isNaN, isInfinite, isDenormalized, isIEEE, isNegativeZero, atan2, return, fail, fmap, mapM, mapM_, sequence, sequence_, maybe, either, not, otherwise, subtract, even, odd, gcd, lcm, fromIntegral, realToFrac, fst, snd, curry, uncurry, id, const, flip, until, asTypeOf, error, undefined, seq}%
+%
+% http://www.haskell.org/onlinereport/haskell2010/haskellch9.html#x16-1720009.1
+, morekeywords=[5]{map, filter, concat, concatMap, head, last, tail, init, null, length, foldl, foldl1, scanl, scanl1, foldr, foldr1, scanr, scanr1, iterate, repeat, replicate, cycle, take, drop, splitAt, takeWhile, dropWhile, span, break, lines, words, unlines, unwords, reverse, and, or, any, all, elem, notElem, lookup, sum, product, maximum, minimum, zip, zip3, zipWith, zipWith3, unzip, unzip3}%
+%
+% http://www.haskell.org/onlinereport/haskell2010/haskellch9.html#x16-1730009.2
+, morekeywords=[2]{Read, Show}%
+, morekeywords=[3]{ReadS, ShowS}%
+, morekeywords=[5]{readsPrec, readList, showsPrec, show, showList, reads, shows, read, lex, showChar, showString, readParen, showParen}%
+%
+% http://www.haskell.org/onlinereport/haskell2010/haskellch9.html#x16-1740009.3
+, morekeywords=[3]{FilePath, IOError}%
+, morekeywords=[5]{ioError, userError, catch, putChar, putStr, putStrLn, print, getChar, getLine, getContents, interact, readFile, writeFile, appendFile, readIO, readLn}%
+}%
+%
+
+\definecolor{listingstyle_boxed_background}{gray}{0.90}%
+\definecolor{listingstyle_boxed_rule}{gray}{0.95}%
+\definecolor{listingstyle_coloredHaskell2010_darkgrey}{gray}{0.4}%
+\definecolor{listingstyle_coloredHaskell2010_darkred}{rgb}{0.75,0,0}%
+\definecolor{listingstyle_coloredHaskell2010_darkgreen}{rgb}{0,0.5,0}%
+\definecolor{listingstyle_coloredHaskell2010_darkblue}{rgb}{0,0,0.5}%
+
+
+\lstdefinestyle{boxed}%
+{ basicstyle=\ttfamily\scriptsize%
+, numbers=left%
+, firstnumber=auto  % \thelstnumber%
+, numberblanklines=true%
+, frame=trbL%
+, numberstyle=\tiny%
+, frame=leftline%
+, framexleftmargin=2pt%
+, numbersep=7pt%
+, framerule=10pt%
+, xleftmargin=19pt%
+%, xrightmargin=-20pt%
+, backgroundcolor=\color{listingstyle_boxed_background}%
+, rulecolor=\color{listingstyle_boxed_rule}%
+}%
+%
+\lstdefinestyle{coloredHaskell2010}%
+{ basicstyle=\ttfamily%
+, identifierstyle=%
+, commentstyle=\color{listingstyle_coloredHaskell2010_darkgrey}%
+, stringstyle=\color{listingstyle_coloredHaskell2010_darkgreen}%
+, keywordstyle=\bf%
+, keywordstyle=[2]\color{listingstyle_coloredHaskell2010_darkred}%
+, keywordstyle=[3]\color{listingstyle_coloredHaskell2010_darkred}%
+, keywordstyle=[4]\color{listingstyle_coloredHaskell2010_darkgreen}%
+, keywordstyle=[5]\color{listingstyle_coloredHaskell2010_darkblue}%
+, columns=spaceflexible%
+, keepspaces=true%
+, showspaces=false%
+, showtabs=false%
+, showstringspaces=false%
+}%

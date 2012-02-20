@@ -1,0 +1,84 @@
+name:           Vanda
+version:        0.1
+cabal-version:  >= 1.2
+license:        BSD3
+-- license-file:   license.txt
+copyright:      (c) 2012 Vanda Team, Technische Universität Dresden
+author:         Vanda Team
+maintainer:     Toni.Dietze@tu-dresden.de
+stability:      alpha
+homepage:       http://www.inf.tu-dresden.de/index.php?node_id=1567
+bug-Reports:    mailto:Toni.Dietze@tu-dresden.de
+-- package-url:    http://www.cabal_source_package.com
+synopsis:       Haskell Machine Translation Toolkit
+-- description:    längere Beschreibung
+category:       NLP
+tested-with:    GHC
+Build-Type:     Simple
+
+
+Executable vanda-Main
+  Build-Depends:
+    array, base >= 4, binary, bytestring, containers, deepseq, heap, parsec, random, time
+  Main-Is:
+    Main.hs
+  hs-source-dirs:
+    src
+  GHC-Options:
+    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+
+
+Executable vanda-BenchmarkTDBH
+  Build-Depends:
+    array, base >= 4, binary, bytestring, containers, deepseq, heap, parsec, random, time
+  Main-Is:
+    BenchmarkTDBH.hs
+  hs-source-dirs:
+    src
+  GHC-Options:
+    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+
+
+library
+  build-depends:
+    array, base >= 4, binary, bytestring, containers, deepseq, heap, mtl, parsec, random, time
+  exposed-modules:
+      Algorithms.CYK
+    , Algorithms.CYKExtended
+    , Algorithms.EMDictionaryArray
+    , Algorithms.EMDictionaryIntMap
+    , Algorithms.EMTrees
+    , Algorithms.ExpectationMaximization
+    , Algorithms.InsideOutsideWeights
+    , Algorithms.KAStar
+    , Algorithms.KAStar.Data
+    , Algorithms.KAStar.State
+    , Algorithms.KAStar.Test
+    , Algorithms.NBest
+    , Algorithms.RuleExtraction
+    , Algorithms.StateSplit
+    , Algorithms.WTABarHillelComplete
+    , Algorithms.WTABarHillelTopDown
+    , Algorithms.WTABarHillelTopDownBinarizing
+    , Data.Hypergraph
+    , Data.Hypergraph.Acyclic
+    , Data.Negra
+    , Data.Queue
+    , Data.WCFG
+    , Data.WSA
+    , Data.WTA
+    , Parser.HGraphLoader
+    , Parser.Negra
+    , Parser.NegraLazy
+    , Parser.Penn
+    , Parser.StanfordGrammar
+    , TestData.TestHypergraph
+    , TestData.TestWTA
+    , Tools.FastNub
+    , Tools.Miscellaneous
+    , Tools.PrettyPrint
+    , Tools.Timestamps
+  hs-source-dirs:
+    src
+  GHC-Options:
+    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
