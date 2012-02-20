@@ -41,6 +41,7 @@ p_grammar =
          <*> p_block "BINARY_GRAMMAR" p_binaryGrammar
   where create _ l u b = wcfg "ROOT" (killCycles l ++ killCycles u ++ b)
         --create s l u b = wcfg (snd . head $ s) (l ++ u ++ b)
+        -- note this does disturb the probability distribution
         killCycles = filter (\p -> pRight p /= [Left $ pLeft p])
 
 

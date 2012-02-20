@@ -70,11 +70,11 @@ newAssignments trigger = do
                               ++ builds c trigger inE os
              (Ranked  _ _) -> builds c trigger inE os
     where
-      ins c h trigger        = concatMap (inRule c h trigger)
-      outs c trigger         = concatMap (outRule c trigger)
-      builds c trigger is os = concatMap (buildRuleO c trigger) os
-                               ++ buildRuleL c trigger is
-                               ++ buildRuleR c trigger
+      ins c h trig        = concatMap (inRule c h trig)
+      outs c trig         = concatMap (outRule c trig)
+      builds c trig is os = concatMap (buildRuleO c trig) os
+                            ++ buildRuleL c trig is
+                            ++ buildRuleR c trig
 
 
 -- | The Switch-rule generates the initial outside item for the goal node @g@,
@@ -185,8 +185,8 @@ buildRuleL
   -> Assignment v l w i
   -> M.Map v [(Hyperedge v l w i, Int)]
   -> [(w, Assignment v l w i)]
-buildRuleL c trigger@(Ranked _ _) inEdges
-  = concatMap rule (M.findWithDefault [] (node trigger) inEdges)
+buildRuleL c trigger@(Ranked _ _) ie
+  = concatMap rule (M.findWithDefault [] (node trigger) ie)
   where
     rule (e, s) = do
       Ranked (K _ e' _ bps) _ <- rankedWithBackpointer c e (s+1) (rank trigger - 1)
@@ -195,12 +195,12 @@ buildRuleL c trigger@(Ranked _ _) inEdges
       asl <- take s `liftM` zipWithM (nthRankedAssignment c) (eTail e) bps
       asr <- drop (s+1) `liftM` zipWithM (nthRankedAssignment c) (eTail e) bps
       oa  <- outsideAssignments c (eHead e)
-      let as  = asl ++ [trigger] ++ asr
-          w   = eWeight e * (product . map weight $ as)
-          p   = w * weight oa
-          bps = map rank as
+      let as = asl ++ [trigger] ++ asr
+          w  = eWeight e * (product . map weight $ as)
+          p  = w * weight oa
+          bp = map rank as
       unless (assert as e) (error "error in buildRuleL") --TODO: remove
-      return $! (p, Ranked (K (eHead e) e 0 bps) w)
+      return $! (p, Ranked (K (eHead e) e 0 bp) w)
 buildRuleL _ _ _ = []
 
 -- | buildRuleR is triggered by a ranked derivation assignment for node @v@
@@ -269,13 +269,13 @@ kastar
   -> (v -> w)
   -> Int
   -> [(T.Tree (Hyperedge v l w i), w)]
-kastar agenda graph g h k
+kastar a gr g h k
   = --trace ("Inserted " ++ (show . stItemsInserted $ info)
     --  ++ " assignments, generated " ++ (show . stItemsGenerated $ info)
     --  ++ "assignments.\n") $
     reverse . mapMaybe (traceBackpointers res) $ rankedAssignments res g
-  where (res, info)   = runKAStar kst agenda k graph g h ins others
-        (ins, others) = edgesForward graph
+  where (res, _)      = runKAStar kst a k gr g h ins others
+        (ins, others) = edgesForward gr
         kst = do
           agendaInsert =<< initialAssignments
           loop
@@ -323,15 +323,15 @@ edgesForward
   => Hypergraph v l w i
   -> ( M.Map v [(Hyperedge v l w i, Int)]
      , M.Map v [(Hyperedge v l w i, Int)])
-edgesForward graph = (compute ins, compute others)
+edgesForward gr = (compute ins, compute others)
   where
     compute f = foldl' (\m (a, b) -> M.insertWith' (++) a b m) M.empty
-                . concatMap f $ edges
+                . concatMap f $ es
     ins e = [(eTail e !! i, [(e, i)]) | i <- [0 .. pred . length . eTail $ e]]
     others e = (eHead e, [(e, 0)])
                : [(eTail e !! i, [(e, i + 1)])
                     | i <- [0 .. pred . length . eTail $ e]]
-    edges = concat . M.elems . edgesM $ graph
+    es = concat . M.elems . edgesM $ gr
 
 
 -- | @traceBackpointers chart a@ reconstructs a derivation from the backpointers
@@ -346,7 +346,7 @@ traceBackpointers c a@(Ranked _  w) = do
   t <- helper a
   return (t, w)
   where helper (Ranked (K _ e _ bps) _) = T.Node e `fmap` mapM
-          (\(rank, idx) -> helper . head $ nthRankedAssignment c (eTail e !! idx) rank)
+          (\(rk, idx) -> helper . head $ nthRankedAssignment c (eTail e !! idx) rk)
           (zip bps [0..])
         helper _ = Nothing
 traceBackpointers _ _ = Nothing

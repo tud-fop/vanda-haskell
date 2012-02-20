@@ -10,6 +10,9 @@
 -- of Programming.
 -- ---------------------------------------------------------------------------
 
+-- Disable nagging about missing type signatures
+{-# OPTIONS_GHC -fno-warn-missing-signatures #-}
+
 module TestStanfordGrammar where
 
 

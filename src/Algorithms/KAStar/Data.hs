@@ -123,14 +123,6 @@ rank (Ranked (K _ _ r _) _) = r
 rank _ = error "Tried to compute rank of non-ranked assignment"
 -- TODO: Or should I do this with maybe? I will have to signal error somewhere...
 
-
--- | Returns backpointers of an asssignment
---   /Nota bene:/ raises error if assignment doesn't contain backpointers!
-backpointers :: Assignment v l w i -> [Int]
-backpointers (Ranked (K _ _ _ bps) _) = bps
-backpointers _ = error "Tried to compute rank of non-ranked assignment "
-
-
 -- | Chart of already explored items with their weights.
 --   'cEdgeMap' is a map assigning nodes to their corresponding inside,
 --   outside, etc., items. Lists are sorted by /increasing/ weights.
