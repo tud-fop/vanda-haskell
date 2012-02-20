@@ -1,8 +1,8 @@
 name:           Vanda
 version:        0.1
-cabal-version:  >= 1.2
-license:        BSD3
--- license-file:   license.txt
+cabal-version:  >= 1.8
+license:        AllRightsReserved
+license-file:   LICENSE
 copyright:      (c) 2012 Vanda Team, Technische Universität Dresden
 author:         Vanda Team
 maintainer:     Toni.Dietze@tu-dresden.de
@@ -64,7 +64,7 @@ library
 
 Executable vanda-EMDictionaryIntMap
   Build-Depends:
-    array, base >= 4, binary, bytestring, containers, deepseq, heap, parsec, random, time
+    array, base >= 4, binary, bytestring, containers, deepseq, heap, mtl, parsec, random, time
   Main-Is:
     Algorithms/EMDictionaryIntMap.hs
   hs-source-dirs:
@@ -76,7 +76,7 @@ Executable vanda-EMDictionaryIntMap
 
 Executable vanda-EMDictionaryArray
   Build-Depends:
-    array, base >= 4, binary, bytestring, containers, deepseq, heap, parsec, random, time
+    array, base >= 4, binary, bytestring, containers, deepseq, heap, mtl, parsec, random, time
   Main-Is:
     Algorithms/EMDictionaryArray.hs
   hs-source-dirs:
@@ -88,7 +88,7 @@ Executable vanda-EMDictionaryArray
 
 Executable vanda-Main
   Build-Depends:
-    array, base >= 4, binary, bytestring, containers, deepseq, heap, parsec, random, time
+    array, base >= 4, binary, bytestring, containers, deepseq, heap, mtl, parsec, random, time
   Main-Is:
     Main.hs
   hs-source-dirs:
@@ -99,7 +99,7 @@ Executable vanda-Main
 
 Executable vanda-BenchmarkCYK
   Build-Depends:
-    array, base >= 4, binary, bytestring, containers, deepseq, heap, parsec, random, time
+    array, base >= 4, binary, bytestring, containers, deepseq, heap, mtl, parsec, random, time
   Main-Is:
     BenchmarkCYK.hs
   hs-source-dirs:
@@ -111,7 +111,7 @@ Executable vanda-BenchmarkCYK
 
 Executable vanda-BenchmarkNegra
   Build-Depends:
-    array, base >= 4, binary, bytestring, containers, deepseq, heap, parsec, random, time
+    array, base >= 4, binary, bytestring, containers, deepseq, heap, mtl, parsec, random, time
   Main-Is:
     BenchmarkNegra.hs
   hs-source-dirs:
@@ -122,7 +122,7 @@ Executable vanda-BenchmarkNegra
 
 Executable vanda-BenchmarkTDBH
   Build-Depends:
-    array, base >= 4, binary, bytestring, containers, deepseq, heap, parsec, random, time
+    array, base >= 4, binary, bytestring, containers, deepseq, heap, mtl, parsec, random, time
   Main-Is:
     BenchmarkTDBH.hs
   hs-source-dirs:
@@ -133,7 +133,7 @@ Executable vanda-BenchmarkTDBH
 
 Executable vanda-EMTest
   Build-Depends:
-    array, base >= 4, binary, bytestring, containers, deepseq, heap, parsec, random, time
+    array, base >= 4, binary, bytestring, containers, deepseq, heap, mtl, parsec, random, time
   Main-Is:
     EMTest.hs
   hs-source-dirs:
@@ -145,7 +145,7 @@ Executable vanda-EMTest
 
 Executable vanda-TestStanfordGrammar
   Build-Depends:
-    array, base >= 4, binary, bytestring, containers, deepseq, heap, parsec, random, time
+    array, base >= 4, binary, bytestring, containers, deepseq, heap, mtl, parsec, random, time
   Main-Is:
     TestStanfordGrammar.hs
   hs-source-dirs:
