@@ -17,28 +17,6 @@ tested-with:    GHC
 Build-Type:     Simple
 
 
-Executable vanda-Main
-  Build-Depends:
-    array, base >= 4, binary, bytestring, containers, deepseq, heap, parsec, random, time
-  Main-Is:
-    Main.hs
-  hs-source-dirs:
-    src
-  GHC-Options:
-    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-
-
-Executable vanda-BenchmarkTDBH
-  Build-Depends:
-    array, base >= 4, binary, bytestring, containers, deepseq, heap, parsec, random, time
-  Main-Is:
-    BenchmarkTDBH.hs
-  hs-source-dirs:
-    src
-  GHC-Options:
-    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-
-
 library
   build-depends:
     array, base >= 4, binary, bytestring, containers, deepseq, heap, mtl, parsec, random, time
@@ -81,4 +59,97 @@ library
   hs-source-dirs:
     src
   GHC-Options:
+    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+
+
+Executable vanda-EMDictionaryIntMap
+  Build-Depends:
+    array, base >= 4, binary, bytestring, containers, deepseq, heap, parsec, random, time
+  Main-Is:
+    Algorithms/EMDictionaryIntMap.hs
+  hs-source-dirs:
+    src
+  GHC-Options:
+    -main-is Algorithms.EMDictionaryIntMap
+    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+
+
+Executable vanda-EMDictionaryArray
+  Build-Depends:
+    array, base >= 4, binary, bytestring, containers, deepseq, heap, parsec, random, time
+  Main-Is:
+    Algorithms/EMDictionaryArray.hs
+  hs-source-dirs:
+    src
+  GHC-Options:
+    -main-is Algorithms.EMDictionaryArray
+    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+
+
+Executable vanda-Main
+  Build-Depends:
+    array, base >= 4, binary, bytestring, containers, deepseq, heap, parsec, random, time
+  Main-Is:
+    Main.hs
+  hs-source-dirs:
+    src
+  GHC-Options:
+    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+
+
+Executable vanda-BenchmarkCYK
+  Build-Depends:
+    array, base >= 4, binary, bytestring, containers, deepseq, heap, parsec, random, time
+  Main-Is:
+    BenchmarkCYK.hs
+  hs-source-dirs:
+    src
+  GHC-Options:
+    -main-is BenchmarkCYK
+    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+
+
+Executable vanda-BenchmarkNegra
+  Build-Depends:
+    array, base >= 4, binary, bytestring, containers, deepseq, heap, parsec, random, time
+  Main-Is:
+    BenchmarkNegra.hs
+  hs-source-dirs:
+    src
+  GHC-Options:
+    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+
+
+Executable vanda-BenchmarkTDBH
+  Build-Depends:
+    array, base >= 4, binary, bytestring, containers, deepseq, heap, parsec, random, time
+  Main-Is:
+    BenchmarkTDBH.hs
+  hs-source-dirs:
+    src
+  GHC-Options:
+    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+
+
+Executable vanda-EMTest
+  Build-Depends:
+    array, base >= 4, binary, bytestring, containers, deepseq, heap, parsec, random, time
+  Main-Is:
+    EMTest.hs
+  hs-source-dirs:
+    src
+  GHC-Options:
+    -main-is EMTest
+    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+
+
+Executable vanda-TestStanfordGrammar
+  Build-Depends:
+    array, base >= 4, binary, bytestring, containers, deepseq, heap, parsec, random, time
+  Main-Is:
+    TestStanfordGrammar.hs
+  hs-source-dirs:
+    src
+  GHC-Options:
+    -main-is TestStanfordGrammar
     -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
