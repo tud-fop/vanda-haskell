@@ -1,84 +1,89 @@
 name:           Vanda
 version:        0.1
-cabal-version:  >= 1.2
-license:        BSD3
--- license-file:   license.txt
+cabal-Version:  >= 1.2
+--license:        BSD3
+--license-file:   license.txt
 copyright:      (c) 2012 Vanda Team, Technische Universität Dresden
-author:         Vanda Team
-maintainer:     Toni.Dietze@tu-dresden.de
+author:         Vanda Team, Toni Dietze
+maintainer:     toni.dietze@tu-dresden.de
 stability:      alpha
-homepage:       http://www.inf.tu-dresden.de/index.php?node_id=1567
-bug-Reports:    mailto:Toni.Dietze@tu-dresden.de
--- package-url:    http://www.cabal_source_package.com
+homepage:       http://www.inf.tu-dresden.de/index.php?node_id=1567&ln=de
+bug-Reports:    http://www.bugreports.de
+package-url:    http://www.cabal_source_package.com
 synopsis:       Haskell Machine Translation Toolkit
--- description:    längere Beschreibung
+description:    (längere Beschreibung)
 category:       NLP
 tested-with:    GHC
 Build-Type:     Simple
 
+executable BerkeleyToHypergraph
+  Main-Is:  Vanda/Corpus/Tools/BerkeleyToHypergraph.hs
+  hs-source-dirs:  src
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts
+  Extensions:
+      ScopedTypeVariables
+    , TypeSynonymInstances
+    , FlexibleInstances
+    , MultiParamTypeClasses
+    , TypeFamilies
+    , FlexibleContexts
 
-Executable vanda-Main
-  Build-Depends:
-    array, base >= 4, binary, bytestring, containers, deepseq, heap, parsec, random, time
-  Main-Is:
-    Main.hs
-  hs-source-dirs:
-    src
-  GHC-Options:
-    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+executable NegraToPenn
+  Main-Is:  Vanda/Corpus/Tools/NegraToPenn.hs
+  hs-source-dirs:  src
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts
+  Extensions:
+      ScopedTypeVariables
+    , TypeSynonymInstances
+    , FlexibleInstances
+    , MultiParamTypeClasses
+    , TypeFamilies
+    , FlexibleContexts
 
-
-Executable vanda-BenchmarkTDBH
-  Build-Depends:
-    array, base >= 4, binary, bytestring, containers, deepseq, heap, parsec, random, time
-  Main-Is:
-    BenchmarkTDBH.hs
-  hs-source-dirs:
-    src
-  GHC-Options:
-    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-
+executable PennToInt
+  Main-Is:  Vanda/Corpus/Tools/PennToInt.hs
+  hs-source-dirs:  src
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts
+  Extensions:
+      ScopedTypeVariables
+    , TypeSynonymInstances
+    , FlexibleInstances
+    , MultiParamTypeClasses
+    , TypeFamilies
+    , FlexibleContexts
 
 library
   build-depends:
-    array, base >= 4, binary, bytestring, containers, deepseq, heap, mtl, parsec, random, time
+      base
+    , containers
+    , array
+    , vector
+    , heap
+    , bytestring
+    , text
+    , parsec >= 3.1.2
+    , binary
+    , deepseq
   exposed-modules:
-      Algorithms.CYK
-    , Algorithms.CYKExtended
-    , Algorithms.EMDictionaryArray
-    , Algorithms.EMDictionaryIntMap
-    , Algorithms.EMTrees
-    , Algorithms.ExpectationMaximization
-    , Algorithms.InsideOutsideWeights
-    , Algorithms.KAStar
-    , Algorithms.KAStar.Data
-    , Algorithms.KAStar.State
-    , Algorithms.KAStar.Test
-    , Algorithms.NBest
-    , Algorithms.RuleExtraction
-    , Algorithms.StateSplit
-    , Algorithms.WTABarHillelComplete
-    , Algorithms.WTABarHillelTopDown
-    , Algorithms.WTABarHillelTopDownBinarizing
-    , Data.Hypergraph
-    , Data.Hypergraph.Acyclic
-    , Data.Negra
+      Vanda.Features
+    , Vanda.Hypergraph
+    , Vanda.Token
+    , Vanda.Corpus.Negra
+    , Vanda.Corpus.Negra.Binary
+    , Vanda.Corpus.Negra.NFData
+    , Vanda.Corpus.Negra.Text
+    , Vanda.Corpus.Penn.Text
+    , Vanda.Grammar.Berkeley.Text
+    , Vanda.Hypergraph.Binary
+    , Vanda.Hypergraph.Basic
     , Data.Queue
-    , Data.WCFG
-    , Data.WSA
-    , Data.WTA
-    , Parser.HGraphLoader
-    , Parser.Negra
-    , Parser.NegraLazy
-    , Parser.Penn
-    , Parser.StanfordGrammar
-    , TestData.TestHypergraph
-    , TestData.TestWTA
-    , Tools.FastNub
-    , Tools.Miscellaneous
-    , Tools.PrettyPrint
-    , Tools.Timestamps
-  hs-source-dirs:
-    src
-  GHC-Options:
-    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+  hs-source-dirs:  src
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts
+  Extensions:
+      ScopedTypeVariables
+    , TypeSynonymInstances
+    , FlexibleInstances
+    , MultiParamTypeClasses
+    , TypeFamilies
+    , FlexibleContexts
+
