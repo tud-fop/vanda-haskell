@@ -1,3 +1,8 @@
+import Distribution.Simple
+
+main = defaultMain
+
+{-
 #! /usr/bin/runghc
  
  import Distribution.Simple
@@ -12,7 +17,7 @@
    where
    buildDll _ _ pkg info = do putStrLn "Building Dll..."
 			      system  "echo hallo"
-
+-}
 {-                            setCurrentDirectory (buildDir info)
                               let buildCmd = cmd pkg info
                               putStrLn buildCmd

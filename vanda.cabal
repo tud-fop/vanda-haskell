@@ -17,6 +17,17 @@ tested-with:    GHC
 Build-Type:     Simple
 
 executable BerkeleyToHypergraph
+  build-depends:
+      base
+    , containers
+    , array
+    , vector
+    , heap
+    , bytestring
+    , text
+    , parsec >= 3.1.2
+    , binary
+    , deepseq
   Main-Is:  Vanda/Corpus/Tools/BerkeleyToHypergraph.hs
   hs-source-dirs:  src
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts
@@ -29,6 +40,17 @@ executable BerkeleyToHypergraph
     , FlexibleContexts
 
 executable NegraToPenn
+  build-depends:
+      base
+    , containers
+    , array
+    , vector
+    , heap
+    , bytestring
+    , text
+    , parsec >= 3.1.2
+    , binary
+    , deepseq
   Main-Is:  Vanda/Corpus/Tools/NegraToPenn.hs
   hs-source-dirs:  src
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts
@@ -41,6 +63,17 @@ executable NegraToPenn
     , FlexibleContexts
 
 executable PennToInt
+  build-depends:
+      base
+    , containers
+    , array
+    , vector
+    , heap
+    , bytestring
+    , text
+    , parsec >= 3.1.2
+    , binary
+    , deepseq
   Main-Is:  Vanda/Corpus/Tools/PennToInt.hs
   hs-source-dirs:  src
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts

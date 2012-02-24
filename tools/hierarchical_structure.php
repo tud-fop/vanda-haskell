@@ -3,7 +3,7 @@
 <html>
  <head>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  <title>Hierarchiche Projektstruktur des Projekts</title>
+  <title>Hierarchische Projektstruktur des Projekts</title>
  </head>
  <body>
 
@@ -11,9 +11,9 @@
 
 $pro_dir = "./";
 $depth=0;
-$haddock_path = "../dist/doc/html"; // beschreibt den relativen Pfad der Haddock-Dokumentation bezüglich dieser php-Datei
+$project_name = "Vanda";
+$haddock_path = "../dist/doc/html".$project_name; // beschreibt den relativen Pfad der Haddock-Dokumentation bezüglich dieser php-Datei
 $latex_path = "../dist/doc/latex";  //beschreibt den relativen Pfad der LaTeX-Dokumentation bezüglich dieser php-Datei
-$project_name = "unbekannt";
 $target_hPath = "html"; // beschreibt den relativen Pfad der Haddock-Dokumentation bezüglich der entstehenden HTML-Datei
 $target_lPath = "latex"; // beschreibt den relativen Pfad der LaTeX-Dokumentation bezüglich der entstehenden HTML-Datei
 if (!empty($argc)) {
