@@ -1,3 +1,13 @@
+--Autor: Linda Leuschner
+--Status: in Bearbeitung
+---------------------------
+-- Dieses Modul erstellt eine Dot-Datei, aus der mittels dot die graphische Modulübersicht generiert wird
+-- Dazu wird die main-Funktion mit dem relativen Pfad des Quellcodeordners aufgerufen. 
+-- Die graphische Modulübersicht stellt einen Graphen dar, dessen Knoten die im Quellcodeordner enthaltenen Module sind, 
+-- eine gerichtete Kante (Modul A, Modul B) bedeutet, dass Modul A Modul B importiert
+--
+-- Module, welche sich auf einer Ebene befinden, hängen nur von Modulen der höher liegenden Ebenen ab und werden als zusammengehörig bezeichnet
+
 module Main
 
 where
@@ -9,250 +19,150 @@ import System.IO as IO
 import Data.List as L
 import Data.IORef
 import Data.Maybe
+import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
 
 main :: IO()
 main = do
   args <- getArgs
   case args of
     [] -> putStrLn "please enter the name of the sourcefolder."
-    [path] ->  --Main.printMap $ reduce (generateFileList (return []) path)  (generateMap (return M.empty) path)
-               drawGraph (generateFileList (return []) path) $ reduce (generateFileList (return []) path)  (generateMap (return M.empty) path)  
+    [path] ->   do
+			myMap <- getFileContents  path
+			--Main.printMap $ reduce (generateFileList (return []) path)  (generateMap (return M.empty) path)
+               		drawGraph $ reduce $ generateMap path myMap 
+
+-- erstellt aus einer Map eine Dot-Datei
+drawGraph:: M.Map T.Text [T.Text] -> IO ()
+drawGraph map = do 
+		TIO.putStrLn $ addRanks2 map
+		let
+		    doubleQuote = (\string -> T.concat [(T.pack "\""), string ,(T.pack "\"")])
+		    dqList = L.map doubleQuote $ M.keys map               
+                    stringsFromMap = L.map getDotNotation $ M.toList map               
+		    dotStr = T.concat [ T.pack "digraph G {ranksep=4;\n"
+				    , T.pack "node [shape=plaintext, fontsize=30];\n"
+				    , T.concat $ L.map (\a -> T.append a $ T.pack "\n") dqList
+    				    , T.concat $ L.map (\a -> T.append a $ T.pack "\n") stringsFromMap
+				    , addRanks2 map
+				    , T.pack "}\n" ]
+
+		-- handle <- openFile "module_overview.dot" WriteMode
+		-- hPutStr handle dotStr
+		TIO.writeFile "module_overview.dot" dotStr
+                -- hClose handle
+
+-- generiert aus einer Map mit beliebigen Listen als Values eine Map, deren Values nur Elemente enthalten, welche auch Keys der Map sind
+-- (entfernt Importverhalten der Form 'Data.List wird importiert von Data.Hypergraph')
+reduce :: M.Map T.Text [T.Text] -> M.Map T.Text [T.Text]
+reduce map = let valueList = L.concat $ M.elems map
+             in M.filterWithKey (\key _ -> L.elem key valueList) map
 
 
-drawGraph:: IO ([String]) -> IO (M.Map String [String]) -> IO ()
-drawGraph l m = do
-                map <-m
-                list <- l
-                handle <- openFile "module_overview.dot" WriteMode
-                hPutStrLn handle "digraph G {" 
-                hPutStrLn handle "ranksep = 4.0;"  
-                let dqList = L.map doubleQuote list              
-                    stringsFromMap = L.map getDotNotation $ M.toList map 
-                --putStrLn $ Prelude.show stringsFromMap               
-                sequence_ $ L.map (hPutStrLn handle) dqList 
-                sequence_ $ L.map (hPutStrLn handle) stringsFromMap
-                addRanks (M.toList map) handle  
-                hPutStrLn handle ""
-                hPutStrLn handle "}"
---                hPutStrLn handle $ Prelude.show map
-                hClose handle
+-- erstellt den Teilstring für die Dot-Datei, welcher zusammengehörige Knoten auf einer Ebene platziert
+addRanks2 :: M.Map T.Text [T.Text] -> T.Text
+addRanks2 map = if M.null map
+			then (T.pack "\n") 
+			else let (standalone,dep) = M.partition (\list -> (L.length list) == 0) map 
+			         dependent = M.map (flip (L.\\) (M.keys standalone)) dep
+			      in T.concat[ T.pack "{ rank = same ; ", (dotNotationForRanks $  M.keys standalone), T.pack "}\n" , addRanks2 dependent]
 
 
-printMap :: IO (M.Map String [String]) -> IO ()
-printMap myMap = do
-        myMap' <-myMap
-        putStr $ Prelude.show myMap'
-
-printList :: IO ([String]) -> IO ()
-printList myList = do
-        myList' <-myList
-        putStr $ Prelude.show myList'
-
-
-reduce :: IO ([String]) -> IO (M.Map String [String]) -> IO (M.Map String [String])
-reduce l m = do
-                list <- l
-                map <- m
-                return $ filterWithKey (\k _ -> elem k list) map
-
-
-generateFileList :: IO ([String]) -> IO.FilePath -> IO ([String])
-generateFileList myList path = do 
-        --putStrLn $Prelude.show path
-        l <- myList
+-- generiert aus den Haskell-Dateien des mittels path übergebenen Projekts eine Map, die das Importverhalten beschreibt.
+-- ein Element (Key,[Value]) der Map bedeutet dabei, dass das Modul Key von den Modulen in Value importiert wird
+-- Das importierende Modul (Value) ist als Map mit Key = Pfad zum Modul, Value = Modulinhalt gespeichert
+getFileContents ::IO.FilePath -> IO (M.Map IO.FilePath T.Text)
+getFileContents  path = do 
         f <- doesFileExist path
-        ---putStrLn $ Prelude.show f 
-        d <- doesDirectoryExist path 
-        let path' = Main.show path
-        if (f)
-          then do if ((chkSubStr path' ".hs") && not(chkSubStr path' ".hs~"))
-                        then return [getModuleName path]
-                        else return []
-          else do if (d && not(chkSubStr path' ".") && not(chkSubStr path' "..") && not(chkSubStr path' ".git"))
-                   then do
-                        putStrLn $ "checking folder..." ++ path'
+        d <- doesDirectoryExist path
+        if (f && ((L.take 3 $ L.reverse path) == "sh."))
+           then do
+		dataStream <- TIO.readFile path
+		return $ M.fromList [(path,dataStream)]		
+           else do if d
+                    then do
                         conts <- getDirectoryContents path
-                        let contents = L.map ((path' ++ "/" ) ++ ) conts
-                        mapList <- sequence $ L.map (generateFileList myList) contents
-                        let newList = L.concat mapList 
-                        return newList 
-                   else do putStrLn $ "something went wrong while reading: " ++ (Main.show path)
-                           return [] 
-
-
-addRanks :: [(String , [String])] -> Handle -> IO()
-addRanks [] handle = putStrLn "ready"
-addRanks list handle = do 
-                let (standalone, dep) = L.partition (\(key,valueList) -> length valueList == 0) list
-                do putStrLn $ "--------standalones: " ++ Prelude.show (L.map fst standalone)
-                let dependent = M.toList $ removeFromMap (L.map fst standalone) (M.fromList dep)
-                --putStrLn $ Prelude.show standalone
-                --putStrLn $ Prelude.show dependent
-                hPutStrLn handle $ ("{ rank = same; " ++ (dotNotationForRanks standalone)++ "}") 
-                addRanks dependent handle 
-
-removeFromMap :: [String] -> M.Map String [String] ->  M.Map String [String]
-removeFromMap [] map = map
-removeFromMap (x:xs) map = removeFromMap xs $ M.map (L.filter (\s -> s/=x)) map
-
-
-generateMap :: IO (M.Map String [String]) -> IO.FilePath -> IO (M.Map String [String])
-generateMap myMap path = do 
-        --putStrLn $Prelude.show path
-        m <- myMap
-        f <- doesFileExist path
-        --putStrLn $ Prelude.show f 
-        d <- doesDirectoryExist path 
-        let path' = Main.show path
-        if (f)
-          then seq (putStrLn "------file--------") $ filehandle True path'
-          else do if (d && not(chkSubStr path' ".") && not(chkSubStr path' "..") && not(chkSubStr path' ".git"))
-                   then do
-                        putStrLn $ "checking folder..." ++ path'
-                        conts <- getDirectoryContents path
-                        let contents = L.map ((path' ++ "/" ) ++ ) conts
-                        mapList <- sequence $ L.map (generateMap myMap) contents
-                        let newMap = M.unionsWith (++) mapList 
+                        let contents = L.filter (\nextPath ->
+							not((L.take 2 $ L.reverse nextPath) == "./")  && 
+							not((L.take 3 $ L.reverse nextPath) == "../") && 
+							not((L.take 4 $ L.reverse nextPath) == "tig.")
+						) 
+					$ L.map ((path ++ "/" ) ++ ) conts
+                        mapList <- sequence $ L.map getFileContents contents
+                        let newMap = M.unions mapList 
                         return newMap 
-                   else do --putStrLn $ "something went wrong while reading: " ++ (Main.show path)
-                           return M.empty     
+                    else return M.empty     
 
+--erstellt aus einer Map (key,value) = (Pfad einer Haskelldatei,Dateiinhalt) die Map, die das Importverhalten beschreibt
+generateMap:: IO.FilePath -> Map IO.FilePath T.Text -> M.Map T.Text [T.Text] 
+generateMap relPath myMap = M.unionsWith (++) $ L.map (contentHandle relPath) (M.toList myMap)
 
-
-createExampleMap :: M.Map String [String]
-createExampleMap = M.fromList [("module4",["module"]),("module3",["module"]),("module2",["module"]),("module1",["module"])]
-            
     
---get the modules imported by the given .hs-file
-filehandle ::Bool -> IO.FilePath -> IO (M.Map String [String])
-filehandle  bool path = if (chkSubStr path ".hs") && not(chkSubStr path ".hs~") 
-                                then do handle <- IO.openFile path IO.ReadMode
-                                        imports <-  getImports handle False
-                                        let b= [getModuleName $ Main.show path]
-                                        return $  M.fromList ((head b,[]):[(a,b)| a<- imports])
-                                else return M.empty                        
- 
---takes a handle and iterates over the lines of the correspondening file to get the imports     
-getImports :: Handle -> Bool -> IO ([String])   -- Boolescher Wert gibt an, ob schon imports gelesen wurden
-getImports handle False = do eof <- hIsEOF handle
-                             if not eof                       
-                                then do line <- hGetLine handle
-                                        --putStrLn line
-                                        let moduleName = getModule line
-                                        if (moduleName /= "")
-                                                then do --putStrLn $  "----------False, != emptyString,  Modulname: " ++ moduleName
-                                                        importsTrue <- getImports handle True
-                                                        return (moduleName:importsTrue)
-                                                else do --putStrLn $  "----------False, == emptyString, Modulname: " ++ moduleName
-                                                        importsFalse <- getImports handle False
-                                                        return importsFalse
-                                else return []
-getImports handle True = do eof <- hIsEOF handle
-                            if not eof
-                                then do     line <- hGetLine handle
-                                            --putStrLn line
-                                            let moduleName = getModule line
-                                            if (moduleName /= "")
-                                                then do --putStrLn $  "----------True, != emptyString, Modulname: " ++ moduleName
-                                                        imports <- getImports handle True
-                                                        return (moduleName:imports)
-                                                else if (chkSubStr line "::")
-                                                        then do --putStrLn $  "----------True, == emptyString, :: vorhanden, Modulname: " ++ moduleName
-                                                                return []
-                                                        else do --putStrLn $  "----------True, == emptyString, :: nicht vorhanden, Modulname: " ++ moduleName
-                                                                imports <- getImports handle True
-                                                                return imports 
-                                
-                                else return []
+--liest aus dem gegebenen .hs-file die imports aus und gibt diese in Form einer Map (key,value) = (importiertes Modul,importierendes Modul) zurück
+contentHandle :: IO.FilePath ->  (IO.FilePath,T.Text) -> M.Map T.Text [T.Text]
+contentHandle relPath (path,content) = let imports = getImports (T.lines content) False
+                             	   	   b = getModuleName relPath path
+                               		in 
+				   		M.fromList ((b,[]):[(a,[b])|a <- imports])
+                      
+-- liest aus einem gegebenen content eines .hs-files alle imports aus
+-- der boolesche Wert gibt an, ob schon imports gelesen wurden
+getImports :: [T.Text] -> Bool -> [T.Text]   
+getImports [] _ = []
+getImports content False = let  line = L.head content
+				moduleName = getModule line
+			   in
+	                           if (moduleName /= T.empty)
+        	                      then (moduleName:(getImports (L.tail content) True))
+        	                      else getImports (L.tail content) False
+getImports content True = let	line = L.head content
+                                moduleName = getModule line
+   			  in	
+	                       if (moduleName /= T.empty)
+   	                          then (moduleName:(getImports (L.tail content) True))
+   	                          else if (T.isInfixOf (T.pack "::") line)
+                                     then []
+                                     else getImports (L.tail content) True
+                                 
 
-
---checks wether a given line contains a moduleimport, if so, it returns the name of the imported module
-getModule :: String -> String 
-getModule line = if (chkSubStr line "import") && not(chkSubStr line "--import") && not(chkSubStr line "-- import")
-                        then let nImport = snd $ L.splitAt 6 line
+--wenn die gegebene Zeile line eine import-Deklaration enthält, wird der Name des importierten Moduls zurückgegeben, sonst T.empty
+getModule :: T.Text -> T.Text 
+getModule line = if (T.isInfixOf (T.pack "import") line) && not(T.isInfixOf (T.pack "--import") line) && not(T.isInfixOf (T.pack "-- import") line)
+                        then let nImport = snd $ T.splitAt 6 line
                              in
-                             if (chkSubStr line "qualified")
-                                then let nQualified = snd $ L.splitAt 10 nImport
-                                     in fst $ Main.splitAt ' ' $ removeWhitespaces nQualified
-                                else fst $ Main.splitAt ' ' $ removeWhitespaces nImport
-                        else ""
+                             if (T.isInfixOf (T.pack "qualified") line)
+                                then let nQualified = snd $ T.splitAt 10 nImport
+                                     in fst $ T.breakOn (T.singleton ' ') $ T.stripStart nQualified
+                                else fst $ T.breakOn (T.singleton ' ') $ T.stripStart nImport
+                        else T.empty
 
---returns the modulename of the module described in the file <path>
-getModuleName :: IO.FilePath -> String
-getModuleName p = changeChar '/' '.' 
-                                $  snd (Main.splitAt '/' $ take 
-                                                                (length (Main.show p) -3) 
-                                                                (Main.show p)) 
+--gibt für einen gegebenen Pfad <path> den Modulnamen zurück, wobei der Prefix <relPath> abgeschnitten wurde
+getModuleName :: IO.FilePath -> IO.FilePath -> T.Text
+getModuleName relPath path = let stripPath = (\prefix word -> fromJust $ T.stripPrefix prefix word)
+				in changeChar '/' '.' $ T.drop 1 $ stripPath (T.pack relPath) $ T.take (T.length (T.pack path) -3) $ T.pack path
          
 
+-- erstellt aus einem Element der Map den Befehl für die Kantendarstellung in dot
+getDotNotation :: (T.Text,[T.Text]) -> T.Text
+getDotNotation (key,[]) =  T.empty
+getDotNotation (key,x:xs) =  T.concat [T.pack "\"" , x , T.pack "\" -> \"" , key , T.pack "\"; \n", getDotNotation (key,xs)] 
+
+-- erstellt aus einer Liste von Modulen, welcher auf einer Ebene liegen sollen, den entsprechenden dot-Befehl   
+dotNotationForRanks:: [T.Text] -> T.Text
+dotNotationForRanks [] = T.empty
+dotNotationForRanks (x:xs) =  T.concat [(T.pack "\"" ), (x) , (T.pack "\"; ") , (dotNotationForRanks xs) ]
 
 
-getDotNotation :: (String,[String]) -> String
-getDotNotation (key,[]) = ""
-getDotNotation (key,x:xs) =  "\"" ++ x ++ "\" -> \"" ++ key ++ "\"; \n" ++ getDotNotation (key,xs) --getStringOfValues valueList
-
-dotNotationForRanks:: [(String,[String])] -> String
-dotNotationForRanks [] = ""
-dotNotationForRanks (x:xs) =  "\"" ++ (fst x) ++ "\"; " ++ (dotNotationForRanks xs)
-
-getStringOfValues :: [String] -> String
-getStringOfValues [] = ""
-getStringOfValues (x:xs) = "\"" ++ x ++ "\"; " ++ getStringOfValues xs
-
-
-
-doubleQuote ::String -> String
-doubleQuote string =  "\"" ++ string ++ "\""
-
-
-
-removeWhitespaces :: [Char] -> [Char]
-removeWhitespaces [] = []
-removeWhitespaces (' ': xs) = removeWhitespaces xs
-removeWhitespaces (x:xs) = (x:xs)
-
-
-chkSubStr:: String -> [Char] -> Bool
-chkSubStr word [] = True 
-chkSubStr ""  substr = False
-chkSubStr word (x:xs) =or $ L.map (onePartSubStr word xs) $ L.elemIndices x word  --chkSubStr2 word s xs -1
-
---chkSubStr:: String -> Char -> String -> Int -> Bool --TODO mit obiger Funktion mergen
---chkSubStr:: word '' substring  _ = True
---chkSubStr:: word c substring  -1  = map onePartSubStr word  c  substring $ L.elemIndices c word 
- 
-onePartSubStr :: String ->  [Char] -> Int -> Bool
-onePartSubStr word [] _ = True
-onePartSubStr word (x:xs) i = (elem (i+1) $ L.elemIndices x word) && (onePartSubStr word xs (i+1))
-
-
-changeChar :: Char -> Char -> [Char] -> [Char]
-changeChar old new [] = []
-changeChar old new word = let   index = fromMaybe (-1) (L.elemIndex old word)
-                          in    if (index >= 1)
-                                        then (L.take index word) ++ [new] ++ (changeChar old new $ snd $ L.splitAt (index+1) word)
-                                        else word
-
-splitAt :: Char -> String -> (String,String)
-splitAt c word = let index = fromMaybe (-1) (L.elemIndex c word)
-                     a = take index word
-                     b = snd (L.splitAt (index+1) word)
-                 in  if (index > -1)
-                         then (a,b)
-                         else (word,"")
-
-splitStr :: [Char] -> Char -> [[Char]]
-splitStr "" _  = [[]]
-splitStr word a = let   index = fromMaybe (-1) (L.elemIndex a word)
-                        subStrs = L.splitAt index word
-                  in  if (index >= 1)
-                                then ((fst subStrs):(splitStr (snd subStrs) a))
-                                else [word]
-
-showMapU:: IO (M.Map String [String]) -> M.Map String [String]
-showMapU _ = undefined
+-- ersetzt im Text t alle Zeichen c1 durch das Zeichen c2 
+changeChar :: Char -> Char -> T.Text -> T.Text
+changeChar c1 c2 t = T.replace (T.singleton c1) (T.singleton c2) t 
 
 show :: IO.FilePath -> String
 show path =  do
   p <- path
   return p 
+
+printMap :: IO (M.Map String [String]) -> IO () 
+printMap myMap = do
+        myMap' <-myMap
+        IO.putStr $ M.showTree myMap'

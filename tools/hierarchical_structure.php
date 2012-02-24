@@ -11,10 +11,11 @@
 
 $pro_dir = "./";
 $depth=0;
-$haddock_path = "../Haddock_Documentation";
-$latex_path = "../LaTeX_Documentation";
+$haddock_path = "../dist/doc/html"; // beschreibt den relativen Pfad der Haddock-Dokumentation bezüglich dieser php-Datei
+$latex_path = "../dist/doc/latex";  //beschreibt den relativen Pfad der LaTeX-Dokumentation bezüglich dieser php-Datei
 $project_name = "unbekannt";
-
+$target_hPath = "html"; // beschreibt den relativen Pfad der Haddock-Dokumentation bezüglich der entstehenden HTML-Datei
+$target_lPath = "latex"; // beschreibt den relativen Pfad der LaTeX-Dokumentation bezüglich der entstehenden HTML-Datei
 if (!empty($argc)) {
 $pro_dir = $argv[1];
 }
@@ -30,7 +31,7 @@ $project_name=$argv[2];
 	<col width = "3*">
 	<col width = "1*">
 	<col width = "1*">
-	<col width = "1*">
+<col width = "1*">
         <col width = "1*">
 	<col width = "1*">
 </colgroup>
@@ -74,26 +75,29 @@ read_dir($pro_dir,$depth,$haddock_path,$latex_path);
 						$lhs_file = true;
 					}
 					$already_done[] = $module;
-					$openfile = fopen($dir."/".$file,"r");
-					if (!feof($openfile)){
-						$author = fgets($openfile);
-						$author_field = explode(":", $author);
-						if (strpos($author_field[0], "Autor")!=null){
-							$author = "unbekannt";
+					if (false !== ($openfile = fopen($dir."/".$file,"r"))){
+					$author = "unbekannt";
+					$state = "unbekannt";
+					while (!feof($openfile)){
+						$line = fgets($openfile);
+						$author_line = $line;
+						$author_field = explode(":", $author_line);
+						//echo  $author_field[0] . "\n";
+						if (strpos($author_field[0], "Maintainer") === false){
+							
 						}
-						else {
+						else if (sizeof($author_field)>1)
+						{
 							$author = $author_field[1];
+							//echo "++++++++++++" .  $author_field[1] . "++++++++++++\n";
 						}
-						$state = fgets($openfile);
-						$state_field = explode(":", $state);
-						if (strpos($state_field[0] ,"Status"!=null){
-							$state = "unbekannt";
-						}
-						else {
+						$state_line = $line;
+						$state_field = explode(":", $state_line);
+						if (sizeof($state_field)>1 &&  strpos($state_field[0], "Stability")!=null){
 							$state = $state_field[1];
 						}
-						while(!feof($openfile)){
-							$moduleName = fgets($openfile);
+						
+							$moduleName = $line;
 							$spos_code_beg = strpos($moduleName,"\begin{code}");
                                                         $spos_code_end = strpos($moduleName,"\end{code}");
 							if(is_int($spos_code_beg)){
@@ -117,13 +121,17 @@ read_dir($pro_dir,$depth,$haddock_path,$latex_path);
 										}
 								}
 							}
-						}
+						
+					}
+					
 					}
 					$latexfield = explode(".",$file);
 					$latexfile = $latexfield[0].".pdf";
 					global $pro_dir;
-					$h_path = "${pro_dir}/${haddock_path}/${moduleName}.html";
-					$l_path = "${pro_dir}/${latex_path}/${latexfile}";
+					global $target_hPath;
+					global $target_lPath;
+					$h_path = "${target_hPath}/${moduleName}.html";
+					$l_path = "${target_lPath}/${moduleName}.pdf";
 					//if(!fopen("$dir/${cd_string}${haddock_path}/${moduleName}.html","r")) {$h_path = "";}
 					//if(!fopen("$dir/${cd_string}${latex_path}/${latexfile}","r")) {$l_path = "";}
 					$dc = "\"";
@@ -139,10 +147,11 @@ read_dir($pro_dir,$depth,$haddock_path,$latex_path);
 						     } ?> 
 						</td>
 						<td> <?php
-							if(fopen("$dir/${cd_string}${latex_path}/${latexfile}","r")) { ?>
-								<a href=<?php echo "'${l_path} '"?> > Latex</a> </td>
+							if(fopen("$dir/${cd_string}${latex_path}/${moduleName}.pdf","r")) { ?>
+								<a href=<?php echo "'${l_path} '"?> > Latex</a>
 								<?php
 							} ?>
+						</td>
 						<td> <?php echo date ("F d Y H:i:s.", filemtime($dir."/".$file)) ?></td>
 					</tr>  
  

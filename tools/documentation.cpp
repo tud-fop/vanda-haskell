@@ -12,12 +12,22 @@ using namespace std;
 
 int main(int argc, char *argv[])
 {
-string name = "unbekannt";
-string path = "./";
-string main = "";
+string comm = "cd ../";
+//system(comm.c_str());
+string name = "Vanda";
+string path = "./src";
+string relPath = "../";
+string main = "Main.hs";
+string doc_path = "dist/doc/";
+string latex_path = "latex/";
+string haddock_path = "html/";
+string tool_path = "tools/";
+
+//read contents main, path, name from cabal-file -- doesn't work yet
+/*
 DIR *dp;
   struct dirent *ep;     
-  dp = opendir (".");
+  dp = opendir (relPath.c_str());
   
   if (dp != NULL)
   {
@@ -25,16 +35,18 @@ DIR *dp;
     while (ep = readdir (dp))
       {
       string  filename = ep->d_name;
+      //cout << filename + "\n";
       struct stat Status;
       string newpath;
       int pos = filename.find(".");
       if(pos!= -1){
 	int length = filename.size() - pos;
 	string filetype = filename.substr( pos+1, length) ;
+	//cout << filetype +"\n";
 	if (filetype == "cabal")
 	{
 		fstream myfile;
-		myfile.open (filename.c_str());
+		myfile.open ((relPath + filename).c_str());
 		if (myfile.is_open())
 		{
 			string line;
@@ -61,6 +73,8 @@ DIR *dp;
 				int pos_path = line.find("hs-source-dirs");
 				if (pos_path != -1)
 				{
+					
+		//			cout << path + "\n";
 					path = origin_line;
 					pos_path= path.find(":");
 					path = path.substr(pos_path+1,path.size());
@@ -68,14 +82,14 @@ DIR *dp;
 					while (pos_path != -1)
 					{
 						path = path.substr(pos_path+1,path.size());
-						//cout << "--" << path << "--\n";
+		//				cout << "--" << path << "--\n";
 						pos_path= path.find(" ");
 					}
 					//path = path + "/";
 					//cout << path;
 				}
 				int pos_main = line.find("main-is");
-				if (pos_main != -1)
+				if (pos_main != -1 && main == "")
 				{
 					main = origin_line;
 					pos_main= main.find(":");
@@ -97,28 +111,40 @@ DIR *dp;
     //cout << name << ".....";
     closedir (dp);
   }
+*/
 
 //cout << "Erstellen der Haddock-Dokumentation...";
-string comm = "cd "+ path +" && haddock -h -o ../Haddock_Documentation " + main;
+comm = "cd "+ relPath+ path +" && haddock -h -o "+  relPath + doc_path + haddock_path + " " +  main;
+//cout << comm;
 system(comm.c_str());
+comm = "mkdir -p " + relPath+doc_path + latex_path;
 //cout << "Erstellen der LaTeX-Dokumentation...";
-system("mkdir -p LaTeX_Documentation");
-system("g++ latex_docu.cpp -o latex_docu.out");
-comm = "./latex_docu.out " + path;
 system(comm.c_str());
+comm = "g++ latex_docu.cpp -o latex_docu.out && ./latex_docu.out " + relPath + path;
+system(comm.c_str());
+//comm = "./latex_docu.out ../" + path;
+//system(comm.c_str());
 //cout << ("Erstellen der HTML-Projektübersicht...");
-comm = "php hierarchical_structure.php "+ path + " "+ name + " > hierarchical_structure.html";
+comm = "php hierarchical_structure.php "+ relPath + path + " "+ name + " > "+ relPath + doc_path + "hierarchical_structure.html";
 system (comm.c_str());
 //cout << "Erstellen der Modulübersicht...";
 //comm = "g++ module_overview.cpp -o module_overview.out";
 //cout << comm;
 //system(comm.c_str());
 //comm = "./module_overview.out " + path;
-comm = "runhaskell modules.hs " + path;
+comm = "runhaskell modules.hs "+ relPath + path;
 system(comm.c_str());
 
-string command = "dot module_overview.dot -Tjpg -o module_overview.jpg";
+string command = "tred module_overview.dot > module_overview_ot.dot";
 system(command.c_str());
+
+command = "dot module_overview.dot -Tjpg -o  "+ relPath + doc_path + "module_overview.jpg";
+system(command.c_str());
+
+command = "dot module_overview_ot.dot -Tjpg -o  "+ relPath + doc_path + "module_overview_ot.jpg";
+system(command.c_str());
+
+
 //cout << path << "--" << name<< "--"<< main <<"\n";
 
 }
