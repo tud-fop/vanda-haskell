@@ -1,3 +1,4 @@
+-- (c) 2012 Matthias Büchse <Matthias.Buechse@tu-dresden.de>
 -- (c) 2011 Toni Dietze <Toni.Dietze@tu-dresden.de>
 --
 -- Technische Universität Dresden / Faculty of Computer Science / Institute
@@ -22,6 +23,7 @@ module Data.Queue (
 , singleton
 , enq
 , deq
+, deqMaybe
 , enqList
 , enqListWith
 , fromList
@@ -32,6 +34,7 @@ module Data.Queue (
 import Prelude hiding (null)
 
 
+-- | Queue data type.
 data Queue a = Queue [a] [a]
 
 
@@ -73,6 +76,12 @@ deq (Queue (x:xs) ys      ) = (x, Queue xs ys)
 deq (Queue []     ys@(_:_)) = deq (Queue (reverse ys) [])
 deq (Queue []     []      ) = error "Cannot dequeue from empty queue."
 
+-- | Remove the oldest element from the 'Queue' and return the element and
+-- the 'Queue' without the element.
+deqMaybe :: Queue a -> Maybe (a, Queue a)
+deqMaybe (Queue (x:xs) ys      ) = Just (x, Queue xs ys)
+deqMaybe (Queue []     ys@(_:_)) = deqMaybe (Queue (reverse ys) [])
+deqMaybe (Queue []     []      ) = Nothing
 
 -- | Add all elements of the given list to the 'Queue'.
 -- /The order in which the list elements are added is not defined./

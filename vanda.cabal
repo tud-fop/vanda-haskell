@@ -16,140 +16,74 @@ category:       NLP
 tested-with:    GHC
 Build-Type:     Simple
 
+executable BerkeleyToHypergraph
+  Main-Is:  Vanda/Corpus/Tools/BerkeleyToHypergraph.hs
+  hs-source-dirs:  src
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts
+  Extensions:
+      ScopedTypeVariables
+    , TypeSynonymInstances
+    , FlexibleInstances
+    , MultiParamTypeClasses
+    , TypeFamilies
+    , FlexibleContexts
+
+executable NegraToPenn
+  Main-Is:  Vanda/Corpus/Tools/NegraToPenn.hs
+  hs-source-dirs:  src
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts
+  Extensions:
+      ScopedTypeVariables
+    , TypeSynonymInstances
+    , FlexibleInstances
+    , MultiParamTypeClasses
+    , TypeFamilies
+    , FlexibleContexts
+
+executable PennToInt
+  Main-Is:  Vanda/Corpus/Tools/PennToInt.hs
+  hs-source-dirs:  src
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts
+  Extensions:
+      ScopedTypeVariables
+    , TypeSynonymInstances
+    , FlexibleInstances
+    , MultiParamTypeClasses
+    , TypeFamilies
+    , FlexibleContexts
 
 library
   build-depends:
-    array, base >= 4, binary, bytestring, containers, deepseq, heap, mtl, parsec, random, time
+      base
+    , containers
+    , array
+    , vector
+    , heap
+    , bytestring
+    , text
+    , parsec >= 3.1.2
+    , binary
+    , deepseq
   exposed-modules:
-      Algorithms.CYK
-    , Algorithms.CYKExtended
-    , Algorithms.EMDictionaryArray
-    , Algorithms.EMDictionaryIntMap
-    , Algorithms.EMTrees
-    , Algorithms.ExpectationMaximization
-    , Algorithms.InsideOutsideWeights
-    , Algorithms.KAStar
-    , Algorithms.KAStar.Data
-    , Algorithms.KAStar.State
-    , Algorithms.KAStar.Test
-    , Algorithms.NBest
-    , Algorithms.RuleExtraction
-    , Algorithms.StateSplit
-    , Algorithms.WTABarHillelComplete
-    , Algorithms.WTABarHillelTopDown
-    , Algorithms.WTABarHillelTopDownBinarizing
-    , Data.Hypergraph
-    , Data.Hypergraph.Acyclic
-    , Data.Negra
+      Vanda.Features
+    , Vanda.Hypergraph
+    , Vanda.Token
+    , Vanda.Corpus.Negra
+    , Vanda.Corpus.Negra.Binary
+    , Vanda.Corpus.Negra.NFData
+    , Vanda.Corpus.Negra.Text
+    , Vanda.Corpus.Penn.Text
+    , Vanda.Grammar.Berkeley.Text
+    , Vanda.Hypergraph.Binary
+    , Vanda.Hypergraph.Basic
     , Data.Queue
-    , Data.WCFG
-    , Data.WSA
-    , Data.WTA
-    , Parser.HGraphLoader
-    , Parser.Negra
-    , Parser.NegraLazy
-    , Parser.Penn
-    , Parser.StanfordGrammar
-    , TestData.TestHypergraph
-    , TestData.TestWTA
-    , Tools.FastNub
-    , Tools.Miscellaneous
-    , Tools.PrettyPrint
-    , Tools.Timestamps
-  hs-source-dirs:
-    src
-  GHC-Options:
-    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+  hs-source-dirs:  src
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts
+  Extensions:
+      ScopedTypeVariables
+    , TypeSynonymInstances
+    , FlexibleInstances
+    , MultiParamTypeClasses
+    , TypeFamilies
+    , FlexibleContexts
 
-
-Executable vanda-EMDictionaryIntMap
-  Build-Depends:
-    array, base >= 4, binary, bytestring, containers, deepseq, heap, mtl, parsec, random, time
-  Main-Is:
-    Algorithms/EMDictionaryIntMap.hs
-  hs-source-dirs:
-    src
-  GHC-Options:
-    -main-is Algorithms.EMDictionaryIntMap
-    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-
-
-Executable vanda-EMDictionaryArray
-  Build-Depends:
-    array, base >= 4, binary, bytestring, containers, deepseq, heap, mtl, parsec, random, time
-  Main-Is:
-    Algorithms/EMDictionaryArray.hs
-  hs-source-dirs:
-    src
-  GHC-Options:
-    -main-is Algorithms.EMDictionaryArray
-    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-
-
-Executable vanda-Main
-  Build-Depends:
-    array, base >= 4, binary, bytestring, containers, deepseq, heap, mtl, parsec, random, time
-  Main-Is:
-    Main.hs
-  hs-source-dirs:
-    src
-  GHC-Options:
-    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-
-
-Executable vanda-BenchmarkCYK
-  Build-Depends:
-    array, base >= 4, binary, bytestring, containers, deepseq, heap, mtl, parsec, random, time
-  Main-Is:
-    BenchmarkCYK.hs
-  hs-source-dirs:
-    src
-  GHC-Options:
-    -main-is BenchmarkCYK
-    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-
-
-Executable vanda-BenchmarkNegra
-  Build-Depends:
-    array, base >= 4, binary, bytestring, containers, deepseq, heap, mtl, parsec, random, time
-  Main-Is:
-    BenchmarkNegra.hs
-  hs-source-dirs:
-    src
-  GHC-Options:
-    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-
-
-Executable vanda-BenchmarkTDBH
-  Build-Depends:
-    array, base >= 4, binary, bytestring, containers, deepseq, heap, mtl, parsec, random, time
-  Main-Is:
-    BenchmarkTDBH.hs
-  hs-source-dirs:
-    src
-  GHC-Options:
-    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-
-
-Executable vanda-EMTest
-  Build-Depends:
-    array, base >= 4, binary, bytestring, containers, deepseq, heap, mtl, parsec, random, time
-  Main-Is:
-    EMTest.hs
-  hs-source-dirs:
-    src
-  GHC-Options:
-    -main-is EMTest
-    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-
-
-Executable vanda-TestStanfordGrammar
-  Build-Depends:
-    array, base >= 4, binary, bytestring, containers, deepseq, heap, mtl, parsec, random, time
-  Main-Is:
-    TestStanfordGrammar.hs
-  hs-source-dirs:
-    src
-  GHC-Options:
-    -main-is TestStanfordGrammar
-    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
