@@ -52,7 +52,9 @@ main = do
       --putStr $ concatMap show es
       --B.encodeFile (grammarFile ++ ".bhg") es
       TIO.writeFile (grammarFile ++ ".hg")
-        $ T.unlines $ map (T.pack . uncurry (++) . (show *** show)) $ eswgts
+        $ T.unlines
+        $ map (T.pack . (\(a,b) -> a ++ " # " ++ b) . (show *** show))
+        $ eswgts
       -- TIO.writeFile (grammarFile ++ ".wgt")
       --   $ T.unlines $ map (T.pack . show) wgts
       TIO.writeFile (mapFile ++ ".new") (toText m')
