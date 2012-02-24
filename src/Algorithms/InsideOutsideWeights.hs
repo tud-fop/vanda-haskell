@@ -28,9 +28,8 @@ module Algorithms.InsideOutsideWeights (
 
 import Data.Hypergraph
 
-import qualified Data.Map  as M
-
 import Control.Arrow
+import qualified Data.Map  as M
 
 -- import Debug.Trace
 
@@ -139,7 +138,7 @@ outside' c w m target g
   where
     go m'
       = {-trace "Dong!" $-}
-        let m'' = outsideStep m'
+        let m'' = outsideStep target m'
         in if checkMapsOn fst c m' m''
         then m''
         else go m''
@@ -149,12 +148,14 @@ outside' c w m target g
 -- weights.
 outsideStep
   :: (Num w, Ord v)
-  => M.Map v (w, [(v, w)])
+  => v
   -> M.Map v (w, [(v, w)])
-outsideStep m
+  -> M.Map v (w, [(v, w)])
+outsideStep target m
   = let f ((v, w) : xs) s = s `seq` f xs (s + maybe 0 fst (M.lookup v m) * w)
         f [] s = s
-    in M.map (\ (_, xs) -> (f xs 0, xs)) m
+    in M.adjust (first (1 +)) target
+     $ M.map (\ (_, xs) -> (f xs 0, xs)) m
 
 
 -- | Initialize the data structure used for computing the outside weights.
@@ -175,7 +176,7 @@ initOutsideMap ::
   -> Hypergraph v l w' i
   -> M.Map v (w, [(v, w)])
 initOutsideMap w m target
-  = M.insert target (1, [(target, 1)])
+  = M.insertWith' (const (first (1 +))) target (1, [])
   . M.map ((,) 0 . M.toList . M.fromListWith (+))
   . M.fromListWith (++)
   . concatMap
