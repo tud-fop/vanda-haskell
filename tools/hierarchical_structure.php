@@ -82,16 +82,15 @@
 								}
 								$i = $i - 1;
 							}
+							fclose($openfile);
 						}
-						$h_path = "${target_hPath}${moduleName}.html";
-						$l_path = "${target_lPath}${moduleName}.pdf";
 ?>
 				<tr bgcolor="#FFFFCC">
 					<td><?php echo $tabulator.$file ?></td>
 					<td><?php echo $author ?></td>
 					<td><?php echo $state ?></td>
-					<td><?php if (fopen("${haddock_path}${moduleName}.html", "r")) { ?><a href=<?php echo "'${h_path}'" ?>>Haddock</a><?php } ?></td>
-					<td><?php if (fopen("${latex_path}${moduleName}.pdf", "r")) { ?><a href=<?php echo "'${l_path} '"?>> Latex</a><?php	} ?></td>
+					<td><?php if (file_exists("${haddock_path}${moduleName}.html")) { ?><a href=<?php echo "'${target_hPath}${moduleName}.html'" ?>>Haddock</a><?php } ?></td>
+					<td><?php if (file_exists("${latex_path}${moduleName}.pdf")) { ?><a href=<?php echo "'${target_lPath}${moduleName}.pdf'"?>> Latex</a><?php	} ?></td>
 					<td> <?php echo date ("Y-m-d H:i:s", filemtime($dir."/".$file)) ?></td>
 				</tr>
 <?php
