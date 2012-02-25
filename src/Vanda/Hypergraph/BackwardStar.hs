@@ -150,7 +150,7 @@ flatten = untangle . H.fromList
           Nothing -> []
           Just (E, heap') -> untangle heap'
           Just (M a l, heap') ->
-            a : untangle (H.union heap' (H.fromList l))
+            a : untangle (heap' `H.union` H.fromList l)
 
 -- | Top concatenation for candidate lists.
 topCCL
@@ -222,7 +222,7 @@ product comp (BackwardStar (v11,v12) b1 _) (BackwardStar (v21,v22) b2 _)
       | v@(v1, v2) <- Ix.range sts'
       ]
     product' rs1 rs2 = [ (r,r') | r <- rs1, r' <- rs2, r `comp` r' ]
-    interlace ((Hyperedge t1 f1 l1 i1), (Hyperedge t2 f2 l2 i2))
+    interlace (Hyperedge t1 f1 l1 i1, Hyperedge t2 f2 l2 i2)
       = Hyperedge (ix (t1,t2)) (V.zipWith (curry ix) f1 f2) l1 (i1,i2)
 
 product'

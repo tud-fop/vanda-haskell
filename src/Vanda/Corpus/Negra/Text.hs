@@ -34,7 +34,7 @@ nextState (S (_ : xs)) = S xs
 nextState s = errorS s "Unexpected end of file"
 
 
-errorS :: S -> [Char] -> a
+errorS :: S -> String -> a
 errorS (S ((n, _) : _)) cs
   = error $ "Parse error on line " ++ show n ++ ": " ++ cs
 errorS _ cs

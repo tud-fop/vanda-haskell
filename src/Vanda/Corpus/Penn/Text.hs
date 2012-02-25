@@ -63,9 +63,7 @@ parsePennMap f = lazyMany (many p_comment *> p_Sentence (p_tag f)) ""
 treeToPenn :: (t -> String) -> T.Tree t -> String
 treeToPenn f (T.Node t1 [T.Node t2 []]) = "(" ++ f t1 ++ " " ++ f t2 ++ ")"
 treeToPenn f (T.Node t1 ts)
-  = "(" ++ f t1 ++ " "
-    ++ (concat $ intersperse " " $ map (treeToPenn f) ts)
-    ++ ")"
+  = "(" ++ f t1 ++ " " ++ unwords (map (treeToPenn f) ts) ++ ")"
 
 -- every p_-function should scan trailing spaces
 

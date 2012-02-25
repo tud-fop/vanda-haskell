@@ -10,7 +10,7 @@ import Vanda.Corpus.Penn.Text
 
 -- unbound = ["UNKNOWN","--","$,","$.","$("]
 -- unbound = map N.wtTag $ filter (not . N.wtBound) $ N.wordtags n
-fltr unbound SentenceWord{sdPostag = tag} = notElem tag unbound
+fltr unbound SentenceWord{sdPostag = tag} = tag `notElem` unbound
 fltr _ _ = True
 
 main = do
@@ -24,8 +24,11 @@ main = do
         . concatMap negraToForest
         . filter (not . null)
         . (\ (Negra wt s) ->
-            map (filter (fltr (map wtTag $ filter (not . wtBound) $ wt)))
-          $ map sData s
+            map
+              ( filter (fltr (map wtTag $ filter (not . wtBound) wt))
+              . sData
+              )
+              s
           )
         . parseNegra
         $ nf

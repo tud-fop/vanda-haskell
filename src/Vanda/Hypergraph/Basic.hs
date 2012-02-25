@@ -84,7 +84,7 @@ data EdgeList v l i
 data BackwardStar v l i
   = BackwardStar
     { nodesBS :: (v, v) -- ^ Interval of nodes
-    , backStar :: (v -> [Hyperedge v l i]) -- ^ Backward star
+    , backStar :: v -> [Hyperedge v l i] -- ^ Backward star
     , memoBS :: Bool  -- ^ Whether the backward star is memoized
     }
 
@@ -96,7 +96,7 @@ data ForwardStar v l i
   = ForwardStar
     { nodesFS :: (v, v) -- ^ Interval of nodes
     , nullaryEdges :: [Hyperedge v l i] -- ^ List of nullary edges
-    , forwStar :: (v -> [Hyperedge v l i]) -- ^ Forward star
+    , forwStar :: v -> [Hyperedge v l i] -- ^ Forward star
     , memoFS :: Bool -- ^ Whether the forward star is memoized
     }
 
@@ -107,7 +107,7 @@ data ForwardStar v l i
 data Simulation v l i
   = Simulation
     { nodesSIM :: (v, v) -- ^ Interval of nodes
-    , lookupSIM :: (v -> l -> Int -> [Hyperedge v l i]) -- ^ Lookup function
+    , lookupSIM :: v -> l -> Int -> [Hyperedge v l i] -- ^ Lookup function
     }
 
 -- | Extracts the nodes occurring in a list of edges. Does /not/ remove

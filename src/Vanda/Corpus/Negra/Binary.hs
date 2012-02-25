@@ -19,23 +19,23 @@ instance B.Binary Sentence where
     B.put $ sData s
   get = Sentence <$> B.get <*> B.get <*> B.get <*> B.get <*> B.get <*> B.get
 
+putCommon :: SentenceData -> B.Put
+putCommon sd = do
+  B.put $ sdPostag sd
+  B.put $ sdMorphtag sd
+  B.put $ sdEdge sd
+  B.put $ sdSecEdges sd
+  B.put $ sdComment sd
+
 instance B.Binary SentenceData where
   put sd@SentenceWord{} = do
     B.put (0 :: Word8)
     B.put $ sdWord sd
-    B.put $ sdPostag sd
-    B.put $ sdMorphtag sd
-    B.put $ sdEdge sd
-    B.put $ sdSecEdges sd
-    B.put $ sdComment sd
+    putCommon sd
   put sd@SentenceNode{} = do
     B.put (1 :: Word8)
     B.put $ sdNum sd
-    B.put $ sdPostag sd
-    B.put $ sdMorphtag sd
-    B.put $ sdEdge sd
-    B.put $ sdSecEdges sd
-    B.put $ sdComment sd
+    putCommon sd
   get = B.get >>= \t -> case (t :: Word8) of
     0 -> SentenceWord
             <$> B.get <*> B.get <*> B.get <*> B.get <*> B.get <*> B.get

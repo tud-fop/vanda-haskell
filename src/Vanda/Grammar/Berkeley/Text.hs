@@ -60,7 +60,7 @@ p_mwrapper
   :: (u -> String -> (u, a))
   -> GenParser (Int, u) String
   -> GenParser (Int, u) a
-p_mwrapper mapper p = p >>= (p_mapper mapper)
+p_mwrapper mapper p = p >>= p_mapper mapper
 
 p_mapper
   :: (u -> String -> (u, a))
@@ -91,7 +91,10 @@ p_grammar mapper
     ; do
       { wgt <- p_weight
       ; spaces
-      ; return $ (mkHyperedge (lhs, read lhsi) [(rhs1, read rhs1i)] Nothing i, wgt)
+      ; return
+          ( mkHyperedge (lhs, read lhsi) [(rhs1, read rhs1i)] Nothing i
+          , wgt
+          )
       }
     <|> do
         { rhs2 <- mwrapper $ many1 $ noneOf "_"
@@ -100,7 +103,14 @@ p_grammar mapper
         ; spaces
         ; wgt <- p_weight
         ; spaces
-        ; return $ (mkHyperedge (lhs, read lhsi) [(rhs1, read rhs1i), (rhs2, read rhs2i)] Nothing i, wgt)
+        ; return
+            ( mkHyperedge
+                (lhs, read lhsi)
+                [(rhs1, read rhs1i), (rhs2, read rhs2i)]
+                Nothing
+                i
+            , wgt
+            )
         }
     }
 
@@ -124,14 +134,14 @@ p_lexicon mapper
     ; rhs <- mwrapper $ many1 $ noneOf " "
     ; spaces
     ; char '['
-    ; wgts <- sepBy (p_weight) (string ", ")
+    ; wgts <- sepBy p_weight (string ", ")
     ; char ']'
     ; spaces
     ; (i', u) <- getState
     ; setState (i' + length wgts, u)
     ; return [ (mkHyperedge (lhs, i) [] (Just rhs) i'', wgt)
              | (i, wgt) <- zip [0..] wgts
-             , let i'' = i' + (fromIntegral i)
+             , let i'' = i' + fromIntegral i
              ] 
     }
 

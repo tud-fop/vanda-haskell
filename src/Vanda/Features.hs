@@ -77,7 +77,7 @@ projRight (Feature pN f) = Feature (pN . (fst &&& snd . snd)) f
 -- That is, the features are lifted to @(i,i')@ via 'projLeft' and
 -- 'projRight', respectively, and then composed via '+++'.
 product :: Feature l i1 x1 -> Feature l i2 x2 -> Feature l (i1,i2) (x1,x2)
-product = curry $ (uncurry (+++)) . (projLeft *** projRight)
+product = curry $ uncurry (+++) . (projLeft *** projRight)
 
 {-- | Processes a hyperedge with a given feature.
 processEdge :: Feature l i x -> Hyperedge v l i -> [x] -> x
@@ -92,12 +92,12 @@ processDerivation feat (T.Node (Hyperedge _ _ l i) ds)
 -- it processes the tree via 'processTree' and then applies the
 -- 'finalize' mapping of the feature.
 evalDerivation :: Feature l i x -> Derivation v l i -> V.Vector Double
-evalDerivation = (uncurry (.)) . (finalize &&& processDerivation)
+evalDerivation = uncurry (.) . (finalize &&& processDerivation)
 --evalDerivation feat = finalize feat . processDerivation feat
 
 -- | Computes the inner product of two 'Vector's of 'Double's.
 inner :: V.Vector Double -> V.Vector Double -> Double
-inner = curry $ V.foldl (+) 0 . (uncurry $ V.zipWith (*))
+inner = curry $ V.foldl (+) 0 . uncurry (V.zipWith (*))
 
 -- | A candidate derivation, consisting of its alleged weight (recall that
 -- we may not be at the root yet), the derivation itself, and its feature

@@ -154,7 +154,7 @@ pointerTreeToCrossedTree
   :: (Show a)
   => PointerTree a
   -> T.Tree (Maybe a, [Span])
-pointerTreeToCrossedTree ptrTree = f 0 ptrTree
+pointerTreeToCrossedTree = f 0
   where
     f num pt
       = case IM.lookup num pt of
@@ -231,7 +231,7 @@ negraTreeToTree (T.Node ((Just dat@(SentenceNode{}), _), _) f)
 negraTreeToTree (T.Node ((Just dat@(SentenceWord{}), _), _) [])
   = T.Node (sdPostag dat) [T.Node (hack . sdWord $ dat) []]
   where
-    hack = filter (flip notElem $ "() ")
+    hack = filter (`notElem` "() ")
 negraTreeToTree _
   = error "malformed negra tree: a SentenceWord has children"
 

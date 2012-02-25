@@ -103,7 +103,7 @@ knuth (EdgeList vs es) feat wV
             . (concat *** concat)
             . unzip . rights
             )
-      $ [ if V.null $ frome
+      $ [ if V.null frome
           then Left e
           else Right
             $ (,)
@@ -127,7 +127,7 @@ knuth (EdgeList vs es) feat wV
           [] -> knuthLoop
             (H.union candH' $ H.fromList newCand)
             (bestA A.// [(v, [it])])
-            (IM.union (IM.fromList adjChange) adjIM)
+            (IM.fromList adjChange `IM.union` adjIM)
               -- union: left argument preferred
           -- candidate for a visited node, just throw it away
           _ -> knuthLoop candH' bestA adjIM

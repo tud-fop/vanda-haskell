@@ -67,33 +67,33 @@ instance TokenStructure TokenArray where
   emptyTS = TokenArray $ A.array (0,-1) []
   toText
     = T.unlines
-    . (uncurry (:))
+    . uncurry (:)
     . ( T.pack . show . (+1) . snd . A.bounds
-      &&& map (T.pack {-. show-}) . A.elems )
+      &&& map T.pack . A.elems )
     . unTokenArray
   fromText
     = TokenArray
-    . (uncurry A.array)
+    . uncurry A.array
     . ( (,) 0 . (-1+) . read . T.unpack . head
-      &&& zip [0..] . map ({-read .-} T.unpack) . tail )
+      &&& zip [0..] . map T.unpack . tail )
     . T.lines
   toArray = id
   toMap
     = TokenMap . M.fromList . map (snd &&& fst) . A.assocs . unTokenArray
 
 instance TokenStructure TokenMap where
-  emptyTS = TokenMap $ M.empty
+  emptyTS = TokenMap M.empty
   toText = toText . toArray
   fromText
     = TokenMap
     . M.fromList
-    . (flip zip) [0..]
-    . map ({-read .-} T.unpack)
+    . flip zip [0..]
+    . map T.unpack
     . tail
     . T.lines
   toArray
     = TokenArray
-    . (uncurry A.array)
+    . uncurry A.array
     . ( (,) 0 . (-1+) . fromIntegral . M.size
       &&& map (snd &&& fst) . M.toList )
     . unTokenMap
