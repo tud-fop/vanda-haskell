@@ -10,27 +10,28 @@
 -- ---------------------------------------------------------------------------
 
 -- |
--- Maintainer  :  Toni Dietze
+-- Maintainer  :  Toni.Dietze@tu-dresden.de
 -- Stability   :  unknown
 -- Portability :  portable
-
+--
+-- Data structures and functions for weighted tree automata.
 module Data.WTA
-( 
-  -- * Types
+( -- * Types
   WTA(..)
-  -- * Construction
-, wtaCreate
-  -- * Decomposition
-, states
-  -- * Map
-, mapStates
-  -- * Pretty Printing 
-, drawWTA
-  -- * Computation
-, weightTree
+, -- * Construction
+  wtaCreate
+, -- * Decomposition
+  states
+, -- * Map
+  mapStates
+, -- * Pretty Printing
+  drawWTA
+, -- * Computation
+  weightTree
 , generate
 , generate'
 ) where
+
 
 import Data.Hypergraph
 
@@ -46,11 +47,17 @@ data WTA q t w i = WTA
     , toHypergraph :: Hypergraph q t w i
     } deriving Show
 
--- | Create a 'WTA'  from a list (state,final weight) and a 'Hypergraph'.
-wtaCreate :: (Ord q, Num w) => [(q, w)] -> [Hyperedge q t w i] -> WTA q t w i
+
+-- | Create a 'WTA'.
+wtaCreate
+  :: (Ord q, Num w)
+  => [(q, w)]             -- ^ final weights
+  -> [Hyperedge q t w i]  -- ^ transitions
+  -> WTA q t w i
 wtaCreate fs ts = WTA (M.fromListWith (+) fs) (hypergraph ts)
 
--- | Create a list of all states from a 'WTA'
+
+-- | Create a list of all states from a 'WTA'.
 states :: (Ord q) => WTA q t w i -> [q]
 states a
   = S.toList
@@ -58,11 +65,15 @@ states a
   $ M.keys
   $ finalWeights a
 
--- | Apply a state-transforming function to the states of a 'WTA'. The final weights of states, that were different before applying but equal after, would be added.
+
+-- | Apply a state-transforming function to the states of a 'WTA'.
+-- The final weights of states, that were different before applying but equal
+-- after, are added up.
 mapStates :: (Ord q, Num w) => (p -> q) -> WTA p t w i -> WTA q t w i
 mapStates f (WTA fs g) = WTA (M.mapKeysWith (+) f fs) (mapVertices f g)
 
--- | Represent a WTA as a String
+
+-- | Pretty-print a 'WTA' to a 'String'.
 drawWTA :: (Show q, Show t, Show w, Show i) => WTA q t w i -> String
 drawWTA (WTA fs g)
   =   "Transitions:\n"
@@ -70,16 +81,23 @@ drawWTA (WTA fs g)
   ++  "\nFinal Weights:\n"
   ++  (unlines . map show $ M.toList fs)
 
--- | Compute the weight of a derivation tree of a 'WTA' 
+
+-- | Compute the weight of a 'T.Tree' based on a 'WTA'.
 weightTree :: (Eq q, Eq t, Num w, Ord q) => WTA q t w i -> T.Tree t -> w
 weightTree (WTA fs g) tree
   = sum
   . map (\(q, w) -> weightTree' g q tree * w)
   $ M.toList fs
 
--- | Compute the weight of a tree in state q
+
+-- | Compute the weight of a 'T.Tree' interpreting the 'Hypergraph' as
+-- 'WTA' transitions.
 weightTree'
-  :: (Eq q, Eq t, Num w, Ord q) => Hypergraph q t w i -> q -> T.Tree t -> w
+  :: (Eq q, Eq t, Num w, Ord q)
+  => Hypergraph q t w i  -- ^ transitions
+  -> q                   -- ^ final state
+  -> T.Tree t            -- ^ input 'T.Tree'
+  -> w                   -- ^ weight of the 'T.Tree'
 weightTree' g q tree
   = sum
       [ product (zipWith (weightTree' g) qs trees) * eWeight t
@@ -92,20 +110,28 @@ weightTree' g q tree
       , lTrees == length qs
       ]
 
--- | create a list of all (possibly incomplete) trees that can be derived by the 'Hypergraph'. The nodes of a tree represent the label of a 'Hyperedge'
+
+-- | Create a list of all 'T.Tree's that can be derived by the 'Hypergraph'
+-- (interpreted as 'WTA' transitions).
 generate :: (Ord q) => Hypergraph q t w i -> [T.Tree t]
 generate = fmap (fmap (\(_, t, _) -> t)) . generate'
 
--- | create a list of all (possibly incomplete) trees that can be derived by the 'Hypergraph'. The nodes of a tree represent a 'Hyperedge'
+
+-- | Create a list of all derivation 'T.Tree's that can be derived by the
+-- 'Hypergraph' (interpreted as 'WTA' transitions).
 generate' :: (Ord q) => Hypergraph q t w i -> [T.Tree (q, t, w)]
 generate' g = map fst $ generateHeight g 0 M.empty
 
--- create a list of all (possibly incomplete) trees with height > h that can be derived by the Hypergraph (and the height of the tree)  
+
+-- | Initial call: @generateHeight g 0 Data.Map.empty@ for some
+-- 'Hypergraph' @g@; returns a list of all derivation 'T.Tree's that can be
+-- derived by the 'Hypergraph' (interpreted as 'WTA' transitions).
 generateHeight
   :: (Ord q)
-  => Hypergraph q t w i                 
-  -> Int                                -- height (can be seen as a running index)
-  -> M.Map q [(T.Tree (q, t, w), Int)]  -- list of all (possibly incomplete) derivation trees per state with a height < h, represented as M.Map with values (tree, height of tree)
+  => Hypergraph q t w i  -- ^ transitions
+  -> Int                 -- ^ maximum height of generated 'T.Tree's up to now
+  -> M.Map q [(T.Tree (q, t, w), Int)]
+           -- ^ generated 'T.Tree's partitioned by root state and their height
   -> [(T.Tree (q, t, w), Int)]
 generateHeight g h m
   = let trees                           -- list of all trees having height h+1
@@ -132,7 +158,9 @@ generateHeight g h m
             trees
           )
 
--- create a list of all possible derivation-subtree-combinations for a given tail of a hyperedge
+
+-- | Create a list of all possible derivation-subtree-combinations for a given
+-- tail of a 'Hyperedge'.
 generateSubs :: (Num h, Ord h, Ord q) => [q] -> M.Map q [(t, h)] -> [([t], h)]
 generateSubs (q:qs) m
   = let tss = generateSubs qs m
