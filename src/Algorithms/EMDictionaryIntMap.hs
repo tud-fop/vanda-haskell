@@ -21,6 +21,7 @@
 module Algorithms.EMDictionaryIntMap
 ( train
 , train'
+, main
 ) where
 
 import Tools.PrettyPrint (putStrColumns)

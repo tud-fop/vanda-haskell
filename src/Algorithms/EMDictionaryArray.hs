@@ -21,6 +21,7 @@
 module Algorithms.EMDictionaryArray
 ( train
 , train'
+, main
 ) where
 
 
