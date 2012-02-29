@@ -30,7 +30,7 @@ import qualified Data.Map as M
 import Data.Time.Clock
 import qualified Data.Tree as T
 import System.CPUTime
-import System.Environment (getArgs)
+import System.Environment (getArgs, getProgName)
 import Text.Parsec.Error (ParseError)
 import Text.Parsec.String (parseFromFile)
 
@@ -38,14 +38,15 @@ import Text.Parsec.String (parseFromFile)
 main :: IO ()
 main = do
   let str = words "The big man has the ball ."
+  pn <- getProgName
   args <- getArgs
   b <- case args of
-        "kbest" : []         -> testKBest 10 str 1.0
-        "kbest" : d : []     -> testKBest 10 str (read d)
-        "kbest" : d : s : [] -> testKBest 10 (words s) (read d)
-        "nbest" : []         -> testNBest 10 str
-        "nbest" : s : []     -> testNBest 10 (words s)
-        _ -> error "Usage: ... (nbest [sentence] | kbest [Double [sentence]])"
+         fp : "kbest" : []         -> testKBest fp 10 str 1.0
+         fp : "kbest" : d : []     -> testKBest fp 10 str (read d)
+         fp : "kbest" : d : s : [] -> testKBest fp 10 (words s) (read d)
+         fp : "nbest" : []         -> testNBest fp 10 str
+         fp : "nbest" : s : []     -> testNBest fp 10 (words s)
+         _ -> error $ "Usage: " ++ pn ++ " <grammar path> (nbest [sentence] | kbest [Double [sentence]])"
 --   let b = reverse $ L.sortBy (compare `on` foo) b0
   putStrLn
     . unlines
@@ -62,16 +63,9 @@ main = do
 --     foo (t, w) = (w, T.drawTree (fmap drawHyperedge t))
 
 
-test, test3 :: IO (Either ParseError (WCFG String String Double Int))
-test = parseFromFile p_grammar
-          "/home/gdp/oholzer/build/stanford-parser-2012-01-06/gram.txt"
-test3 = parseFromFile p_grammar
-          "/home/gdp/oholzer/build/stanford-parser-2012-01-06/gram3.txt"
-
-
 -- This fails if grammar cannot be parsed
-properTestGraph str
-  =   fmap (\ (Right x) -> x) test
+properTestGraph fp str
+  =   fmap (\ (Right x) -> x) (parseFromFile p_grammar fp)
   >>= measure "loading grammar"
   >>= measure "properizing grammar"
       . (\ g -> wcfgFromHypergraph (initial g)
@@ -88,14 +82,14 @@ properTestGraph str
   >>= (\ g -> return (initial g, productionsHypergraph g))
 
 
-testNBest n str = do
-  (goal, graph) <- properTestGraph str
+testNBest fp n str = do
+  (goal, graph) <- properTestGraph fp str
   ret <- measure "NBest" $ nBest' n goal graph
   return ret
 
 
-testKBest n str r = do
-  (goal, graph) <- properTestGraph str
+testKBest fp n str r = do
+  (goal, graph) <- properTestGraph fp str
   wm <- measure "outside weights" $ weightMap goal graph r
   ret <- measure "KBest"
        $ K.kbest graph goal (\node -> M.findWithDefault 0.0 node wm) n
