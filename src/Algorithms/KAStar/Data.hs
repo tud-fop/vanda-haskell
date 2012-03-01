@@ -179,7 +179,7 @@ nthRankedAssignment c v n = if n >= 1 && n <= S.length s
 
 
 -- | @rankedWithBackpointer c e i v@ returns all ranked assignments
---   constructed from hyperedge @e@ whose @i$-th backpointer
+--   constructed from hyperedge @e@ whose @i@-th backpointer
 --   points to the corresponding @v@-ranked assignment, with chart @c@.
 rankedWithBackpointer :: Ord i
                       => Chart v l w i -> (Hyperedge v l w i)
