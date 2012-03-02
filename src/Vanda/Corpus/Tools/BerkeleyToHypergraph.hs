@@ -18,6 +18,8 @@ instance Show s => Show (Hyperedge (s, Int8) (Maybe s) Int) where
   show (Hyperedge t f Nothing i)
     = show t
       ++ " -> "
+      ++ show (fst t)
+      ++ " "
       ++ unwords (map show $ V.toList f)
   show (Hyperedge t f (Just s) i)
     = show t

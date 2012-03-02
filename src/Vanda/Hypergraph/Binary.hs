@@ -32,10 +32,28 @@ instance (B.Binary v, B.Binary l, B.Binary i)
     B.put i
   get = mkHyperedge <$> B.get <*> B.get <*> B.get <*> B.get
 
+myGet :: (B.Binary v, B.Binary l, B.Binary i) => B.Get [Hyperedge v l i]
+myGet = do
+  es1 <- B.get
+  if null es1
+    then return []
+    else
+      do
+        es2 <- myGet
+        return $ es1 ++ es2
+
+myPut
+  :: forall v l i. (B.Binary v, B.Binary l, B.Binary i)
+  => [Hyperedge v l i] -> B.Put
+myPut [] = B.put ([] :: [Hyperedge v l i])
+myPut es = do
+  B.put (take 100 es)
+  myPut (drop 100 es)
+
 instance (B.Binary v, B.Binary l, B.Binary i)
   => B.Binary (EdgeList v l i) where
   put (EdgeList vs es) = do
     B.put vs
-    B.put es
-  get = EdgeList <$> B.get <*> B.get
+    myPut es
+  get = EdgeList <$> B.get <*> myGet
 

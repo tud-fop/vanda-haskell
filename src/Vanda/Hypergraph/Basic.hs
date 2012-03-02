@@ -30,6 +30,7 @@ module Vanda.Hypergraph.Basic
 
 import Control.Arrow ( (&&&) )
 import qualified Data.Ix as Ix
+import qualified Data.List as L
 import qualified Data.Tree as T
 import qualified Data.Vector as V
 
@@ -117,5 +118,11 @@ nodesLL es = [ v | e <- es, v <- to e : V.toList (from e) ]
 
 -- | Obtains the interval of nodes occurring in a list of edges.
 nodesL :: Ix.Ix v => [Hyperedge v l i] -> (v,v)
-nodesL = (minimum &&& maximum) . nodesLL
-
+-- nodesL = (minimum &&& maximum) . nodesLL
+nodesL es = L.foldl' minimax (x,x) xs
+  where
+    minimax (min0, max0) a
+      = let min1 = min min0 a
+            max1 = max max0 a
+        in min1 `seq` max1 `seq` (min1, max1)
+    (x:xs) = nodesLL es
