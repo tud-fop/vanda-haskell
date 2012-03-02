@@ -43,12 +43,11 @@ myGet = do
         return $ es1 ++ es2
 
 myPut
-  :: forall v l i. (B.Binary v, B.Binary l, B.Binary i)
-  => [Hyperedge v l i] -> B.Put
-myPut [] = B.put ([] :: [Hyperedge v l i])
+  :: (B.Binary v, B.Binary l, B.Binary i) => [Hyperedge v l i] -> B.Put
+myPut es@[] = B.put es -- ([] :: [Hyperedge v l i])
 myPut es = do
-  B.put (take 100 es)
-  myPut (drop 100 es)
+  B.put (take 10000 es)
+  myPut (drop 10000 es)
 
 instance (B.Binary v, B.Binary l, B.Binary i)
   => B.Binary (EdgeList v l i) where

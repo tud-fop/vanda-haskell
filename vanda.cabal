@@ -28,6 +28,7 @@ executable TestHypergraph
     , parsec >= 3.1.2
     , binary
     , deepseq
+    , zlib
   Main-Is:  Test/TestHypergraph.hs
   hs-source-dirs:  src
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts
