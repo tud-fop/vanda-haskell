@@ -43,9 +43,7 @@ import Vanda.Features
 import Vanda.Hypergraph.Basic
 
 filterEdges p (EdgeList vs es) = EdgeList (nodesL es) (filter p es)
-mapNodes f (EdgeList vs es) = EdgeList ((f *** f) vs) (map (lft f) es)
-  where
-    lft f' (Hyperedge t f l i) = Hyperedge (f' t) (V.map f' f) l i
+mapNodes f (EdgeList vs es) = EdgeList ((f *** f) vs) (map (mapHE f) es)
 mapLabels f (EdgeList vs es) = EdgeList vs (map f es)
 toBackwardStar (EdgeList sts es) = BackwardStar sts (a A.!) True
   where
@@ -53,12 +51,12 @@ toBackwardStar (EdgeList sts es) = BackwardStar sts (a A.!) True
     a = A.accumArray (flip (:)) [] sts lst
 toForwardStar (EdgeList sts es) = ForwardStar sts lst (a A.!) True
   where
-    lst = [ e | e <- es, V.null (from e) ]
+    lst = [ e | e <- es, null (from e) ]
     lst' = [ (v, e)
            | e <- es
            , let from' = from e
-           , not . V.null $ from'
-           , v <- S.toList . S.fromList . V.toList $ from'
+           , not . null $ from'
+           , v <- S.toList . S.fromList $ from'
            ]
     a = A.accumArray (flip (:)) [] sts lst'
 toSimulation (EdgeList sts es) = Simulation sts lookup
@@ -70,7 +68,7 @@ toSimulation (EdgeList sts es) = Simulation sts lookup
           | e <- es
           , let v = to e
           , let l = label e
-          , let n = V.length . from $ e
+          , let n = arity e {- FIXME: length O(n) -}
           ]
     a = A.accumArray
       (\m (l, n, e) -> M.insertWith (++) (l, n) [e] m)
@@ -103,7 +101,7 @@ knuth (EdgeList vs es) feat wV
             . (concat *** concat)
             . unzip . rights
             )
-      $ [ if V.null frome
+      $ [ if null frome
           then Left e
           else Right
             $ (,)
@@ -111,7 +109,7 @@ knuth (EdgeList vs es) feat wV
               [ (k, S.size ingoing) ]
         | it@(k, e) <- zip [0..] es
         , let frome = from e
-        , let ingoing = S.fromList . V.toList $ frome
+        , let ingoing = S.fromList $ frome
         ]
     -- 
     knuthLoop
@@ -146,7 +144,7 @@ knuth (EdgeList vs es) feat wV
                   cand =
                     if (==0) unvis'
                     then Just $ topCC feat wV e $ map (head . (bestA A.!))
-                         $ V.toList (from e)
+                         $ from e
                     else Nothing
               in (cand, (k, unvis'))
 

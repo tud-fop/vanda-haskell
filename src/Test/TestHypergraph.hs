@@ -14,14 +14,14 @@ import Vanda.Hypergraph.Binary
 import Vanda.Hypergraph.Text
 
 instance (Show v, Show l, Show i) => Show (Hyperedge v l i) where
-  show (Hyperedge t f l i)
-    = show t
+  show e
+    = show (to e)
       ++ " -> "
-      ++ show l
+      ++ show (label e)
       ++ " "
-      ++ unwords (map show $ V.toList f)
+      ++ unwords (map show $ from e)
       ++ " # "
-      ++ show i
+      ++ show (i e)
 
 -- "~lindal/Downloads/SHK/Berkeley/t_eng_sm6.txt.grammar.hg" 
 -- "~lindal/Downloads/SHK/Berkeley/t_small.hg" 

@@ -52,6 +52,10 @@ import Vanda.Features
   , topCC )
 import Vanda.Hypergraph.Basic
   ( Hyperedge(..)
+  , from
+  , arity
+  , mapHE
+  , interlace
   , BackwardStar(..)
   , EdgeList(..)
   , Simulation(..) )
@@ -62,8 +66,7 @@ mapNodes f (BackwardStar vs b _)
   = BackwardStar vs' (a A.!) True
   where
     vs' = (f *** f) vs
-    a = A.array vs' [ (f v, map (lft f) (b v)) | v <- Ix.range vs ]
-    lft f' (Hyperedge t f l i) = Hyperedge (f' t) (V.map f' f) l i
+    a = A.array vs' [ (f v, map (mapHE f) (b v)) | v <- Ix.range vs ]
 mapLabels f (BackwardStar vs b _) = BackwardStar vs (map f . b) False
 memoize bs@(BackwardStar vs b mem)
   | mem = bs -- idempotent
@@ -81,7 +84,7 @@ toSimulation (BackwardStar sts b _) = Simulation sts lookup
       [ ((l, n), [e])
       | e <- es
       , let l = label e
-      , let n = V.length . from $ e
+      , let n = arity e
       ]
     a = A.array sts [ (v, makeM $ b v) | v <- Ix.range sts ]
 
@@ -110,7 +113,7 @@ dropUnreachables v0 (BackwardStar vs b mem) = BackwardStar vs' b' mem
             vsS' = S.insert v vsS
             newNodes bv = [ v'
                           | e <- bv
-                          , v' <- V.toList (from e)
+                          , v' <- from e
                           -- , S.notMember v' vsS' -- don't do it twice?
                           ]
 
@@ -200,7 +203,7 @@ bests (BackwardStar vs b _) feat wV bestA = bestA'
                       M _ ts -> ts
                 | e' <- b v
                 , let tc = topCCL feat wV e
-                         $ map (bestA' A.!) $ V.toList $ from e'
+                         $ map (bestA' A.!) $ from e'
                 ]
         )
       | v <- Ix.range vs
@@ -212,7 +215,7 @@ product
   -> BackwardStar Int l i2
   -> BackwardStar Int l (i1,i2)
 product comp (BackwardStar (v11,v12) b1 _) (BackwardStar (v21,v22) b2 _)
-  = BackwardStar sts (map interlace . (a A.!)) True
+  = BackwardStar sts (map (uncurry (interlace ix)) . (a A.!)) True
   where
     sts'@(stsl,stsh) = ((v11,v21), (v12,v22)) 
     ix = Ix.index sts'
@@ -222,8 +225,6 @@ product comp (BackwardStar (v11,v12) b1 _) (BackwardStar (v21,v22) b2 _)
       | v@(v1, v2) <- Ix.range sts'
       ]
     product' rs1 rs2 = [ (r,r') | r <- rs1, r' <- rs2, r `comp` r' ]
-    interlace (Hyperedge t1 f1 l1 i1, Hyperedge t2 f2 l2 i2)
-      = Hyperedge (ix (t1,t2)) (V.zipWith (curry ix) f1 f2) l1 (i1,i2)
 
 product'
   :: (Hyperedge Int l i1 -> Hyperedge Int l i2 -> Bool)
@@ -240,7 +241,6 @@ product' comp (BackwardStar (v11,v12) b1 _) (BackwardStar (v21,v22) b2 _)
       [ (ix v, product' (b1 v1) (b2 v2))
       | v@(v1, v2) <- Ix.range sts'
       ]
-    product' rs1 rs2 = [ interlace r r' | r <- rs1, r' <- rs2, r `comp` r' ]
-    interlace (Hyperedge t1 f1 l1 i1) (Hyperedge t2 f2 l2 i2)
-      = Hyperedge (ix (t1,t2)) (V.zipWith (curry ix) f1 f2) l1 (i1,i2)
+    product' rs1 rs2
+      = [ interlace ix r r' | r <- rs1, r' <- rs2, r `comp` r' ]
 

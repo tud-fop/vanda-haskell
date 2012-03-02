@@ -18,6 +18,10 @@
 -- for the several hypergraph representations.
 module Vanda.Hypergraph.Basic
   ( Hyperedge (..)
+  , from
+  , arity
+  , mapHE
+  , interlace
   , Derivation
   , mkHyperedge
   , EdgeList (..)
@@ -38,18 +42,69 @@ import qualified Data.Vector as V
 -- The identifier can be used for interfacing with feature functions.
 -- Hyperedge is made an instance of Eq and Ord solely via the identifier.
 data Hyperedge v l i
-  = Hyperedge
+  = Nullary
     { to :: !v
-    , from :: V.Vector v
+    , label :: !l
+    , i :: !i
+    }
+  | Unary
+    { to :: !v
+    , from1 :: !v
+    , label :: !l
+    , i :: !i
+    }
+  | Binary
+    { to :: !v
+    , from1 :: !v
+    , from2 :: !v
+    , label :: !l
+    , i :: !i
+    }
+  | Hyperedge
+    { to :: !v
+    , _from :: V.Vector v
     , label :: !l
     , i :: !i
     }
 
+from :: Hyperedge v l i -> [v]
+from (Nullary t l i) = []
+from (Unary t f1 l i) = [f1]
+from (Binary t f1 f2 l i) = [f1, f2]
+from (Hyperedge t f l i) = V.toList f
+
+arity :: Hyperedge v l i -> Int
+arity (Nullary _ _ _) = 0
+arity (Unary _ _ _ _) = 1
+arity (Binary _ _ _ _ _) = 2
+arity (Hyperedge _ f _ _) = V.length f
+
+mapHE :: (v -> v') -> Hyperedge v l i -> Hyperedge v' l i
+mapHE g (Nullary t l i) = Nullary (g t) l i
+mapHE g (Unary t f1 l i) = Unary (g t) (g f1) l i
+mapHE g (Binary t f1 f2 l i) = Binary (g t) (g f1) (g f2) l i
+mapHE g (Hyperedge t f l i) = Hyperedge (g t) (V.map g f) l i
+
+interlace
+  :: ((Int, Int) -> Int)
+  -> Hyperedge Int l i1
+  -> Hyperedge Int l i2
+  -> Hyperedge Int l (i1, i2)
+interlace ix (Nullary t1 l i1) (Nullary t2 _ i2)
+  = Nullary (ix (t1, t2)) l (i1, i2)
+interlace ix (Unary t1 f1 l i1) (Unary t2 f2 _ i2)
+  = Unary (ix (t1, t2)) (ix (f1, f2)) l (i1, i2)
+interlace ix (Binary t1 f11 f12 l i1) (Binary t2 f21 f22 _ i2)
+  = Binary (ix (t1, t2)) (ix (f11, f21)) (ix (f12, f22)) l (i1, i2)
+interlace ix (Hyperedge t1 f1 l i1) (Hyperedge t2 f2 _ i2)
+  = Hyperedge (ix (t1,t2)) (V.zipWith (curry ix) f1 f2) l (i1,i2)
+
+
 instance Eq i => Eq (Hyperedge v l i) where
-  Hyperedge _ _ _ i1 == Hyperedge _ _ _ i2 = i1 == i2
+  e1 == e2 = i e1 == i e2
 
 instance Ord i => Ord (Hyperedge v l i) where
-  Hyperedge _ _ _ i1 `compare` Hyperedge _ _ _ i2 = i1 `compare` i2
+  e1 `compare` e2 = i e1 `compare` i e2
 
 -- | A derivation (tree), i.e., a tree over hyperedges.
 type Derivation v l i = T.Tree (Hyperedge v l i)
@@ -62,12 +117,11 @@ mkHyperedge
   -> i   -- ^ Identifier
   -> Hyperedge v l i
 mkHyperedge t f l i
-  = Hyperedge
-    { to = t
-    , from = V.fromList f
-    , label = l
-    , i = i
-    }
+  = case f of
+      [] -> Nullary t l i
+      [f1] -> Unary t f1 l i 
+      [f1, f2] -> Binary t f1 f2 l i
+      _ -> Hyperedge t (V.fromList f) l i
 
 -- * Hypergraph representations
 
@@ -114,7 +168,7 @@ data Simulation v l i
 -- | Extracts the nodes occurring in a list of edges. Does /not/ remove
 -- duplicates.
 nodesLL :: [Hyperedge v l i] -> [v]
-nodesLL es = [ v | e <- es, v <- to e : V.toList (from e) ]
+nodesLL es = [ v | e <- es, v <- to e : from e ]
 
 -- | Obtains the interval of nodes occurring in a list of edges.
 nodesL :: Ix.Ix v => [Hyperedge v l i] -> (v,v)

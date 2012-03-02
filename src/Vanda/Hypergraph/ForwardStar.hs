@@ -40,11 +40,10 @@ filterEdges p (ForwardStar vs lst f _)
 mapLabels g (ForwardStar vs lst f _)
   = ForwardStar vs (map g lst) (map g . f) False
 mapNodes g (ForwardStar vs lst f _)
-  = ForwardStar vs' (map (lft g) lst) (a A.!) True
+  = ForwardStar vs' (map (mapHE g) lst) (a A.!) True
   where
     vs' = (g *** g) vs
-    a = A.array vs' [ (g v, map (lft g) (f v)) | v <- Ix.range vs ]
-    lft f' (Hyperedge t f l i) = Hyperedge (f' t) (V.map f' f) l i
+    a = A.array vs' [ (g v, map (mapHE g) (f v)) | v <- Ix.range vs ]
 memoize fs@(ForwardStar vs lst f mem)
   | mem = fs -- idempotent
   | otherwise = ForwardStar vs lst (a A.!) True

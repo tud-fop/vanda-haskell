@@ -25,11 +25,11 @@ import Vanda.Hypergraph.Basic
 
 instance (B.Binary v, B.Binary l, B.Binary i)
   => B.Binary (Hyperedge v l i) where
-  put (Hyperedge t f l i) = do
-    B.put t
-    B.put $ V.toList f
-    B.put l
-    B.put i
+  put e = do
+    B.put (to e)
+    B.put (from e)
+    B.put (label e)
+    B.put (i e)
   get = mkHyperedge <$> B.get <*> B.get <*> B.get <*> B.get
 
 myGet :: (B.Binary v, B.Binary l, B.Binary i) => B.Get [Hyperedge v l i]
