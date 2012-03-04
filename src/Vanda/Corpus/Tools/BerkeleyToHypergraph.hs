@@ -1,70 +1,96 @@
 module Main where
 
-import Control.Arrow ( (***) )
+import Codec.Compression.GZip ( compress, decompress )
+import Control.Arrow ( (***), (&&&) )
+import Control.DeepSeq ( ($!!) )
 import qualified Data.Binary as B
-import Data.Int ( Int8 )
+import qualified Data.ByteString.Lazy as B
+import Data.Int ( Int8, Int16, Int32 )
 import Data.List ( intersperse )
 import qualified Data.Text.Lazy as T
 import qualified Data.Text.Lazy.IO as TIO
 import qualified Data.Vector as V
+import Data.Word ( Word16 )
 import System.Environment ( getArgs )
 
-import Vanda.Token
-import Vanda.Grammar.Berkeley.Text
+import Text
 import Vanda.Hypergraph
 import Vanda.Hypergraph.Binary
+import Vanda.Token
 
-instance Show s => Show (Hyperedge (s, Int8) (Maybe s) Int) where
-  show (Hyperedge t f Nothing i)
-    = show t
+instance (Show v, Show l, Show i) => Show (Hyperedge v l i) where
+  show e
+    = show (to e)
       ++ " -> "
-      ++ show (fst t)
+      ++ show (label e)
       ++ " "
-      ++ unwords (map show $ V.toList f)
-  show (Hyperedge t f (Just s) i)
-    = show t
-      ++ " -> "
-      ++ show s
+      ++ unwords (map show $ from e)
+      -- ++ " # "
+      -- ++ show (i e)
 
 main = do
   args <- getArgs
   case args of
-    ["-l", lexiconFile, "-g", grammarFile] -> do
-      lf <- TIO.readFile lexiconFile
-      gf <- TIO.readFile grammarFile
-      {-let (es, wgts)
-            = unzip . snd
-            $ parseBerkeleyMap (curry $ id *** id) () lf gf-}
-      let (x, es) = parseBerkeleyMap (curry $ id *** id) () lf gf
-      {-TIO.writeFile (grammarFile ++ ".hg")
-        $ T.unlines $ map (T.pack . show) es
-      TIO.writeFile (grammarFile ++ ".wgt")
-        $ T.unlines $ map (T.pack . show) wgts-}
-      putStr $ concatMap show es
-      print x
-    ["-m", mapFile, "-l", lexiconFile, "-g", grammarFile] -> do
+    [ "-m", mapFile, "-l", lexiconFile, "-g", grammarFile
+      , "-z", zhgFile ] -> do
       mf <- TIO.readFile mapFile
       lf <- TIO.readFile lexiconFile
       gf <- TIO.readFile grammarFile
-      -- let es = snd $ parseBerkeleyMap (curry $ id *** id) () lf gf
-      let (m', eswgts) -- @(es, wgts))
-            = id -- *** unzip
-            $ parseBerkeleyMap updateToken (fromText mf) lf gf
-      -- let es = snd $ parseBerkeleyMap (curry $ id *** id) () lf gf
-      --putStr $ concatMap show es
-      --B.encodeFile (grammarFile ++ ".bhg") es
-      TIO.writeFile (grammarFile ++ ".hg")
+      {-let x :: (((),()), ([Hyperedge Int16 Int16 Int32], [Double]))
+      -- ((ml, mv), (es :: [Hyperedge Int16 Int16 Int32], wgts))
+            = id *** unzip
+            $ parseBerkeleyMap
+                (curry $ id *** const 0)
+                ()
+                (curry $ id *** const 0)
+                ()
+                lf
+                gf-}
+      {-let (_, (es :: [Hyperedge Int16 Int16 Int32], _))
+            = id *** unzip
+            $ parseBerkeleyMap
+                updateToken
+                (fromText mf)
+                updateToken
+                (emptyTS :: TokenMap)
+                lf1
+                gf1
+      let (_, (_, wgts))
+            = id *** unzip
+            $ parseBerkeleyMap
+                updateToken
+                (fromText mf)
+                updateToken
+                (emptyTS :: TokenMap)
+                lf2
+                gf2 -}
+      let ((ml, mv), (es :: [Hyperedge Int32 Int32 Int32], wgts))
+            = id *** unzip
+            $!! parseBerkeleyMap
+                updateToken
+                (fromText mf)
+                updateToken
+                (emptyTS :: TokenMap)
+                lf
+                gf
+      let hyp = EdgeList (getBounds mv) es
+      {-TIO.writeFile (grammarFile ++ ".hg")
         $ T.unlines
         $ map (T.pack . (\(a,b) -> a ++ " # " ++ b) . (show *** show))
-        $ eswgts
+        $ eswgts-}
+      B.writeFile zhgFile $ compress $ B.encode hyp 
+      B.encodeFile (zhgFile ++ ".weights") wgts
+      TIO.writeFile (mapFile ++ ".new") (toText ml)
+      TIO.writeFile (zhgFile ++ ".nodes") (toText mv)
       -- TIO.writeFile (grammarFile ++ ".wgt")
       --   $ T.unlines $ map (T.pack . show) wgts
-      TIO.writeFile (mapFile ++ ".new") (toText m')
+      {- TIO.writeFile (zhgFile ++ ".weights")
+        ( T.unlines
+        . uncurry (:)
+        . ( T.pack . show . length
+          &&& map (T.pack . show)
+          )
+        $ wgts
+        ) -}
       -- putStr $ show m'
-    _ -> do
-      print "Usage 1: BerkeleyToHypergraph -l <lexicon file> -g <grammar file>"
-      print "Converts Berkeley grammar into hypergraph using strings"
-      print ""
-      print "Usage 2: BerkeleyToHypergraph -m <map file> -l <lexicon file> -g <grammar file>"
-      print "Converts Berkeley grammar into hypergraph using integers"
 

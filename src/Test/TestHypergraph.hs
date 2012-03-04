@@ -57,6 +57,6 @@ main = do
     ["-z", zhgfile] -> do
       bhgstring <- fmap decompress $ B.readFile zhgfile
       let (EdgeList vs es) = B.decode bhgstring :: EdgeList (Int, Int8) Int Double
-      putStr $ unlines $ map show $ take 1000 $ {-drop 1000000 $-} es 
-      -- putStr $ show vs 
+      -- putStr $ unlines $ map show $ take 1000 $ {-drop 1000000 $-} es 
+      putStr $ show vs 
       -- unlines $ map show es

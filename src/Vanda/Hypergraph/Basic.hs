@@ -116,7 +116,7 @@ mkHyperedge
   -> l   -- ^ Label
   -> i   -- ^ Identifier
   -> Hyperedge v l i
-mkHyperedge t f l i
+mkHyperedge !t !f !l !i
   = case f of
       [] -> Nullary t l i
       [f1] -> Unary t f1 l i 

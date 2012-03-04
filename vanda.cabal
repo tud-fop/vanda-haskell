@@ -40,6 +40,7 @@ executable TestHypergraph
     , MultiParamTypeClasses
     , TypeFamilies
     , FlexibleContexts
+    , BangPatterns
 
 
 executable BerkeleyToHypergraph
@@ -54,9 +55,11 @@ executable BerkeleyToHypergraph
     , parsec >= 3.1.2
     , binary
     , deepseq
+    , zlib
   Main-Is:  Vanda/Corpus/Tools/BerkeleyToHypergraph.hs
   hs-source-dirs:  src
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts
+  ghc-prof-options: -caf-all -auto-all
   Extensions:
       ScopedTypeVariables
     , TypeSynonymInstances
@@ -64,6 +67,7 @@ executable BerkeleyToHypergraph
     , MultiParamTypeClasses
     , TypeFamilies
     , FlexibleContexts
+    , BangPatterns
 
 executable NegraToPenn
   build-depends:
@@ -87,6 +91,7 @@ executable NegraToPenn
     , MultiParamTypeClasses
     , TypeFamilies
     , FlexibleContexts
+    , BangPatterns
 
 executable PennToInt
   build-depends:
@@ -110,6 +115,7 @@ executable PennToInt
     , MultiParamTypeClasses
     , TypeFamilies
     , FlexibleContexts
+    , BangPatterns
 
 library
   build-depends:
@@ -146,4 +152,5 @@ library
     , MultiParamTypeClasses
     , TypeFamilies
     , FlexibleContexts
+    , BangPatterns
 

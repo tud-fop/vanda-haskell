@@ -11,11 +11,11 @@
 
 {-# LANGUAGE FlexibleContexts #-}  -- for 'Stream'
 
-module Vanda.Grammar.Berkeley.Text where
+module Text where
 
 import Control.Applicative ( (<*>), (<*), (*>), (<|>), (<$>), many )
-import Control.Arrow ( second )
-import Control.DeepSeq ( NFData, deepseq )
+import Control.Arrow ( first, second )
+import Control.DeepSeq ( NFData, deepseq, ($!!), force )
 -- import Data.Either ( either )
 import Data.Int ( Int32 )
 import qualified Data.IntMap as IM
@@ -26,11 +26,8 @@ import Text.Parsec.Text.Lazy
 import Vanda.Hypergraph.Basic ( Hyperedge, mkHyperedge )
 import Vanda.Hypergraph.NFData
 
-force :: (NFData a) => a -> a
-force x = x `deepseq` x
-
 parseBerkeleyMap
-  :: (NFData v, NFData l)
+  :: (NFData v, NFData l, NFData ul, NFData uv)
   => (ul -> String -> (ul, l))-- ^ symbol mapping function, e.g. 'updateToken'
   -> ul                       -- ^ initial token structure
   -> (uv -> String -> (uv, v))-- ^ node mapping function, e.g. 'updateToken'
@@ -39,10 +36,25 @@ parseBerkeleyMap
   -> T.Text                   -- ^ grammar file
   -> ((ul, uv), [(Hyperedge v l Int32, Double)])
                               -- ^ resulting token structure and hyperedges
+{-parseBerkeleyMap mapl ul0 mapv uv0 lex gr = ((ul0, uv0), concat es1 ++ es2)
+  where
+    (_, es1) = lazyMany (p_lexicon mapl mapv) "lexicon" (0, (ul0, uv0)) lex
+    (_, es2) = lazyMany (p_grammar mapl mapv) "grammar" (0, (ul0, uv0)) gr-}
+{-parseBerkeleyMap mapl ul0 mapv uv0 lex gr = ((ul0, uv0), es1 ++ concat es2)
+  where
+    (_, es1) = lazyMany (p_grammar mapl mapv) "grammar" (0, (ul0, uv0)) gr
+    (_, es2) = lazyMany (p_lexicon mapl mapv) "lexicon" (0, (ul0, uv0)) lex-}
+{-parseBerkeleyMap mapl ul0 mapv uv0 lex gr = (snd iu2, es1 ++ concat es2)
+  where
+    (iu1, es1) = lazyMany (p_grammar mapl mapv) "grammar" (0, (ul0, uv0)) gr
+    (iu2, es2) = lazyMany (p_lexicon mapl mapv) "lexicon" iu1 lex-}
+{-parseBerkeleyMap mapl ul0 mapv uv0 lex gr = (snd iu1, concat es1)
+  where
+    (iu1, es1) = lazyMany (p_lexicon mapl mapv) "lexicon" (0, (ul0, uv0)) lex-}
 parseBerkeleyMap mapl ul0 mapv uv0 lex gr = (snd iu2, concat es1 ++ es2)
   where
-    (iu1, es1) = second force $ lazyMany (p_lexicon mapl mapv) "lexicon" (0, (ul0, uv0)) lex
-    (iu2, es2) = second force $ lazyMany (p_grammar mapl mapv) "grammar" iu1 gr
+    (iu1, es1) = lazyMany (p_lexicon mapl mapv) "lexicon" (0, (ul0, uv0)) lex
+    (iu2, es2) = lazyMany (p_grammar mapl mapv) "grammar" iu1 gr
 
 lazyMany :: NFData a => GenParser u a -> SourceName -> u -> T.Text -> (u, [a])
 lazyMany p file ustate contents
@@ -51,7 +63,7 @@ lazyMany p file ustate contents
     mp = do
       xs <- many p
       u <- getState
-      return (u, xs)
+      return $! (u, id $!! xs)
 {-lazyMany p file ustate contents = lm state0
   where
     Right state0 = runParser getParserState ustate file contents
@@ -72,8 +84,8 @@ lazyMany p file ustate contents
                 -- let rs = second (x:) $ lm state'
                 -- rs `seq` return rs
                 return $ second (x:) $ lm state'
-            ]-}
-
+            ]
+-}
 {-p_mwrapper
   :: (u -> String -> (u, a))
   -> GenParser (Int, u) String
@@ -104,6 +116,44 @@ p_mapv mapper !s = do
   ist `seq` st `seq` setState st 
   return v
 
+p_grammar0
+  :: (NFData v, NFData l)
+  => (ul -> String -> (ul, l))
+  -> (uv -> String -> (uv, v))
+  -> GenParser (Int32, (ul, uv)) (Hyperedge v l Int32, Double)
+p_grammar0 mapl mapv
+  = do
+    { lhss <- (many1 $ noneOf "_")
+    ; char '_'
+    ; lhsi <- (many1 $ oneOf "1234567890")
+    ; symbol <- p_mapl mapl lhss
+    ; lhs <- p_mapv mapv $!! lhss ++ "_" ++ lhsi
+    ; spaces; string "->"; spaces
+    ; rhs1 <- p_mapv mapv =<< (many1 $ noneOf " ")
+    ; spaces
+    -- ; (i, u) <- getState
+    -- ; let i1 = i+1 in i1 `seq` setState (i1, u)
+    ; i <- fmap fst getState
+    ; updateState (first (+1))
+    ; do
+      { wgt <- p_weight
+      ; spaces
+      ; return $!! (mkHyperedge lhs [rhs1] symbol i, wgt)
+      }
+    <|> do
+        { rhs2 <- p_mapv mapv =<< (return . force) =<< (many1 $ noneOf " ")
+        ; spaces
+        ; wgt <- p_weight
+        ; spaces
+        ; return $!! (mkHyperedge lhs [rhs1, rhs2] symbol i, wgt)
+        }
+    {-; rhs2 <- p_mapv mapv =<< (many1 $ noneOf " ")
+    ; spaces
+    ; wgt <- p_weight
+    ; spaces
+    ; return $!! (mkHyperedge lhs [rhs1, rhs2] symbol i, wgt)-}
+    }
+
 p_grammar
   :: (NFData v, NFData l)
   => (ul -> String -> (ul, l))
@@ -115,23 +165,23 @@ p_grammar mapl mapv
     ; char '_'
     ; lhsi <- (many1 $ oneOf "1234567890")
     ; symbol <- p_mapl mapl lhss
-    ; lhs <- p_mapv mapv (lhss ++ "_" ++ lhsi)
+    ; lhs <- p_mapv mapv $!! lhss ++ "_" ++ lhsi
     ; spaces; string "->"; spaces
     ; rhs1 <- p_mapv mapv =<< (many1 $ noneOf " ")
     ; spaces
-    ; (i, u) <- getState
-    ; let i1 = i+1 in i1 `seq` setState (i1, u)
+    ; i <- fmap fst getState
+    ; updateState (first (+1))
     ; do
       { wgt <- p_weight
       ; spaces
-      ; return $ force $ (mkHyperedge lhs [rhs1] symbol i, wgt)
+      ; return $!! (mkHyperedge lhs [rhs1] symbol i, wgt)
       }
     <|> do
         { rhs2 <- p_mapv mapv =<< (return . force) =<< (many1 $ noneOf " ")
         ; spaces
         ; wgt <- p_weight
         ; spaces
-        ; return $ force $ (mkHyperedge lhs [rhs1, rhs2] symbol i, wgt)
+        ; return $!! (mkHyperedge lhs [rhs1, rhs2] symbol i, wgt)
         }
     }
 
@@ -171,12 +221,14 @@ p_lexicon mapl mapv
     ; wgts <- sepBy p_weight (string ", ")
     ; char ']'
     ; spaces
-    ; sequence
+    ; sequence $!
       [ do
-        { lhs' <- p_mapv mapv $ lhs ++ "_" ++ show i
-        ; (i', u) <- getState
-        ; let i1 = i' + 1 in i1 `seq` setState (i1, u)
-        ; return $ force $ (mkHyperedge lhs' [] rhs i', wgt)
+        { lhs' <- p_mapv mapv $!! lhs ++ "_" ++ show i
+        --; (i', u) <- getState
+        --; let i1 = i' + 1 in i1 `seq` setState (i1, u)
+        ; i' <- fmap fst getState
+        ; updateState (first (+1))
+        ; return $!! (mkHyperedge lhs' [] rhs i', wgt) 
         }
       | (i, wgt) <- zip [0..] wgts
       ]
@@ -187,7 +239,7 @@ p_weight
   = do
     { c <- oneOf "0123456789"
     ; cs <- many (oneOf "0123456789.E-")
-    ; return $ force $ read $ (c:cs) 
+    ; return $! read $! (c:cs)
     }
 
 {-p_grammar

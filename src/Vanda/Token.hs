@@ -24,6 +24,7 @@ module Vanda.Token
   , TokenStructure
     ( emptyTS
     , fromText
+    , getBounds
     , toArray
     , toMap
     , toText )
@@ -33,14 +34,19 @@ module Vanda.Token
   ) where
 
 import Control.Arrow ( (&&&) )
+import Control.DeepSeq ( NFData(..) )
 import qualified Data.Array as A
 import Data.Int ( Int32 )
+-- import Data.Word ( Word16 )
 import qualified Data.Map as M
 import qualified Data.Text.Lazy as T
 
 type Token = Int32
 newtype TokenMap = TokenMap { unTokenMap :: M.Map String Token }
 newtype TokenArray = TokenArray { unTokenArray :: A.Array Token String }
+
+instance NFData TokenMap where
+  rnf = rnf . M.toList . unTokenMap
 
 getToken :: TokenMap -> String -> Token
 getToken = (M.!) . unTokenMap
@@ -50,21 +56,29 @@ getString = (A.!) . unTokenArray
 
 updateToken :: TokenMap -> String -> (TokenMap, Token)
 updateToken orig@(TokenMap m) s
-  = case M.lookup s m of
-      Nothing -> let t = fromIntegral $ M.size m
-                 in (TokenMap $ M.insert s t m, t)
-      Just t -> (orig, t)
+  = let t' = fromIntegral $ M.size m
+        f _ _ = id
+    in
+    case M.insertLookupWithKey' f s t' m of
+      (Nothing, m') -> (TokenMap m', t')
+      (Just t, m') -> (orig, t)
+  -- = case M.lookup s m of
+  --     Nothing -> let t = fromIntegral $ M.size m
+  --                in (TokenMap $ M.insert s t m, t)
+  --     Just t -> (orig, t)
 
 -- | This class provides common operations for 'TokenArray's and 'TokenMap's.
 class TokenStructure t where
   emptyTS :: t -- ^ empty token structure
   fromText :: T.Text -> t
+  getBounds :: t -> (Token, Token)
   toArray :: t -> TokenArray
   toMap :: t -> TokenMap
   toText :: t -> T.Text
 
 instance TokenStructure TokenArray where
   emptyTS = TokenArray $ A.array (0,-1) []
+  getBounds = A.bounds . unTokenArray
   toText
     = T.unlines
     . uncurry (:)
@@ -83,6 +97,7 @@ instance TokenStructure TokenArray where
 
 instance TokenStructure TokenMap where
   emptyTS = TokenMap M.empty
+  getBounds = (,) 0 . (-1+) . fromIntegral . M.size . unTokenMap
   toText = toText . toArray
   fromText
     = TokenMap

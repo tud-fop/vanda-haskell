@@ -24,10 +24,10 @@ module Vanda.Corpus.Penn.Text
 import Control.Applicative ( (<*>), (<*), (*>), (<|>), (<$>), many )
 import Control.Arrow ( (***), second )
 import Data.Either ( either )
-import Data.Int ( Int32 )
 import Data.List ( intersperse )
 import qualified Data.Text.Lazy as T
 import qualified Data.Tree as T
+import Data.Int ( Int32 )
 import Text.Parsec hiding ( many, (<|>) )
 import Text.Parsec.Text.Lazy
 
