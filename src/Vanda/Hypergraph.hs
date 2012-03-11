@@ -48,7 +48,7 @@ class Hypergraph h where
   -- | Computes the array of best derivations. Basically a composition
   -- of "bests'" and 'knuth'.
   bests
-    :: (Ord i, Ix.Ix v, Eq i, Eq x)
+    :: (Ord i, Ix.Ix v)
     => h v l i
     -> Feature l i x
     -> V.Vector Double
@@ -83,7 +83,7 @@ class Hypergraph h where
   
   -- | Computes the best derivation for each node.
   knuth
-    :: (Ix.Ix v, Eq i, Eq x)
+    :: (Ix.Ix v)
     => h v l i
     -> Feature l i x
     -> V.Vector Double

@@ -14,3 +14,5 @@ instance (NFData v, NFData l, NFData i) => NFData (Hyperedge v l i) where
   rnf (Hyperedge t f l i)
     = rnf t `seq` (V.map rnf f) `seq` rnf l `seq` rnf i
 
+instance (NFData v, NFData l, NFData i) => NFData (EdgeList v l i) where
+  rnf (EdgeList vs es) = rnf vs `seq` rnf es

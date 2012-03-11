@@ -80,7 +80,7 @@ type CandidateHeap v l i x = H.MinPrioHeap Double (Derivation v l i, x)
 type BestMapping   v l i x = v -> Candidate v l i x
 
 knuth
-  :: forall v l i x. (Ix.Ix v, Eq i, Eq x)
+  :: forall v l i x. Ix.Ix v
   => EdgeList v l i
   -> Feature l i x
   -> V.Vector Double
@@ -124,12 +124,13 @@ knuth (EdgeList vs es) feat wV
           -- candidate for an as yet unvisited node
           [] -> knuthLoop
             (H.union candH' $ H.fromList newCand)
-            (bestA A.// [(v, [it])])
+            bestA'
             (IM.fromList adjChange `IM.union` adjIM)
               -- union: left argument preferred
           -- candidate for a visited node, just throw it away
           _ -> knuthLoop candH' bestA adjIM
         where
+          bestA' = bestA A.// [(v, [it])]
           v = to e
           newCand :: [Candidate v l i x] -- < new candidates from v
           adjChange :: [(Int, Int)] -- < changes to adjacency map
@@ -143,12 +144,8 @@ knuth (EdgeList vs es) feat wV
             = let unvis' = (adjIM IM.! k) - 1
                   cand =
                     if (==0) unvis'
-                    then let allBest = map (bestA A.!) $ from e
-                         in if (elem) [] allBest 
-                            then Nothing
-                            else
-                              Just $ topCC feat wV e $ map (head . (bestA A.!))
-                              $ from e
+                    then Just $ topCC feat wV e $ map (head . (bestA' A.!))
+                         $ from e
                     else Nothing
               in (cand, (k, unvis'))
 
