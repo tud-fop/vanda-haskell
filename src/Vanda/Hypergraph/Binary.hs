@@ -40,7 +40,7 @@ myGet = do
     else
       do
         es2 <- myGet
-        return $ es1 ++ es2
+        es1 `seq` return (es1 ++ es2)
 
 myPut
   :: (B.Binary v, B.Binary l, B.Binary i) => [Hyperedge v l i] -> B.Put

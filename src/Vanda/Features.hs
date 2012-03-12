@@ -42,7 +42,7 @@ import qualified Data.Array as A
 import qualified Data.Tree as T
 import qualified Data.Vector as V
 
-import Vanda.Hypergraph.Basic
+import Vanda.Hypergraph.Basic ( Hyperedge (..), Derivation )
 
 -- | A Feature with label type @l@, id type @i@, and data type @x@;
 -- the data type is for intermediate calculations when processing

@@ -28,6 +28,7 @@ module Vanda.Hypergraph.EdgeList
   ) where
 
 import Control.Arrow ( (***), (&&&) )
+import Control.DeepSeq ( NFData (..), ($!!) )
 import qualified Data.Array as A
 import qualified Data.Heap as H
 import Data.Either
@@ -41,6 +42,7 @@ import qualified Data.Vector as V
 
 import Vanda.Features
 import Vanda.Hypergraph.Basic
+import Vanda.Hypergraph.NFData
 
 filterEdges p (EdgeList vs es) = EdgeList (nodesL es) (filter p es)
 mapNodes f (EdgeList vs es) = EdgeList ((f *** f) vs) (map (mapHE f) es)
@@ -79,15 +81,18 @@ toSimulation (EdgeList sts es) = Simulation sts lookup
 type CandidateHeap v l i x = H.MinPrioHeap Double (Derivation v l i, x)
 type BestMapping   v l i x = v -> Candidate v l i x
 
+instance NFData l => NFData (T.Tree l) where
+  rnf (T.Node l ts) = rnf l `seq` rnf ts
+
 knuth
-  :: forall v l i x. Ix.Ix v
+  :: forall v l i x. (NFData v, NFData l, NFData i, NFData x, Ix.Ix v)
   => EdgeList v l i
   -> Feature l i x
   -> V.Vector Double
   -> BestArray v l i x
 knuth (EdgeList vs es) feat wV
   = knuthLoop
-      (H.fromList . map (flip (topCC feat wV) []) $ nullE)
+      (H.fromList $!! map (flip (topCC feat wV) []) $ nullE)
       (A.array vs [ (v, []) | v <- Ix.range vs ])
       adjIM
   where
@@ -104,7 +109,7 @@ knuth (EdgeList vs es) feat wV
       $ [ if null frome
           then Left e
           else Right
-            $ (,)
+            $!! (,)
               [ (v, it) | v <- S.toList ingoing ]
               [ (k, S.size ingoing) ]
         | it@(k, e) <- zip [0..] es
