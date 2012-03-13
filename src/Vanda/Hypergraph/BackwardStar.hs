@@ -202,7 +202,7 @@ bests (BackwardStar vs b _) feat wV bestA = bestA'
                       E -> []
                       M _ ts -> ts
                 | e' <- b v
-                , let tc = topCCL feat wV e
+                , let tc = topCCL feat wV e'
                          $ map (bestA' A.!) $ from e'
                 ]
         )

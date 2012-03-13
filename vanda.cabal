@@ -31,7 +31,7 @@ executable TestHypergraph
     , zlib
   Main-Is:  Test/TestHypergraph.hs
   hs-source-dirs:  src
-  GHC-Options:  -O2 -funbox-strict-fields -rtsopts
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -caf-all -auto-all
   Extensions:
       ScopedTypeVariables
@@ -58,7 +58,7 @@ executable BerkeleyToHypergraph
     , zlib
   Main-Is:  Vanda/Corpus/Tools/BerkeleyToHypergraph.hs
   hs-source-dirs:  src
-  GHC-Options:  -O2 -funbox-strict-fields -rtsopts
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -caf-all -auto-all
   Extensions:
       ScopedTypeVariables
@@ -144,7 +144,7 @@ library
     , Vanda.Hypergraph.Text
     , Data.Queue
   hs-source-dirs:  src
-  GHC-Options:  -O2 -funbox-strict-fields -rtsopts
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   Extensions:
       ScopedTypeVariables
     , TypeSynonymInstances

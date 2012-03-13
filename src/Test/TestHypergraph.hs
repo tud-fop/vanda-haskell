@@ -3,7 +3,6 @@ module Main where
 
 import Codec.Compression.GZip ( compress, decompress )
 
--- import Control.Applicative
 import Control.DeepSeq ( ($!!) , deepseq , force)
 import qualified Data.Array as A
 import qualified Data.Binary as B
@@ -14,25 +13,10 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
 import System.Environment ( getArgs )
 
-
-import Control.Arrow ( (***), (&&&) )
-import Control.DeepSeq ( NFData (..) )
-import qualified Data.Heap as H
-import Data.Either
-import qualified Data.IntMap as IM
-import qualified Data.Ix as Ix
-import qualified Data.Map as M
-import Data.Maybe
-import qualified Data.Set as S
-import qualified Data.Tree as T
-
-
-
 import Vanda.Features
 import Vanda.Hypergraph
 import Vanda.Hypergraph.Binary
 import Vanda.Hypergraph.NFData
--- import Vanda.Hypergraph.EdgeList as EL (toBackwardStar)
 
 instance (Show v, Show l, Show i) => Show (Hyperedge v l i) where
   show e
@@ -46,17 +30,10 @@ instance (Show v, Show l, Show i) => Show (Hyperedge v l i) where
 
 instance (Show v, Show l, Show i) => Show (Candidate v l i x) where
   show (Candidate w d _) = show w ++ " -- " ++ show d
--- "~lindal/Downloads/SHK/Berkeley/t_eng_sm6.txt.grammar.hg" 
--- "~lindal/Downloads/SHK/Berkeley/t_small.hg" 
--- "/home/student/lindal/Downloads/SHK/Berkeley/berkeley.bhg"
-
 
 
 main :: IO ()
-main = mainKnuth
-
-mainKnuth :: IO ()
-mainKnuth = do 
+main = do 
   args <- getArgs
   case args of
     ["-z", zhgfile] -> do
@@ -71,33 +48,10 @@ mainKnuth = do
            $ B.readFile zhgfile
       let pN !l !i xs = (weights VU.! fromIntegral i) + (sum xs)
       --el `seq` print "ok"
-      weights `seq` el `seq` print
+      weights `seq` el `seq` putStr
+        $ unlines
+        $ map show
+        $ take 25000
         $ (A.! 1132)
-        $ knuth el (Feature pN V.singleton) (V.singleton 1)
-
--- heap: ~350MB
--- time: ~102s
-      
-{-mainNbest :: IO()
-mainNbest = do                                       
-  args <- getArgs
-  case args of
-    ["-z", zhgfile] -> do
-      wghts <- B.decodeFile $ zhgfile ++ ".weights" :: IO([Double])
-      hg' <- B.readFile zhgfile
-      let !hg = B.decode . decompress $! hg'  :: [Hyperedge Int32 Int32 Int32]
-          !weights = array (0,fromIntegral $ (length wghts) - 1) $ zip [0..] wghts 
-          !el = ($!!) EdgeList (bounds weights) hg
-          processNode = (\(l,i) xs -> (weights ! i) + (sum xs))
-          feat = ($!!) Feature processNode V.singleton
-          vector = V.singleton 1
-      deepseq (wghts)
-              print $ bests 
-              (EL.toBackwardStar el)
-              feat
-              (V.singleton 1)
-  -}            
--- heap: ~700MB
--- time: ~104s
-
+        $ bests el (Feature pN V.singleton) (V.singleton 1)
 
