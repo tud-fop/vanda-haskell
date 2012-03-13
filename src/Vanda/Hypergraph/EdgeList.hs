@@ -78,75 +78,124 @@ toSimulation (EdgeList sts es) = Simulation sts lookup
       sts
       lst
 
-type CandidateHeap v l i x = H.MinPrioHeap Double (Derivation v l i, x)
-type BestMapping   v l i x = v -> Candidate v l i x
+-- | A phantom type to specify our kind of heap.
+data MPolicy = MPolicy
 
-instance NFData l => NFData (T.Tree l) where
-  rnf (T.Node l ts) = rnf l `seq` rnf ts
+-- | Heap type used to efficiently flatten the merge data structure.
+type CandidateHeap v l i x = H.Heap MPolicy (Candidate v l i x)
+
+-- | We order candidates by their weights, and instances of 'M' by their
+-- head candidate.
+instance H.HeapItem MPolicy (Candidate v l i x) where
+  newtype H.Prio MPolicy (Candidate v l i x)
+    = FMP { unFMP :: Double } deriving (Eq, Ord)
+  type    H.Val  MPolicy (Candidate v l i x) = (Candidate v l i x)
+
+  split c@(Candidate w d x) = (FMP w, c)
+  merge (FMP _, c) = c
+
+{-instance (NFData v, NFData i, NFData l, NFData x)
+  => NFData (Candidate v l i x) where
+  rnf (Candidate w d x) = rnf w `seq` rnf d `seq` rnf x-}
+
+type BestMapping v l i x = v -> Candidate v l i x
 
 knuth
-  :: forall v l i x. (NFData v, NFData l, NFData i, NFData x, Ix.Ix v)
+  :: forall v l i x. (NFData v, NFData l, NFData i, NFData x, Integral i, Ix.Ix v)
   => EdgeList v l i
   -> Feature l i x
   -> V.Vector Double
   -> BestArray v l i x
 knuth (EdgeList vs es) feat wV
   = knuthLoop
-      (H.fromList $!! map (flip (topCC feat wV) []) $ nullE)
-      (A.array vs [ (v, []) | v <- Ix.range vs ])
+      iniCandH
+      iniBestA
       adjIM
   where
-    -- auxiliary data structures:
-    nullE :: [Hyperedge v l i] -- ^ nullary edges
-    forwA :: A.Array v [(Int, Hyperedge v l i)] -- ^ forward star w/edge ids
-    adjIM :: IM.IntMap Int -- ^ # ingoing adjacencies by edge id
-    (nullE, (forwA, adjIM))
-      = lefts
-        &&& ( (A.accumArray (flip (:)) [] vs *** IM.fromList)
-            . (concat *** concat)
-            . unzip . rights
-            )
-      $ [ if null frome
-          then Left e
-          else Right
-            $!! (,)
-              [ (v, it) | v <- S.toList ingoing ]
-              [ (k, S.size ingoing) ]
-        | it@(k, e) <- zip [0..] es
+    (iniCandH, iniBestA)
+      = updateLoop
+          H.empty
+          (A.array vs [ (v, []) | v <- Ix.range vs ])
+          [ topCC feat wV e [] | e@(Nullary _ _ _) <- es ]
+    -- -- --
+    forwA :: A.Array v [Hyperedge v l i] -- ^ forward star w/edge ids
+    forwA
+      = A.accumArray (flip (:)) [] vs
+      $ [ (v, e)
+        | e <- es
         , let frome = from e
-        , let ingoing = S.fromList $ frome
+        , not $ null frome
+        , let fr = case e of
+                      Unary _ f1 _ _ -> [f1]
+                      Binary _ f1 f2 _ _
+                        | f1 == f2 -> [f1]
+                        | otherwise -> [f1, f2]
+                      Hyperedge _ f _ _ -> S.toList . S.fromList $ frome
+        , v <- fr
         ]
-    -- 
+    -- -- --
+    adjIM :: IM.IntMap Int -- ^ # ingoing adjacencies by edge id
+    adjIM
+      = IM.fromList
+      $ [ case e of
+            Unary _ f1 _ _ -> (ie, 1)
+            Binary _ f1 f2 _ _
+              | f1 == f2 -> (ie, 1)
+              | otherwise -> (ie, 2)
+            Hyperedge _ f _ _ -> (ie, S.size ingoing)
+              where ingoing = S.fromList frome
+        | e <- es
+        , let frome = from e
+        , not $ null frome
+        , let ie = fromIntegral $ i e
+        ]
+    -- -- --
+    updateLoop
+      :: CandidateHeap v l i x
+      -> BestArray v l i x
+      -> [Candidate v l i x]
+      -> (CandidateHeap v l i x, BestArray v l i x)
+    updateLoop !candH !bestA [] = (candH, bestA)
+    updateLoop !candH !bestA (c@(Candidate w (T.Node e _) _):cs) =
+      let v = to e in
+      case bestA A.! v of
+        [] -> updateLoop (H.insert c candH) (bestA A.// [(v, [c])]) cs
+        c'@(Candidate w' _ _):_
+          | w < w' -> updateLoop (H.insert c candH) (bestA A.// [(v, [c])]) cs
+          | otherwise -> updateLoop candH bestA cs
+    -- -- --
     knuthLoop
       :: CandidateHeap v l i x
       -> BestArray v l i x
       -> IM.IntMap Int
       -> BestArray v l i x
-    knuthLoop candH bestA adjIM = case H.view candH of
+    knuthLoop !candH !bestA !adjIM = case H.view candH of
       Nothing -> bestA -- < no candidates, so we are done
-      Just (it@(w, (d@(T.Node e ds), x)), candH') ->
+      Just (c@(Candidate w d@(T.Node e ds) x), candH') ->
         case bestA A.! v of
-          -- candidate for an as yet unvisited node
-          [] -> knuthLoop
-            (H.union candH' $ H.fromList newCand)
-            bestA'
-            (IM.fromList adjChange `IM.union` adjIM)
-              -- union: left argument preferred
-          -- candidate for a visited node, just throw it away
-          _ -> knuthLoop candH' bestA adjIM
+          c@(Candidate w' (T.Node e' _) _):_
+              -- candidate for an as yet unvisited node
+            | e == e' -> knuthLoop
+                           candH''
+                           bestA''
+                           (IM.fromList adjChange `IM.union` adjIM)
+                  -- union: left argument preferred
+              -- candidate for a visited node, just throw it away
+            | otherwise -> knuthLoop candH' bestA adjIM
+          -- _ -> knuthLoop candH' bestA adjIM
         where
-          bestA' = bestA A.// [(v, [it])]
+          (candH'', bestA'') = updateLoop candH' bestA' newCand
+          bestA' = bestA -- A.// [(v, [c])]
           v = to e
           newCand :: [Candidate v l i x] -- < new candidates from v
           adjChange :: [(Int, Int)] -- < changes to adjacency map
           (newCand, adjChange)
             = (catMaybes *** id) . unzip . map work . (forwA A.!) $ v
           -- compute change for a given edge information
-          work
-            :: (Int, Hyperedge v l i)
-            -> (Maybe (Candidate v l i x), (Int, Int))
-          work (k, e)
-            = let unvis' = (adjIM IM.! k) - 1
+          work :: Hyperedge v l i -> (Maybe (Candidate v l i x), (Int, Int))
+          work e
+            = let k = fromIntegral $ i e
+                  unvis' = (adjIM IM.! k) - 1
                   cand =
                     if (==0) unvis'
                     then Just $ topCC feat wV e $ map (head . (bestA' A.!))

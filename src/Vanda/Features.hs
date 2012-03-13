@@ -26,7 +26,7 @@ module Vanda.Features (
   , evalDerivation
   , inner
   -- * Best derivations
-  , Candidate
+  , Candidate (..)
   , BestArray
   , topCC
   -- * Composition
@@ -51,7 +51,7 @@ import Vanda.Hypergraph.Basic ( Hyperedge (..), Derivation )
 data Feature l i x = Feature
   { -- | Processes a node of a derivation tree using the (label, id) pair
     -- of that node and a list of intermediate results for the successors.
-    processNode :: (l, i) -> [x] -> x
+    processNode :: l -> i -> [x] -> x
     -- | Converts the intermediate result at the root of a derivation tree
     -- into a 'Vector' of 'Double'.
   , finalize :: x -> V.Vector Double
@@ -62,16 +62,16 @@ data Feature l i x = Feature
 (+++) :: Feature l i x1 -> Feature l i x2 -> Feature l i (x1,x2) 
 Feature pN1 f1 +++ Feature pN2 f2
   = Feature
-    (\ li -> (pN1 li *** pN2 li) . unzip)
+    (\ l i -> (pN1 l i *** pN2 l i) . unzip)
     (uncurry (V.++) . (f1 *** f2))
 
 -- | Lifts a feature with id type @i@ to @(i, i')@.
 projLeft :: Feature l i x -> Feature l (i, i') x
-projLeft (Feature pN f) = Feature (pN . (fst &&& fst . snd)) f
+projLeft (Feature pN f) = Feature (\ l (i, i') -> pN l i) f
 
 -- | Lifts a feature with id type @i'@ to @(i, i')@.
 projRight :: Feature l i' x -> Feature l (i, i') x
-projRight (Feature pN f) = Feature (pN . (fst &&& snd . snd)) f
+projRight (Feature pN f) = Feature (\ l (i, i') -> pN l i') f
 
 -- | Composes two features with id types @i@ and @i'@, respectively.
 -- That is, the features are lifted to @(i,i')@ via 'projLeft' and
@@ -86,7 +86,7 @@ processEdge (Feature pN f) (Hyperedge _ _ l i) = pN (l, i) --}
 -- | Processes a derivation tree with a given feature.
 processDerivation :: Feature l i x -> Derivation v l i -> x
 processDerivation feat (T.Node (Hyperedge _ _ l i) ds)
-  = processNode feat (l, i) $ map (processDerivation feat) ds
+  = processNode feat l i $ map (processDerivation feat) ds
 
 -- | Evaluates a derivation tree with a given feature. That is,
 -- it processes the tree via 'processTree' and then applies the
@@ -102,7 +102,12 @@ inner = curry $ V.foldl (+) 0 . uncurry (V.zipWith (*))
 -- | A candidate derivation, consisting of its alleged weight (recall that
 -- we may not be at the root yet), the derivation itself, and its feature
 -- data value.
-type Candidate v l i x = (Double, (Derivation v l i, x))
+data Candidate v l i x
+  = Candidate
+    { weight :: !Double
+    , deriv :: Derivation v l i
+    , fdata :: !x
+    }
 
 -- | An array of best derivations for each node.
 type BestArray v l i x = A.Array v [Candidate v l i x]
@@ -114,7 +119,11 @@ topCC
   -> Hyperedge v l i      -- ^ 'Hyperedge' for top concatenation
   -> [Candidate v l i x]  -- ^ successor candidates
   -> Candidate v l i x    -- ^ resulting candidate
-topCC feat wV e
-  = (inner wV . finalize feat . snd &&& id)
-  . (T.Node e . map (fst . snd)
-    &&& processNode feat (label e, i e) . map (snd . snd))
+topCC feat wV e cs
+  = Candidate
+      (inner wV $ finalize feat $ fd)
+      (T.Node e $ map deriv $ cs)
+      fd
+  where
+    fd = processNode feat (label e) (i e) $ map fdata $ cs
+

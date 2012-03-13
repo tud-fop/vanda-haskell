@@ -47,7 +47,7 @@ import qualified Data.Vector as V
 
 import Vanda.Features
   ( Feature
-  , Candidate
+  , Candidate (..)
   , BestArray
   , topCC )
 import Vanda.Hypergraph.Basic
@@ -139,7 +139,7 @@ instance H.HeapItem MPolicy (M (Candidate v l i x)) where
   type    H.Val  MPolicy (M (Candidate v l i x)) = (M (Candidate v l i x))
 
   split E = (FMP Nothing, E)
-  split m@(M (w, (_, _)) _) = (FMP (Just w), m)
+  split m@(M (Candidate w _ _) _) = (FMP (Just w), m)
   merge (FMP _, m) = m
 
 -- | Flattens a list of merge data structures, producing a sorted list
@@ -193,7 +193,7 @@ bests (BackwardStar vs b _) feat wV bestA = bestA'
       [ ( v
         , case bestA A.! v of
             [] -> []
-            cand@(_, (T.Node e _, _)) : _ ->
+            cand@(Candidate _ (T.Node e _) _) : _ ->
               cand : (flatten . concat)
                 [ if e /= e'
                   then [tc]
