@@ -23,13 +23,14 @@
 module Vanda.Hypergraph
   ( module Vanda.Hypergraph.Basic
   , Hypergraph (..)
+  , product
+  , product'
   ) where
 
 import Prelude hiding ( product )
 
 import Control.Arrow ( (&&&) )
 import Control.DeepSeq ( NFData )
-import qualified Data.Array as A
 import qualified Data.Ix as Ix
 import qualified Data.Vector as V
 
@@ -49,7 +50,7 @@ class Hypergraph h where
   -- | Computes the array of best derivations. Basically a composition
   -- of "bests'" and 'knuth'.
   bests
-    :: (Integral i, NFData v, NFData l, NFData i, NFData x, Ix.Ix v)
+    :: (Integral i, NFData v, NFData l, NFData i, NFData x, Ix.Ix v, Show l, Show v)
     => h v l i
     -> Feature l i x
     -> V.Vector Double
@@ -84,7 +85,7 @@ class Hypergraph h where
   
   -- | Computes the best derivation for each node.
   knuth
-    :: (NFData v, NFData l, NFData i, NFData x, Integral i, Ix.Ix v)
+    :: (NFData v, NFData l, NFData i, NFData x, Integral i, Ix.Ix v, Show l, Show v)
     => h v l i
     -> Feature l i x
     -> V.Vector Double
@@ -125,11 +126,11 @@ class Hypergraph h where
   
   -- | Returns the BackwardStar representation of a hypergraph.
   toBackwardStar :: Ix.Ix v => h v l i -> BackwardStar v l i
-  toBackwardStar = toBackwardStar . toEdgeList
+  toBackwardStar = BS.fromEdgeList . toEdgeList
   
   -- | Returns the ForwardStar representation of a hypergraph.
   toForwardStar  :: Ix.Ix v => h v l i -> ForwardStar v l i
-  toForwardStar = toForwardStar . toEdgeList
+  toForwardStar = FS.fromEdgeList . toEdgeList
   
   -- | Returns the Simulation representation of a hypergraph.
   toSimulation   :: (Ix.Ix v, Ord l) => h v l i -> Simulation v l i
@@ -143,8 +144,6 @@ instance Hypergraph EdgeList where
   mkHypergraph = uncurry EdgeList . (nodesL &&& id)
   nodes = nodesEL
   toEdgeList = id
-  toBackwardStar = EL.toBackwardStar
-  toForwardStar = EL.toForwardStar
   toSimulation = EL.toSimulation
 
 instance Hypergraph BackwardStar where
@@ -153,7 +152,7 @@ instance Hypergraph BackwardStar where
   mapLabels = BS.mapLabels
   mapNodes = BS.mapNodes
   memoize = BS.memoize
-  mkHypergraph = EL.toBackwardStar . mkHypergraph
+  mkHypergraph = BS.fromEdgeList . mkHypergraph
   nodes = nodesBS
   toEdgeList = BS.toEdgeList
   toBackwardStar = id
@@ -165,7 +164,7 @@ instance Hypergraph ForwardStar where
   mapLabels = FS.mapLabels
   mapNodes = FS.mapNodes
   memoize = FS.memoize
-  mkHypergraph = EL.toForwardStar . mkHypergraph
+  mkHypergraph = FS.fromEdgeList . mkHypergraph
   nodes = nodesFS
   toEdgeList = FS.toEdgeList
   toForwardStar = id
@@ -186,34 +185,3 @@ product'
   -> h2 Int l i2
   -> BackwardStar Int l (i1,i2)
 product' comp h1 h2 = BS.product' comp (toBackwardStar h1) (toBackwardStar h2)
-
--- OLD STUFF!
-
-data Hypergraph' v l i x = Hypergraph' (A.Array v x) (x -> Hyperedge v l i)
-
-
-data BinHyperedge l i
-  = NullaryHyperedge
-    { _to :: !Int
-    , _label :: !l
-    , _i :: !i
-    }
-  | UnaryHyperedge
-    { _to :: !Int
-    , _label :: !l
-    , _i :: !i
-    , _from :: !Int
-    }
-  | BinaryHyperedge
-    { _to :: !Int
-    , _label :: !l
-    , _i :: !i
-    , _from :: !Int
-    , _from2 :: !Int
-    }
-
-convert :: BinHyperedge l i -> Hyperedge Int l i
-convert (NullaryHyperedge t l i) = Hyperedge t V.empty l i
-convert (UnaryHyperedge t l i f) = Hyperedge t (V.singleton f) l i
-convert (BinaryHyperedge t l i f f2) = Hyperedge t (V.fromList [f,f2]) l i
-

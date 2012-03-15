@@ -67,11 +67,11 @@ Feature pN1 f1 +++ Feature pN2 f2
 
 -- | Lifts a feature with id type @i@ to @(i, i')@.
 projLeft :: Feature l i x -> Feature l (i, i') x
-projLeft (Feature pN f) = Feature (\ l (i, i') -> pN l i) f
+projLeft (Feature pN f) = Feature (\ l (i, _) -> pN l i) f
 
 -- | Lifts a feature with id type @i'@ to @(i, i')@.
 projRight :: Feature l i' x -> Feature l (i, i') x
-projRight (Feature pN f) = Feature (\ l (i, i') -> pN l i') f
+projRight (Feature pN f) = Feature (\ l (_, i') -> pN l i') f
 
 -- | Composes two features with id types @i@ and @i'@, respectively.
 -- That is, the features are lifted to @(i,i')@ via 'projLeft' and
@@ -85,8 +85,8 @@ processEdge (Feature pN f) (Hyperedge _ _ l i) = pN (l, i) --}
 
 -- | Processes a derivation tree with a given feature.
 processDerivation :: Feature l i x -> Derivation v l i -> x
-processDerivation feat (T.Node (Hyperedge _ _ l i) ds)
-  = processNode feat l i $ map (processDerivation feat) ds
+processDerivation feat (T.Node e ds)
+  = processNode feat (label e) (ident e) $ map (processDerivation feat) ds
 
 -- | Evaluates a derivation tree with a given feature. That is,
 -- it processes the tree via 'processTree' and then applies the
@@ -121,9 +121,9 @@ topCC
   -> Candidate v l i x    -- ^ resulting candidate
 topCC feat wV e cs
   = Candidate
-      (inner wV $ finalize feat $ fd)
-      (T.Node e $ map deriv $ cs)
+      (inner wV $ finalize feat fd)
+      (T.Node e $ map deriv cs)
       fd
   where
-    fd = processNode feat (label e) (i e) $ map fdata $ cs
+    fd = processNode feat (label e) (ident e) $ map fdata cs
 

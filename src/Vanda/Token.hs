@@ -61,7 +61,7 @@ updateToken orig@(TokenMap m) s
     in
     case M.insertLookupWithKey' f s t' m of
       (Nothing, m') -> (TokenMap m', t')
-      (Just t, m') -> (orig, t)
+      (Just t, _) -> (orig, t)
   -- = case M.lookup s m of
   --     Nothing -> let t = fromIntegral $ M.size m
   --                in (TokenMap $ M.insert s t m, t)

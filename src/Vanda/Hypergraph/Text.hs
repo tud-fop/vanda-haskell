@@ -11,21 +11,13 @@
 
 {-# LANGUAGE FlexibleContexts, FlexibleInstances #-}  -- for 'Stream'
 
-module Vanda.Hypergraph.Text where
+module Vanda.Hypergraph.Text ( parseHypergraph ) where
 
-import Control.Arrow ( (&&&), first )
-import Data.Int ( Int8 )
+import Control.Arrow ( (&&&) )
 import qualified Data.Ix as Ix
-import qualified Data.List as L
 import qualified Data.Text.Lazy as T
-import qualified Data.Text.Lazy.IO as T
 
 import Vanda.Hypergraph.Basic --( Hyperedge, mkHyperedge, EdgeList )
-
-import Debug.Trace
-
--- mytrace x = trace (show x) x
-mytrace = id
 
 parseHypergraph
   :: (Ix.Ix v, Read v, Read l) => T.Text -> EdgeList v l Double 
@@ -34,27 +26,18 @@ parseHypergraph
   . (nodesL &&& id)
   . map (he . words . T.unpack)
   . T.lines
-  
-he (x1:(x2:(x3:xs))) 
-  = mkHyperedge 
-    (read x1) 
-    from'
-    (read x3)
-    wgt
-  where (from', wgt) = g xs []
-
-g [] _ = error "empty list"
-g (x:[]) _ = error "just one element"
-g [x1, x2] ys = (reverse ys, read x2)
-g (x1:xs) ys
-  = let y = read x1
-    in y `seq` g xs (y:ys) -- first ((read $ T.unpack x1):) (g xs)
+  where
+    he (x1 : (_ : (x3 : xs))) 
+      = mkHyperedge (read x1) from' (read x3) wgt
+      where (from', wgt) = g xs []
+    he _ = undefined
+    g [] _ = error "empty list"
+    g (_ : []) _ = error "just one element"
+    g [_, x2] ys = (reverse ys, read x2)
+    g (x1 : xs) ys
+      = let y = read x1
+        in y `seq` g xs (y:ys) -- first ((read $ T.unpack x1):) (g xs)
       
-  
-  
-  
-  
-  
 {-  
   
   =

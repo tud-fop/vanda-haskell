@@ -19,37 +19,66 @@ module Vanda.Hypergraph.ForwardStar
   ( module Vanda.Hypergraph.Basic
   , edgeCount
   , filterEdges
+  , fromEdgeList
   , mapLabels
   , mapNodes
   , memoize
   , toEdgeList
   ) where
 
-import Control.Arrow ( (***), (&&&) )
+import Control.Arrow ( (***) )
 import qualified Data.Array as A
 import qualified Data.Ix as Ix
-import qualified Data.Map as M
-import qualified Data.Vector as V
+import qualified Data.Set as S
 
 import Vanda.Hypergraph.Basic
 
+edgeCount :: Ix.Ix v => ForwardStar v l i -> Int
 edgeCount (ForwardStar sts lst f _)
   = (length lst+) $ sum $ map (length . f) (Ix.range sts)
+
+filterEdges
+  :: (Hyperedge v l i -> Bool) -> ForwardStar v l i -> ForwardStar v l i
 filterEdges p (ForwardStar vs lst f _)
   = ForwardStar vs (filter p lst) (filter p . f) False
+
+fromEdgeList :: Ix.Ix v => EdgeList v l i -> ForwardStar v l i
+fromEdgeList (EdgeList vs es) = ForwardStar vs lst (a A.!) True
+  where
+    lst = [ e | e <- es, null (from e) ]
+    lst' = [ (v, e)
+           | e <- es
+           , let from' = from e
+           , not . null $ from'
+           , v <- S.toList . S.fromList $ from'
+           ]
+    a = A.accumArray (flip (:)) [] vs lst'
+
+mapLabels
+  :: (Hyperedge v l i -> Hyperedge v l' i')
+  -> ForwardStar v l i
+  -> ForwardStar v l' i'
 mapLabels g (ForwardStar vs lst f _)
   = ForwardStar vs (map g lst) (map g . f) False
+
+mapNodes
+  :: (Ix.Ix v, Ix.Ix v')
+  => (v -> v') -> ForwardStar v l i -> ForwardStar v' l i
 mapNodes g (ForwardStar vs lst f _)
   = ForwardStar vs' (map (mapHE g) lst) (a A.!) True
   where
     vs' = (g *** g) vs
     a = A.array vs' [ (g v, map (mapHE g) (f v)) | v <- Ix.range vs ]
+
+memoize :: Ix.Ix v => ForwardStar v l i -> ForwardStar v l i
 memoize fs@(ForwardStar vs lst f mem)
   | mem = fs -- idempotent
   | otherwise = ForwardStar vs lst (a A.!) True
   where
     a = A.array vs [ (v, f v) | v <- Ix.range vs ]
-toEdgeList (ForwardStar sts lst f _)
-  = EdgeList sts $ lst ++ concatMap f (Ix.range sts)
+
+toEdgeList :: Ix.Ix v => ForwardStar v l i -> EdgeList v l i
+toEdgeList (ForwardStar vs lst f _)
+  = EdgeList vs $ lst ++ concatMap f (Ix.range vs)
 
 

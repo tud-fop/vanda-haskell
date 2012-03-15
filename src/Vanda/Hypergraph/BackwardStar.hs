@@ -23,6 +23,7 @@ module Vanda.Hypergraph.BackwardStar
   , bests
   , edgeCount
   , filterEdges
+  , fromEdgeList
   , mapNodes
   , mapLabels
   , memoize
@@ -33,7 +34,7 @@ module Vanda.Hypergraph.BackwardStar
   , product'
   ) where
 
-import Prelude hiding ( product )
+import Prelude hiding ( lookup, product )
 
 import Control.Arrow ( (***), (&&&) )
 import qualified Data.Array as A
@@ -60,22 +61,47 @@ import Vanda.Hypergraph.Basic
   , EdgeList(..)
   , Simulation(..) )
 
+edgeCount :: Ix.Ix v => BackwardStar v l i -> Int
 edgeCount (BackwardStar vs b _) = sum $ map (length . b) (Ix.range vs)
+
+filterEdges
+  :: (Hyperedge v l i -> Bool) -> BackwardStar v l i -> BackwardStar v l i
 filterEdges p (BackwardStar vs b _) = BackwardStar vs (filter p . b) False
+
+fromEdgeList :: Ix.Ix v => EdgeList v l i -> BackwardStar v l i
+fromEdgeList (EdgeList vs es) = BackwardStar vs (a A.!) True
+  where
+    lst = [ (v, e) | e <- es, let v = to e ]
+    a = A.accumArray (flip (:)) [] vs lst
+
+mapNodes
+  :: (Ix.Ix v, Ix.Ix v')
+  => (v -> v') -> BackwardStar v l i -> BackwardStar v' l i
 mapNodes f (BackwardStar vs b _)
   = BackwardStar vs' (a A.!) True
   where
     vs' = (f *** f) vs
     a = A.array vs' [ (f v, map (mapHE f) (b v)) | v <- Ix.range vs ]
+
+mapLabels
+  :: (Hyperedge v l i -> Hyperedge v l' i')
+  -> BackwardStar v l i
+  -> BackwardStar v l' i'
 mapLabels f (BackwardStar vs b _) = BackwardStar vs (map f . b) False
+
+memoize :: Ix.Ix v => BackwardStar v l i -> BackwardStar v l i
 memoize bs@(BackwardStar vs b mem)
   | mem = bs -- idempotent
   | otherwise = BackwardStar vs (a A.!) True
   where
     a = A.array vs [ (v, b v) | v <- Ix.range vs ]
-toEdgeList (BackwardStar sts b _)
-  = EdgeList sts $ concatMap b (Ix.range sts)
-toSimulation (BackwardStar sts b _) = Simulation sts lookup
+
+toEdgeList :: Ix.Ix v => BackwardStar v l i -> EdgeList v l i
+toEdgeList (BackwardStar vs b _)
+  = EdgeList vs $ concatMap b (Ix.range vs)
+
+toSimulation :: (Ord l, Ix.Ix v) => BackwardStar v l i -> Simulation v l i
+toSimulation (BackwardStar vs b _) = Simulation vs lookup
   where
     lookup v l n
       = M.findWithDefault [] (l, n)
@@ -86,7 +112,7 @@ toSimulation (BackwardStar sts b _) = Simulation sts lookup
       , let l = label e
       , let n = arity e
       ]
-    a = A.array sts [ (v, makeM $ b v) | v <- Ix.range sts ]
+    a = A.array vs [ (v, makeM $ b v) | v <- Ix.range vs ]
 
 -- | Drops unreachable nodes and corresponding edges.
 dropUnreachables
@@ -94,13 +120,13 @@ dropUnreachables
   => v
   -> BackwardStar v l i
   -> BackwardStar v l i
-dropUnreachables v0 (BackwardStar vs b mem) = BackwardStar vs' b' mem
+dropUnreachables v0 (BackwardStar _ b mem) = BackwardStar vs' b' mem
   where
-    vs' = (S.findMin vsS, S.findMax vsS)
-    b' v = if S.member v vsS then b v else []
+    vs' = S.findMin &&& S.findMax $ vsS0
+    b' v = if S.member v vsS0 then b v else []
     -- set of reachable nodes
-    vsS :: S.Set v
-    vsS = closeReachables (S.empty, Q.singleton v0)
+    vsS0 :: S.Set v
+    vsS0 = closeReachables (S.empty, Q.singleton v0)
     -- "while loop" for computing the closure
     closeReachables :: (S.Set v, Q.Queue v) -> S.Set v
     closeReachables (vsS, vsQ) = case Q.deqMaybe vsQ of
@@ -135,12 +161,15 @@ type Heap v l i x = H.Heap MPolicy (M (Candidate v l i x))
 -- head candidate.
 instance H.HeapItem MPolicy (M (Candidate v l i x)) where
   newtype H.Prio MPolicy (M (Candidate v l i x))
-    = FMP { unFMP :: Maybe Double } deriving (Eq, Ord)
-  type    H.Val  MPolicy (M (Candidate v l i x)) = (M (Candidate v l i x))
+    = FMP (Maybe Double) deriving Eq
+  type    H.Val  MPolicy (M (Candidate v l i x)) = M (Candidate v l i x)
 
   split E = (FMP Nothing, E)
   split m@(M (Candidate w _ _) _) = (FMP (Just w), m)
   merge (FMP _, m) = m
+
+instance Ord (H.Prio MPolicy (M (Candidate v l i x))) where
+  compare (FMP x) (FMP y) = compare y x
 
 -- | Flattens a list of merge data structures, producing a sorted list
 -- of candidates.
@@ -221,10 +250,10 @@ product comp (BackwardStar (v11,v12) b1 _) (BackwardStar (v21,v22) b2 _)
     ix = Ix.index sts'
     sts = (ix stsl, ix stsh)
     a = A.array sts
-      [ (ix v, product' (b1 v1) (b2 v2))
+      [ (ix v, b1 v1 `pr` b2 v2)
       | v@(v1, v2) <- Ix.range sts'
       ]
-    product' rs1 rs2 = [ (r,r') | r <- rs1, r' <- rs2, r `comp` r' ]
+    pr rs1 rs2 = [ (r,r') | r <- rs1, r' <- rs2, r `comp` r' ]
 
 product'
   :: (Hyperedge Int l i1 -> Hyperedge Int l i2 -> Bool)
@@ -238,9 +267,9 @@ product' comp (BackwardStar (v11,v12) b1 _) (BackwardStar (v21,v22) b2 _)
     ix = Ix.index sts'
     sts = (ix stsl, ix stsh)
     a = A.array sts
-      [ (ix v, product' (b1 v1) (b2 v2))
+      [ (ix v, b1 v1 `pr` b2 v2)
       | v@(v1, v2) <- Ix.range sts'
       ]
-    product' rs1 rs2
+    pr rs1 rs2
       = [ interlace ix r r' | r <- rs1, r' <- rs2, r `comp` r' ]
 

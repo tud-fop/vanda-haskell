@@ -189,12 +189,12 @@ mergeSpans = m . L.sort
         else a : m ys
     m xs = xs
 
-
+{-- FIXME use QuickCheck
 test_mergeSpans :: Bool
 test_mergeSpans
   = mergeSpans [(1,1), (1,2), (3,4), (6,10), (7,9), (11,12)]
     == [(1,4), (6,12)]
-
+--}
 
 -- | Takes a tree containing correct 'Span' lists and splits nodes to remove
 -- crossing edges.
@@ -235,7 +235,8 @@ negraTreeToTree (T.Node ((Just dat@(SentenceWord{}), _), _) [])
 negraTreeToTree _
   = error "malformed negra tree: a SentenceWord has children"
 
-
+  
+{-- FIXME neither exported nor used
 isSentenceNode :: SentenceData -> Bool
 isSentenceNode (SentenceNode {}) = True
 isSentenceNode _ = False
@@ -244,3 +245,4 @@ isSentenceNode _ = False
 showSentenceData :: SentenceData -> String
 showSentenceData SentenceWord{sdWord = w} = w
 showSentenceData SentenceNode{sdPostag = t} = t
+--}

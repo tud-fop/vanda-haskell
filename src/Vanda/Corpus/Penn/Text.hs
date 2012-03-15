@@ -21,10 +21,8 @@ module Vanda.Corpus.Penn.Text
   , parsePennMap
   ) where
 
-import Control.Applicative ( (<*>), (<*), (*>), (<|>), (<$>), many )
+import Control.Applicative ( (<*), (*>), (<|>), (<$>), many )
 import Control.Arrow ( (***), second )
-import Data.Either ( either )
-import Data.List ( intersperse )
 import qualified Data.Text.Lazy as T
 import qualified Data.Tree as T
 import Data.Int ( Int32 )
@@ -76,7 +74,7 @@ lazyMany p file ustate contents = lm state0
                     Right x -> x
       where
         p' = do
-          setParserState state
+          _ <- setParserState state
           choice
             [ do
                 eof
@@ -107,11 +105,11 @@ p_comment =
 
 
 p_tag :: (u -> String -> (u, b)) -> GenParser u b
-p_tag lookup = do
+p_tag lookupToken = do
   name <- many (noneOf " ()\t\n\r\f\v")
   spaces
   m <- getState
-  let (m', i) = lookup m name
+  let (m', i) = lookupToken m name
   setState m'
   return i
 

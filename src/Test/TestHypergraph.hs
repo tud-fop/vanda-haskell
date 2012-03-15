@@ -1,23 +1,26 @@
 {-# LANGUAGE BangPatterns #-}
 module Main where
 
-import Codec.Compression.GZip ( compress, decompress )
+import Codec.Compression.GZip ( decompress )
 
-import Control.DeepSeq ( ($!!) , deepseq , force)
+import Control.DeepSeq ( force)
 import qualified Data.Array as A
 import qualified Data.Binary as B
 import qualified Data.ByteString.Lazy as B
-import Data.Int ( Int8, Int16, Int32 )
+import Data.Int ( Int32 )
 import qualified Data.Text.Lazy.IO as T
+import qualified Data.Tree as T
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
 import System.Environment ( getArgs )
 
 import Vanda.Features
-import Vanda.Hypergraph
-import Vanda.Hypergraph.Binary
-import Vanda.Hypergraph.NFData
+import Vanda.Hypergraph hiding ( nodes )
+import Vanda.Hypergraph.Binary ()
+import Vanda.Hypergraph.NFData ()
+import Vanda.Token
 
+{-
 instance (Show v, Show l, Show i) => Show (Hyperedge v l i) where
   show e
     = show (to e)
@@ -30,28 +33,47 @@ instance (Show v, Show l, Show i) => Show (Hyperedge v l i) where
 
 instance (Show v, Show l, Show i) => Show (Candidate v l i x) where
   show (Candidate w d _) = show w ++ " -- " ++ show d
+-}
 
+makeItSo
+  :: TokenArray -> TokenArray -> Candidate Token Token Int32 x -> String
+makeItSo tok nodes (Candidate w d _)
+  = show w ++ " -- " ++ makeItSo' tok nodes d
+makeItSo'
+  :: TokenArray -> TokenArray -> Derivation Token Token Int32 -> String
+makeItSo' tok _ (T.Node e [])
+  = getString tok (label e)
+makeItSo' tok nodes (T.Node e es)
+  = "(" ++ getString tok (label e) ++ " "
+    ++ unwords (map (makeItSo' tok nodes) es)
+    ++ ")"
 
 main :: IO ()
 main = do 
   args <- getArgs
   case args of
-    ["-z", zhgfile] -> do
+    ["-z", zhgFile, "-t", tokFile] -> do
       weights :: VU.Vector Double
         <- fmap
              (VU.fromList . B.decode . decompress)
            $ B.readFile
-           $ zhgfile ++ ".weights.gz"
+           $ zhgFile ++ ".weights.gz"
       el :: EdgeList Int32 Int32 Int32
         <- fmap
              (force . B.decode . decompress)
-           $ B.readFile zhgfile
-      let pN !l !i xs = (weights VU.! fromIntegral i) + (sum xs)
+           $ B.readFile zhgFile
+      tok :: TokenArray
+        <- fmap fromText $ T.readFile tokFile
+      nodes :: TokenArray
+        <- fmap fromText $ T.readFile (zhgFile ++ ".nodes")
+      let pN !_ !i xs = (weights VU.! fromIntegral i) * Prelude.product xs
       --el `seq` print "ok"
       weights `seq` el `seq` putStr
-        $ unlines
-        $ map show
-        $ take 25000
+        -- $ unlines
+        -- $ map show
+        $ makeItSo tok nodes
+        $ (!! 0)
         $ (A.! 1132)
-        $ bests el (Feature pN V.singleton) (V.singleton 1)
+        $ knuth el (Feature pN V.singleton) (V.singleton 1)
+    _ -> error "Usage: TestHypergraph -z zhgFile -t tokenFile"
 

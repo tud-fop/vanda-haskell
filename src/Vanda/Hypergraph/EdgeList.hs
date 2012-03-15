@@ -21,17 +21,16 @@ module Vanda.Hypergraph.EdgeList
   , filterEdges
   , mapNodes
   , mapLabels
-  , toBackwardStar
-  , toForwardStar
   , toSimulation
   , knuth
   ) where
 
-import Control.Arrow ( (***), (&&&) )
-import Control.DeepSeq ( NFData (..), ($!!) )
+import Prelude hiding ( lookup )
+
+import Control.Arrow ( (***) )
+import Control.DeepSeq ( NFData (..) )
 import qualified Data.Array as A
 import qualified Data.Heap as H
-import Data.Either
 import qualified Data.IntMap as IM
 import qualified Data.Ix as Ix
 import qualified Data.Map as M
@@ -42,26 +41,23 @@ import qualified Data.Vector as V
 
 import Vanda.Features
 import Vanda.Hypergraph.Basic
-import Vanda.Hypergraph.NFData
+import Vanda.Hypergraph.NFData ()
 
-filterEdges p (EdgeList vs es) = EdgeList (nodesL es) (filter p es)
-mapNodes f (EdgeList vs es) = EdgeList ((f *** f) vs) (map (mapHE f) es)
+filterEdges
+  :: Ord v => (Hyperedge v l i -> Bool) -> EdgeList v l i -> EdgeList v l i
+filterEdges p (EdgeList _ es) = EdgeList (nodesL es) (filter p es)
+
+mapLabels
+  :: (Hyperedge v l i -> Hyperedge v l' i')
+  -> EdgeList v l i
+  -> EdgeList v l' i'
 mapLabels f (EdgeList vs es) = EdgeList vs (map f es)
-toBackwardStar (EdgeList sts es) = BackwardStar sts (a A.!) True
-  where
-    lst = [ (v, e) | e <- es, let v = to e ]
-    a = A.accumArray (flip (:)) [] sts lst
-toForwardStar (EdgeList sts es) = ForwardStar sts lst (a A.!) True
-  where
-    lst = [ e | e <- es, null (from e) ]
-    lst' = [ (v, e)
-           | e <- es
-           , let from' = from e
-           , not . null $ from'
-           , v <- S.toList . S.fromList $ from'
-           ]
-    a = A.accumArray (flip (:)) [] sts lst'
-toSimulation (EdgeList sts es) = Simulation sts lookup
+
+mapNodes :: (v -> v') -> EdgeList v l i -> EdgeList v' l i
+mapNodes f (EdgeList vs es) = EdgeList ((f *** f) vs) (map (mapHE f) es)
+
+toSimulation :: (Ix.Ix v, Ord l) => EdgeList v l i -> Simulation v l i
+toSimulation (EdgeList vs es) = Simulation vs lookup
   where
     lookup v l n
       = M.findWithDefault [] (l, n)
@@ -75,7 +71,7 @@ toSimulation (EdgeList sts es) = Simulation sts lookup
     a = A.accumArray
       (\m (l, n, e) -> M.insertWith (++) (l, n) [e] m)
       M.empty
-      sts
+      vs
       lst
 
 -- | A phantom type to specify our kind of heap.
@@ -88,20 +84,17 @@ type CandidateHeap v l i x = H.Heap MPolicy (Candidate v l i x)
 -- head candidate.
 instance H.HeapItem MPolicy (Candidate v l i x) where
   newtype H.Prio MPolicy (Candidate v l i x)
-    = FMP { unFMP :: Double } deriving (Eq, Ord)
-  type    H.Val  MPolicy (Candidate v l i x) = (Candidate v l i x)
+    = FMP Double deriving Eq
+  type    H.Val  MPolicy (Candidate v l i x) = Candidate v l i x
 
-  split c@(Candidate w d x) = (FMP w, c)
-  merge (FMP _, c) = c
+  split c@(Candidate w _ _) = (FMP w, c)
+  merge = snd -- (FMP _, c) = c
 
-{-instance (NFData v, NFData i, NFData l, NFData x)
-  => NFData (Candidate v l i x) where
-  rnf (Candidate w d x) = rnf w `seq` rnf d `seq` rnf x-}
-
-type BestMapping v l i x = v -> Candidate v l i x
+instance Ord (H.Prio MPolicy (Candidate v l i x)) where
+  compare (FMP x) (FMP y) = compare y x
 
 knuth
-  :: forall v l i x. (NFData v, NFData l, NFData i, NFData x, Integral i, Ix.Ix v)
+  :: forall v l i x. (NFData v, NFData l, NFData i, NFData x, Integral i, Ix.Ix v, Show l, Show v)
   => EdgeList v l i
   -> Feature l i x
   -> V.Vector Double
@@ -110,44 +103,46 @@ knuth (EdgeList vs es) feat wV
   = knuthLoop
       iniCandH
       iniBestA
-      adjIM
+      iniAdjIM
   where
     (iniCandH, iniBestA)
       = updateLoop
           H.empty
           (A.array vs [ (v, []) | v <- Ix.range vs ])
-          [ topCC feat wV e [] | e@(Nullary _ _ _) <- es ]
+          [ topCC feat wV e [] | e@Nullary{} <- es ]
     -- -- --
     forwA :: A.Array v [Hyperedge v l i] -- ^ forward star w/edge ids
     forwA
       = A.accumArray (flip (:)) [] vs
-      $ [ (v, e)
+        [ (v, e)
         | e <- es
-        , let frome = from e
-        , not $ null frome
-        , let fr = case e of
-                      Unary _ f1 _ _ -> [f1]
-                      Binary _ f1 f2 _ _
-                        | f1 == f2 -> [f1]
-                        | otherwise -> [f1, f2]
-                      Hyperedge _ f _ _ -> S.toList . S.fromList $ frome
-        , v <- fr
+        , case e of
+            Nullary{} -> False
+            _ -> True
+        , v <- case e of
+                 Binary _ f1 f2 _ _
+                   | f1 == f2 -> [f1]
+                   | otherwise -> [f1, f2]
+                 Unary _ f1 _ _ -> [f1]
+                 Hyperedge _ f _ _ -> S.toList (S.fromList (V.toList f))
+                 Nullary{} -> undefined -- can not happen
         ]
     -- -- --
-    adjIM :: IM.IntMap Int -- ^ # ingoing adjacencies by edge id
-    adjIM
+    iniAdjIM :: IM.IntMap Int -- ^ # ingoing adjacencies by edge id
+    iniAdjIM
       = IM.fromList
-      $ [ case e of
-            Unary _ f1 _ _ -> (ie, 1)
+        [ case e of
             Binary _ f1 f2 _ _
               | f1 == f2 -> (ie, 1)
               | otherwise -> (ie, 2)
-            Hyperedge _ f _ _ -> (ie, S.size ingoing)
-              where ingoing = S.fromList frome
+            Unary{} -> (ie, 1)
+            Hyperedge _ f _ _ -> (ie, S.size (S.fromList (V.toList f)))
+            Nullary{} -> undefined -- can not happen
         | e <- es
-        , let frome = from e
-        , not $ null frome
-        , let ie = fromIntegral $ i e
+        , case e of
+            Nullary{} -> False
+            _ -> True
+        , let ie = fromIntegral $ ident e
         ]
     -- -- --
     updateLoop
@@ -160,8 +155,8 @@ knuth (EdgeList vs es) feat wV
       let v = to e in
       case bestA A.! v of
         [] -> updateLoop (H.insert c candH) (bestA A.// [(v, [c])]) cs
-        c'@(Candidate w' _ _):_
-          | w < w' -> updateLoop (H.insert c candH) (bestA A.// [(v, [c])]) cs
+        Candidate w' _ _ : _
+          | w > w' -> updateLoop (H.insert c candH) (bestA A.// [(v, [c])]) cs
           | otherwise -> updateLoop candH bestA cs
     -- -- --
     knuthLoop
@@ -171,35 +166,34 @@ knuth (EdgeList vs es) feat wV
       -> BestArray v l i x
     knuthLoop !candH !bestA !adjIM = case H.view candH of
       Nothing -> bestA -- < no candidates, so we are done
-      Just (c@(Candidate w d@(T.Node e ds) x), candH') ->
+      Just (Candidate _ (T.Node e _) _, candH') ->
         case bestA A.! v of
-          c@(Candidate w' (T.Node e' _) _):_
+          Candidate _ (T.Node e' _) _ : _
               -- candidate for an as yet unvisited node
             | e == e' -> knuthLoop
                            candH''
-                           bestA''
+                           bestA'
                            (IM.fromList adjChange `IM.union` adjIM)
                   -- union: left argument preferred
               -- candidate for a visited node, just throw it away
             | otherwise -> knuthLoop candH' bestA adjIM
-          -- _ -> knuthLoop candH' bestA adjIM
+          _ -> undefined -- can not happen
         where
-          (candH'', bestA'') = updateLoop candH' bestA' newCand
-          bestA' = bestA -- A.// [(v, [c])]
           v = to e
+          (candH'', bestA') = updateLoop candH' bestA newCand
           newCand :: [Candidate v l i x] -- < new candidates from v
           adjChange :: [(Int, Int)] -- < changes to adjacency map
           (newCand, adjChange)
             = (catMaybes *** id) . unzip . map work . (forwA A.!) $ v
           -- compute change for a given edge information
           work :: Hyperedge v l i -> (Maybe (Candidate v l i x), (Int, Int))
-          work e
-            = let k = fromIntegral $ i e
+          work e1
+            = let k = fromIntegral $ ident e
                   unvis' = (adjIM IM.! k) - 1
                   cand =
                     if (==0) unvis'
-                    then Just $ topCC feat wV e $ map (head . (bestA' A.!))
-                         $ from e
+                    then Just $ topCC feat wV e1 $ map (head . (bestA A.!))
+                         $ from e1
                     else Nothing
               in (cand, (k, unvis'))
 

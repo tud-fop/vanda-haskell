@@ -19,7 +19,6 @@ module Vanda.Hypergraph.Binary () where
 
 import Control.Applicative ( (<$>), (<*>) )
 import qualified Data.Binary as B
-import qualified Data.Vector as V
 
 import Vanda.Hypergraph.Basic
 
@@ -29,7 +28,7 @@ instance (B.Binary v, B.Binary l, B.Binary i)
     B.put (to e)
     B.put (from e)
     B.put (label e)
-    B.put (i e)
+    B.put (ident e)
   get = mkHyperedge <$> B.get <*> B.get <*> B.get <*> B.get
 
 myGet :: (B.Binary v, B.Binary l, B.Binary i) => B.Get [Hyperedge v l i]

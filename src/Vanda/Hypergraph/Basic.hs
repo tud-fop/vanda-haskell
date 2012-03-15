@@ -32,8 +32,6 @@ module Vanda.Hypergraph.Basic
   , nodesLL
   ) where
 
-import Control.Arrow ( (&&&) )
-import qualified Data.Ix as Ix
 import qualified Data.List as L
 import qualified Data.Tree as T
 import qualified Data.Vector as V
@@ -45,38 +43,38 @@ data Hyperedge v l i
   = Nullary
     { to :: !v
     , label :: !l
-    , i :: !i
+    , ident :: !i
     }
   | Unary
     { to :: !v
     , from1 :: !v
     , label :: !l
-    , i :: !i
+    , ident :: !i
     }
   | Binary
     { to :: !v
     , from1 :: !v
     , from2 :: !v
     , label :: !l
-    , i :: !i
+    , ident :: !i
     }
   | Hyperedge
     { to :: !v
     , _from :: V.Vector v
     , label :: !l
-    , i :: !i
+    , ident :: !i
     }
 
 from :: Hyperedge v l i -> [v]
-from (Nullary t l i) = []
-from (Unary t f1 l i) = [f1]
-from (Binary t f1 f2 l i) = [f1, f2]
-from (Hyperedge t f l i) = V.toList f
+from Nullary{} = []
+from (Unary _ f1 _ _) = [f1]
+from (Binary _ f1 f2 _ _) = [f1, f2]
+from (Hyperedge _ f _ _) = V.toList f
 
 arity :: Hyperedge v l i -> Int
-arity (Nullary _ _ _) = 0
-arity (Unary _ _ _ _) = 1
-arity (Binary _ _ _ _ _) = 2
+arity Nullary{} = 0
+arity Unary{} = 1
+arity Binary{} = 2
 arity (Hyperedge _ f _ _) = V.length f
 
 mapHE :: (v -> v') -> Hyperedge v l i -> Hyperedge v' l i
@@ -98,13 +96,14 @@ interlace ix (Binary t1 f11 f12 l i1) (Binary t2 f21 f22 _ i2)
   = Binary (ix (t1, t2)) (ix (f11, f21)) (ix (f12, f22)) l (i1, i2)
 interlace ix (Hyperedge t1 f1 l i1) (Hyperedge t2 f2 _ i2)
   = Hyperedge (ix (t1,t2)) (V.zipWith (curry ix) f1 f2) l (i1,i2)
-
+interlace _ _ _ = error "cannot interlace different arities"
+  
 
 instance Eq i => Eq (Hyperedge v l i) where
-  e1 == e2 = i e1 == i e2
+  e1 == e2 = ident e1 == ident e2
 
 instance Ord i => Ord (Hyperedge v l i) where
-  e1 `compare` e2 = i e1 `compare` i e2
+  e1 `compare` e2 = ident e1 `compare` ident e2
 
 -- | A derivation (tree), i.e., a tree over hyperedges.
 type Derivation v l i = T.Tree (Hyperedge v l i)
@@ -171,7 +170,7 @@ nodesLL :: [Hyperedge v l i] -> [v]
 nodesLL es = [ v | e <- es, v <- to e : from e ]
 
 -- | Obtains the interval of nodes occurring in a list of edges.
-nodesL :: Ix.Ix v => [Hyperedge v l i] -> (v,v)
+nodesL :: Ord v => [Hyperedge v l i] -> (v,v)
 -- nodesL = (minimum &&& maximum) . nodesLL
 nodesL es = L.foldl' minimax (x,x) xs
   where

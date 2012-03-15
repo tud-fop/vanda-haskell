@@ -13,24 +13,19 @@
 
 module Vanda.Grammar.Berkeley.Text where
 
-import Control.Applicative ( (<*>), (<*), (*>), (<|>), (<$>), many )
-import Control.Arrow ( second )
-import Control.DeepSeq ( NFData, deepseq )
--- import Data.Either ( either )
+import Control.Applicative ( (<|>), many )
+import Control.Arrow ( first )
+import Control.DeepSeq ( NFData, ($!!) )
 import Data.Int ( Int32 )
-import qualified Data.IntMap as IM
 import qualified Data.Text.Lazy as T
 import Text.Parsec hiding ( many, (<|>) )
 import Text.Parsec.Text.Lazy
 
 import Vanda.Hypergraph.Basic ( Hyperedge, mkHyperedge )
-import Vanda.Hypergraph.NFData
-
-force :: (NFData a) => a -> a
-force x = x `deepseq` x
+import Vanda.Hypergraph.NFData ()
 
 parseBerkeleyMap
-  :: (NFData v, NFData l)
+  :: (NFData v, NFData l, NFData ul, NFData uv)
   => (ul -> String -> (ul, l))-- ^ symbol mapping function, e.g. 'updateToken'
   -> ul                       -- ^ initial token structure
   -> (uv -> String -> (uv, v))-- ^ node mapping function, e.g. 'updateToken'
@@ -39,19 +34,19 @@ parseBerkeleyMap
   -> T.Text                   -- ^ grammar file
   -> ((ul, uv), [(Hyperedge v l Int32, Double)])
                               -- ^ resulting token structure and hyperedges
-parseBerkeleyMap mapl ul0 mapv uv0 lex gr = (snd iu2, concat es1 ++ es2)
+parseBerkeleyMap mapl ul0 mapv uv0 lx gr = (snd iu2, concat es1 ++ es2)
   where
-    (iu1, es1) = second force $ lazyMany (p_lexicon mapl mapv) "lexicon" (0, (ul0, uv0)) lex
-    (iu2, es2) = second force $ lazyMany (p_grammar mapl mapv) "grammar" iu1 gr
+    (iu1, es1) = lazyMany (p_lexicon mapl mapv) "lexicon" (0, (ul0, uv0)) lx
+    (iu2, es2) = lazyMany (p_grammar mapl mapv) "grammar" iu1 gr
 
 lazyMany :: NFData a => GenParser u a -> SourceName -> u -> T.Text -> (u, [a])
 lazyMany p file ustate contents
-  = either undefined id $ runParser mp ustate file contents
+  = either (error . show) id $ runParser mp ustate file contents
   where
     mp = do
       xs <- many p
       u <- getState
-      return (u, xs)
+      return $! (u, id $!! xs)
 {-lazyMany p file ustate contents = lm state0
   where
     Right state0 = runParser getParserState ustate file contents
@@ -72,13 +67,8 @@ lazyMany p file ustate contents
                 -- let rs = second (x:) $ lm state'
                 -- rs `seq` return rs
                 return $ second (x:) $ lm state'
-            ]-}
-
-{-p_mwrapper
-  :: (u -> String -> (u, a))
-  -> GenParser (Int, u) String
-  -> GenParser (Int, u) a
-p_mwrapper mapper p = p >>= p_mapper mapper-}
+            ]
+-}
 
 p_mapl
   :: (ul -> String -> (ul, l))
@@ -111,49 +101,28 @@ p_grammar
   -> GenParser (Int32, (ul, uv)) (Hyperedge v l Int32, Double)
 p_grammar mapl mapv
   = do
-    { lhss <- (many1 $ noneOf "_")
-    ; char '_'
-    ; lhsi <- (many1 $ oneOf "1234567890")
+    { lhss <- many1 $ noneOf "_"
+    ; _ <- char '_'
+    ; lhsi <- many1 $ oneOf "1234567890"
     ; symbol <- p_mapl mapl lhss
-    ; lhs <- p_mapv mapv (lhss ++ "_" ++ lhsi)
-    ; spaces; string "->"; spaces
-    ; rhs1 <- p_mapv mapv =<< (many1 $ noneOf " ")
+    ; lhs <- p_mapv mapv $!! lhss ++ "_" ++ lhsi
+    ; spaces; _ <- string "->"; spaces
+    ; rhs1 <- p_mapv mapv =<< many1 (noneOf " ")
     ; spaces
-    ; (i, u) <- getState
-    ; let i1 = i+1 in i1 `seq` setState (i1, u)
+    ; i <- fmap fst getState
+    ; updateState (first (+1))
     ; do
       { wgt <- p_weight
       ; spaces
-      ; return $ force $ (mkHyperedge lhs [rhs1] symbol i, wgt)
+      ; return $!! (mkHyperedge lhs [rhs1] symbol i, wgt)
       }
     <|> do
-        { rhs2 <- p_mapv mapv =<< (return . force) =<< (many1 $ noneOf " ")
+        { rhs2 <- p_mapv mapv =<< (return $!!) =<< many1 (noneOf " ")
         ; spaces
         ; wgt <- p_weight
         ; spaces
-        ; return $ force $ (mkHyperedge lhs [rhs1, rhs2] symbol i, wgt)
+        ; return $!! (mkHyperedge lhs [rhs1, rhs2] symbol i, wgt)
         }
-    }
-
-p_lexicon0
-  :: (NFData v, NFData l)
-  => (ul -> String -> (ul, l))
-  -> (uv -> String -> (uv, v))
-  -> GenParser (Int32, (ul, uv)) [(Hyperedge v l Int32, Double)]
-p_lexicon0 mapl mapv
-  = do
-    { lhs <- p_mapv mapv =<< (many1 $ noneOf " ")
-    ; spaces
-    ; rhs <- p_mapl mapl =<< (many1 $ noneOf " ")
-    ; spaces
-    ; char '['
-    ; wgts <- sepBy p_weight (string ", ")
-    ; char ']'
-    ; spaces
-    ; return [ (mkHyperedge lhs [] rhs i, 0.0)
-             | (i, wgt) <- zip [0..] wgts
-             ] 
-    -- ; return []
     }
 
 p_lexicon
@@ -165,20 +134,20 @@ p_lexicon mapl mapv
   = do
     { lhs <- many1 $ noneOf " "
     ; spaces
-    ; rhs <- p_mapl mapl =<< (many1 $ noneOf " ")
+    ; rhs <- p_mapl mapl =<< many1 (noneOf " ")
     ; spaces
-    ; char '['
+    ; _ <- char '['
     ; wgts <- sepBy p_weight (string ", ")
-    ; char ']'
+    ; _ <- char ']'
     ; spaces
-    ; sequence
+    ; sequence $!
       [ do
-        { lhs' <- p_mapv mapv $ lhs ++ "_" ++ show i
-        ; (i', u) <- getState
-        ; let i1 = i' + 1 in i1 `seq` setState (i1, u)
-        ; return $ force $ (mkHyperedge lhs' [] rhs i', wgt)
+        { lhs' <- p_mapv mapv $!! lhs ++ "_" ++ show i
+        ; i' <- fmap fst getState
+        ; updateState (first (+1))
+        ; return $!! (mkHyperedge lhs' [] rhs i', wgt) 
         }
-      | (i, wgt) <- zip [0..] wgts
+      | (i, wgt) <- zip [(0::Int)..] wgts
       ]
     }
 
@@ -187,87 +156,5 @@ p_weight
   = do
     { c <- oneOf "0123456789"
     ; cs <- many (oneOf "0123456789.E-")
-    ; return $ force $ read $ (c:cs) 
+    ; return $! read $! (c:cs)
     }
-
-{-p_grammar
-  :: (u -> String -> (u, a))
-  -> GenParser (Int, u) (Hyperedge (a, Int8) (Maybe a) Int, Double)
-p_grammar mapper
-  = let mwrapper = p_mwrapper mapper
-    in do
-    { lhs <- mwrapper $ many1 $ noneOf "_"
-    ; char '_'
-    ; lhsi <- many1 $ oneOf "1234567890"
-    ; spaces; string "->"; spaces
-    ; rhs1 <- mwrapper $ many1 $ noneOf "_"
-    ; char '_'
-    ; rhs1i <- many1 $ oneOf "1234567890"
-    ; spaces
-    ; (i, u) <- getState
-    ; setState (i+1, u)
-    ; do
-      { wgt <- p_weight
-      ; spaces
-      ; return
-          ( mkHyperedge (lhs, read lhsi) [(rhs1, read rhs1i)] Nothing i
-          , wgt
-          )
-      }
-    <|> do
-        { rhs2 <- mwrapper $ many1 $ noneOf "_"
-        ; char '_'
-        ; rhs2i <- many1 $ oneOf "1234567890"
-        ; spaces
-        ; wgt <- p_weight
-        ; spaces
-        ; return
-            ( mkHyperedge
-                (lhs, read lhsi)
-                [(rhs1, read rhs1i), (rhs2, read rhs2i)]
-                Nothing
-                i
-            , wgt
-            )
-        }
-    }
-
-p_weight :: GenParser u Double
-p_weight
-  = do
-    { c <- oneOf "0123456789"
-    ; cs <- many (oneOf "0123456789.E-")
-    ; return $ read (c:cs)
-    }
-
-p_lexicon
-  :: (u -> String -> (u, a))
-  -> GenParser (Int, u) [(Hyperedge (a, Int8) (Maybe a) Int, Double)]
-p_lexicon mapper
-  = let mwrapper = p_mwrapper mapper
-        pmapper = p_mapper mapper
-    in do
-    { lhs <- mwrapper $ many1 $ noneOf " "
-    ; spaces
-    ; rhs <- mwrapper $ many1 $ noneOf " "
-    ; spaces
-    ; char '['
-    ; wgts <- sepBy p_weight (string ", ")
-    ; char ']'
-    ; spaces
-    ; (i', u) <- getState
-    ; setState (i' + length wgts, u)
-    ; return [ (mkHyperedge (lhs, i) [] (Just rhs) i'', wgt)
-             | (i, wgt) <- zip [0..] wgts
-             , let i'' = i' + fromIntegral i
-             ] 
-    }
--}
-     {-; let lists = unzip
-            [ ((i'', wgt), mkHyperedge (lhs, i) [] (Just rhs) i'')
-            | (i, wgt) <- zip [0..] wgts
-            , let i'' = i'+ (fromIntegral i)
-            ]
-    ; setState (i' + length wgts, IM.union im $ IM.fromList (fst lists), u)
-    ; return (snd lists)-}
-
