@@ -188,7 +188,7 @@ knuth (EdgeList vs es) feat wV
           -- compute change for a given edge information
           work :: Hyperedge v l i -> (Maybe (Candidate v l i x), (Int, Int))
           work e1
-            = let k = fromIntegral $ ident e
+            = let k = fromIntegral $ ident e1
                   unvis' = (adjIM IM.! k) - 1
                   cand =
                     if (==0) unvis'
