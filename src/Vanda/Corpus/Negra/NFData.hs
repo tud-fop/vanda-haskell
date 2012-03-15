@@ -1,4 +1,7 @@
 -- | Makes Negra data types instances of 'NFData' for strict evaluation.
+
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 module Vanda.Corpus.Negra.NFData where
 
 import Control.DeepSeq

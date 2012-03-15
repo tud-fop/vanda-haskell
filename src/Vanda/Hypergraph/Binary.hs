@@ -15,6 +15,8 @@
 -- Portability :  portable
 --
 
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 module Vanda.Hypergraph.Binary () where
 
 import Control.Applicative ( (<$>), (<*>) )

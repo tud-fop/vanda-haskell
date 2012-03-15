@@ -1,5 +1,8 @@
 -- | Makes Negra data types instances of 'B.Binary' for rapid
 -- (de)serialization.
+
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 module Vanda.Corpus.Negra.Binary where
 
 import Control.Applicative

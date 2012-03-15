@@ -1,4 +1,7 @@
 -- | Makes Hyperedge an instance of 'NFData' for strict evaluation.
+
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 module Vanda.Hypergraph.NFData () where
 
 import Control.DeepSeq
