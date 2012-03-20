@@ -30,7 +30,8 @@ import Prelude hiding ( lookup )
 import Control.Arrow ( (***) )
 import Control.DeepSeq ( NFData (..) )
 import qualified Data.Array as A
-import qualified Data.Heap as H
+import Data.Heap ( Prio, Val )
+import qualified Data.Heap as H hiding ( Prio, Val )
 import qualified Data.IntMap as IM
 import qualified Data.Ix as Ix
 import qualified Data.Map as M
@@ -83,14 +84,14 @@ type CandidateHeap v l i x = H.Heap MPolicy (Candidate v l i x)
 -- | We order candidates by their weights, and instances of 'M' by their
 -- head candidate.
 instance H.HeapItem MPolicy (Candidate v l i x) where
-  newtype H.Prio MPolicy (Candidate v l i x)
+  newtype Prio MPolicy (Candidate v l i x)
     = FMP Double deriving Eq
-  type    H.Val  MPolicy (Candidate v l i x) = Candidate v l i x
+  type    Val  MPolicy (Candidate v l i x) = Candidate v l i x
 
   split c@(Candidate w _ _) = (FMP w, c)
   merge = snd -- (FMP _, c) = c
 
-instance Ord (H.Prio MPolicy (Candidate v l i x)) where
+instance Ord (Prio MPolicy (Candidate v l i x)) where
   compare (FMP x) (FMP y) = compare y x
 
 knuth

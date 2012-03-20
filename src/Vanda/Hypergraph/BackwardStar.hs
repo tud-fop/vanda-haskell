@@ -38,7 +38,7 @@ import Prelude hiding ( lookup, product )
 
 import Control.Arrow ( (***), (&&&) )
 import qualified Data.Array as A
-import qualified Data.Heap as H
+import qualified Data.Heap as H hiding ( Prio, Val )
 import Data.Heap ( Prio, Val )
 import qualified Data.Ix as Ix
 import qualified Data.Map as M
@@ -169,7 +169,7 @@ instance H.HeapItem MPolicy (M (Candidate v l i x)) where
   split m@(M (Candidate w _ _) _) = (FMP (Just w), m)
   merge (FMP _, m) = m
 
-instance Ord (H.Prio MPolicy (M (Candidate v l i x))) where
+instance Ord (Prio MPolicy (M (Candidate v l i x))) where
   compare (FMP x) (FMP y) = compare y x
 
 -- | Flattens a list of merge data structures, producing a sorted list
