@@ -67,7 +67,7 @@ forestEMlist
   -> M.Map i w            -- ^ initial weight vector
   -> [(w, M.Map i w)]     -- ^ list of (log-likelihood, estimate) pairs
 forestEMlist part gs exId i
-  = (0,i) : map (forestEMstep part gs exId) (forestEMlist part gs exId i)
+  = iterate (forestEMstep part gs exId) (0, i)
 
 -- | Normalize a map according to a partition. Very similar to
 -- relative-frequency estimation, only that the corpus is partitioned,
