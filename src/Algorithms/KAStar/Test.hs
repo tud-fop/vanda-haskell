@@ -71,7 +71,9 @@ t3' = nBest' 1000 'S' (Test.testHypergraphs !! 1)
 t4 = t (Test.testHypergraphs !! 1) 'S' heur1 10
 
 comparison
-  :: (Fractional w, Ord v, Ord w, Ord i, Ord l, Show i, Show l, Show v)
+  :: ( Fractional w
+     , Ord v, Ord w, Ord i, Ord l
+     , Show i, Show l, Show v, Show w)
   => Hypergraph v l w i -> v -> (v -> w) -> Int -> IO Bool
 comparison graph goal heur k = and `liftM` zipWithM put mine others
   where put w1 w2 = do

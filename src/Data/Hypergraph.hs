@@ -325,7 +325,8 @@ dropUnreachables target g
 
 
 -- | Remove all zero weighted 'Hyperedge's from a 'Hypergraph'.
-dropZeroWeighted :: (Ord v, Num w) => Hypergraph v l w i -> Hypergraph v l w i
+dropZeroWeighted
+  :: (Ord v, Eq w, Num w) => Hypergraph v l w i -> Hypergraph v l w i
 dropZeroWeighted g
   = hypergraphM
   . M.mapMaybe

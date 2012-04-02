@@ -306,13 +306,13 @@ showItemLaTeX i
         ++ "]"
 
 getIntersectItems ::
-  (Ord p, Show p, Ord q, Show q, Ord t, Show t, Num w) =>
+  (Ord p, Show p, Ord q, Show q, Ord t, Show t, Num w, Show w) =>
   (t -> Bool) -> WSA.WSA p t w -> WTA.WTA q t w i -> [[Char]]
 getIntersectItems epsTest wsa wta
   = iter (Just . showItem) (initState epsTest wsa wta)
 
 getIntersectItemsLaTeX ::
-  (Num w) =>
+  (Num w, Show w) =>
   (Char -> Bool)
   -> WSA.WSA Char Char w
   -> WTA.WTA Char Char w i

@@ -402,7 +402,9 @@ showItemLaTeX i
 
 -- | Count the 'Item's in the 'Queue' of the last 'State' after intersection.
 intersectionItemCount
-  :: (Show p, Show q, Show t, Num w, Ord p, Ord i, Ord q, Ord t, Ord w)
+  :: ( Num w
+     , Ord p, Ord i, Ord q, Ord t, Ord w
+     , Show p, Show q, Show t, Show w)
   => WSA.WSA p t w -> WTA.WTA q t w i -> Int
 intersectionItemCount wsa wta
  = (\ (Queue _ _ s) -> Set.size s) $ itemq $ iter $ initState (const False) wsa wta

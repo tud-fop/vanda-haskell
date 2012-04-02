@@ -358,7 +358,7 @@ synthBench2 n bin action algo
 benchmark'1
   :: ( Ord p, Ord q, Ord t, Ord i, Ord w
      , Num w
-     , Show p, Show q, Show t, Show i
+     , Show p, Show q, Show t, Show i, Show w
      , NFData p, NFData t, NFData w, NFData q, NFData i
      )
   => String

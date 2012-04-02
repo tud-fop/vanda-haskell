@@ -280,7 +280,7 @@ partition f = M.fromListWith (++) . map (\ x -> (f x, [x]))
 --
 -- > variation 2 [0 .. 1] == [[0,0],[1,0],[0,1],[1,1]]
 variation
-  :: (Num n)
+  :: (Eq n, Num n)
   => n      -- ^ Length of the combinations.
   -> [a]    -- ^ Given elements.
   -> [[a]]
