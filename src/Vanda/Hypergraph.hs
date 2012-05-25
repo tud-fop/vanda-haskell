@@ -23,8 +23,8 @@
 module Vanda.Hypergraph
   ( module Vanda.Hypergraph.Basic
   , Hypergraph (..)
-  , product
-  , product'
+--  , product
+--  , product'
   ) where
 
 import Prelude hiding ( product )
@@ -33,6 +33,8 @@ import Control.Arrow ( (&&&) )
 import Control.DeepSeq ( NFData )
 import qualified Data.Ix as Ix
 import qualified Data.Vector as V
+import qualified Data.Map as M
+import qualified Data.Set as S
 
 import Vanda.Features hiding ( product )
 import Vanda.Hypergraph.Basic
@@ -54,7 +56,7 @@ class Hypergraph h where
     => h v l i
     -> Feature l i x
     -> V.Vector Double
-    -> BestArray v l i x
+    -> M.Map v [Candidate v l i x] -- BestArray v l i x
   bests hg feat wV = BS.bests (toBackwardStar hg) feat wV (knuth hg feat wV)
   
   -- | Computes the array of best derivations, given an array of one best
@@ -64,8 +66,8 @@ class Hypergraph h where
     => h v l i
     -> Feature l i x
     -> V.Vector Double
-    -> BestArray v l i x
-    -> BestArray v l i x
+    -> M.Map v [Candidate v l i x] -- BestArray v l i x
+    -> M.Map v [Candidate v l i x] -- BestArray v l i x
   bests' = BS.bests . toBackwardStar
   
   -- | Drops unreachable nodes and corresponding edges.
@@ -89,7 +91,7 @@ class Hypergraph h where
     => h v l i
     -> Feature l i x
     -> V.Vector Double
-    -> BestArray v l i x
+    -> M.Map v [Candidate v l i x] -- BestArray v l i x
   knuth = EL.knuth . toEdgeList
   
   -- | Applies a mapping to all hyperedges. The mapping may not change the
@@ -114,8 +116,8 @@ class Hypergraph h where
   -- | Creates a Hypergraph from a list of 'Hyperedge's.
   mkHypergraph :: Ix.Ix v => [Hyperedge v l i] -> h v l i
   
-  -- | Returns the interval of all nodes.
-  nodes :: Ix.Ix v => h v l i -> (v, v)
+  -- | Returns the set of all nodes.
+  nodes :: Ix.Ix v => h v l i -> S.Set v -- (v, v)
   
   -- | Returns the number of edges. This is included for its instructiveness.
   edgeCount :: Ix.Ix v => h v l i -> Int
@@ -169,7 +171,7 @@ instance Hypergraph ForwardStar where
   toEdgeList = FS.toEdgeList
   toForwardStar = id
 
-
+{-
 product
   :: (Hypergraph h1, Hypergraph h2)
   => (Hyperedge Int l i1 -> Hyperedge Int l i2 -> Bool)
@@ -185,3 +187,4 @@ product'
   -> h2 Int l i2
   -> BackwardStar Int l (i1,i2)
 product' comp h1 h2 = BS.product' comp (toBackwardStar h1) (toBackwardStar h2)
+-}

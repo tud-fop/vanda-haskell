@@ -20,11 +20,15 @@ import qualified Data.Vector as V
 import System.Environment ( getArgs, getProgName )
 import Text.Parsec hiding ( State, label )
 import Text.Parsec.Text.Lazy ( GenParser )
+import qualified Data.Binary as B
+import qualified Data.ByteString.Lazy as B
+import Codec.Compression.GZip ( compress )
 
 import Vanda.Corpus.Penn.Text ( parsePenn )
 import Vanda.Hypergraph hiding ( label )
 import qualified Vanda.Hypergraph as Hypergraph ( label )
 import Vanda.Token
+import Vanda.Hypergraph.Binary ()
 
 number :: T.Tree a -> T.Tree (Either a (a, Int))
 number t = evalState (number' t) 1
@@ -83,8 +87,8 @@ instance NFData l => NFData (T.Tree l) where
 instance NFData x => NFData (V.Vector x) where
   rnf s = rnf (V.toList s)
 
-instance NFData x => NFData (S.Set x) where
-  rnf s = rnf (S.toList s)
+-- instance NFData x => NFData (S.Set x) where
+  -- rnf s = rnf (S.toList s)
 
 instance (NFData k, NFData v) => NFData (M.Map k v) where
   rnf m = rnf (M.toList m)
@@ -302,7 +306,7 @@ alignParser mapper
                 ; _ <- char ')'
                 ; skipMany (char ' ')
                 ; return (wd, map ((+(-1)) . read::String->Int) ls)
-                }
+               }
       _ <- newline
       return res
 
@@ -394,6 +398,10 @@ instance Ord l => Ord (T.Tree l) where
         (EQ, EQ) -> EQ
         _ -> GT
 
+instance Show (TokenMap) where
+  show m = show $ toMap m
+
+
 main :: IO ()
 main = do
   arg0 <- getProgName
@@ -426,5 +434,13 @@ main = do
       TIO.writeFile outFile (TIO.unlines (map (TIO.pack . printRule) rules))
       TIO.writeFile (outFile ++ ".string") (TIO.unlines (map (TIO.pack . printRuleTA (toArray tmap')) rules))
       TIO.writeFile (mapFile ++ ".new") (toText tmap')
+      let hyp = mkHypergraph $ map unRule rules 
+            :: EdgeList Token (T.Tree (Either Int Token), [Either Int Token]) Int
+      B.writeFile (outFile ++ ".bhg.gz") (compress $ B.encode hyp)
+      -- TIO.writeFile (outFile ++ ".bhg.gz") 
+          -- (TIO.unlines $ map (TIO.pack. show . unRule) rules)
+      -- print $ tmap 
+      -- print $ (TIO.unpack parseContents) 
+      -- print $ (TIO.unpack alignContents) 
     _ -> putStrLn ("Usage: " ++ arg0 ++ " -m mapfile -p parses -a align -o output")
     -- putStrLn $ show $ length parseTrees

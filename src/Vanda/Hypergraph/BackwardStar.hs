@@ -30,8 +30,8 @@ module Vanda.Hypergraph.BackwardStar
   , toEdgeList
   , toSimulation
   , dropUnreachables
-  , product
-  , product'
+--  , product
+--  , product'
   ) where
 
 import Prelude hiding ( lookup, product )
@@ -63,26 +63,30 @@ import Vanda.Hypergraph.Basic
   , Simulation(..) )
 
 edgeCount :: Ix.Ix v => BackwardStar v l i -> Int
-edgeCount (BackwardStar vs b _) = sum $ map (length . b) (Ix.range vs)
+edgeCount (BackwardStar vs b _) = sum $ map (length . b) (S.toList vs)
 
 filterEdges
   :: (Hyperedge v l i -> Bool) -> BackwardStar v l i -> BackwardStar v l i
 filterEdges p (BackwardStar vs b _) = BackwardStar vs (filter p . b) False
 
 fromEdgeList :: Ix.Ix v => EdgeList v l i -> BackwardStar v l i
-fromEdgeList (EdgeList vs es) = BackwardStar vs (a A.!) True
+fromEdgeList (EdgeList vs es) = BackwardStar vs (a M.!) True
   where
-    lst = [ (v, e) | e <- es, let v = to e ]
-    a = A.accumArray (flip (:)) [] vs lst
+    lst = [ (v, [e]) | e <- es, let v = to e ]
+    a = M.union
+        (M.fromListWith (++) lst)
+        (M.fromList $ zip (S.toList vs) $ repeat [])
+        -- A.accumArray (flip (:)) [] vs lst
 
 mapNodes
   :: (Ix.Ix v, Ix.Ix v')
   => (v -> v') -> BackwardStar v l i -> BackwardStar v' l i
 mapNodes f (BackwardStar vs b _)
-  = BackwardStar vs' (a A.!) True
+  = BackwardStar vs' (a M.!) True
   where
-    vs' = (f *** f) vs
-    a = A.array vs' [ (f v, map (mapHE f) (b v)) | v <- Ix.range vs ]
+    vs' = S.map f vs -- (f *** f) vs
+    a = M.fromList [ (f v, map (mapHE f) (b v)) | v <- S.toList vs ]
+        -- A.array vs' [ (f v, map (mapHE f) (b v)) | v <- Ix.range vs ]
 
 mapLabels
   :: (Hyperedge v l i -> Hyperedge v l' i')
@@ -93,27 +97,29 @@ mapLabels f (BackwardStar vs b _) = BackwardStar vs (map f . b) False
 memoize :: Ix.Ix v => BackwardStar v l i -> BackwardStar v l i
 memoize bs@(BackwardStar vs b mem)
   | mem = bs -- idempotent
-  | otherwise = BackwardStar vs (a A.!) True
+  | otherwise = BackwardStar vs (a M.!) True
   where
-    a = A.array vs [ (v, b v) | v <- Ix.range vs ]
+    a = M.fromList [ (v, b v) | v <- S.toList vs ]
+        -- A.array vs [ (v, b v) | v <- Ix.range vs ]
 
 toEdgeList :: Ix.Ix v => BackwardStar v l i -> EdgeList v l i
 toEdgeList (BackwardStar vs b _)
-  = EdgeList vs $ concatMap b (Ix.range vs)
+  = EdgeList vs $ concatMap b (S.toList vs)
 
 toSimulation :: (Ord l, Ix.Ix v) => BackwardStar v l i -> Simulation v l i
 toSimulation (BackwardStar vs b _) = Simulation vs lookup
   where
     lookup v l n
       = M.findWithDefault [] (l, n)
-      $ a A.! v
+      $ a M.! v
     makeM es = M.fromListWith (++)
       [ ((l, n), [e])
       | e <- es
       , let l = label e
       , let n = arity e
       ]
-    a = A.array vs [ (v, makeM $ b v) | v <- Ix.range vs ]
+    a = M.fromList [ (v, makeM $ b v) | v <- S.toList vs ]
+        -- A.array vs [ (v, makeM $ b v) | v <- Ix.range vs ]
 
 -- | Drops unreachable nodes and corresponding edges.
 dropUnreachables
@@ -123,7 +129,7 @@ dropUnreachables
   -> BackwardStar v l i
 dropUnreachables v0 (BackwardStar _ b mem) = BackwardStar vs' b' mem
   where
-    vs' = S.findMin &&& S.findMax $ vsS0
+    vs' = vsS0 -- S.findMin &&& S.findMax $ vsS0
     b' v = if S.member v vsS0 then b v else []
     -- set of reachable nodes
     vsS0 :: S.Set v
@@ -214,14 +220,14 @@ bests
   => BackwardStar v l i
   -> Feature l i x
   -> V.Vector Double
-  -> BestArray v l i x
-  -> BestArray v l i x
+  -> M.Map v [Candidate v l i x] -- BestArray v l i x
+  -> M.Map v [Candidate v l i x] -- BestArray v l i x
 bests (BackwardStar vs b _) feat wV bestA = bestA'
   where
-    bestA' :: BestArray v l i x
-    bestA' = A.array vs
+    bestA' :: M.Map v [Candidate v l i x] -- BestArray v l i x
+    bestA' = M.fromList -- A.array vs
       [ ( v
-        , case bestA A.! v of
+        , case bestA M.! v of
             [] -> []
             cand@(Candidate _ (T.Node e _) _) : _ ->
               cand : (flatten . concat)
@@ -233,12 +239,13 @@ bests (BackwardStar vs b _) feat wV bestA = bestA'
                       M _ ts -> ts
                 | e' <- b v
                 , let tc = topCCL feat wV e'
-                         $ map (bestA' A.!) $ from e'
+                         $ map (bestA' M.!) $ from e'
                 ]
         )
-      | v <- Ix.range vs
+      | v <- S.toList vs
       ]
 
+{-
 product
   :: (Hyperedge Int l i1 -> Hyperedge Int l i2 -> Bool)
   -> BackwardStar Int l i1
@@ -273,4 +280,4 @@ product' comp (BackwardStar (v11,v12) b1 _) (BackwardStar (v21,v22) b2 _)
       ]
     pr rs1 rs2
       = [ interlace ix r r' | r <- rs1, r' <- rs2, r `comp` r' ]
-
+-}

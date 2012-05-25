@@ -44,7 +44,7 @@ main = do
                 (emptyTS :: TokenMap)
                 lf
                 gf
-      let hyp = EdgeList (getBounds mv) es
+      let hyp = EdgeList (nodesL es) es -- (getBounds mv) es
       B.writeFile zhgFile $ compress $ B.encode hyp 
       B.writeFile (zhgFile ++ ".weights.gz") $ compress $ B.encode wgts
       TIO.writeFile (mapFile ++ ".new") (toText ml)

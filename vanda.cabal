@@ -16,7 +16,7 @@ category:       NLP
 tested-with:    GHC
 Build-Type:     Simple
 
-executable GHKM
+executable Translate
   build-depends:
       base
     , containers
@@ -29,8 +29,59 @@ executable GHKM
     , binary
     , deepseq
     , zlib
-    , mtl >= 2.0.1.0
-  Main-Is:  Test/GHKM.hs
+  Main-Is:  Translate.hs
+  hs-source-dirs:  src
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+  ghc-prof-options: -caf-all -auto-all
+  Extensions:
+      ScopedTypeVariables
+    , TypeSynonymInstances
+    , FlexibleInstances
+    , MultiParamTypeClasses
+    , TypeFamilies
+    , FlexibleContexts
+    , BangPatterns
+
+executable WriteHypergraph
+  build-depends:
+      base
+    , containers
+    , array
+    , vector
+    , heap
+    , bytestring
+    , text
+    , parsec >= 3.1.2
+    , binary
+    , deepseq
+    , zlib
+  Main-Is:  Test/WriteHypergraph.hs
+  hs-source-dirs:  src
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+  ghc-prof-options: -caf-all -auto-all
+  Extensions:
+      ScopedTypeVariables
+    , TypeSynonymInstances
+    , FlexibleInstances
+    , MultiParamTypeClasses
+    , TypeFamilies
+    , FlexibleContexts
+    , BangPatterns
+
+executable Translation
+  build-depends:
+      base
+    , containers
+    , array
+    , vector
+    , heap
+    , bytestring
+    , text
+    , parsec >= 3.1.2
+    , binary
+    , deepseq
+    , zlib
+  Main-Is:  Test/Translation.hs
   hs-source-dirs:  src
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -caf-all -auto-all
@@ -69,6 +120,60 @@ executable TestHypergraph
     , FlexibleContexts
     , BangPatterns
 
+    
+executable GHKM
+  build-depends:
+      base
+    , containers
+    , array
+    , vector
+    , heap
+    , bytestring
+    , text
+    , parsec >= 3.1.2
+    , binary
+    , deepseq
+    , zlib
+    , mtl
+  Main-Is:  Test/GHKM.hs
+  hs-source-dirs:  src
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+  ghc-prof-options: -caf-all -auto-all
+  Extensions:
+      ScopedTypeVariables
+    , TypeSynonymInstances
+    , FlexibleInstances
+    , MultiParamTypeClasses
+    , TypeFamilies
+    , FlexibleContexts
+    , BangPatterns    
+ 
+executable TestEarley
+  build-depends:
+      base
+    , containers
+    , array
+    , vector
+    , heap
+    , bytestring
+    , text
+    , parsec >= 3.1.2
+    , binary
+    , deepseq
+    , zlib
+    , random
+  Main-Is:  Test/TestEarley.hs
+  hs-source-dirs:  src
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+  ghc-prof-options: -caf-all -auto-all
+  Extensions:
+      ScopedTypeVariables
+    , TypeSynonymInstances
+    , FlexibleInstances
+    , MultiParamTypeClasses
+    , TypeFamilies
+    , FlexibleContexts
+    , BangPatterns
 
 executable BerkeleyToHypergraph
   build-depends:
@@ -166,14 +271,10 @@ library
     , Vanda.Corpus.Negra.Text
     , Vanda.Corpus.Penn.Text
     , Vanda.Grammar.Berkeley.Text
-    , Vanda.Hypergraph.BackwardStar
-    , Vanda.Hypergraph.Basic
     , Vanda.Hypergraph.Binary
-    , Vanda.Hypergraph.NFData
+    , Vanda.Hypergraph.Basic
     , Vanda.Hypergraph.Text
-    , Vanda.Hypergraph.EdgeList
     , Data.Queue
-  other-modules:
   hs-source-dirs:  src
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   Extensions:
