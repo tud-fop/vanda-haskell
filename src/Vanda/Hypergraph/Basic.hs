@@ -30,11 +30,13 @@ module Vanda.Hypergraph.Basic
   , Simulation (..)
   , nodesL
   , nodesLL
+  , nodesR
   ) where
 
 import qualified Data.List as L
 import qualified Data.Tree as T
 import qualified Data.Vector as V
+import qualified Data.Set as S
 
 -- | A Hyperedge, consisting of head node, tail nodes, label, and identifier.
 -- The identifier can be used for interfacing with feature functions.
@@ -128,7 +130,7 @@ mkHyperedge !t !f !l !i
 -- of nodes present in the hypergraph and a list of its hyperedges.
 data EdgeList v l i
   = EdgeList
-    { nodesEL :: (v, v) -- ^ Interval of nodes
+    { nodesEL :: S.Set v -- ^ Interval of nodes
     , edgesEL :: [Hyperedge v l i] -- ^ List of 'Hyperedge's
     }
 
@@ -137,7 +139,7 @@ data EdgeList v l i
 -- Hyperedges are sorted according to the head node.
 data BackwardStar v l i
   = BackwardStar
-    { nodesBS :: (v, v) -- ^ Interval of nodes
+    { nodesBS :: S.Set v -- ^ Interval of nodes
     , backStar :: v -> [Hyperedge v l i] -- ^ Backward star
     , memoBS :: Bool  -- ^ Whether the backward star is memoized
     }
@@ -148,7 +150,7 @@ data BackwardStar v l i
 -- nullary edges. Therefore nullary edges are explicitly included here.
 data ForwardStar v l i
   = ForwardStar
-    { nodesFS :: (v, v) -- ^ Interval of nodes
+    { nodesFS :: S.Set v -- ^ Interval of nodes
     , nullaryEdges :: [Hyperedge v l i] -- ^ List of nullary edges
     , forwStar :: v -> [Hyperedge v l i] -- ^ Forward star
     , memoFS :: Bool -- ^ Whether the forward star is memoized
@@ -160,7 +162,7 @@ data ForwardStar v l i
 -- reconstructing all hyperedges from the sorted form is too tedious!
 data Simulation v l i
   = Simulation
-    { nodesSIM :: (v, v) -- ^ Interval of nodes
+    { nodesSIM :: S.Set v -- ^ Interval of nodes
     , lookupSIM :: v -> l -> Int -> [Hyperedge v l i] -- ^ Lookup function
     }
 
@@ -170,9 +172,13 @@ nodesLL :: [Hyperedge v l i] -> [v]
 nodesLL es = [ v | e <- es, v <- to e : from e ]
 
 -- | Obtains the interval of nodes occurring in a list of edges.
-nodesL :: Ord v => [Hyperedge v l i] -> (v,v)
+nodesL :: Ord v => [Hyperedge v l i] -> S.Set v
 -- nodesL = (minimum &&& maximum) . nodesLL
-nodesL es = L.foldl' minimax (x,x) xs
+nodesL = S.fromList . nodesLL
+
+
+nodesR :: Ord v => [Hyperedge v l i] -> (v,v)
+nodesR es = L.foldl' minimax (x,x) xs
   where
     minimax (min0, max0) a
       = let min1 = min min0 a

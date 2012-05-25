@@ -24,7 +24,7 @@ import qualified Data.Binary as B
 
 import Vanda.Hypergraph.Basic
 
-instance (B.Binary v, B.Binary l, B.Binary i)
+instance (B.Binary v, B.Binary l, B.Binary i, Ord v)
   => B.Binary (Hyperedge v l i) where
   put e = do
     B.put (to e)
@@ -33,7 +33,7 @@ instance (B.Binary v, B.Binary l, B.Binary i)
     B.put (ident e)
   get = mkHyperedge <$> B.get <*> B.get <*> B.get <*> B.get
 
-myGet :: (B.Binary v, B.Binary l, B.Binary i) => B.Get [Hyperedge v l i]
+myGet :: (B.Binary v, B.Binary l, B.Binary i, Ord v) => B.Get [Hyperedge v l i]
 myGet = do
   es1 <- B.get
   if null es1
@@ -44,13 +44,13 @@ myGet = do
         es1 `seq` return (es1 ++ es2)
 
 myPut
-  :: (B.Binary v, B.Binary l, B.Binary i) => [Hyperedge v l i] -> B.Put
+  :: (B.Binary v, B.Binary l, B.Binary i, Ord v) => [Hyperedge v l i] -> B.Put
 myPut es@[] = B.put es -- ([] :: [Hyperedge v l i])
 myPut es = do
   B.put (take 10000 es)
   myPut (drop 10000 es)
 
-instance (B.Binary v, B.Binary l, B.Binary i)
+instance (B.Binary v, B.Binary l, B.Binary i, Ord v)
   => B.Binary (EdgeList v l i) where
   put (EdgeList vs es) = do
     B.put vs

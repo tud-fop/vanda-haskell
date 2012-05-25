@@ -3,6 +3,7 @@ module Main where
 
 import Codec.Compression.GZip ( decompress )
 
+import qualified Data.Map as M
 import Control.DeepSeq ( force)
 import qualified Data.Array as A
 import qualified Data.Binary as B
@@ -73,7 +74,7 @@ main = do
         -- $ map show
         $ makeItSo tok nodes
         $ (!! 0)
-        $ (A.! 1132)
+        $ (M.! 1132)
         $ knuth el (Feature pN V.singleton) (V.singleton 1)
     _ -> error "Usage: TestHypergraph -z zhgFile -t tokenFile"
 
