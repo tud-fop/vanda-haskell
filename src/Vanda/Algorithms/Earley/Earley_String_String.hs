@@ -30,26 +30,20 @@
 
 module Vanda.Algorithms.Earley.Earley_String_String  where
 
-import Data.Ord as O
-import Data.Tree as T
-import Control.Applicative
-import qualified Data.Set as S
-import Data.Maybe
-import Data.List as L
-import qualified Data.Map as M
-import Data.Either
+-- import Control.Applicative
 import Control.Arrow
-import Data.Int (Int32)
-import Debug.Trace
 import Control.DeepSeq
-import qualified Data.Vector as V
-import qualified Data.Text.Lazy as TIO
-import qualified Data.Text.Lazy.IO as TIO
+import Data.Either
+import Data.List as L
+import Data.Maybe
+import qualified Data.Map as M
+import Data.Ord as O
+import qualified Data.Set as S
+import Debug.Trace
 
 import Vanda.Hypergraph
-import Vanda.Algorithms.Earley.WSA
 import Vanda.Token
-import Vanda.Hypergraph.BackwardStar (fromEdgeList)
+import Vanda.Algorithms.Earley.WSA
 
 instance (Show v, Show l, Show i) => Show (Hyperedge v l i) where
   show e
@@ -64,11 +58,10 @@ instance (Show v, Show l, Show i) => Show (Hyperedge v l i) where
       ++ show (ident e)
       ++ "\n\n"
 
-instance Show Item where
+instance (Show v, Show t) => Show (Item v t) where
   show item
     = show (iHead item)
-      ++ " -> "
-      ++ show (bLeft item)
+      ++ " -> ???"
       ++ " * "
       ++ show (bRight item)
       ++ "\n   "
@@ -79,284 +72,174 @@ instance Show Item where
       ++ show (nextSymb item)
       ++ "\n"
 
-      
-instance Ord Item where
-  i <= i' = if (not $ nextSymb i == Nothing) && (not $ nextSymb i' == Nothing)
-            then (fromJust $ nextSymb i) <= (fromJust $ nextSymb i')
-            else (iHead i) <= (iHead i') 
-  -- i == i' = if (i<=i') && (i'<=i)
-           -- then    (iHead i == iHead i') 
-                -- && (bLeft i == bLeft i')
-                -- && (bRight i == bRight i')
-                -- && (iEdge i == iEdge i')
-                -- && (stateList i == stateList i')
-                -- -- && (nextSymb i == nextSymb i')
-           -- else (\_ _ -> False)
-           
-           
-instance NFData Item where
-  rnf (Item iHead bLeft bRight iEdge stateList nextSymb lastState)
-    =       rnf iHead 
-      -- `seq` rnf bLeft 
-      --`seq` rnf bRight
-      -- `seq` rnf iEdge
+instance (NFData v, NFData t) => NFData (Item v t) where
+  rnf (Item iHead bRight iEdge stateList nextSymb lastState)
+    =       rnf iHead
       `seq` rnf stateList
       `seq` rnf nextSymb
       `seq` rnf lastState
-      
-instance NFData l => NFData (V.Vector l) where
-  rnf v = rnf $ V.toList v
-            
-      
-instance NFData l => NFData (T.Tree l) where
-  rnf (T.Node l ts) = rnf l `seq` rnf ts
 
-instance NFData (BackwardStar (Int,Token,Int) 
-                  ([Either Int Token],[Either Int Token]) 
-                  (Int,Int)) 
-         where
-  rnf (BackwardStar nodes f memo) = rnf nodes `seq` rnf memo 
+instance (NFData v, NFData l)
+  => NFData (BackwardStar (Int,v,Int) l (Int, Int)) where
+    rnf (BackwardStar nodes f memo) = rnf nodes `seq` rnf memo 
     
 instance (NFData k, NFData v) => NFData (M.Map k v) where
   rnf m = rnf (M.toList m)
   
--- instance (NFData v) => NFData (S.Set v) where
-  -- rnf m = rnf (S.toList m)
-  
-
-  
--- Item: [iHead -> bLeft * bRight] 
+-- Item: [iHead -> ??? * bRight] 
 -- statelist contains states of a wsa. 
 -- Ignoring the bullet, the first symbol of the righthandside of an item
 -- (not bRight) is wrapped by the first and the second state, the second symbol 
 -- is wrapped by the second and the third state etc.
-data Item = Item 
-    { iHead ::  Token                 
-    , bLeft ::  [Either Token Token]
-    , bRight::  [Either Token Token]
-    , iEdge     :: Int -- Hyperedge Token (T.Tree (Either Int Token), [Either Int Token]) Int
-    , stateList::  [Int]
-    , nextSymb ::  Maybe (Either Token Token)
-    , lastState :: Int
-    }deriving Eq
+data Item v t
+  = Item 
+    { iHead :: v
+    , bRight :: [Either Int t]
+    , iEdge :: Int
+    , stateList :: [Int]
+    , nextSymb :: Maybe (Either Int t)
+    , firstState :: Int
+    , weight :: Double
+    }
+  deriving Eq
   
--- instance Ord Item where    
-  -- i <= i' = (iHead i) <= (iHead i') 
-    
+instance Ord (Item v t) where
+  i1 `compare` i2
+    = (iEdge i1, stateList i1) `compare` (iEdge i2, stateList i2)
   
 -- The main procedure. Is it favourable to represent the weights as a vector 
 -- instead of a map? The ids of the hyperedges do not start with 0.. (rename?)
 
-earley 
-  :: EdgeList Token ([Either Int Token], [Either Int Token]) Int
-  -> Bool -- indicates if the translation direction left -> right
-  -> M.Map Int Double
-  -> WSA Int Token Double
-  -> ( EdgeList (Int,Token,Int) 
-                  ([Either Int Token],[Either Int Token]) 
-                  (Int,Int)
-       , M.Map (Int,Int) Double)
-earley el dir weights wsa = earley' (fromEdgeList el) dir weights wsa  0
+earley
+  :: Ord v
+  => BackwardStar v l Int
+  -> (l -> [Either Int t])
+  -> WSA Int t Double
+  -> (EdgeList (Int, v, Int) l (Int, Int), M.Map (Int, Int) Double)
+earley bs component wsa = earley' bs dir wsa 0
 
 earley'
-  ::BackwardStar Token ([Either Int Token], [Either Int Token]) Int
-  -> Bool
-  -> M.Map Int Double -- weights of the hypergraph
-  -> WSA Int Token Double
-  -> Token                      -- an initial node of the Hypergraph
-  -> ( EdgeList (Int,Token,Int) 
-                  ([Either Int Token],[Either Int Token]) 
-                  (Int,Int)
-       , M.Map (Int,Int) Double)
-earley' hg dir weights wsa iniNode 
-  = let component = if dir == True then fst else snd 
-        statelist = [s|s <- states wsa, (snd $ fromJust $ L.find (\x -> fst x == s) 
-                                 $ initialWeights wsa) > 0]
-        itemlist = iter (M.empty,M.empty, M.empty) hg component wsa (initState hg component iniNode $ statelist)
-        helist = extractTransitions hg component weights wsa iniNode itemlist
-        erg = create_hg helist iniNode wsa
+  :: Ord v
+  => BackwardStar v l Int
+  -> (l -> [Either Int t])
+  -> WSA Int t Double
+  -> v            -- an initial node of the Hypergraph
+  -> (EdgeList (Int, v, Int) l (Int, Int), M.Map (Int,Int) Double)
+earley' hg component wsa iniNode 
+  = let statelist = [ s | (s, w) <- initialWeights wsa, w > 0 ]
+        itemlist
+          = iter
+              (M.empty, M.empty, M.empty)
+              hg
+              component
+              wsa
+              (initState hg component iniNode statelist)
+        helist = map (extract hg component wsa iniNode) itemlist
+        erg = create_hg helist iniNode
     in  trace "start earley"
         $ statelist `deepseq` trace "statelist berechnet"
         $ itemlist `deepseq` trace "-------itemlist berechnet: -------- " 
-              -- $ traceShow itemlist
-        -- $ traceShow itemlist $ trace "-----------end list"  
-        -- $ helist `deepseq` trace "helist berechnet"
-        -- $ erg `deepseq` trace "erg berechnet"
         erg
-        
--- ^ iter computes a predict, scan and complete. 
---   The first input, a tuple of list of items contains all items computed in 
---   earlier iteration steps but not in the last one. 
---   It is partitioned by items having no next symbol , i.e. items that are 
---   'ready' and items which have still    
+
 iter 
-  :: (M.Map Token [Item],M.Map (Either Token Token) [Item], M.Map (Either Token Token) [Item]) 
-  -> BackwardStar Token ([Either Int Token],[Either Int Token]) Int
-  -> (([Either Int Token],[Either Int Token]) -> [Either Int Token]) 
-  -> WSA Int Token Double
-  -> [Item] 
-  -> [Item] 
-iter pre@(preNoNext, preLeft, preRight) hg component wsa act  
-  = let   -- c1  = conc preNoNext preNext
-          -- !vec = filter (\x -> not $ elem x c1) act
-          sorted = L.sortBy (O.comparing (nextSymb)) act
-          (actNoNext',actNext') = L.span (\x -> (==) Nothing  (nextSymb x)) sorted
-          f g list = (\x -> not $ elem x $ M.findWithDefault [] (g x) list ) 
-          (actNT',actT') 
-            = L.span 
-                (\x ->  (==) False (isRight $ fromJust $ nextSymb x)) actNext'
-          actNoNext 
-            = filter -- (f iHead preNoNext) actNoNext'
-                (\x -> not $ elem x $ M.findWithDefault [] (iHead x) preNoNext ) 
-                actNoNext'
-          actNT = filter (f (fromJust . nextSymb) preLeft) actNT'
-            -- = filter 
-                -- (\x-> not $ elem x $  M.findWithDefault [] 
-                          -- (fromJust $ nextSymb x) preLeft) actNT'
-          actT = filter (f (fromJust . nextSymb) preRight) actT'
-                  -- (\x-> not $ elem x $  M.findWithDefault [] 
-                          -- (fromJust $ nextSymb x) preRight) actT'
-    in   -- trace "Nonterminals: " $ traceShow (V.length vecNT) $ -- traceShow (vecNT) $
-         -- trace "Terminals: "  $ traceShow (V.length vecT) $
-         if (actNoNext == [] && actNT == [] && actT == []) 
-         then concat $ map snd $ M.toList preNoNext
-         else let preNT = concat $ map snd $ M.toList preLeft
-                  groupActNT 
-                              = groupBy (\item1 item2 
-                                          -> (nextSymb item1) == (nextSymb item2))
-                                        actNT
-                  newPredict = (actNT `deepseq` trace "predict" $ predict hg component groupActNT)
-                  new 
-                    = trace "new predictitems: " $ traceShow (length newPredict) $ 
-                          actT `seq` (++) (scan wsa actT) newPredict-- new elements
-                  concNew1 = trace "comp1" $ complete ((++) preNT actNT) actNoNext
-                  concNew2 = trace "comp2" $ complete actNT 
-                              (concat (map snd ( M.toList preNoNext)))
-                  -- (concNewNext ,concNewNonext) 
-                    -- = partition (\x -> (nextSymb x == Nothing)) concNew 
-                  concatenate = (new,concNew1, concNew2) `deepseq` trace "completer" 
-                            $ (++) concNew2 $ (++) concNew1 new
-                  -- (newRight, newLeft) 
-                      -- = L.partition (\x -> isRight $fromJust $ nextSymb x) actNext
-                  newTuple@(newNoNext, appLeft, appRight) 
-                    = (M.unionWith (++) (M.fromListWith (++) $ map 
-                                (\x -> (iHead x,[x])) actNoNext) preNoNext
-                      ,M.unionWith (++) (M.fromListWith (++) $ map 
-                          (\x -> (fromJust $ nextSymb x,[x]) ) actNT) preLeft
-                      ,M.unionWith (++) (M.fromListWith (++) $ map 
-                          (\x -> (fromJust $ nextSymb x,[x]) ) actT) preRight
+  :: Ord v
+  => ( M.Map v [Item v t]
+     , M.Map (Either Token Token) [Item v t]
+     , M.Map (Either Token Token) [Item v t]
+     ) 
+  -> BackwardStar v l Int
+  -> (l -> [Either Int t]) 
+  -> WSA Int t Double
+  -> [Item v t]
+  -> [Item v t]
+iter (preNoNext, preLeft, preRight) hg component wsa act  
+  = let sorted = L.sortBy (O.comparing (nextSymb)) act
+        (actNoNext',actNext') = L.span ((Nothing ==) . nextSymb) sorted
+        f g list x = not $ elem x $ M.findWithDefault [] (g x) list 
+        (actNT',actT') = L.span (not . isRight . fromJust . nextSymb) actNext'
+        actNoNext 
+          = filter
+              (\x -> not $ elem x $ M.findWithDefault [] (iHead x) preNoNext) 
+              actNoNext'
+        actNT = filter (f (fromJust . nextSymb) preLeft) actNT'
+        actT = filter (f (fromJust . nextSymb) preRight) actT'
+    in if (null actNoNext && null actNT && null actT) 
+       then concat $ map snd $ M.toList preNoNext
+       else let preNT = concat $ map snd $ M.toList preLeft
+                groupActNT = groupBy
+                               ( \item1 item2
+                                 -> (nextSymb item1) == (nextSymb item2)
+                               )
+                               actNT
+                newPredict = actNT `deepseq` trace "predict"
+                           $ predict hg component groupActNT
+                new = trace "new predictitems: "
+                    $ traceShow (length newPredict)
+                    $ actT `seq` (scan wsa actT ++ newPredict)
+                concNew1 = trace "comp1"
+                         $ complete (preNT ++ actNT) actNoNext
+                concNew2 = trace "comp2"
+                         $ complete actNT 
+                         $ concat (map snd (M.toList preNoNext))
+                concatenate = (new, concNew1, concNew2)
+                            `deepseq` trace "completer" 
+                            (concNew2 ++ concNew1 ++ new)
+                newTuple@(newNoNext, appLeft, appRight) 
+                    = ( M.unionWith (++) (M.fromListWith (++)
+                        $ map (\x -> (iHead x,[x])) actNoNext) preNoNext
+                      , M.unionWith (++) (M.fromListWith (++)
+                        $ map (\x -> (fromJust $ nextSymb x,[x])) actNT) preLeft
+                      , M.unionWith (++) (M.fromListWith (++)
+                        $ map (\x -> (fromJust $ nextSymb x,[x])) actT) preRight
                       )
-              in  actNoNext' `deepseq` trace "actNoNext' berechnet" $
-                  actNext' `deepseq` trace "actNext' berechnet" $
-                  -- actNext `deepseq` trace "actNext berechnet" $
-                  actNoNext `deepseq` trace "actNoNext berechnet" $
-                  actT `deepseq` trace "actT' berechnet" $
-                  actNT `deepseq` trace "actNT' berechnet" $
-                  -- newRight `deepseq` trace "newRight' berechnet" $
-                  -- newLeft `deepseq` trace "newLeft' berechnet" $
-                  -- trace "\n\n actNoNext\n\n" $ traceShow (take 10 actNoNext)
-                  -- -- $ trace "\n\n actNext\n\n" $ traceShow (take 10 actNext)
-                  -- $ trace "\n\n actT\n\n" $ traceShow (take 10 actT)
-                  -- $ trace "\n\n actNT\n\n" $ traceShow (take 10 actNT) 
-                  -- -- $ trace "\n\n newRight\n\n" $ traceShow (take 10 newRight) 
-                  -- -- $ trace "\n\n newLeft\n\n" $ traceShow (take 10 newLeft) 
-                  -- $ trace "\n\n preNT\n\n" $ traceShow (take 10 preNT) $
-                  preNT `deepseq` trace "preNT berechnet" $
-                  new `deepseq`  trace "new berechnet" $
-                  concNew1 `deepseq` trace "concNew1 berechnet" $
-                  concNew2 `deepseq` trace "concNew2 berechnet" $
-                  concat `deepseq` trace "concat berechnet" $
-                  newTuple `deepseq` trace "newTuple berechnet" $
-                  -- trace "sorted: " -- $  traceShow sorted 
-                   -- (TIO.writeFile "/home/student/lindal/files/git/testEarley_items.txt" 
-                    -- $ TIO.pack $  "new items: " ) -- ++  (show new))
-                      --(newTuple,tracer) `deepseq` trace "iter" 
-                      --c1 `seq` trace "c1 berechnet"
-                      -- $ vec `seq` trace "vec berechnet"
-                      -- trace "iter beginnt" 
-                      -- $ actNext' `deepseq` trace "actNext' berechnet"
-                      -- $ actNext `deepseq` trace "actNext berechnet"
-                      -- $ actT `deepseq` trace "actT berechnet"
-                      -- $ preNT `deepseq` trace "preNT berechnet"
-                      -- $ new `deepseq` trace "new berechnet"
-                      -- $ concNew1 `deepseq` trace "concNew1 berechnet"
-                      -- $ concNew2 `deepseq` trace "concNew2 berechnet"
-                      -- $ concat `deepseq` trace "concat berechnet"
-                      -- $ newTuple `deepseq` trace "newTuple berechnet"
-                      (iter newTuple hg component wsa concatenate)
-                 
+              in actNoNext' `deepseq` trace "actNoNext' berechnet" $
+                 actNext' `deepseq` trace "actNext' berechnet" $
+                 actNoNext `deepseq` trace "actNoNext berechnet" $
+                 actT `deepseq` trace "actT' berechnet" $
+                 actNT `deepseq` trace "actNT' berechnet" $
+                 preNT `deepseq` trace "preNT berechnet" $
+                 new `deepseq`  trace "new berechnet" $
+                 concNew1 `deepseq` trace "concNew1 berechnet" $
+                 concNew2 `deepseq` trace "concNew2 berechnet" $
+                 concat `deepseq` trace "concat berechnet" $
+                 newTuple `deepseq` trace "newTuple berechnet" $
+                 (iter newTuple hg component wsa concatenate)
+
 initState
-  :: BackwardStar Token ([Either Int Token], [Either Int Token]) Int
-  -> (([Either Int Token],[Either Int Token]) -> [Either Int Token])
-  -> Token      -- ^ an initial node of the Hypergraph.
+  :: Ord v
+  => BackwardStar v l Int
+  -> (l -> [Either Int t])
+  -> v          -- ^ an initial node of the Hypergraph.
   -> [Int]      -- ^ list of states of a 'WSA' 
-  -> [Item]
+  -> [Item v t]
 initState hg component iniNode stateList
   = let list = 
-          [Item iniNode 
-                []
-                right
-                (ident edge) 
-                [q]
-                (listToMaybe right)
-                q
-          | edge <- (backStar hg iniNode)
+          [ Item
+              iniNode 
+              right
+              (ident edge)
+              [q]
+              (listToMaybe right)
+              q
+              1
+          | edge <- backStar hg iniNode
           , q <- stateList
-          , let right = (map (either (Left  . ((!!) $ from edge))  (Right . id))  
-                  (component $ label edge) )
-            -- list <- combine 0 n (map (either id id) (snd $ label edge))
+          , let right = (map (either
+              (Left . ((!!) $ from edge))
+              (Right . id))
+              (component $ label edge))
           ]
-    in  trace "-------------------" 
-        $ trace "init:" 
-        $ traceShow list 
-        $ trace "-------------------"
-        list
-          
+    in trace "-------------------" 
+       $ trace "init:" 
+       $ traceShow list 
+       $ trace "-------------------"
+       list
 
-
-
-
-{-
-predict u v = V.empty
-complete u v = V.empty
-scan u v = V.empty
--}
-
-
--- completeNoNext :: [Item] -> [Item] -> [Item]
--- completeNoNext preNext newNoNext 
-   -- = if (newNoNext == [])
-     -- then []
-     -- else let Left next = iHead $ head newNoNext 
-              -- (nextEq, remain) 
-                -- = partL (\item -> iHead item) 
-                        -- next 
-                        -- newNoNext
-                              -- -- = V.partition (\x -> nextSymb x == Just (Left next)) new
-              -- comp = (complete' next nextEq)
-              -- newItems = --traceShow next $ traceShow (V.length $ nextEq) 
-                -- comp `seq` conc comp $ completeNoNext preNext remain  
-          -- in newItems
-                       
-                       
-                       
-{-  = let newItems = concatMap (complete' all) new
-                   in trace "complete" $ nub newItems-}
-
-complete :: [Item] -> [Item] -> [Item]
+complete :: [Item v t] -> [Item v t] -> [Item v t]
 complete nextI noNext 
    = if (noNext == [] || nextI == [])
      then trace "complete ready" []
-     else let -- nextS = traceShow (iHead $ head noNext) (iHead $ head noNext)
-              -- Just (Left nextS) = nextSymb $ head next 
-              -- (nextEq, remainN) 
-                -- = partL (\item -> either id id $ fromJust $ nextSymb item) 
-                        -- nextS 
-                        -- next
-                    -- = V.partition (\x -> nextSymb x == Just (Left next)) new
-              -- Left head = iHead $ head noNext
-              
-              headord = L.sortBy (O.comparing (iHead)) noNext
+     else let headord = L.sortBy (O.comparing (iHead)) noNext
               headSort = groupBy (\item1 item2 
                            -> (iHead item1) == (iHead item2))
                          headord
@@ -366,344 +249,162 @@ complete nextI noNext
                          nextI
               nexts = map (fromLeft . fromJust . nextSymb . head) sortList
               newItems = concatPart sortList headSort
-                  -- (headEq, remainH) 
-                 --  = partL (\item -> iHead item) nextS noNext
-              -- comp = {- trace "complete'"-} (complete' nextEq headEq nextS)
-              -- newItems = --traceShow next $ traceShow (V.length $ nextEq) 
-                -- -- comp `seq` trace "complete' ready" $ 
-                                -- (++) comp 
-                                -- $ complete (remainN) 
-                                  -- -- $
-                                  -- -- (trace "headEq:" $ traceShow headEq $
-                                  -- -- trace "remainH: " $ traceShow remainH 
-                                  -- remainH --)  
-          in -- trace "next: " $  traceShow next $ trace "noNext" $ traceShow noNext $
-              trace "sortList" $ sortList `deepseq` trace "sortList berechnet" 
-                -- $ traceShow (sortList)
-              trace "nexts" $ nexts `deepseq` trace "nexts berechnet" $
-              newItems `deepseq` trace "conc ready -- leaving complete" newItems
-              
-concatPart ::[[Item]] -> [[Item]] -> [Item]
+          in trace "sortList" $ sortList `deepseq` trace "sortList berechnet" 
+             trace "nexts" $ nexts `deepseq` trace "nexts berechnet" $
+             newItems `deepseq` trace "conc ready -- leaving complete" newItems
+
+concatPart :: [[Item v t]] -> [[Item v t]] -> [Item v t]
 concatPart [] _ = trace "concpart ready" []
 concatPart _ [] = trace "concpart ready" []
 concatPart nexts heads 
   = let nextHead = (iHead $ head $ head heads)
         nextS = (fromLeft $ fromJust $ nextSymb $ head $ head nexts)
-    in trace "nextSymbol: " $ -- $ traceShow (head nexts) $ 
-       -- nextS `deepseq` trace "nextS berechnet" $ traceShow nextS $
+    in trace "nextSymbol: " $
        if  nextHead < nextS 
        then concatPart (nexts) (tail heads) 
        else if nextHead > nextS
             then concatPart (tail nexts) (heads) 
             else (complete' (head nexts) (head heads) nextS)
                   ++ concatPart (tail nexts) (tail heads)
-               
--- complete [nextEq] -> [headEq]
-complete' :: [Item] -> [Item] -> Token -> [Item]
+
+complete' :: [Item v t] -> [Item v t] -> Int -> [Item v t]
 complete' next noNext symb
   = let list = 
           nub
-            [ 
-            item{ nextSymb = listToMaybe newRight -- $ tail $ bRight item
-            , bRight =  newRight -- tail $ bRight item
-            , bLeft = bLeft item ++ [Left symb]
-            , stateList = (stateList item) ++ [lState]
-            , lastState = lState
+            [ item
+                { nextSymb = listToMaybe newRight -- $ tail $ bRight item
+                , bRight =  newRight -- tail $ bRight item
+                , stateList = lState : stateList item
                 }
             | item <- next
             , item' <- noNext
-            , (last $ stateList item) == (head $ stateList item')
-            , let newRight  
-                    = --if (bRight item == [])
-                      --then []
-                      --else 
-                      tail $ bRight item
-                  lState = last $ stateList item'
+            , head (stateList item) == firstState item'
+            , let newRight = tail $ bRight item
+                  lState = head $ stateList item'
             ]
-    in  -- trace "-------------------" 
-        -- $ trace "complete':" 
-        -- $ traceShow list 
-        -- $ trace "-------------------"
-        list
-  
+    in list
 
-predict :: BackwardStar Token ([Either Int Token],[Either Int Token]) Int
-        -> (([Either Int Token],[Either Int Token]) -> [Either Int Token])
-        -> [[Item]]
-        -> [Item]
--- predict all V.empty = V.empty
-predict hg component !new =  -- trace "predict" $ 
-                  if (new == [])
-                  then trace "predict ready" []
-                  else trace "anzahl new: " $ traceShow (length new) $ 
-                    {- let ordList 
-                              = L.sortBy 
-                                  (O.comparing (nextSymb) ) 
-                                  new -}
-                       let -- Just (Left next) = nextSymb $ head $ head new
-                           -- sortList 
-                              -- = groupBy (\item1 item2 
-                                          -- -> (nextSymb item1) == (nextSymb item2))
-                                        -- new
-                           nexts = map (fromLeft . fromJust . nextSymb . head) new
-                           newItems = concat $ map2 (map (predict'  hg component) nexts)  new
-                           
-                           
-                       -- let Just (Left next) = nextSymb $ head new
-                           -- (!nextEq, !remain) = partL' next new
-                           -- pred = (predict' hg next nextEq)
-                           -- newItems 
-                             -- = pred `seq` (++) pred $ predict hg remain
- 
-                       in -- ordList `deepseq` trace "ordList berechnet" 
-                          -- sortList `deepseq` trace "sortList berechnet" 
-                          -- $ remain `deepseq` trace "remain berechnet"
-                          -- $ pred `deepseq` trace "pred berechnet"
-                          newItems `deepseq` trace "newItems berechnet"
-                          newItems
-                     
-                       
-predict' :: BackwardStar Token ([Either Int Token],[Either Int Token]) Int
-        -> (([Either Int Token],[Either Int Token]) -> [Either Int Token])
-        -> Token
-        -> [Item]
-        -> [Item]
--- predict' hg Item{nextSymb = Nothing} = V.empty
--- predict' hg Item{nextSymb = Just (Right a)} = V.empty
+predict
+  :: Ord v
+  => BackwardStar v l Int
+  -> (l -> [Either Int t])
+  -> [[Item v t]]
+  -> [Item v t]
+predict hg component !new
+  = if null new
+    then trace "predict ready" []
+    else trace "anzahl new: " $ traceShow (length new) $ 
+         let nexts = map (fromLeft . fromJust . nextSymb . head) new
+             newItems = concat $ map2 (map (predict'  hg component) nexts)  new
+         in newItems `deepseq` trace "newItems berechnet"
+            newItems
+
+predict'
+  :: Ord v
+  => BackwardStar v l Int
+  -> (l -> [Either Int t])
+  -> v
+  -> [Item v t]
+  -> [Item v t]
 predict' hg component !next !vec
-  = -- trace "in predict'" $ 
-    let list = [Item next
-                []
-                s'
-                (ident hgEdge)
-                [itemInd]
-                (listToMaybe s')
-                itemInd
+    let list = [ Item
+                   next
+                   s'
+                   (ident hgEdge)
+                   [st]
+                   (listToMaybe s')
+                   st
+                   1
                 | hgEdge <- backStar hg $ next
-                , itemInd <- S.toList $ S.fromList $ map lastState vec 
+                , st <- S.toList $ S.fromList $ map (head . stateList) vec 
                 , let s = component $ label hgEdge 
                 , let s' = map (either (Left . ((!!) $ from hgEdge))  
                                        (Right . id)) s
                ]
-    in  -- trace "predict: " $  traceShow list $ 
-        -- (TIO.writeFile "/home/student/lindal/files/git/testEarley_items.txt" 
-            -- $ TIO.pack . show $  V.fromList  list)
-        -- `seq`  
-        -- trace "old items: " $ traceShow (length vec) $
-        -- trace "predict-Items:" $traceShow (length list) $ -- trace "end predict'"  
-        -- traceShow list
-        -- list
-        (next,vec) `deepseq`
-        -- trace "-------------------" 
-        -- $ trace "predict':" 
+    in  (next,vec) `deepseq`
         list `deepseq`
-        -- traceShow list 
-        -- $ trace "-------------------"
         list
 
      
-scan:: WSA Int Token Double -> [Item] -> [Item]
-scan wsa new = -- trace "scan" $ 
-                  if (new == [])
-                  then []
-                  else let Just (Right next) = nextSymb $ head new
-                           (nextEq, remain) = partR next new
-                           scn = (scan' wsa next nextEq)
-                           newItems = -- traceShow next $ traceShow (V.length $ nextEq) 
-                                    scn `seq` (++) scn $ scan wsa remain  
-                       in newItems  
+scan :: WSA Int t Double -> [Item v t] -> [Item v t]
+scan wsa new
+  = if null new
+    then []
+    else let Just (Right next) = nextSymb $ head new
+             (nextEq, remain) = partR next new
+             scn = (scan' wsa next nextEq)
+             newItems = -- traceShow next $ traceShow (V.length $ nextEq) 
+                      scn `seq` (++) scn $ scan wsa remain  
+         in newItems  
                                     
 
-{-
-               trace "scan" $ 
-               let newItems = V.concatMap (scan' wsa) new
-               in trace "new scanitems: " traceShow (newItems) 
-                  -- $ (write  $ return ("vector: " ++  (show $ newItems))::IO())
-                      `seq` newItems        
-  -}           
-                  
-scan':: WSA Int Token Double -> Token -> [Item] -> [Item]
-scan' wsa a vec -- item@Item{ -- nextSymb = Just (Right a)
-             -- , bLeft = left
-             -- , bRight = right
-             -- , stateList = list
-             -- } 
-  = let erg = [item{ bLeft = (bLeft item) ++ [Right a]
-           , bRight = if (bRight item == [])
-                      then []
-                      else tail $ bRight item
-           , nextSymb = listToMaybe $tail $ bRight item
-           , stateList = (stateList item) ++ [state] 
-           , lastState = state
-           }
-           | trans <- transitions wsa
-           , item <-  vec
-           , transTerminal trans == fromIntegral a
-           , last (stateList item) == transStateIn trans
-           , let state = transStateOut trans
-           ]
-    in  -- trace "scan" -- $ traceShow erg $ 
-        -- (TIO.writeFile "/home/student/lindal/files/git/testEarley_items.txt" 
-            -- $ TIO.pack $  "item: " ++  (show $  V.fromList  erg))
-        -- `seq`
-        -- traceShow erg erg
-        -- trace "-------------------" 
-        -- $ trace "scan:" 
-        -- $ traceShow erg 
-        -- $ trace "-------------------"
-        erg
-    
-create_hg ::[(Hyperedge (Int,Token,Int) 
-                        ([Either Int Token], [Either Int Token]) 
-                        (Int,Int)
-            , Double
-            )]
-          -> Token -- iniNode
-          -> WSA Int Token Double
-          -> (EdgeList (Int,Token,Int) 
-                          ([Either Int Token],[Either Int Token]) 
-                          (Int,Int)
-             , M.Map (Int,Int) Double)
+scan' :: WSA Int t Double -> t -> [Item v t] -> [Item v t]
+scan' wsa a vec 
+  = let erg = [ item
+                  { bRight = if (bRight item == [])
+                             then []
+                             else tail $ bRight item
+                  , nextSymb = listToMaybe $tail $ bRight item
+                  , stateList = state : stateList item
+                  , weight = transWeight trans * weight item
+                  }
+              | trans <- transitions wsa
+              , item <- vec
+              , transTerminal trans == fromIntegral a
+              , head (stateList item) == transStateIn trans
+              , let state = transStateOut trans
+              ]
+    in erg
+
+create_hg
+  :: Ord v
+  => [(Hyperedge (Int, v, Int) l Int, Double)]
+  -> (EdgeList (Int, v, Int) l (Int, Int), V.Vector Double)
 create_hg [] _  _ = error "The given word is not derivable."
-create_hg list iniNode wsa 
-  = let flist = map fst list
-        myZip = map (ident . fst) list
-        myMap  = M.fromList $ zip myZip (map snd list) 
-    in  trace "createHG"
-        $ flist `deepseq` trace "flist berechnet"
-        $ myZip `deepseq` trace "myZip berechnet"
-        $ (mkHypergraph flist
-          ,  myMap) 
-    --map ((ident . fst) &&& snd) list )
-    
-    
-          
-extractTransitions
-  :: BackwardStar Token ([Either Int Token],[Either Int Token]) Int
-  -> (([Either Int Token],[Either Int Token])->[Either Int Token])
-  -> M.Map Int Double
-  -> WSA Int Token Double
-  -> Token
-  -> [Item] 
-  -> [(Hyperedge (Int,Token,Int) 
-                ([Either Int Token], [Either Int Token]) 
-                (Int,Int)
-      , Double
-     )]
-extractTransitions hg component weights wsa iniNode v
-  = let f (vec,n ::  Int) x 
-            = let !trans = extract x hg component weights wsa iniNode (n)
-              in -- if (isJust trans)
-                 -- then ((fromJust trans) : vec, n+1)
-                 (trans : vec, n+1)
-                 -- else (vec,n)
-    in fst $ foldl' f ([],0) v
-                         
-                         
-extract :: Item
-        -> BackwardStar Token ([Either Int Token],[Either Int Token]) Int
-        -> (([Either Int Token],[Either Int Token])-> [Either Int Token])
-        -> M.Map Int Double
-        -> WSA Int Token Double
-        -> Token
-        -> Int
-        -> (Hyperedge  (Int,Token,Int) 
-                             ([Either Int Token], [Either Int Token]) 
-                             (Int,Int), Double)
-extract item@Item{bRight = []}
-        hg
-        component
-        weights
-        wsa
-        iniNode
-        n
+create_hg list
+  = (map doIt list, V.fromList theList)
+  where
+    theList = S.toList $ S.fromList $ snd $ unzip list
+    theMap = M.fromList (zip theList [0..])
+    doIt (he, w) = mapHEi (\ i -> (i, theMap M.! w) ) he
+
+extract
+  :: Item v t
+  -> BackwardStar v l Int
+  -> (l -> [Either Int t])
+  -> WSA Int t Double
+  -> v
+  -> (Hyperedge (Int, v, Int) l Int, Double)
+extract item@Item{bRight = []} hg component wsa iniNode
   = let edge = fromJust $ find (\x -> (ident x) == (iEdge item)) $ edgesEL $ toEdgeList hg
         initial_weight 
-          = if (iHead item == iniNode)
-            then (snd $ fromJust $ L.find 
-                                  (\x -> (fst x) == (head $ stateList item)) 
-                                 $ initialWeights wsa)
-                 * (snd $ fromJust $ L.find 
-                                  (\x -> (fst x) == (last $ stateList item)) 
-                                 $ finalWeights wsa)
-                         else 1
-        goal =(mkHyperedge 
-                  (head $ stateList item , iHead item , last $ stateList item) 
-                  (carryL (component $ label edge) (stateList item) (from edge))
-                  (label edge) 
-                  (ident edge, n)
-             , ((weights M.! (ident edge)) 
-                   * initial_weight 
-                   * (L.product [transWeight trans
-                               | trans <- transitions wsa
-                               , (p,Right a,q) 
-                                    <- traceShow item $ carryR (component $ label edge) (stateList item) 
-                               , transStateIn trans  == p
-                               , transTerminal trans == fromIntegral a
-                               , transStateOut trans == q
-                               ] ))
-             )
+          = if (iHead item == iniNode) -- START-SEPARATION REQUIRED
+            then [ w
+                 | (s, w) <- initialWeights wsa
+                 , s == firstState item ]
+                 ++ [ w
+                    | (s, w) <- finalWeights wsa
+                    , s == head $ stateList item
+                    ]
+            else []
+        goal
+          = ( mkHyperedge 
+                (firstState item, iHead item, head $ stateList item) 
+                (carryL (component $ label edge) (reverse $ stateList item) (from edge))
+                (label edge) 
+                (ident edge)
+            , weight item * L.product initial_weight
+            )
     in    trace "extract:" 
         $ edge `deepseq` trace "edge berechnet"
         $ initial_weight `deepseq` trace "initial weight berechnet: " 
         $ goal `deepseq` trace "goal berechnet"
-        -- $ edge `deepseq`
-          -- trace "edge:" $ traceShow edge
-        -- $ trace "goal:" $ traceShow goal
         $ trace "ready" goal
-        -- traceShow item 
-        -- $ traceShow initial_weight 
-        -- traceShow initial_weight `deepseq` 
--- extract _ _ _ _ _ _
-  -- = Nothing          
-  
-vNub l = vNub' l V.empty
-  where
-    vNub' vec vec'
-      = if (vec == V.empty) 
-        then V.empty
-        else let h = V.head vec
-                 t = V.tail vec
-             in  if (h `V.elem` t) 
-                 then vNub' t vec'
-                 else let iter = vNub' t (V.snoc vec' h)
-                      in  V.snoc iter h
 
--- ^ for a list of variables and terminals, 
--- a list of states of a 'WSA' and a list of Nonterminals, 
--- carryL extract tuples (i,A,j) where i and j are the states of the second list 
--- that belong to the nonterminal A of the third list and cooresponds to a
--- variable of the first list.
--- Assumption: the labels are linear in the second component, i.e. there is no 
--- variable that appears twice.
-carryL:: (NFData s, NFData b, Num b) => [Either Int b] -> [s] -> [Token] -> [(s,Token,s)]
-carryL label states nonterminals 
-  = let nons = [0..((length nonterminals)-1)] 
-        indVars = map (\x -> fromJust (elemIndex (Left x) label)) nons 
-        statesBeforeVars = map ((!!)states) indVars
-        statesAfterVars = map (\x -> (!!) states (x+1)) indVars
-        erg = zip3 statesBeforeVars nonterminals statesAfterVars
-    in  -- trace "carryL" 
-        -- $ nons `deepseq` trace "nons berechnet" 
-        -- $ indVars `deepseq` trace "indVars berechnet"
-        -- $ statesBeforeVars `deepseq` trace "bfVars berechnet"
-        -- $ statesAfterVars `deepseq` trace "aVars berechnet"
-        -- $ erg `deepseq` trace "leaving carryL" 
-        erg
-carryR:: (NFData a, NFData b, NFData s, Num b) => [Either a b] -> [s] -> [(s,Either a b,s)]
-carryR label states 
-  = let rs = trace "carryR" filter isRight label
-        indTerms = findIndices isRight label
-        statesBeforeTerms = map ((!!)states) indTerms
-        statesAfterTerms = map (\x -> (!!) states (x+1)) indTerms
-        erg = zip3 statesBeforeTerms rs statesAfterTerms    
-    in  -- trace "carryR" 
-        -- $ rs `deepseq` trace "rs berechnet" 
-        -- $ indTerms `deepseq`  trace "indTerms berechnet"
-        -- $ statesBeforeTerms `deepseq` trace "bfTerms berechnet"
-        -- $ statesAfterTerms `deepseq`  trace "aTerms berechnet"
-        -- $ erg `deepseq` (trace "leaving carryR" erg)
-        erg
+carryL :: [Either Int t] -> [Int] -> [v] -> [(Int, v, Int)]
+carryL lab wsast vert
+  = [ trip | (Left _, trip) <- zip lab (zip3 wsast vert (tail wsast)) ]
+
 isRight :: Either a b -> Bool
 isRight (Right _) = True
 isRight (Left _)  = False
@@ -711,85 +412,10 @@ isRight (Left _)  = False
 fromLeft (Left x) = x
 fromLeft x = error $ "error while reading " ++ (show x)
 
-concV :: V.Vector a -> V.Vector a -> V.Vector a
-concV v1 v2 =  V.fromList $ V.toList v2 ++ V.toList v1
-    
-conc :: [a] -> [a] -> [a]
-conc v1 v2 = if (length v1 < length v2) 
-             then v2 ++ v1
-             else v1 ++ v2
-
-concL :: [a] -> [a] -> [a]
-concL = (++)              
-
-concR :: [a] -> [a] -> [a]
-concR v1 v2 = v2 ++ v1             
-
-conc_all :: [[a]] -> [a]
-conc_all = foldl' (concR) []
-
-concat':: [[a]] -> [a]
-concat' [] = []
-concat' (x:xs) = conc x  $ concat' xs 
-
-foldr' f a []     = a
-foldr' f a (x:xs) = let a' = f a x in a' `seq` foldl' f a' xs
-
-             
-partV :: V.Vector Item -> M.Map Token (V.Vector Item)
-partV v = let f = (\v1 v2 -> concV v1 v2)
-              next = (\x -> either id id $ fromJust $ nextSymb x)
-          in  V.foldl' 
-                (\m item -> M.insertWith' f (next item) (V.singleton item) m)
-                M.empty 
-                v
-                
-                
-partR :: Token -> [Item] -> ([Item], [Item])
+partR :: Token -> [Item v t] -> ([Item v t], [Item v t])
 partR next new = partition (\x -> nextSymb x == Just (Right next)) new                
 
-partL' :: Token -> [Item] -> ([Item], [Item])
-partL' next new = partition (\x -> nextSymb x == Just (Left next)) new      
-
-partL :: (Item -> Token) -> Token -> [Item] -> ([Item], [Item])
-partL f next new = partition (\x -> f x == next) new 
-
-partBy::(a -> a-> Bool) -> [a] -> [[a]]
-partBy f list 
-  = let eq = (\x -> f x $ head list) 
-        (a,b) = partition eq list
-        in a: (partBy f list)
-  -- partBy' $ sortBy f list
-  -- where partBy' [] = []
-        -- partBy' list = let (a,b) = span f list
-                       -- in a : (partBy b)
-                       
 map2 [] _ = []
 map2 _ [] = []
 map2 (f:fs) (x:xs) = (f x) : map2 fs xs  
-------------------- debugging ---------------------------------------
 
-write:: Show a => IO(a) -> IO()
-write term = do term' <- term
-                (TIO.writeFile "/home/student/lindal/files/git/testEarley_items.txt" 
-                  $ TIO.pack $  "item: " ++  (show $  term'))
-
--- vector_fromList :: [a] -> V.MVector s a
--- vector_fromList = foldl' (V.snoc) (V.empty :: V.MVector s a)
-  
-{-
--- | Create a list of all chains (p_0,q_1,p_1)(p_1,q_2,p_2)...(p_k-1,q_k,p_k)
-combine :: Int -> Int -> [Int] -> [[Int]]
--- combine i j [] = []
-combine i j (x:[]) = [[i,j]]
-combine i j (x:xs)
-  = concat [map (\b -> i : b) (combine k j xs) | k <- [i..j]]
--}
-          
-{-
-proj_left:: (T.Tree (Either Token Token), [Either Token Token]) -> T.Tree (Either Token Token)
-proj_left = fst;
-
-proj_right:: (T.Tree (Either Token Token), [Either Token Token]) -> T.Tree (Either Token Token)
-proj_right (left,right) = right;
--}

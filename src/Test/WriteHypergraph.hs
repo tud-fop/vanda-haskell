@@ -12,22 +12,87 @@ import Vanda.Hypergraph
 import Vanda.Hypergraph.EdgeList
 import Vanda.Token
 
-instance Ix String where
-  range (x, y) = [I.range (head x, head y)]
-
-main:: IO()
-main  = do
+main :: IO ()
+main = do
   progName <- getProgName
   args <- getArgs
   case args of
-   ["-o", outfile] 
-     -> let rules = hgInt
+    ["-o", outfile] ->
+      let rules = hgInt
       in B.writeFile (outfile ++ ".bhg.gz") (compress $ B.encode rules)
-   _ 
-     -> print $ "Usage: " ++ progName ++ "-o outfile"    
+    _ -> print $ "Usage: " ++ progName ++ "-o outfile"    
      
-hgString :: EdgeList String (T.Tree (Either Int String), [Either Int String]) Int
-hgString = mkHypergraph 
+hgString :: EdgeList String ([Either Int String], [Either Int String]) Int
+hgString
+  = mkHypergraph 
+      [ mkHyperedge "X" ["X","X"]
+        ( [Left 0, Right "duonianlai", Right "de", Left 1]
+        , [Left 1, Right "over", Right "the", Right "last", Left 0, Right "years"]
+        ) 1
+      , mkHyperedge "X" ["X"]
+        ( [Left 0, Right "duonianlai"],
+          [Right "over", Right "the", Right "last", Left 0, Right "years"]
+        ) 2
+      , mkHyperedge "X" []
+        ( [Right "youhao"]
+        , [Right "friendly"]
+        ) 3
+      , mkHyperedge "X" [] 
+        ( [Right "hezuo"]
+        , [Right "cooperation"]
+        ) 4
+      , mkHyperedge "X" []
+        ( [Right "30"]
+        , [Right "30"]
+        ) 5
+      , mkHyperedge "X" []
+        ( [Right "nian"]
+        , [Right "years"]
+        ) 6
+      , mkHyperedge "X" ["X","X"]
+        ( [Left 0, Left 1]
+        , [Left 0, Left 1]
+        ) 7
+      , mkHyperedge "X" ["X"]
+        ( [Left 0]
+        , [Left 0]
+        ) 8
+      , mkHyperedge "X" ["X","X"]
+        ( [Right "yu", Left 0, Right "you", Left 1]
+        , [Right "have", Left 1, Right "with", Left 0]
+        ) 9
+      , mkHyperedge "X" ["X","X"]
+        ( [Left 0, Right "de", Left 1]
+        , [Right "the", Left 1, Right "that", Left 0]
+        ) 10
+      , mkHyperedge "X" []
+        ( [Left 0, Right "zhiyi"]
+        , [Right "one", Right "of",  Left 0]
+        ) 11
+      , mkHyperedge "X" []
+        ( [Right "Aozhou"]
+        , [Right "Australia"]
+        ) 12
+      , mkHyperedge "X" [] 
+        ( [Right "Beihan"]
+        , [Right "North", Right "Korea"]
+        ) 13
+      , mkHyperedge "X" [] 
+        ( [Right "shi"]
+        , [Right "is"]
+        ) 14
+      , mkHyperedge "X" [] 
+        ( [Right "bangjiao"]
+        , [Right "diplomatic", Right "relations"]
+        ) 15
+      , mkHyperedge "X" []
+        ( [Right "shaoshu", Right "guojia"]
+        , [Right "few", Right "countries"]
+        ) 16
+      ]  
+     
+hgString' :: EdgeList String (T.Tree (Either Int String), [Either Int String]) Int
+hgString' = mkHypergraph 
               [ mkHyperedge "X" ["X","X"] (Node (Right "") [Node (Left 0) [], Node (Right "duonianlai") [], Node (Right "de") [], Node (Left 1) []]
                             , [Left 1, Right "over", Right "the", Right "last", Left 0 , Right "years"]) 1
               ,mkHyperedge "X" ["X"] (Node (Right "") [Node (Left 0) [], Node (Right "duonianlai") []] , [Right "over", Right "the", Right "last", Left 0, Right "years"]) 2

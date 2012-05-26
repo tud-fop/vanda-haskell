@@ -21,6 +21,7 @@ module Vanda.Hypergraph.Basic
   , from
   , arity
   , mapHE
+  , mapHEi
   , interlace
   , Derivation
   , mkHyperedge
@@ -84,6 +85,12 @@ mapHE g (Nullary t l i) = Nullary (g t) l i
 mapHE g (Unary t f1 l i) = Unary (g t) (g f1) l i
 mapHE g (Binary t f1 f2 l i) = Binary (g t) (g f1) (g f2) l i
 mapHE g (Hyperedge t f l i) = Hyperedge (g t) (V.map g f) l i
+
+mapHEi :: (i -> i') -> Hyperedge v l i -> Hyperedge v l i'
+mapHEi g (Nullary t l i) = Nullary t l (g i)
+mapHEi g (Unary t f1 l i) = Unary t f1 l (g i)
+mapHEi g (Binary t f1 f2 l i) = Binary t f1 f2 l (g i)
+mapHEi g (Hyperedge t f l i) = Hyperedge t f l (g i)
 
 interlace
   :: ((Int, Int) -> Int)

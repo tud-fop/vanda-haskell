@@ -114,7 +114,7 @@ class Hypergraph h where
   memoize = id
   
   -- | Creates a Hypergraph from a list of 'Hyperedge's.
-  mkHypergraph :: Ix.Ix v => [Hyperedge v l i] -> h v l i
+  mkHypergraph :: (Ord v) => [Hyperedge v l i] -> h v l i
   
   -- | Returns the set of all nodes.
   nodes :: Ix.Ix v => h v l i -> S.Set v -- (v, v)

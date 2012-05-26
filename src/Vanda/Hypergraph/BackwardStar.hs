@@ -69,7 +69,7 @@ filterEdges
   :: (Hyperedge v l i -> Bool) -> BackwardStar v l i -> BackwardStar v l i
 filterEdges p (BackwardStar vs b _) = BackwardStar vs (filter p . b) False
 
-fromEdgeList :: Ix.Ix v => EdgeList v l i -> BackwardStar v l i
+fromEdgeList :: Ord v => EdgeList v l i -> BackwardStar v l i
 fromEdgeList (EdgeList vs es) = BackwardStar vs (a M.!) True
   where
     lst = [ (v, [e]) | e <- es, let v = to e ]

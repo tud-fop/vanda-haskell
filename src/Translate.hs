@@ -75,91 +75,57 @@ instance NFData (Feature l i x) where
 
 instance Eq (Candidate v l i x) where
   (==)  = (==)
+
+
+loadSCFG
+  :: String
+  -> IO (EdgeList String ([Either Int String], [Either Int String]) Int)
+loadSCFG file
+  = force . B.decode . decompress $ B.readFile file
+
+loadWeights :: String -> IO (VU.Vector Double)
+loadWeights file
+  = fmap (VU.fromList . B.decode . decompress) $ B.readFile file
   
+loadText :: String -> IO String
+loadText file = TIO.unpack $ head $ TIO.lines $ TIO.readFile file
+
+toWSA :: String -> WSA Int Token Double 
+toWSA input = WSA.fromList 1 (L.words input)
+
+fakeWeights
+  :: Hypergraph h 
+  => h Token ([Either Int Token], [Either Int Token]) Int 
+  -> M.Map Int Double
+fakeWeights hg 
+  = M.fromList $ zip (map ident $ edgesEL $ toEdgeList hg) (replicate 1)
+
+
+translation hg input = output where
+  weights = fakeWeights hg
+  wsa = toWSA input -- :: WSA Int  l v 
+  (iGraph, newWeights) = E.earley hg True weights wsa 
+  newWeightsVec = toVector newWeights                                     
+  pN !_ !i xs = (newWeightsVec VU.! fromIntegral (snd i)) * Prelude.product xs
+  feat = feature pN
+  -- edgeGraph  = (toEdgeList iGraph)
+  best = knuth iGraph feat (V.singleton 1) 
+  -- bestAt = M.lookup (0,0,l) best  
+  der = makeString tok best (partWords input) component
+
+
 main :: IO ()
 main = do
   progName <- getProgName
   args <- getArgs
   case args of
-    ["-g", graph, "-w" , weights,  "-t", token, "-d", dir, "-s", input] 
-     -> if ((length $ L.lines input) == 0) 
-        then error "empty word"
-        else do
-          hg <- readHg graph
-          tok <- tokens token
-          -- weights <- readWeights 
-          let weights = testWeights (length $ edgesEL $ toEdgeList hg)
-          let wghts = weightsToMap weights hg
-              word = L.words input
-              l = length word 
-              component :: (([Either Int Token],[Either Int Token]) -> [Either Int Token])
-                = if dir == "lr" then snd else fst 
-              direction = if dir == "lr" then True else False
-              words = toTokens tok input -- toTokens tok word --[0 .. l-1]      -- words are not yet decoded with
-                                                 -- the correct integers
-              wsa = toWSA tok input -- :: WSA Int  l v 
-              (iGraph,newWeights) = E.earley hg direction wghts wsa 
-                                             -- compute the intersection of the 
-                                             -- hypergraph and the word.
-                                             -- The initial node should  be 0 or
-                                             -- changed
-              newWeightsVec = toVector newWeights                                     
-              pN !_ !i xs = (newWeightsVec VU.! fromIntegral (snd i)) * Prelude.product xs
-              feat = feature pN
-              -- edgeGraph  = (toEdgeList iGraph)
-              best = knuth iGraph feat (V.singleton 1) 
-              -- bestAt = M.lookup (0,0,l) best  
-              der = makeString tok best (partWords input) component -- if not (bestAt == Nothing) 
-                    -- then {- tokToStr tok $-} candToToken (head $ fromJust bestAt) component 
-                    -- else error "The word is not derivable."
-          -- wsa `deepseq` trace "+++++wsa:++++++" $ traceShow wsa
-            -- $ hg `deepseq` trace "Hypergraph gelesen" 
-            -- $ weights `deepseq` trace "weights berechnet"
-            -- $ trace "wordlength" $ traceShow (length word)
-            -- $ trace "word: " traceShow words 
-            -- $ iGraph `deepseq` trace "hg berechnet" $ traceShow iGraph
-            -- $ newWeights `deepseq` trace "neue Gewichte: " $ traceShow newWeights
-            -- $ feat `deepseq` trace "feature berechnet"
-            -- $ edgeGraph `deepseq` trace "edgeGraph berechnet" -- $ traceShow edgeGraph
-            -- $ trace "---------------------------\n---------------------"
-            -- $ traceShow words
-          print der
+    ["-g", graph, "-w", weights, "-s", inFile, "-t", outFile] -> do
+      hg <- loadSCFG graph
+      -- weights <- loadWeights
+      input <- loadText inFile
+      let output = doTranslate hg input
+      saveText output outFile
     _ -> print $ "Usage: " ++ progName ++ "-g graphfile -t tokenfile -s sentence"    
-     
-          
-readHg:: String -> IO(EdgeList Token ([Either Int Token], [Either Int Token]) Int)
-readHg file = do 
-            dec :: EdgeList Token ([Either Int Token], [Either Int Token]) Int
-             <- fmap (force . B.decode . decompress) 
-                      $ B.readFile file
-            return $ force dec  
-       
-testWeights:: Int -> VU.Vector Double
-testWeights n = VU.replicate n 1  
-       
-weightsToMap:: (Hypergraph h) 
-  => VU.Vector Double 
-  -> h Token ([Either Int Token],[Either Int Token]) Int 
-  -> M.Map Int Double
-weightsToMap weights hg 
-  = M.fromList $ zip (map ident $ edgesEL $ toEdgeList hg) (VU.toList weights)
-
-readWeights:: String -> IO(VU.Vector Double)
-readWeights file = fmap
-             (VU.fromList . B.decode . decompress)
-             $ B.readFile file
-           
-partWords:: String -> [String]
-partWords = L.words
-             
-tokens:: String  -> IO(TokenMap)
-tokens tokenfile = do 
-    tokenm :: TokenMap 
-      <- fmap ( force . fromText) $ TIO.readFile tokenfile
-    return tokenm
-    
-toWSA :: TokenMap -> String -> WSA Int Token Double 
-toWSA tok input = WSA.fromList 1 $ toTokens tok input
 
 iStartState :: [String] -> (Int, Token, Int)
 iStartState word = (0,startNT,length word)

@@ -43,7 +43,7 @@ filterEdges
 filterEdges p (ForwardStar vs lst f _)
   = ForwardStar vs (filter p lst) (filter p . f) False
 
-fromEdgeList :: Ix.Ix v => EdgeList v l i -> ForwardStar v l i
+fromEdgeList :: Ord v => EdgeList v l i -> ForwardStar v l i
 fromEdgeList (EdgeList vs es) = ForwardStar vs lst (a M.!) True
   where
     lst = [ e | e <- es, null (from e) ]
