@@ -62,7 +62,7 @@ import Vanda.Hypergraph.Basic
   , EdgeList(..)
   , Simulation(..) )
 
-edgeCount :: Ix.Ix v => BackwardStar v l i -> Int
+edgeCount :: Ord v => BackwardStar v l i -> Int
 edgeCount (BackwardStar vs b _) = sum $ map (length . b) (S.toList vs)
 
 filterEdges
@@ -79,7 +79,7 @@ fromEdgeList (EdgeList vs es) = BackwardStar vs (a M.!) True
         -- A.accumArray (flip (:)) [] vs lst
 
 mapNodes
-  :: (Ix.Ix v, Ix.Ix v')
+  :: (Ord v, Ord v')
   => (v -> v') -> BackwardStar v l i -> BackwardStar v' l i
 mapNodes f (BackwardStar vs b _)
   = BackwardStar vs' (a M.!) True
@@ -94,7 +94,7 @@ mapLabels
   -> BackwardStar v l' i'
 mapLabels f (BackwardStar vs b _) = BackwardStar vs (map f . b) False
 
-memoize :: Ix.Ix v => BackwardStar v l i -> BackwardStar v l i
+memoize :: Ord v => BackwardStar v l i -> BackwardStar v l i
 memoize bs@(BackwardStar vs b mem)
   | mem = bs -- idempotent
   | otherwise = BackwardStar vs (a M.!) True
@@ -102,11 +102,11 @@ memoize bs@(BackwardStar vs b mem)
     a = M.fromList [ (v, b v) | v <- S.toList vs ]
         -- A.array vs [ (v, b v) | v <- Ix.range vs ]
 
-toEdgeList :: Ix.Ix v => BackwardStar v l i -> EdgeList v l i
+toEdgeList :: Ord v => BackwardStar v l i -> EdgeList v l i
 toEdgeList (BackwardStar vs b _)
   = EdgeList vs $ concatMap b (S.toList vs)
 
-toSimulation :: (Ord l, Ix.Ix v) => BackwardStar v l i -> Simulation v l i
+toSimulation :: (Ord l, Ord v) => BackwardStar v l i -> Simulation v l i
 toSimulation (BackwardStar vs b _) = Simulation vs lookup
   where
     lookup v l n
@@ -123,7 +123,7 @@ toSimulation (BackwardStar vs b _) = Simulation vs lookup
 
 -- | Drops unreachable nodes and corresponding edges.
 dropUnreachables
-  :: forall v l i. Ix.Ix v
+  :: forall v l i. Ord v
   => v
   -> BackwardStar v l i
   -> BackwardStar v l i
@@ -216,7 +216,7 @@ topCCL feat wV e lists
 -- | Computes the array of best derivations, given an array of one best
 -- derivations (e.g., obtained via Knuth's algorithm).
 bests
-  :: forall v l i x. (Eq i, Ix.Ix v)
+  :: forall v l i x. (Eq i, Ord v)
   => BackwardStar v l i
   -> Feature l i x
   -> V.Vector Double

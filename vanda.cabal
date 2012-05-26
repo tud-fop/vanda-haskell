@@ -16,6 +16,32 @@ category:       NLP
 tested-with:    GHC
 Build-Type:     Simple
 
+executable Train
+  build-depends:
+      base
+    , containers
+    , array
+    , vector
+    , heap
+    , bytestring
+    , text
+    , parsec >= 3.1.2
+    , binary
+    , deepseq
+    , zlib
+  Main-Is:  Train.hs
+  hs-source-dirs:  src
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+  ghc-prof-options: -caf-all -auto-all
+  Extensions:
+      ScopedTypeVariables
+    , TypeSynonymInstances
+    , FlexibleInstances
+    , MultiParamTypeClasses
+    , TypeFamilies
+    , FlexibleContexts
+    , BangPatterns
+
 executable Translate
   build-depends:
       base
@@ -56,32 +82,6 @@ executable WriteHypergraph
     , deepseq
     , zlib
   Main-Is:  Test/WriteHypergraph.hs
-  hs-source-dirs:  src
-  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-  ghc-prof-options: -caf-all -auto-all
-  Extensions:
-      ScopedTypeVariables
-    , TypeSynonymInstances
-    , FlexibleInstances
-    , MultiParamTypeClasses
-    , TypeFamilies
-    , FlexibleContexts
-    , BangPatterns
-
-executable Translation
-  build-depends:
-      base
-    , containers
-    , array
-    , vector
-    , heap
-    , bytestring
-    , text
-    , parsec >= 3.1.2
-    , binary
-    , deepseq
-    , zlib
-  Main-Is:  Test/Translation.hs
   hs-source-dirs:  src
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -caf-all -auto-all
@@ -148,33 +148,6 @@ executable GHKM
     , FlexibleContexts
     , BangPatterns    
  
-executable TestEarley
-  build-depends:
-      base
-    , containers
-    , array
-    , vector
-    , heap
-    , bytestring
-    , text
-    , parsec >= 3.1.2
-    , binary
-    , deepseq
-    , zlib
-    , random
-  Main-Is:  Test/TestEarley.hs
-  hs-source-dirs:  src
-  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-  ghc-prof-options: -caf-all -auto-all
-  Extensions:
-      ScopedTypeVariables
-    , TypeSynonymInstances
-    , FlexibleInstances
-    , MultiParamTypeClasses
-    , TypeFamilies
-    , FlexibleContexts
-    , BangPatterns
-
 executable BerkeleyToHypergraph
   build-depends:
       base
@@ -265,6 +238,11 @@ library
       Vanda.Features
     , Vanda.Hypergraph
     , Vanda.Token
+    , Vanda.Algorithms.EarleyCFG
+    , Vanda.Algorithms.Earley.FastNub
+    , Vanda.Algorithms.Earley.WSA
+    , Vanda.Algorithms.ExpectationMaximization
+    , Vanda.Algorithms.InsideOutsideWeights
     , Vanda.Corpus.Negra
     , Vanda.Corpus.Negra.Binary
     , Vanda.Corpus.Negra.NFData
@@ -272,7 +250,11 @@ library
     , Vanda.Corpus.Penn.Text
     , Vanda.Grammar.Berkeley.Text
     , Vanda.Hypergraph.Binary
+    , Vanda.Hypergraph.BackwardStar
     , Vanda.Hypergraph.Basic
+    , Vanda.Hypergraph.EdgeList
+    , Vanda.Hypergraph.ForwardStar
+    , Vanda.Hypergraph.NFData
     , Vanda.Hypergraph.Text
     , Data.Queue
   hs-source-dirs:  src

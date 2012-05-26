@@ -79,15 +79,15 @@ class Hypergraph h where
   dropUnreachables v0 = BS.dropUnreachables v0 . toBackwardStar
   
   -- | Returns the list of 'Hyperedge's.
-  edges :: Ix.Ix v => h v l i -> [Hyperedge v l i]
+  edges :: Ord v => h v l i -> [Hyperedge v l i]
   edges = edgesEL . toEdgeList
   
   -- | Applies a filter to all hyperedges. Need not be memoized.
-  filterEdges :: Ix.Ix v => (Hyperedge v l i -> Bool) -> h v l i -> h v l i
+  filterEdges :: Ord v => (Hyperedge v l i -> Bool) -> h v l i -> h v l i
   
   -- | Computes the best derivation for each node.
   knuth
-    :: (NFData v, NFData l, NFData i, NFData x, Integral i, Ix.Ix v, Show l, Show v)
+    :: (NFData v, NFData l, NFData i, NFData x, Ord i, Ord v, Show l, Show v, Show i)
     => h v l i
     -> Feature l i x
     -> V.Vector Double
@@ -97,45 +97,45 @@ class Hypergraph h where
   -- | Applies a mapping to all hyperedges. The mapping may not change the
   -- structure (i.e., head or tail), only label and id. Need not be memoized.
   mapLabels
-    :: Ix.Ix v
+    :: Ord v
     => (Hyperedge v l i -> Hyperedge v l' i')
     -> h v l i
     -> h v l' i'
   
   -- | Applies a renaming to all nodes. The renaming must be monotone!
   mapNodes
-    :: (Ix.Ix v, Ix.Ix v')
+    :: (Ord v, Ord v')
     => (v -> v')
     -> h v l i
     -> h v' l i
   
   -- | Memoizes the hypergraph, if applicable. This function is idempotent.
-  memoize :: Ix.Ix v => h v l i -> h v l i
+  memoize :: Ord v => h v l i -> h v l i
   memoize = id
   
   -- | Creates a Hypergraph from a list of 'Hyperedge's.
   mkHypergraph :: (Ord v) => [Hyperedge v l i] -> h v l i
   
   -- | Returns the set of all nodes.
-  nodes :: Ix.Ix v => h v l i -> S.Set v -- (v, v)
+  nodes :: Ord v => h v l i -> S.Set v -- (v, v)
   
   -- | Returns the number of edges. This is included for its instructiveness.
-  edgeCount :: Ix.Ix v => h v l i -> Int
+  edgeCount :: Ord v => h v l i -> Int
   edgeCount = length . edges
   
   -- | Returns the EdgeList representation of a hypergraph.
-  toEdgeList     :: Ix.Ix v => h v l i -> EdgeList v l i
+  toEdgeList     :: Ord v => h v l i -> EdgeList v l i
   
   -- | Returns the BackwardStar representation of a hypergraph.
-  toBackwardStar :: Ix.Ix v => h v l i -> BackwardStar v l i
+  toBackwardStar :: Ord v => h v l i -> BackwardStar v l i
   toBackwardStar = BS.fromEdgeList . toEdgeList
   
   -- | Returns the ForwardStar representation of a hypergraph.
-  toForwardStar  :: Ix.Ix v => h v l i -> ForwardStar v l i
+  toForwardStar  :: Ord v => h v l i -> ForwardStar v l i
   toForwardStar = FS.fromEdgeList . toEdgeList
   
   -- | Returns the Simulation representation of a hypergraph.
-  toSimulation   :: (Ix.Ix v, Ord l) => h v l i -> Simulation v l i
+  toSimulation   :: (Ord v, Ord l) => h v l i -> Simulation v l i
   toSimulation = toSimulation . toEdgeList
 
 

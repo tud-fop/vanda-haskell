@@ -75,8 +75,8 @@ fromList w ts
     in WSA
         [0 .. l]
         (zipWith3 (\t i j -> Transition t i j 1) ts [0 ..] [1 ..])
-        ((0, w): (zip [1 .. l] (repeat 0)))
-        ((zip [0 .. l-1] (repeat 0)) ++ [(l, 1)])
+        ((0, w): [] {-(zip [1 .. l] (repeat 0))-})
+        ({-(zip [0 .. l-1] (repeat 0)) ++-} [(l, 1)])
 
 -- | Create a 'WSA' from a word (list of terminals). The 'WSA' represents the Kleene-Star of the word.
 fromListCyclic :: (Num w) => [t] -> WSA Int t w

@@ -18,6 +18,7 @@
 -- for the several hypergraph representations.
 module Vanda.Hypergraph.Basic
   ( Hyperedge (..)
+  , deref
   , from
   , arity
   , mapHE
@@ -68,11 +69,28 @@ data Hyperedge v l i
     , ident :: !i
     }
 
+    
+instance (Show v, Show l, Show i) => Show (Hyperedge v l i) where
+  show e
+    = show (to e)
+      ++ " -> "
+      ++ show (label e)
+      ++ " "
+      ++ unwords (map show $ from e)
+      ++ " # "
+      ++ show (ident e)
+
+
 from :: Hyperedge v l i -> [v]
 from Nullary{} = []
 from (Unary _ f1 _ _) = [f1]
 from (Binary _ f1 f2 _ _) = [f1, f2]
 from (Hyperedge _ f _ _) = V.toList f
+
+deref (Unary _ f1 _ _) 0 = f1
+deref (Binary _ f1 f2 _ _) 0 = f1
+deref (Binary _ f1 f2 _ _) 1 = f2
+deref (Hyperedge _ f _ _) i = f V.! i
 
 arity :: Hyperedge v l i -> Int
 arity Nullary{} = 0

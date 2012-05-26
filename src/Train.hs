@@ -30,6 +30,9 @@ import Vanda.Hypergraph.Binary ()
 -- import Vanda.Hypergraph.NFData ()
 import Vanda.Token
 
+import Vanda.Algorithms.InsideOutsideWeights
+import Vanda.Algorithms.ExpectationMaximization
+
 
 instance NFData (BackwardStar Token ([Either Int Token], [Either Int Token]) Int) where
   rnf (BackwardStar nodes edges memo) 
@@ -52,16 +55,28 @@ loadSCFG
 loadSCFG file
   = fmap (fromEdgeList . B.decode . decompress) $ B.readFile file
 
-loadWeights :: String -> IO (VU.Vector Double)
+loadWeights :: String -> IO (V.Vector Double)
 loadWeights file
-  = fmap (VU.fromList . B.decode . decompress) $ B.readFile file
+  = fmap (V.fromList . B.decode . decompress) $ B.readFile file
   
 loadText :: String -> IO String
 loadText file
   = fmap (TIO.unpack . head . TIO.lines) $ TIO.readFile file
 
+loadSentenceCorpus :: String -> IO [String]
+loadSentenceCorpus file
+  = fmap (map TIO.unpack . TIO.lines) $ TIO.readFile file
+
+
 saveText :: String -> String -> IO ()
 saveText text file = TIO.writeFile file (TIO.pack text)
+
+saveSequence :: [(Double, VU.Vector Double)] -> String -> IO ()
+saveSequence s3q file
+  = TIO.writeFile file
+  $ TIO.unlines
+  $ map (TIO.pack . show)
+  $ s3q
 
 toWSA :: String -> WSA.WSA Int String Double 
 toWSA input = WSA.fromList 1 (L.words input)
@@ -78,7 +93,7 @@ fakeWeights hg
 makeFeature nweights
   = (Feature pN V.singleton, V.singleton 1.0)
   where
-    pN _ !i xs = (nweights VU.! fromIntegral (snd i)) * Prelude.product xs
+    pN _ !i xs = (nweights V.! fromIntegral (snd i)) * Prelude.product xs
 
 getInitial hg = S.findMin (nodes hg)
 
@@ -109,16 +124,37 @@ makeString best nv0 component
       Just [] -> "(No translation.)"
       Just (c : _) -> trace (T.drawTree $ fmap show $ deriv c) $ candToString component (deriv c)
 
+initialWeights hg = VU.replicate (length (edges hg)) 0.1
 
-doTranslate hg input = output where
+prepareExamples hg v0 input output
+  = [ (v0both
+      , fst
+      $ E.earley
+          ( fst
+          $ E.earley hg fst (toWSA inp) v0
+          )
+          snd (toWSA oup) v0one
+      , 1
+      )
+    | (inp, oup) <- zip input output
+    , let v0one = newInitial v0 inp
+    , let v0both = newInitial v0one oup
+    ]
+
+preparePartition hg
+  = M.elems . M.fromListWith (++)
+  $ [ (to e, [ident e]) | e <- edges hg ]
+
+doEM part exs initw
+  = take 100 $ forestEMlist part exs (fst . fst . ident) initw 
+
+doTrain hg input output = s3q where
   -- weights = fakeWeights hg
-  wsa = toWSA input -- :: WSA Int  l v 
   v0 = getInitial hg
-  (nhg, nweights) = E.earley hg fst wsa v0
-  (feat, featvec) = makeFeature nweights
-  best = knuth nhg feat featvec
-  nv0 = newInitial v0 input
-  output = makeString best nv0 snd ++ "\n" ++ makeString best nv0 fst ++ "\n"
+  examples = prepareExamples hg v0 input output -- :: WSA Int  l v 
+  wvector = initialWeights hg
+  part = preparePartition hg
+  s3q = doEM part examples wvector
 
 
 main :: IO ()
@@ -126,10 +162,11 @@ main = do
   progName <- getProgName
   args <- getArgs
   case args of
-    ["-g", graph, "-s", inFile, "-t", outFile] -> do
+    ["-g", graph, "-s", inFile, "-t", outFile, "-w", s3qFile] -> do
       hg <- loadSCFG graph
       -- weights <- loadWeights
-      input <- loadText inFile
-      let output = doTranslate hg input
-      saveText output outFile
-    _ -> print $ "Usage: " ++ progName ++ "-g graphfile -t tokenfile -s sentence"
+      input <- loadSentenceCorpus inFile
+      output <- loadSentenceCorpus outFile
+      let s3q = doTrain hg input output
+      saveSequence s3q s3qFile
+    _ -> print "Syntax error"

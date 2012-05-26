@@ -40,6 +40,8 @@ import qualified Data.Set as S
 import qualified Data.Tree as T
 import qualified Data.Vector as V
 
+import Debug.Trace
+
 import Vanda.Features
 import Vanda.Hypergraph.Basic
 import Vanda.Hypergraph.NFData ()
@@ -58,7 +60,7 @@ mapNodes :: (Ord v, Ord v') => (v -> v') -> EdgeList v l i -> EdgeList v' l i
 mapNodes f (EdgeList vs es) 
   = EdgeList (S.fromList $ map f $ S.toList vs) (map (mapHE f) es)
 
-toSimulation :: (Ix.Ix v, Ord l) => EdgeList v l i -> Simulation v l i
+toSimulation :: (Ord v, Ord l) => EdgeList v l i -> Simulation v l i
 toSimulation (EdgeList vs es) = Simulation vs lookup
   where
     lookup v l n
@@ -100,7 +102,7 @@ instance Ord (Prio MPolicy (Candidate v l i x)) where
   compare (FMP x) (FMP y) = compare y x
 
 knuth
-  :: forall v l i x. (NFData v, NFData l, NFData i, NFData x, Integral i, Ix.Ix v, Show l, Show v)
+  :: forall v l i x. (NFData v, NFData l, NFData i, NFData x, Ord i, Ord v, Show l, Show v, Show i)
   => EdgeList v l i
   -> Feature l i x
   -> V.Vector Double
@@ -137,9 +139,9 @@ knuth (EdgeList vs es) feat wV
         ])
         (M.fromList $ zip (S.toList vs) $ repeat [])
     -- -- --
-    iniAdjIM :: IM.IntMap Int -- ^ # ingoing adjacencies by edge id
+    iniAdjIM :: M.Map i Int -- ^ # ingoing adjacencies by edge id
     iniAdjIM
-      = IM.fromList
+      = M.fromList
         [ case e of
             Binary _ f1 f2 _ _
               | f1 == f2 -> (ie, 1)
@@ -151,7 +153,7 @@ knuth (EdgeList vs es) feat wV
         , case e of
             Nullary{} -> False
             _ -> True
-        , let ie = fromIntegral $ ident e
+        , let ie = ident e
         ]
     -- -- --
     updateLoop
@@ -163,15 +165,15 @@ knuth (EdgeList vs es) feat wV
     updateLoop !candH !bestA (c@(Candidate w (T.Node e _) _):cs) =
       let v = to e in
       case bestA M.! v of
-        [] -> updateLoop (H.insert c candH) (M.insert  v [c] bestA) cs
+        [] -> updateLoop (H.insert c candH) (M.insert v [c] bestA) cs
         Candidate w' _ _ : _
-          | w > w' -> updateLoop (H.insert c candH) (M.insert v [c] bestA  ) cs
+          | w > w' -> updateLoop (H.insert c candH) (M.insert v [c] bestA) cs
           | otherwise -> updateLoop candH bestA cs
     -- -- --
     knuthLoop
       :: CandidateHeap v l i x
       -> M.Map v [Candidate v l i x] -- BestArray v l i x
-      -> IM.IntMap Int
+      -> M.Map i Int
       -> M.Map v [Candidate v l i x] -- BestArray v l i x
     knuthLoop !candH !bestA !adjIM = case H.view candH of
       Nothing -> bestA -- < no candidates, so we are done
@@ -182,7 +184,7 @@ knuth (EdgeList vs es) feat wV
             | e == e' -> knuthLoop
                           candH''
                           bestA'
-                          (IM.fromList adjChange `IM.union` adjIM)
+                          (M.fromList adjChange `M.union` adjIM)
                   -- union: left argument preferred
               -- candidate for a visited node, just throw it away
             | otherwise -> knuthLoop candH' bestA adjIM
@@ -191,14 +193,14 @@ knuth (EdgeList vs es) feat wV
           v = to e
           (candH'', bestA') = updateLoop candH' bestA newCand
           newCand :: [Candidate v l i x] -- < new candidates from v
-          adjChange :: [(Int, Int)] -- < changes to adjacency map
+          adjChange :: [(i, Int)] -- < changes to adjacency map
           (newCand, adjChange)
             = (catMaybes *** id) . unzip . map work . (forwA M.!) $ v
           -- compute change for a given edge information
-          work :: Hyperedge v l i -> (Maybe (Candidate v l i x), (Int, Int))
+          work :: Hyperedge v l i -> (Maybe (Candidate v l i x), (i, Int))
           work e1
-            = let k = fromIntegral $ ident e1
-                  unvis' = (adjIM IM.! k) - 1
+            = let k = ident e1
+                  unvis' = (adjIM M.! k) - 1
                   cand =
                     if (==0) unvis'
                     then Just $ topCC feat wV e1 $ map (head . (bestA M.!))

@@ -26,9 +26,7 @@
 -- Left : nonterminals
 -- Right: terminals
 
--- TODO: Resulting pscfg accepts the empty word
-
-module Vanda.Algorithms.Earley.Earley_String_String  where
+module Vanda.Algorithms.EarleyCFG where
 
 -- import Control.Applicative
 import Control.Arrow
@@ -134,8 +132,8 @@ data State v l i t p = State
 earley' bs component wsa = earley bs component wsa (S.findMin $ nodes bs) -}
 
 earley
-  :: (Ord p, Ord v, Ord i, Ord t, Show p, Show v, Show i, Show t)
-  => BackwardStar v l i
+  :: (Ord p, Ord v, Ord i, Ord t, Show p, Show v, Show i, Show t, Hypergraph h)
+  => h v l i
   -> (l -> [Either Int t])
   -> WSA.WSA p t Double
   -> v            -- an initial node of the Hypergraph
@@ -143,7 +141,8 @@ earley
 earley hg component wsa v0
   = (mkHypergraph $ map doIt trans, V.fromList (snd (unzip theList)))
   where
-    trans = iter extract (initState hg component wsa v0) []
+    bs = toBackwardStar hg
+    trans = iter extract (initState bs component wsa v0) []
     theList = S.toList $ S.fromList $ snd $ unzip trans
     theMap = M.fromList (zip theList [0..])
     doIt (he, w) = mapHEi (\ i -> (i, theMap M.! w)) he
@@ -205,8 +204,11 @@ extract item@Item{bRight = []} state
     statl = stateList item
     ide = iEdge item
     edge = byId state ide
-    carryL yesbaby vert = [ (l, v, r) | ((l, _, r), v) <- zip yesbaby vert ]
-    yesyes lab wsast = [ x | x@(_, Left _, _) <- zip3 wsast lab (tail wsast) ]
+    carryL yesbaby vert
+      = [ (l, v, r) | (i, v) <- zip [0..] vert
+        , let (l, _, r) = yesbaby M.! i
+        ]
+    yesyes lab wsast = M.fromList [ (i, x) | x@(_, Left i, _) <- zip3 wsast lab (tail wsast) ]
     {-
     initial_weight 
       = if (iHead item == iniNode) -- START-SEPARATION REQUIRED
