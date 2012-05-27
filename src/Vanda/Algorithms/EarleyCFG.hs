@@ -26,7 +26,7 @@
 -- Left : nonterminals
 -- Right: terminals
 
-module Vanda.Algorithms.EarleyCFG where
+module Vanda.Algorithms.EarleyCFG ( earley ) where
 
 -- import Control.Applicative
 import Control.Arrow

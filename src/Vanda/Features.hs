@@ -38,7 +38,7 @@ module Vanda.Features (
 
 import Prelude hiding ( product )
 import Control.Arrow ( (***), (&&&) )
-import qualified Data.Array as A
+import qualified Data.Map as M
 import qualified Data.Tree as T
 import qualified Data.Vector as V
 
@@ -110,7 +110,7 @@ data Candidate v l i x
     }
 
 -- | An array of best derivations for each node.
-type BestArray v l i x = A.Array v [Candidate v l i x]
+type BestArray v l i x = {-A.Array-} M.Map v [Candidate v l i x]
 
 -- | Top concatenation for derivation candidates.
 topCC

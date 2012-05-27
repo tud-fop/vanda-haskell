@@ -106,7 +106,7 @@ knuth
   => EdgeList v l i
   -> Feature l i x
   -> V.Vector Double
-  -> M.Map v [Candidate v l i x] -- BestArray v l i x
+  -> BestArray v l i x
 knuth (EdgeList vs es) feat wV
   = knuthLoop
       iniCandH
@@ -158,9 +158,9 @@ knuth (EdgeList vs es) feat wV
     -- -- --
     updateLoop
       :: CandidateHeap v l i x
-      -> M.Map v [Candidate v l i x] -- BestArray v l i x
+      -> BestArray v l i x
       -> [Candidate v l i x]
-      -> (CandidateHeap v l i x, M.Map v [Candidate v l i x]) -- BestArray v l i x)
+      -> (CandidateHeap v l i x, BestArray v l i x)
     updateLoop !candH !bestA [] = (candH, bestA)
     updateLoop !candH !bestA (c@(Candidate w (T.Node e _) _):cs) =
       let v = to e in
@@ -172,9 +172,9 @@ knuth (EdgeList vs es) feat wV
     -- -- --
     knuthLoop
       :: CandidateHeap v l i x
-      -> M.Map v [Candidate v l i x] -- BestArray v l i x
+      -> BestArray v l i x
       -> M.Map i Int
-      -> M.Map v [Candidate v l i x] -- BestArray v l i x
+      -> BestArray v l i x
     knuthLoop !candH !bestA !adjIM = case H.view candH of
       Nothing -> bestA -- < no candidates, so we are done
       Just (Candidate _ (T.Node e _) _, candH') ->

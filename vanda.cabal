@@ -234,8 +234,11 @@ library
     , parsec >= 3.1.2
     , binary
     , deepseq
+    , zlib
+    , mtl
   exposed-modules:
       Vanda.Features
+    , Vanda.Functions
     , Vanda.Hypergraph
     , Vanda.Token
     , Vanda.Algorithms.EarleyCFG

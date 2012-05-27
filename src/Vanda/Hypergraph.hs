@@ -91,7 +91,7 @@ class Hypergraph h where
     => h v l i
     -> Feature l i x
     -> V.Vector Double
-    -> M.Map v [Candidate v l i x] -- BestArray v l i x
+    -> BestArray v l i x
   knuth = EL.knuth . toEdgeList
   
   -- | Applies a mapping to all hyperedges. The mapping may not change the
