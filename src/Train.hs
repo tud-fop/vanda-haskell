@@ -1,7 +1,10 @@
 module Main where 
 
+import qualified Data.Set as S
+import Debug.Trace
 import System.Environment ( getArgs, getProgName )
 
+import Vanda.Hypergraph
 import Vanda.Functions
 
 {-
@@ -10,13 +13,13 @@ instance (Show v, Show i, Show l, Show x) => Show (Candidate v l i x) where
     = "Gewicht: " ++ (show $ weight c) ++ "\n Ableitung: "
       ++ (show $ deriv c) ++ "\fdata: "
       ++ (show $ fdata c)
-  
-instance (Show v, Show i, Show l, Ord v) => Show (EdgeList v l i) where 
-  show g 
-    = show (S.toList $ nodesEL g) ++ "\n" ++ unlines (map show (edgesEL g))
 -}
 
-doTrain scfg input output = v where
+instance (Show v, Show i, Show l, Ord v) => Show (EdgeList v l i) where 
+  show g 
+    = show (S.toList $ nodes g) ++ "\n" ++ unlines (map show (edges g))
+
+doTrain scfg input output = traceShow part $ traceShow examples $ traceShow s3q $ v where
   examples = prepareExamples scfg input output -- :: WSA Int  l v 
   wvector = initialWeights scfg
   part = preparePartition scfg

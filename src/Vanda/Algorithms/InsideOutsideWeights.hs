@@ -124,7 +124,7 @@ outside
   -> v                 -- ^ target node
   -> h v l i
   -> M.Map v w
-outside w g = outside' converged w g
+outside = outside' converged
 
 
 -- | The same as 'outside', but a property to check if the fixpoint
@@ -162,7 +162,7 @@ outsideStep
   -> M.Map v w
   -> M.Map v w
 outsideStep target aux m
-  = M.adjust (1 +) target
+  = M.insertWith (+) target 1 -- M.update (Just . (1 +)) target
   $ M.fromList [ (v, f lst 0) | (v, lst) <- aux ]
   where
     f ((v, w) : xs) s = s `seq` f xs (s + (M.findWithDefault 0 v m) * w)

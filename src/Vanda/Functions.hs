@@ -80,15 +80,20 @@ loadSCFG
 loadSCFG file
   = fmap
     ( (uncurry SCFG)
-    . (id &&& S.findMin . nodes)
+    . (id &&& to . head . edges{-S.findMin . nodes-})
     . B.decode
     . decompress
     )
-  $ B.readFile file
+  $ B.readFile (file ++ ".bhg.gz")
 
 loadWeights :: String -> IO (VU.Vector Double)
 loadWeights file
-  = fmap (VU.fromList . B.decode . decompress) $ B.readFile file
+  = fmap
+    ( VU.fromList
+    . B.decode
+    . decompress
+    )
+  $ B.readFile (file ++ ".weights.gz")
 
 loadText :: String -> IO String
 loadText file
@@ -104,7 +109,7 @@ saveText text file = TIO.writeFile file (TIO.pack text)
 
 saveWeights :: VU.Vector Double -> String -> IO ()
 saveWeights v file
-  = B.writeFile file
+  = B.writeFile (file ++ ".weights.gz")
   $ compress
   $ B.encode
   $ VU.toList
@@ -268,7 +273,7 @@ makeString component best
   = case best of
       Nothing -> "(No translation.)"
       Just [] -> "(No translation.)"
-      Just (c : _) -> trace (T.drawTree $ fmap show $ deriv c) $ candToString component (deriv c)
+      Just (c : _) -> {-trace (T.drawTree $ fmap show $ deriv c) $-} candToString component (deriv c)
 
 initialWeights :: Ord nt => SCFG nt t i -> VU.Vector Double
 initialWeights hg = VU.replicate (length (edges (toHypergraph hg))) 0.1
@@ -301,7 +306,7 @@ doEM
   -> VU.Vector Double
   -> [(Double, VU.Vector Double)] 
 doEM part exs initw
-  = take 100 $ forestEMlist part exs (fst . fst . ident) initw 
+  = take 10 $ forestEMlist part exs (fst . fst . ident) initw 
 
 getVector :: [(Double, VU.Vector Double)] -> VU.Vector Double
-getVector = snd . (!! 99)
+getVector = snd . (!! 9)

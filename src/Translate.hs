@@ -10,7 +10,7 @@ doTranslate scfg weights input = output where
   wsa = toWSA input -- :: WSA Int  l v 
   (scfg', feat') = inputProduct wsa scfg feat
   best = bestDeriv scfg' feat'
-  output = getOutputString best
+  output = {-getInputString best ++ "\n" ++-} getOutputString best {-++ "\n"-}
 
 
 main :: IO ()

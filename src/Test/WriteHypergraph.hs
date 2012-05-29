@@ -16,12 +16,51 @@ main = do
   args <- getArgs
   case args of
     ["-o", outfile] ->
-      let rules = hgString
+      let rules = hgString10
       in B.writeFile (outfile ++ ".bhg.gz") (compress $ B.encode rules)
     _ -> print $ "Usage: " ++ progName ++ "-o outfile"    
 
-hgString :: EdgeList String ([Either Int String], [Either Int String]) Int
-hgString
+hgString10 :: EdgeList String ([Either Int String], [Either Int String]) Int
+hgString10
+  = mkHypergraph 
+      [ mkHyperedge "S" ["S","X"] ([Left 0, Left 1], [Left 0, Left 1]) 0
+      , mkHyperedge "S" ["X"] ([Left 0], [Left 0]) 1
+      , mkHyperedge "X" ["X","X"]
+        ( [Right "yu", Left 0, Right "you", Left 1]
+        , [Right "have", Left 1, Right "with", Left 0]
+        ) 2
+      , mkHyperedge "X" ["X","X"]
+        ( [Left 0, Right "de", Left 1]
+        , [Right "the", Left 1, Right "that", Left 0]
+        ) 3
+      , mkHyperedge "X" ["X"]
+        ( [Left 0, Right "zhiyi"]
+        , [Right "one", Right "of",  Left 0]
+        ) 4
+      , mkHyperedge "X" []
+        ( [Right "Aozhou"]
+        , [Right "Australia"]
+        ) 5
+      , mkHyperedge "X" [] 
+        ( [Right "Beihan"]
+        , [Right "North", Right "Korea"]
+        ) 6
+      , mkHyperedge "X" [] 
+        ( [Right "shi"]
+        , [Right "is"]
+        ) 7
+      , mkHyperedge "X" [] 
+        ( [Right "bangjiao"]
+        , [Right "diplomatic", Right "relations"]
+        ) 8
+      , mkHyperedge "X" []
+        ( [Right "shaoshu", Right "guojia"]
+        , [Right "few", Right "countries"]
+        ) 9
+      ]  
+
+hgString16 :: EdgeList String ([Either Int String], [Either Int String]) Int
+hgString16
   = mkHypergraph 
       [ mkHyperedge "X" ["X","X"]
         ( [Left 0, Right "duonianlai", Right "de", Left 1]
