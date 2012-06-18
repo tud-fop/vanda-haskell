@@ -153,8 +153,9 @@ forestEMstepList gs exId (_,theta)
     | (v0, g, w) <- gs -- for each forest
     , let inner = inside exweight g -- compute inside weights
     , let outer = outside exweight inner v0 g -- compute outside weights
-    , let innerv0 = inner M.! v0 -- inner of target node
+    , let innerv0 = M.findWithDefault 0 v0 inner -- inner of target node
     , let factor = w/innerv0 -- example-specific factor for id significance
+    , innerv0 /= 0
     , traceShow outer True
     ]
     where

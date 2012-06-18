@@ -234,14 +234,14 @@ iter extract s r
   = case Q.deqMaybe (itemq s) of
       Nothing -> r
       Just (i, itemq')
-        -> s' `seq` r' `seq` iter extract s' r'
+        -> s0 `seq` s1 `seq` s2 `seq` s3 `seq` r' `seq` iter extract s3 r'
         where
-          s' = complete i
-             $ scan i
-             $ predict i
+          s3 = complete i s2
+          s2 = scan i s1
+          s1 = predict i s0
              -- $ traceShow i
-             $ s{itemq = itemq'}
-          r' = maybe id (:) (extract i s') r
+          s0 = s{itemq = itemq'}
+          r' = maybe id (:) (extract i s3) r
  
 
 predict

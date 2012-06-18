@@ -70,12 +70,12 @@ filterEdges
 filterEdges p (BackwardStar vs b _) = BackwardStar vs (filter p . b) False
 
 fromEdgeList :: Ord v => EdgeList v l i -> BackwardStar v l i
-fromEdgeList (EdgeList vs es) = BackwardStar vs (a M.!) True
+fromEdgeList (EdgeList vs es) = BackwardStar vs (flip (M.findWithDefault []) a) True
   where
     lst = [ (v, [e]) | e <- es, let v = to e ]
-    a = M.union
+    a = -- M.union
         (M.fromListWith (++) lst)
-        (M.fromList $ zip (S.toList vs) $ repeat [])
+        -- (M.fromList $ zip (S.toList vs) $ repeat [])
         -- A.accumArray (flip (:)) [] vs lst
 
 mapNodes

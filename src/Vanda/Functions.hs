@@ -1,13 +1,16 @@
 module Vanda.Functions
-  ( SCFG
+  ( SCFG (..)
+  , loadGHKM
   , loadSCFG
   , loadWeights
   , loadText
+  , loadTokenMap
   , loadSentenceCorpus
   , saveText
   , saveSequence
   , saveWeights
   , toWSA
+  , toWSAmap
   , inputProduct
   , inputProduct'
   , outputProduct
@@ -18,6 +21,7 @@ module Vanda.Functions
   , getOutputString
   , initialWeights
   , prepareExamples
+  , prepareExamplesGHKM
   , preparePartition
   , doEM
   , fakeWeights
@@ -35,7 +39,7 @@ import qualified Data.ByteString.Lazy as B
 import qualified Data.Map as M
 import qualified Data.List as L
 import qualified Data.Set as S
-import Data.Tree as T
+import qualified Data.Tree as T
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
 import Debug.Trace
@@ -47,7 +51,7 @@ import qualified Vanda.Algorithms.Earley.WSA as WSA
 import Vanda.Features
 import Vanda.Hypergraph
 import Vanda.Hypergraph.Binary ()
--- import Vanda.Token
+import Vanda.Token
 
 import Vanda.Algorithms.ExpectationMaximization
 
@@ -69,15 +73,28 @@ instance (Show v, Show i, Show l, Ord v) => Show (EdgeList v l i) where
 
 type SyncPair t = ([Either Int t], [Either Int t])
 
-data SCFG nt t i
+type GHKM t = (T.Tree (Either Int t), [Either Int t])
+
+data SCFG nt l i
   = SCFG
-    { toHypergraph :: EdgeList nt (SyncPair t) i
+    { toHypergraph :: EdgeList nt l i
     , initNT :: nt
     }
 
 loadSCFG
-  :: String -> IO (SCFG String String Int)
+  :: String -> IO (SCFG String (SyncPair String) Int)
 loadSCFG file
+  = fmap
+    ( (uncurry SCFG)
+    . (id &&& to . head . edges{-S.findMin . nodes-})
+    . B.decode
+    . decompress
+    )
+  $ B.readFile (file ++ ".bhg.gz")
+
+loadGHKM
+  :: String -> IO (SCFG Token (GHKM Token) Int)
+loadGHKM file
   = fmap
     ( (uncurry SCFG)
     . (id &&& to . head . edges{-S.findMin . nodes-})
@@ -98,6 +115,11 @@ loadWeights file
 loadText :: String -> IO String
 loadText file
   = fmap (TIO.unpack . head . TIO.lines) $ TIO.readFile file
+
+loadTokenMap :: String -> IO TokenMap
+loadTokenMap file
+  = fmap fromText
+  $ TIO.readFile file
 
 loadSentenceCorpus :: String -> IO [String]
 loadSentenceCorpus file
@@ -124,6 +146,9 @@ saveSequence s3q file
 
 toWSA :: String -> WSA.WSA Int String Double 
 toWSA = WSA.fromList 1.0 . L.words
+
+toWSAmap :: TokenMap -> String -> WSA.WSA Int Token Double 
+toWSAmap tm = WSA.fromList 1.0 . map (getToken tm) . L.words
 
 {-
 scfgProduct
@@ -152,11 +177,11 @@ scfgProduct component wsa (SCFG hg initnt)
 -}
 scfgProduct
   :: (Show t, Show nt, Show p, Show i, Ord t, Ord nt, Ord p, Ord i)
-  => (SyncPair t -> [Either Int t])
+  => (l -> [Either Int t])
   -> WSA.WSA p t Double
-  -> SCFG nt t i
+  -> SCFG nt l i
   -> Feature l i Double
-  -> (SCFG (p, nt, p) t (i, Int), Feature l (i, Int) (Double, Double))
+  -> (SCFG (p, nt, p) l (i, Int), Feature l (i, Int) (Double, Double))
 scfgProduct component wsa (SCFG hg initnt) f1
   = (scfg', projLeft f1 +++ projRight f2)
   where
@@ -174,10 +199,10 @@ scfgProduct component wsa (SCFG hg initnt) f1
 
 scfgProduct'
   :: (Show t, Show nt, Show p, Show i, Ord t, Ord nt, Ord p, Ord i)
-  => (SyncPair t -> [Either Int t])
+  => (l -> [Either Int t])
   -> WSA.WSA p t Double
-  -> SCFG nt t i
-  -> SCFG (p, nt, p) t (i, Int)
+  -> SCFG nt l i
+  -> SCFG (p, nt, p) l (i, Int)
 scfgProduct' component wsa (SCFG hg initnt)
   = SCFG
     { toHypergraph = fst $ earley hg component wsa initnt
@@ -191,33 +216,33 @@ scfgProduct' component wsa (SCFG hg initnt)
 inputProduct
   :: (Show t, Show nt, Show p, Show i, Ord t, Ord nt, Ord p, Ord i)
   => WSA.WSA p t Double
-  -> SCFG nt t i
-  -> Feature l i Double
-  -> (SCFG (p, nt, p) t (i, Int), Feature l (i, Int) (Double, Double))
+  -> SCFG nt ([Either Int t], l) i
+  -> Feature ([Either Int t], l) i Double
+  -> (SCFG (p, nt, p) ([Either Int t], l) (i, Int), Feature ([Either Int t], l) (i, Int) (Double, Double))
 inputProduct = scfgProduct fst
 
 
 inputProduct'
   :: (Show t, Show nt, Show p, Show i, Ord t, Ord nt, Ord p, Ord i)
   => WSA.WSA p t Double
-  -> SCFG nt t i
-  -> SCFG (p, nt, p) t (i, Int)
+  -> SCFG nt ([Either Int t], l) i
+  -> SCFG (p, nt, p) ([Either Int t], l) (i, Int)
 inputProduct' = scfgProduct' fst
 
 
 outputProduct
   :: (Show t, Show nt, Show p, Show i, Ord t, Ord nt, Ord p, Ord i)
   => WSA.WSA p t Double
-  -> SCFG nt t i
-  -> Feature l i Double
-  -> (SCFG (p, nt, p) t (i, Int), Feature l (i, Int) (Double, Double))
+  -> SCFG nt (l, [Either Int t]) i
+  -> Feature (l, [Either Int t]) i Double
+  -> (SCFG (p, nt, p) (l, [Either Int t]) (i, Int), Feature (l, [Either Int t]) (i, Int) (Double, Double))
 outputProduct = scfgProduct snd
 
 outputProduct'
   :: (Show t, Show nt, Show p, Show i, Ord t, Ord nt, Ord p, Ord i)
-  => SCFG nt t i
+  => SCFG nt (l, [Either Int t]) i
   -> WSA.WSA p t Double
-  -> SCFG (p, nt, p) t (i, Int)
+  -> SCFG (p, nt, p) (l, [Either Int t]) (i, Int)
 outputProduct' = flip $ scfgProduct' snd
 
 
@@ -225,10 +250,10 @@ fakeWeights :: Ord nt => SCFG nt t i -> Feature (SyncPair t) i Double
 fakeWeights _ = Feature (\ _ _ _ -> 1) V.singleton
 
 bestDeriv
-  :: (NFData x, NFData i, NFData t, NFData nt, Show t, Show nt, Show i, Ord i, Ord nt)
-  => SCFG nt t i
-  -> Feature (SyncPair t) i x
-  -> Maybe [Candidate nt (SyncPair t) i x]
+  :: (NFData x, NFData i, NFData l, NFData nt, Show l, Show nt, Show i, Ord i, Ord nt)
+  => SCFG nt l i
+  -> Feature l i x
+  -> Maybe [Candidate nt l i x]
 bestDeriv scfg feat
   = M.lookup (initNT scfg)
   $ knuth (toHypergraph scfg) feat (V.singleton 1.0)
@@ -280,7 +305,7 @@ initialWeights hg = VU.replicate (length (edges (toHypergraph hg))) 0.1
 
 prepareExamples
   :: (Ord i, Ord nt, Show i, Show nt)
-  => SCFG nt String i
+  => SCFG nt (SyncPair String) i
   -> [String]
   -> [String]
   -> [ ((Int, (Int, nt, Int), Int)
@@ -290,6 +315,27 @@ prepareExamples scfg input output
   = [ (initNT pr, toHypergraph pr, 1)
     | (inp, oup) <- zip input output
     , let pr = (toWSA inp `inputProduct'` scfg) `outputProduct'` toWSA oup
+    ]
+
+myflatten :: T.Tree t -> [t]
+myflatten T.Node{T.rootLabel = l, T.subForest = s}
+  | null s = [l]
+  | otherwise = concatMap myflatten s
+
+prepareExamplesGHKM
+  :: (Ord i, Ord nt, Show i, Show nt)
+  => SCFG nt (GHKM Token) i
+  -> TokenMap
+  -> [String]
+  -> [String]
+  -> [ ((Int, (Int, nt, Int), Int)
+     , EdgeList (Int, (Int, nt, Int), Int) (GHKM Token) ((i, Int), Int)
+     , Double)]
+prepareExamplesGHKM scfg tm input output
+  = [ (initNT pr, toHypergraph pr, 1)
+    | (inp, oup) <- zip input output
+    , let pr = (scfgProduct' (myflatten . fst) (toWSAmap tm inp) scfg)
+               `outputProduct'` toWSAmap tm oup
     ]
 
 preparePartition

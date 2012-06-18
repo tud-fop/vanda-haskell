@@ -42,7 +42,7 @@ import qualified Data.Map as M
 import qualified Data.Text.Lazy as T
 
 type Token = Int32
-newtype TokenMap = TokenMap { unTokenMap :: M.Map String Token }
+newtype TokenMap = TokenMap { unTokenMap :: M.Map String Token } deriving Show
 newtype TokenArray = TokenArray { unTokenArray :: A.Array Token String }
 
 instance NFData TokenMap where

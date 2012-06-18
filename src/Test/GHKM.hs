@@ -398,8 +398,8 @@ instance Ord l => Ord (T.Tree l) where
         (EQ, EQ) -> EQ
         _ -> GT
 
-instance Show (TokenMap) where
-  show m = show $ toMap m
+-- instance Show (TokenMap) where
+--   show m = show $ toMap m
 
 
 main :: IO ()
@@ -431,10 +431,14 @@ main = do
                       )
                     )
                     0
+      let rul = [ mkHyperedge (to e) (from e) (Hypergraph.label e) i 
+                | (r, i) <- zip rules [0..]
+                , let e = unRule r
+                ]
       TIO.writeFile outFile (TIO.unlines (map (TIO.pack . printRule) rules))
       TIO.writeFile (outFile ++ ".string") (TIO.unlines (map (TIO.pack . printRuleTA (toArray tmap')) rules))
       TIO.writeFile (mapFile ++ ".new") (toText tmap')
-      let hyp = mkHypergraph $ map unRule rules 
+      let hyp = mkHypergraph rul 
             :: EdgeList Token (T.Tree (Either Int Token), [Either Int Token]) Int
       B.writeFile (outFile ++ ".bhg.gz") (compress $ B.encode hyp)
       -- TIO.writeFile (outFile ++ ".bhg.gz") 
