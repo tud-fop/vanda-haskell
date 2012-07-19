@@ -30,6 +30,7 @@ module Vanda.Hypergraph.BackwardStar
   , toEdgeList
   , toSimulation
   , dropUnreachables
+  , dropNonproducing
 --  , product
 --  , product'
   ) where
@@ -120,6 +121,47 @@ toSimulation (BackwardStar vs b _) = Simulation vs lookup
       ]
     a = M.fromList [ (v, makeM $ b v) | v <- S.toList vs ]
         -- A.array vs [ (v, makeM $ b v) | v <- Ix.range vs ]
+
+-- | Drops nonproducing nodes and corresponding edges.
+dropNonproducing
+  :: forall v l i. Ord v
+  => BackwardStar v l i
+  -> BackwardStar v l i
+dropNonproducing (BackwardStar vs b _) = BackwardStar vs' b' False
+  where
+    vs' = vsS0 -- S.findMin &&& S.findMax $ vsS0
+    b' v = if S.member v vsS0
+           then filter p $ b v
+           else []
+    p e = S.fromList (from e) `S.isSubsetOf` vsS0
+    theMap
+      = M.fromListWith S.union
+      $ concat
+      $ [ if null frome
+          then [ (Nothing, stoe) ]
+          else [ (Just x, stoe) | x <- frome ]
+        | v <- S.toList vs
+        , e <- b v
+        , let frome = from e
+        , let stoe = S.singleton (to e)
+        ]
+    -- set of producing nodes
+    vsS0 :: S.Set v
+    vsS0 = closeProducing
+             ( S.empty
+             , Q.fromList (S.toList (theMap M.! Nothing))
+             )
+    -- "while loop" for computing the closure
+    closeProducing :: (S.Set v, Q.Queue v) -> S.Set v
+    closeProducing (vsS, vsQ) = case Q.deqMaybe vsQ of
+      Nothing -> vsS
+      Just (v, vsQ') ->
+        if S.member v vsS
+        then closeProducing (vsS, vsQ')
+        else closeProducing
+               ( S.insert v vsS
+               , Q.enqList (S.toList (theMap M.! Just v)) vsQ'
+               )
 
 -- | Drops unreachable nodes and corresponding edges.
 dropUnreachables

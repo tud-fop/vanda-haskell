@@ -29,6 +29,7 @@ executable Train
     , binary
     , deepseq
     , zlib
+    , parallel >= 3.2
   Main-Is:  Train.hs
   hs-source-dirs:  src
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
@@ -55,10 +56,11 @@ executable TrainGHKM
     , binary
     , deepseq
     , zlib
+    , parallel >= 3.2
   Main-Is:  TrainGHKM.hs
   hs-source-dirs:  src
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-  ghc-prof-options: -caf-all -auto-all
+  ghc-prof-options: -fprof-auto -fprof-cafs
   Extensions:
       ScopedTypeVariables
     , TypeSynonymInstances
@@ -81,6 +83,7 @@ executable Translate
     , binary
     , deepseq
     , zlib
+    , parallel >= 3.2
   Main-Is:  Translate.hs
   hs-source-dirs:  src
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
@@ -262,12 +265,13 @@ library
     , deepseq
     , zlib
     , mtl
+    , parallel >= 3.2
   exposed-modules:
       Vanda.Features
     , Vanda.Functions
     , Vanda.Hypergraph
     , Vanda.Token
-    , Vanda.Algorithms.EarleyCFG
+    , Vanda.Algorithms.EarleyMonadic
     , Vanda.Algorithms.Earley.FastNub
     , Vanda.Algorithms.Earley.WSA
     , Vanda.Algorithms.ExpectationMaximization
@@ -288,6 +292,8 @@ library
     , Data.Queue
   hs-source-dirs:  src
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+  --  -ddump-rule-rewrites
+  --  -ddump-rule-firings
   Extensions:
       ScopedTypeVariables
     , TypeSynonymInstances

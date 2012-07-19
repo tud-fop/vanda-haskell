@@ -49,7 +49,7 @@ instance NFData TokenMap where
   rnf = rnf . M.toList . unTokenMap
 
 getToken :: TokenMap -> String -> Token
-getToken = (M.!) . unTokenMap
+getToken = flip (M.findWithDefault (-1)) . unTokenMap
 
 getString :: TokenArray -> Token -> String
 getString = (A.!) . unTokenArray

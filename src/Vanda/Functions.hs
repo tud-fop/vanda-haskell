@@ -32,7 +32,7 @@ module Vanda.Functions
 import Codec.Compression.GZip ( compress, decompress )
 
 import Control.Arrow ( (&&&) )
-import Control.DeepSeq ( NFData )
+import Control.DeepSeq ( NFData, force )
 
 import qualified Data.Binary as B
 import qualified Data.ByteString.Lazy as B
@@ -46,7 +46,7 @@ import Debug.Trace
 import qualified Data.Text.Lazy as TIO
 import qualified Data.Text.Lazy.IO as TIO
 
-import Vanda.Algorithms.EarleyCFG ( earley )
+import Vanda.Algorithms.EarleyMonadic ( earley )
 import qualified Vanda.Algorithms.Earley.WSA as WSA
 import Vanda.Features
 import Vanda.Hypergraph
@@ -77,7 +77,7 @@ type GHKM t = (T.Tree (Either Int t), [Either Int t])
 
 data SCFG nt l i
   = SCFG
-    { toHypergraph :: EdgeList nt l i
+    { toHypergraph :: BackwardStar nt l i
     , initNT :: nt
     }
 
@@ -86,8 +86,8 @@ loadSCFG
 loadSCFG file
   = fmap
     ( (uncurry SCFG)
-    . (id &&& to . head . edges{-S.findMin . nodes-})
-    . B.decode
+    . (toBackwardStar &&& to . head . edges{-S.findMin . nodes-})
+    . (B.decode :: B.ByteString -> EdgeList String (SyncPair String) Int)
     . decompress
     )
   $ B.readFile (file ++ ".bhg.gz")
@@ -97,8 +97,9 @@ loadGHKM
 loadGHKM file
   = fmap
     ( (uncurry SCFG)
-    . (id &&& to . head . edges{-S.findMin . nodes-})
-    . B.decode
+    . (toBackwardStar &&& to . head . edges{-S.findMin . nodes-})
+    . force
+    . (B.decode :: B.ByteString -> EdgeList Token (GHKM Token) Int)
     . decompress
     )
   $ B.readFile (file ++ ".bhg.gz")
@@ -176,7 +177,7 @@ scfgProduct component wsa (SCFG hg initnt)
     pN _ !i xs = (wgt VU.! snd i) * Prelude.product xs
 -}
 scfgProduct
-  :: (Show t, Show nt, Show p, Show i, Ord t, Ord nt, Ord p, Ord i)
+  :: (Show t, Show nt, Show p, Show i, Ord t, Ord nt, Ord p, Ord i, NFData p, NFData nt, NFData i, NFData t, NFData l)
   => (l -> [Either Int t])
   -> WSA.WSA p t Double
   -> SCFG nt l i
@@ -187,7 +188,7 @@ scfgProduct component wsa (SCFG hg initnt) f1
   where
     scfg'
       = SCFG
-        { toHypergraph = hg'
+        { toHypergraph = toBackwardStar hg'
         , initNT
           = ( fst . head . WSA.initialWeights $ wsa
             , initnt
@@ -198,14 +199,14 @@ scfgProduct component wsa (SCFG hg initnt) f1
     f2 = Feature (\_ !i xs -> (wgt VU.! i) * Prelude.product xs) V.singleton
 
 scfgProduct'
-  :: (Show t, Show nt, Show p, Show i, Ord t, Ord nt, Ord p, Ord i)
+  :: (Show t, Show nt, Show p, Show i, Ord t, Ord nt, Ord p, Ord i, NFData p, NFData nt, NFData i, NFData t, NFData l)
   => (l -> [Either Int t])
   -> WSA.WSA p t Double
   -> SCFG nt l i
   -> SCFG (p, nt, p) l (i, Int)
 scfgProduct' component wsa (SCFG hg initnt)
   = SCFG
-    { toHypergraph = fst $ earley hg component wsa initnt
+    { toHypergraph = toBackwardStar $ fst $ earley hg component wsa initnt
     , initNT
       = ( fst . head . WSA.initialWeights $ wsa
         , initnt
@@ -214,7 +215,7 @@ scfgProduct' component wsa (SCFG hg initnt)
     }
 
 inputProduct
-  :: (Show t, Show nt, Show p, Show i, Ord t, Ord nt, Ord p, Ord i)
+  :: (Show t, Show nt, Show p, Show i, Ord t, Ord nt, Ord p, Ord i, NFData l, NFData t, NFData i, NFData nt, NFData p)
   => WSA.WSA p t Double
   -> SCFG nt ([Either Int t], l) i
   -> Feature ([Either Int t], l) i Double
@@ -223,7 +224,7 @@ inputProduct = scfgProduct fst
 
 
 inputProduct'
-  :: (Show t, Show nt, Show p, Show i, Ord t, Ord nt, Ord p, Ord i)
+  :: (Show t, Show nt, Show p, Show i, Ord t, Ord nt, Ord p, Ord i, NFData l, NFData t, NFData i, NFData nt, NFData p)
   => WSA.WSA p t Double
   -> SCFG nt ([Either Int t], l) i
   -> SCFG (p, nt, p) ([Either Int t], l) (i, Int)
@@ -231,7 +232,7 @@ inputProduct' = scfgProduct' fst
 
 
 outputProduct
-  :: (Show t, Show nt, Show p, Show i, Ord t, Ord nt, Ord p, Ord i)
+  :: (Show t, Show nt, Show p, Show i, Ord t, Ord nt, Ord p, Ord i, NFData l, NFData t, NFData i, NFData nt, NFData p)
   => WSA.WSA p t Double
   -> SCFG nt (l, [Either Int t]) i
   -> Feature (l, [Either Int t]) i Double
@@ -239,7 +240,7 @@ outputProduct
 outputProduct = scfgProduct snd
 
 outputProduct'
-  :: (Show t, Show nt, Show p, Show i, Ord t, Ord nt, Ord p, Ord i)
+  :: (Show t, Show nt, Show p, Show i, Ord t, Ord nt, Ord p, Ord i, NFData l, NFData t, NFData i, NFData nt, NFData p)
   => SCFG nt (l, [Either Int t]) i
   -> WSA.WSA p t Double
   -> SCFG (p, nt, p) (l, [Either Int t]) (i, Int)
@@ -304,12 +305,12 @@ initialWeights :: Ord nt => SCFG nt t i -> VU.Vector Double
 initialWeights hg = VU.replicate (length (edges (toHypergraph hg))) 0.1
 
 prepareExamples
-  :: (Ord i, Ord nt, Show i, Show nt)
+  :: (Ord i, Ord nt, Show i, Show nt, NFData i, NFData nt)
   => SCFG nt (SyncPair String) i
   -> [String]
   -> [String]
   -> [ ((Int, (Int, nt, Int), Int)
-     , EdgeList (Int, (Int, nt, Int), Int) (SyncPair String) ((i, Int), Int)
+     , BackwardStar (Int, (Int, nt, Int), Int) (SyncPair String) ((i, Int), Int)
      , Double)]
 prepareExamples scfg input output
   = [ (initNT pr, toHypergraph pr, 1)
@@ -322,21 +323,62 @@ myflatten T.Node{T.rootLabel = l, T.subForest = s}
   | null s = [l]
   | otherwise = concatMap myflatten s
 
+getTerminals :: Ord t => WSA.WSA Int t Double -> S.Set t
+getTerminals = S.fromList . map WSA.transTerminal . WSA.transitions
+
+getTerminalsGHKM :: Ord t => GHKM t -> S.Set t
+getTerminalsGHKM (l, r) = getString r $ getTree S.empty l
+  where
+    getString [] s = s
+    getString (Left _ : xs) s = getString xs s
+    getString (Right t : xs) s = getString xs (S.insert t s)
+    getTree s (T.Node (Left _) []) = s
+    getTree s (T.Node (Right t) []) = S.insert t s
+    getTree s (T.Node _ xs) = L.foldl' getTree s xs
+
+pruneTerminals :: Ord t => S.Set t -> SCFG nt (GHKM t) i -> SCFG nt (GHKM t) i
+pruneTerminals ts (SCFG bs@(BackwardStar _ b _) initnt)
+  = let
+      b' = filter p . b
+      p he = S.null $ getTerminalsGHKM (label he) `S.difference` ts
+    in SCFG bs{ backStar = b' } initnt
+
+droppNonproducing :: Ord nt => SCFG nt (GHKM t) i -> SCFG nt (GHKM t) i
+droppNonproducing scfg
+  = scfg{ toHypergraph = dropNonproducing (toHypergraph scfg) }
+
 prepareExamplesGHKM
-  :: (Ord i, Ord nt, Show i, Show nt)
+  :: (Ord i, Ord nt, Show i, Show nt, NFData i, NFData nt)
   => SCFG nt (GHKM Token) i
   -> TokenMap
   -> [String]
   -> [String]
-  -> [ ((Int, (Int, nt, Int), Int)
-     , EdgeList (Int, (Int, nt, Int), Int) (GHKM Token) ((i, Int), Int)
-     , Double)]
+  -> [ ( (Int, (Int, nt, Int), Int)
+       , BackwardStar (Int, (Int, nt, Int), Int) (GHKM Token) ((i, Int), Int)
+       , Double
+       )
+     ]
+  {- -> [ ( (Int, nt, Int)
+       , BackwardStar (Int, nt, Int) (GHKM Token) (i, Int)
+       , Double
+       )
+     ]-}
 prepareExamplesGHKM scfg tm input output
   = [ (initNT pr, toHypergraph pr, 1)
-    | (inp, oup) <- zip input output
-    , let pr = (scfgProduct' (myflatten . fst) (toWSAmap tm inp) scfg)
-               `outputProduct'` toWSAmap tm oup
+    | (is, os, inp, oup) <- force flist
+    , trace is $ trace os True
+    , let scfg' = droppNonproducing
+                $ pruneTerminals (getTerminals inp `S.union` getTerminals oup)
+                $ scfg
+    -- , trace (unlines $ map show $ edges $ toHypergraph scfg') True
+    -- , trace "\n" True
+    , let pr = (scfgProduct' (myflatten . fst) inp scfg') `outputProduct'` oup
     ]
+  where
+    flist
+      = [ (inp, oup, toWSAmap tm inp, toWSAmap tm oup)
+        | (inp, oup) <- zip input output
+        ]
 
 preparePartition
   :: Ord nt => SCFG nt t i -> [[i]]

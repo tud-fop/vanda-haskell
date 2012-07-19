@@ -21,5 +21,5 @@ instance (NFData v, NFData l, NFData i) => NFData (Hyperedge v l i) where
 instance (NFData v, NFData l, NFData i) => NFData (EdgeList v l i) where
   rnf (EdgeList vs es) = rnf vs `seq` rnf es
   
-instance (NFData v) => NFData (S.Set v) where
-  rnf s = rnf $ S.toList s
+{-instance (NFData v) => NFData (S.Set v) where
+  rnf s = rnf $ S.toList s-}

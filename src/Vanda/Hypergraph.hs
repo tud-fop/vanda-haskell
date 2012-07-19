@@ -52,7 +52,7 @@ class Hypergraph h where
   -- | Computes the array of best derivations. Basically a composition
   -- of "bests'" and 'knuth'.
   bests
-    :: (Integral i, NFData v, NFData l, NFData i, NFData x, Ix.Ix v, Show l, Show v)
+    :: (Integral i, NFData v, NFData l, NFData i, NFData x, Ix.Ix v, Show l, Show v, Show i)
     => h v l i
     -> Feature l i x
     -> V.Vector Double
@@ -70,9 +70,16 @@ class Hypergraph h where
     -> M.Map v [Candidate v l i x] -- BestArray v l i x
   bests' = BS.bests . toBackwardStar
   
+  -- | Drops nonproducing nodes and corresponding edges.
+  dropNonproducing
+    :: Ord v
+    => h v l i            -- ^ Input hypergraph
+    -> BackwardStar v l i -- ^ Output hypergraph
+  dropNonproducing = BS.dropNonproducing . toBackwardStar
+  
   -- | Drops unreachable nodes and corresponding edges.
   dropUnreachables
-    :: Ix.Ix v
+    :: Ord v
     => v                  -- ^ Target node for reachability analysis
     -> h v l i            -- ^ Input hypergraph
     -> BackwardStar v l i -- ^ Output hypergraph

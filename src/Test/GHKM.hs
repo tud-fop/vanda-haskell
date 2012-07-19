@@ -81,8 +81,8 @@ instance NFData l => NFData (TreeNode2 l) where
       `seq` rnf (complSpan tn2)
       `seq` rnf (frontier tn2)
 
-instance NFData l => NFData (T.Tree l) where
-  rnf (T.Node l ts) = rnf l `seq` rnf ts
+{- instance NFData l => NFData (T.Tree l) where
+  rnf (T.Node l ts) = rnf l `seq` rnf ts -}
 
 instance NFData x => NFData (V.Vector x) where
   rnf s = rnf (V.toList s)
@@ -90,8 +90,8 @@ instance NFData x => NFData (V.Vector x) where
 -- instance NFData x => NFData (S.Set x) where
   -- rnf s = rnf (S.toList s)
 
-instance (NFData k, NFData v) => NFData (M.Map k v) where
-  rnf m = rnf (M.toList m)
+{-instance (NFData k, NFData v) => NFData (M.Map k v) where
+  rnf m = rnf (M.toList m)-}
 
 instance NFData l => NFData (Alignment l) where
   rnf al = rnf (almap al) `seq` rnf (snt al)

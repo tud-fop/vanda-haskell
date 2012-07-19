@@ -17,7 +17,7 @@
 --   1998.
 --   <http://www.cs.cmu.edu/~rwh/theses/okasaki.pdf>
 module Data.Queue (
-  Queue()
+  Queue(..)
 , null
 , empty
 , singleton

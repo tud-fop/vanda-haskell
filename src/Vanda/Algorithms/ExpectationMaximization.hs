@@ -45,7 +45,7 @@ iter = iter' 0 where
 
 -- | Execute the forest-EM algorithm, i.e., iterate the EM step.
 forestEM
-  :: (Converging w, RealFloat w, Integral i, Ord v, Hypergraph h, V.Unbox w, Show v)
+  :: (Converging w, RealFloat w, Integral i, Ord v, Hypergraph h, V.Unbox w, Show v, Show w)
   => [[i]]                -- ^ partition of the ids for normalization
   -> [(v, h v l j, w)]
                           -- ^ a list of training example derivation forests
@@ -59,7 +59,7 @@ forestEM part gs exId p i
     p' (l1,_) (l2,_) it = p (abs (l2-l1)) it
 
 forestEMlist
-  :: (Converging w, RealFloat w, Integral i, Ord v, Hypergraph h, V.Unbox w, Show v)
+  :: (Converging w, RealFloat w, Integral i, Ord v, Hypergraph h, V.Unbox w, Show v, Show w)
   => [[i]]                -- ^ partition of the ids for normalization
   -> [(v, h v l j, w)]
                           -- ^ a list of training example derivation forests
@@ -97,7 +97,7 @@ normalize part m
 -- | Do an EM-step. The arguments are as for 'forestEM', only without the
 -- stopping condition.
 forestEMstep
-  :: (Converging w, RealFloat w, Integral i, Ord v, Hypergraph h, V.Unbox w, Show v)
+  :: (Converging w, RealFloat w, Integral i, Ord v, Hypergraph h, V.Unbox w, Show v, Show w)
   => [[i]]                -- ^ partition of the ids for normalization
   -> [(v, h v l j, w)]
                           -- ^ a list of training-example derivation forests
@@ -128,7 +128,7 @@ forestEMstep part gs exId theta
 -- that forest (not strictly necessary for further processing, but nice for
 -- documentation).
 forestEMstepList
-  :: (Converging w, Floating w, Integral i, Ord v, Hypergraph h, V.Unbox w, Show v)
+  :: (Converging w, Floating w, Integral i, Ord v, Hypergraph h, V.Unbox w, Show v, Eq w, Show w)
   => [(v, h v l j, w)]
                           -- ^ a list of training-example derivation forests
   -> (Hyperedge v l j -> i)
@@ -156,7 +156,7 @@ forestEMstepList gs exId (_,theta)
     , let innerv0 = M.findWithDefault 0 v0 inner -- inner of target node
     , let factor = w/innerv0 -- example-specific factor for id significance
     , innerv0 /= 0
-    , traceShow outer True
+    -- , traceShow outer True
     ]
     where
       exweight = (theta V.!) . fromIntegral . exId
