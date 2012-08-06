@@ -30,8 +30,9 @@ executable Train
     , deepseq
     , zlib
     , parallel >= 3.2
+    , Vanda
   Main-Is:  Train.hs
-  hs-source-dirs:  src
+  hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -caf-all -auto-all
   Extensions:
@@ -57,8 +58,9 @@ executable TrainGHKM
     , deepseq
     , zlib
     , parallel >= 3.2
+    , Vanda
   Main-Is:  TrainGHKM.hs
-  hs-source-dirs:  src
+  hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -fprof-auto -fprof-cafs
   Extensions:
@@ -84,8 +86,9 @@ executable Translate
     , deepseq
     , zlib
     , parallel >= 3.2
+    , Vanda
   Main-Is:  Translate.hs
-  hs-source-dirs:  src
+  hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -caf-all -auto-all
   Extensions:
@@ -112,8 +115,9 @@ executable WriteHypergraph
     , zlib
     , mtl
     , parallel >= 3.2
-  Main-Is:  Test/WriteHypergraph.hs
-  hs-source-dirs:  src
+    , Vanda
+  Main-Is:  WriteHypergraph.hs
+  hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -caf-all -auto-all
   Extensions:
@@ -140,8 +144,9 @@ executable TestHypergraph
     , zlib
     , mtl
     , parallel >= 3.2
-  Main-Is:  Test/TestHypergraph.hs
-  hs-source-dirs:  src
+    , Vanda
+  Main-Is:  TestHypergraph.hs
+  hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -caf-all -auto-all
   Extensions:
@@ -169,8 +174,9 @@ executable GHKM
     , zlib
     , mtl
     , parallel >= 3.2
-  Main-Is:  Test/GHKM.hs
-  hs-source-dirs:  src
+    , Vanda
+  Main-Is:  GHKM.hs
+  hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -fprof-auto -fprof-cafs
   Extensions:
@@ -198,8 +204,9 @@ executable BerkeleyToHypergraph
     , zlib
     , mtl
     , parallel >= 3.2
-  Main-Is:  Vanda/Corpus/Tools/BerkeleyToHypergraph.hs
-  hs-source-dirs:  src
+    , Vanda
+  Main-Is:  BerkeleyToHypergraph.hs
+  hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -caf-all -auto-all
   Extensions:
@@ -226,8 +233,9 @@ executable NegraToPenn
     , zlib
     , mtl
     , parallel >= 3.2
-  Main-Is:  Vanda/Corpus/Tools/NegraToPenn.hs
-  hs-source-dirs:  src
+    , Vanda
+  Main-Is:  NegraToPenn.hs
+  hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts
   Extensions:
       ScopedTypeVariables
@@ -253,8 +261,9 @@ executable PennToInt
     , zlib
     , mtl
     , parallel >= 3.2
-  Main-Is:  Vanda/Corpus/Tools/PennToInt.hs
-  hs-source-dirs:  src
+    , Vanda
+  Main-Is:  PennToInt.hs
+  hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts
   ghc-prof-options: -fprof-auto -fprof-cafs
   Extensions:
