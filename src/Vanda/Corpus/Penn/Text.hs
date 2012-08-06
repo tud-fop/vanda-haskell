@@ -56,7 +56,21 @@ instance PennFamily Int32 where
 -- | Uses a mapping function to parse identifiers. One possibility is
 -- 'Vanda.Token.updateToken'.
 parsePennMap :: (u -> String -> (u, b)) -> u -> T.Text -> (u, [T.Tree b])
-parsePennMap f = lazyMany (many p_comment *> p_Sentence (p_tag f)) "penn tb"
+parsePennMap f ustate contents
+  = go ustate $ zip [(0 :: Int)..] (T.lines contents)
+  where
+    go u [] = (u, [])
+    go u ((i, x):xs) =
+      let Right (u', x') = runParser p u ("line " ++ show i) x
+          (u'', xs') = go u' xs
+      in (u'', x':xs')
+    p = do
+      x' <- p_Sentence (p_tag f)
+      u' <- getState
+      return (u', x')
+
+-- parsePennMap f
+--   = lazyMany (many p_comment *> p_Sentence (p_tag f)) "penn tb"
 
 treeToPenn :: (t -> String) -> T.Tree t -> String
 treeToPenn f (T.Node t1 [T.Node t2 []]) = "(" ++ f t1 ++ " " ++ f t2 ++ ")"

@@ -110,6 +110,8 @@ executable WriteHypergraph
     , binary
     , deepseq
     , zlib
+    , mtl
+    , parallel >= 3.2
   Main-Is:  Test/WriteHypergraph.hs
   hs-source-dirs:  src
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
@@ -136,6 +138,8 @@ executable TestHypergraph
     , binary
     , deepseq
     , zlib
+    , mtl
+    , parallel >= 3.2
   Main-Is:  Test/TestHypergraph.hs
   hs-source-dirs:  src
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
@@ -164,10 +168,11 @@ executable GHKM
     , deepseq
     , zlib
     , mtl
+    , parallel >= 3.2
   Main-Is:  Test/GHKM.hs
   hs-source-dirs:  src
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-  ghc-prof-options: -caf-all -auto-all
+  ghc-prof-options: -fprof-auto -fprof-cafs
   Extensions:
       ScopedTypeVariables
     , TypeSynonymInstances
@@ -175,7 +180,8 @@ executable GHKM
     , MultiParamTypeClasses
     , TypeFamilies
     , FlexibleContexts
-    , BangPatterns    
+    , BangPatterns
+    , GeneralizedNewtypeDeriving
  
 executable BerkeleyToHypergraph
   build-depends:
@@ -190,6 +196,8 @@ executable BerkeleyToHypergraph
     , binary
     , deepseq
     , zlib
+    , mtl
+    , parallel >= 3.2
   Main-Is:  Vanda/Corpus/Tools/BerkeleyToHypergraph.hs
   hs-source-dirs:  src
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
@@ -215,6 +223,9 @@ executable NegraToPenn
     , parsec >= 3.1.2
     , binary
     , deepseq
+    , zlib
+    , mtl
+    , parallel >= 3.2
   Main-Is:  Vanda/Corpus/Tools/NegraToPenn.hs
   hs-source-dirs:  src
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts
@@ -239,9 +250,13 @@ executable PennToInt
     , parsec >= 3.1.2
     , binary
     , deepseq
+    , zlib
+    , mtl
+    , parallel >= 3.2
   Main-Is:  Vanda/Corpus/Tools/PennToInt.hs
   hs-source-dirs:  src
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts
+  ghc-prof-options: -fprof-auto -fprof-cafs
   Extensions:
       ScopedTypeVariables
     , TypeSynonymInstances

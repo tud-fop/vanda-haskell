@@ -19,10 +19,8 @@
 
 module Vanda.Algorithms.EarleyMonadic ( earley ) where
 
--- import Control.Applicative
 import Control.Arrow ( first, second )
 import Control.Seq
--- import Control.DeepSeq
 import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Queue as Q
@@ -32,18 +30,6 @@ import Debug.Trace
 
 import Vanda.Hypergraph
 import qualified Vanda.Algorithms.Earley.WSA as WSA
-
-instance (Show v, Show i, Show p, Show t) => Show (Item v i t p) where
-  show item
-    = show (iHead item)
-      ++ " -> ???"
-      ++ " * "
-      ++ show (bRight item)
-      ++ "\n   "
-      ++ show (iEdge item)
-      ++ "\n   "
-      ++ show (stateList item)
-      ++ "\n"
 
 
 -- Item: [iHead -> ??? * bRight] 
@@ -61,12 +47,25 @@ data Item v i t p
     , weight :: !Double
     }
 
+instance (Show v, Show i, Show p, Show t) => Show (Item v i t p) where
+  show item
+    = show (iHead item)
+      ++ " -> ???"
+      ++ " * "
+      ++ show (bRight item)
+      ++ "\n   "
+      ++ show (iEdge item)
+      ++ "\n   "
+      ++ show (stateList item)
+      ++ "\n"
+
 instance (Eq i, Eq p) => Eq (Item v i t p) where
   i1 == i2 = (iEdge i1, stateList i1) == (iEdge i2, stateList i2)
 
 instance (Ord i, Ord p) => Ord (Item v i t p) where
   i1 `compare` i2
     = (iEdge i1, stateList i1) `compare` (iEdge i2, stateList i2)
+
 
 data Const v l i t p
   = Const

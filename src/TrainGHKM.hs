@@ -1,6 +1,6 @@
 module Main where 
 
-import Control.DeepSeq ( force )
+import Control.DeepSeq ( NFData (..), force )
 import qualified Data.Set as S
 import Debug.Trace
 import System.Environment ( getArgs, getProgName )
@@ -20,6 +20,9 @@ instance (Show v, Show i, Show l, Ord v) => Show (EdgeList v l i) where
   show g 
     = show (S.toList $ nodes g) ++ "\n" ++ unlines (map show (edges g))
 
+instance (NFData nt, NFData l, NFData i) => NFData (SCFG nt l i) where
+  rnf (SCFG hg i) = rnf hg `seq` rnf i
+
 snd3 (_, x, _) = x
     
 doTrain scfg tm input output = v where
@@ -38,7 +41,7 @@ main = do
     ["-m", tmap, "-g", graph, "-s", inFile, "-t", outFile, "-w", vFile] -> do
       hg <- loadGHKM graph
       tm <- loadTokenMap tmap
-      -- weights <- loadWeights
+      -- weights <- loadWeights vFile
       input <- loadSentenceCorpus inFile
       output <- loadSentenceCorpus outFile
       let v = doTrain hg tm input output

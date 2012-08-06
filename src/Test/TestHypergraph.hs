@@ -53,6 +53,9 @@ main :: IO ()
 main = do 
   args <- getArgs
   case args of
+    [] -> do
+      let he = head (B.decode (B.encode (take 500000 (repeat (mkHyperedge (1::Int) [1] (1::Int) (1::Int)))))) :: Hyperedge Int Int Int
+      print he
     ["-z", zhgFile, "-t", tokFile] -> do
       weights :: VU.Vector Double
         <- fmap

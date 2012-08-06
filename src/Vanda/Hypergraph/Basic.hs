@@ -64,7 +64,7 @@ data Hyperedge v l i
     }
   | Hyperedge
     { to :: !v
-    , _from :: V.Vector v
+    , _from :: !(V.Vector v)
     , label :: !l
     , ident :: !i
     }

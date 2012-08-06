@@ -4,9 +4,15 @@ module Main where
 
 import Prelude hiding ( span )
 
+import Codec.Compression.GZip ( compress )
+
 import Control.Arrow ( (&&&), second )
 import Control.DeepSeq ( NFData(..), ($!!) )
+import Control.Seq
 import Control.Monad.State.Strict ( State, evalState, runState, get, put )
+
+import qualified Data.Binary as B
+import qualified Data.ByteString.Lazy as B
 import Data.Function ( on )
 import Data.Int ( Int32 )
 import qualified Data.IntMap as IM
@@ -17,12 +23,11 @@ import qualified Data.Text.Lazy as TIO
 import qualified Data.Text.Lazy.IO as TIO
 import qualified Data.Tree as T
 import qualified Data.Vector as V
+
 import System.Environment ( getArgs, getProgName )
+
 import Text.Parsec hiding ( State, label )
 import Text.Parsec.Text.Lazy ( GenParser )
-import qualified Data.Binary as B
-import qualified Data.ByteString.Lazy as B
-import Codec.Compression.GZip ( compress )
 
 import Vanda.Corpus.Penn.Text ( parsePenn )
 import Vanda.Hypergraph hiding ( label )
@@ -98,18 +103,20 @@ instance NFData l => NFData (Alignment l) where
 
 -- | Depth-first left-to-right traversal of a tree (via the State monad),
 -- adding the spans, span closures, and index information to each node
-process :: Alignment l -> T.Tree l -> T.Tree (TreeNode l)
-process = curry $ (`evalState` 0) . uncurry p
+{-process :: Alignment l -> T.Tree l -> T.Tree (TreeNode l)
+process = curry $ (`evalState` 0) . uncurry p-}
+process :: Alignment l -> T.Tree l -> (Alignment l, T.Tree (TreeNode l))
+process al t = (al, evalState (p t) 0)
   where
-    p :: Alignment l -> T.Tree l -> State Int (T.Tree (TreeNode l))
-    p al (T.Node l ts)
+    p :: {- Alignment l -> -} T.Tree l -> State Int (T.Tree (TreeNode l))
+    p (T.Node l ts)
       | null ts   = do
                       i <- get
                       put (i+1)
                       let sp = M.findWithDefault S.empty i (almap al)
                       return $ T.Node (TreeNode l sp (closure sp) i) []
       | otherwise = do
-                      ts' <- mapM (p al) ts
+                      ts' <- mapM p ts
                       let sp = foldl' S.union S.empty
                              $ map (span . T.rootLabel) ts'
                       return $ T.Node (TreeNode l sp (closure sp) (-1)) ts'
@@ -143,10 +150,11 @@ process2 = {-mytrace .-} p S.empty [] []
 
 
 type Sync l = (T.Tree (Either Int l), [Either Int l])
-newtype Rule v l = Rule { unRule :: (Hyperedge v (Sync l) Int) }
+newtype Rule v l = Rule { unRule :: Hyperedge v (Sync l) Int }
+  deriving NFData
 
-instance (NFData v, NFData l) => NFData (Rule v l) where
-  rnf = rnf . unRule
+-- instance (NFData v, NFData l) => NFData (Rule v l) where
+--   rnf = rnf . unRule
 
 
 process3
@@ -208,26 +216,50 @@ instance Eq b => Eq (MyPair a b) where
 instance Ord b => Ord (MyPair a b) where
   MyPair (_, b1) `compare` MyPair (_, b2) = b1 `compare` b2
 
-process4
+seqEither :: Strategy a -> Strategy b -> Strategy (Either a b)
+seqEither sa _ (Left a)  = sa a
+seqEither _ sb (Right b) = sb b
+
+{-process4
   :: (NFData l, Show l)
   => [(Alignment l, T.Tree (TreeNode2 l))] -> State Int [Rule l l]
 process4 [] = return []
-process4 ((al, t) : ats) = do
-  let ((lhs, rhslist, stmap, rs'), n) = runState (process3 al True t) 0
-  let rhs = process3' al t $ sortBy (compare `on` snd) rhslist
-  -- let rhs = fst . unzip . map unMyPair
-  --        . S.toAscList . S.fromList . map MyPair $ rhs'
-    -- = fst $ unzip $ sortBy (compare `on` snd) rhs'
-  i <- get
-  put (i+1)
-  let r = id $!! Rule $ mkHyperedge
-            (label (treeNode (T.rootLabel t)))
-            (map (stmap IM.!) [(0::Int) .. n-1])
-            (lhs, rhs)
-            i
-  rs <- process4 $ zip (repeat al) rs'
-  rs2 <- process4 ats
-  r `seq` return (r : rs ++ rs2)
+process4 ((al, t) : ats)
+  = case runState (process3 al True t) 0 of
+      ((lhs, rhslist, stmap, rs'), n) -> do
+        let rhs = (process3' al t $ sortBy (compare `on` snd) rhslist)
+                  -- `using` seqList (seqEither rseq rseq)
+        -- let rhs = fst . unzip . map unMyPair
+        --        . S.toAscList . S.fromList . map MyPair $ rhs'
+          -- = fst $ unzip $ sortBy (compare `on` snd) rhs'
+        i <- get
+        put (i+1)
+        let r = id $!! Rule $ mkHyperedge
+                  (label (treeNode (T.rootLabel t)))
+                  (map (stmap IM.!) [(0::Int) .. n-1])
+                  (lhs, rhs)
+                  i
+        rs <- r `seq` process4 $ zip (repeat al) rs'
+        rs2 <- process4 ats
+        return (r : rs ++ rs2)-}
+
+process4
+  :: (NFData l, Show l)
+  => [(Alignment l, T.Tree (TreeNode2 l))] -> [Rule l l]
+process4 [] = []
+process4 ((al, t) : ats)
+  = case runState (process3 al True t) 0 of
+      ((lhs, rhslist, stmap, rs'), n) ->
+        let rhs = (process3' al t $ sortBy (compare `on` snd) rhslist)
+                  -- `using` seqList (seqEither rseq rseq)
+            r = id $!! Rule $ mkHyperedge
+                  (label (treeNode (T.rootLabel t)))
+                  (map (stmap IM.!) [(0::Int) .. n-1])
+                  (lhs, rhs)
+                  0
+            rs = process4 $ zip (repeat al) rs'
+            rs2 = process4 ats
+        in r `seq` (r : rs ++ rs2)
 
 {-
 
@@ -307,23 +339,39 @@ alignParser mapper
                 ; skipMany (char ' ')
                 ; return (wd, map ((+(-1)) . read::String->Int) ls)
                }
-      _ <- newline
+      _ <- eof -- newline
       return res
 
 parseAlign
   :: (NFData l, Show l)
   => (u -> String -> (u, l)) -> u -> TIO.Text -> (u, [Alignment l])
-parseAlign mapper u
+parseAlign mapper ustate contents
+  = go ustate $ zip [(0 :: Int)..] (TIO.lines contents)
+  where
+    go u [] = (u, [])
+    go u ((i, x):xs) =
+      case runParser p u ("line " ++ show i ++ show x) x of
+        Right (u', x') -> let (u'', xs') = go u' xs
+                          in (u'', x':xs')
+        Left x -> error (show x)
+    p = do
+      x' <- alignParser mapper -- (p_tag f)
+      u' <- getState
+      return (u', makeItSo x')
+    {-
+
   = second (map makeItSo) . lazyMany (alignParser mapper) "align" u
     where
-      makeItSo :: [(l, [Int])] -> Alignment l
-      makeItSo
-        = uncurry Alignment
-        . (foldl f M.empty . zip [(0::Int)..] . snd &&& V.fromList . fst)
-        . unzip
-      f m (ind, als) = foldl (f' ind) m als
-      f' ind m i = M.insertWith' S.union i (S.singleton ind) m
+    -}
+    makeItSo :: [(l, [Int])] -> Alignment l
+    makeItSo
+      = uncurry Alignment
+      . (foldl f M.empty . zip [(0::Int)..] . snd &&& V.fromList . fst)
+      . unzip
+    f m (ind, als) = foldl (f' ind) m als
+    f' ind m i = M.insertWith' S.union i (S.singleton ind) m
 
+{-
 lazyMany
   :: NFData a => GenParser u a -> SourceName -> u -> TIO.Text -> (u, [a])
 lazyMany p file ustate contents
@@ -333,7 +381,7 @@ lazyMany p file ustate contents
       xs <- many p -- many p
       u <- getState
       return $! (u, id $!! xs)
-
+-}
 
 printTree :: Show l => T.Tree (Either Int l) -> String
 printTree (T.Node (Right l) ts)
@@ -412,39 +460,53 @@ main = do
       parseContents <- TIO.readFile parseFile
       alignContents <- TIO.readFile alignFile
       let tmap = fromText mapContents :: TokenMap
-      let (tmap', alignments) = id $!! parseAlign updateToken tmap alignContents
-      let parseTrees = id $!! parsePenn parseContents :: [T.Tree Int32]
-      let rules = S.toList . S.fromList
-                $ evalState
-                    ( process4
-                      ( zip
-                        alignments
-                      $!! ( map
-                          ( process2
-                          . uncurry process
-                          )
-                          ( zip
-                            alignments
-                            parseTrees
+      case parseAlign updateToken tmap alignContents of
+        (tmap', alignments) -> do
+          let parseTrees = parsePenn parseContents :: [T.Tree Int32]
+          let rules = S.toList . S.fromList
+                    $ -- evalState
+                        ( process4
+                          ( map
+                            ( second process2
+                            . uncurry process
+                            )
+                            ( zip
+                              alignments
+                              parseTrees
+                            )
                           )
                         )
-                      )
-                    )
-                    0
-      let rul = [ mkHyperedge (to e) (from e) (Hypergraph.label e) i 
-                | (r, i) <- zip rules [0..]
-                , let e = unRule r
-                ]
-      TIO.writeFile outFile (TIO.unlines (map (TIO.pack . printRule) rules))
-      TIO.writeFile (outFile ++ ".string") (TIO.unlines (map (TIO.pack . printRuleTA (toArray tmap')) rules))
-      TIO.writeFile (mapFile ++ ".new") (toText tmap')
-      let hyp = mkHypergraph rul 
-            :: EdgeList Token (T.Tree (Either Int Token), [Either Int Token]) Int
-      B.writeFile (outFile ++ ".bhg.gz") (compress $ B.encode hyp)
-      -- TIO.writeFile (outFile ++ ".bhg.gz") 
-          -- (TIO.unlines $ map (TIO.pack. show . unRule) rules)
-      -- print $ tmap 
-      -- print $ (TIO.unpack parseContents) 
-      -- print $ (TIO.unpack alignContents) 
+                        -- 0
+                    {-$ evalState
+                        ( process4
+                          ( zip
+                            alignments
+                          $!! ( map
+                              ( process2
+                              . uncurry process
+                              )
+                              ( zip
+                                alignments
+                                parseTrees
+                              )
+                            )
+                          )
+                        )
+                        0-}
+          let rul = [ mkHyperedge (to e) (from e) (Hypergraph.label e) i 
+                    | (r, i) <- zip rules [0..]
+                    , let e = unRule r
+                    ]
+          TIO.writeFile outFile (TIO.unlines (map (TIO.pack . printRule) rules))
+          TIO.writeFile (outFile ++ ".string") (TIO.unlines (map (TIO.pack . printRuleTA (toArray tmap')) rules))
+          -- let hyp = mkHypergraph rul 
+          --       :: EdgeList Token (T.Tree (Either Int Token), [Either Int Token]) Int
+          -- B.writeFile (outFile ++ ".bhg.gz") (compress $ B.encode hyp)
+          -- TIO.writeFile (mapFile ++ ".new") (toText tmap')
+          -- TIO.writeFile (outFile ++ ".bhg.gz") 
+              -- (TIO.unlines $ map (TIO.pack. show . unRule) rules)
+          -- print $ tmap 
+          -- print $ (TIO.unpack parseContents) 
+          -- print $ (TIO.unpack alignContents) 
     _ -> putStrLn ("Usage: " ++ arg0 ++ " -m mapfile -p parses -a align -o output")
     -- putStrLn $ show $ length parseTrees

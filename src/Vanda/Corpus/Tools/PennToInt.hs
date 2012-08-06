@@ -19,7 +19,10 @@ main = do
     ["-m", mapFile, "-p", pennFile] -> do
       mf <- TIO.readFile mapFile
       pf <- TIO.readFile pennFile
-      let (m', p') = parsePennMap updateToken (fromText mf) pf
-      TIO.writeFile (pennFile ++ ".int") (unparsePenn p')
-      TIO.writeFile (mapFile ++ ".new") (toText m')
+      -- let ~(m', p') = parsePennMap updateToken (fromText mf) pf
+      case parsePennMap updateToken (fromText mf) pf of
+        (m', p') -> do
+          -- let (m', _) = parsePennMap updateToken (fromText mf) pf
+          TIO.writeFile (pennFile ++ ".int") (unparsePenn p')
+          TIO.writeFile (mapFile ++ ".new") (toText m')
     _ -> print "Usage: PennToInt -m <map file> -p <penn file>"

@@ -19,12 +19,10 @@
 
 module Vanda.Algorithms.EarleyMonadic ( earley ) where
 
--- import Control.Applicative
 import Control.Arrow ( first, second )
 import Control.Monad ( unless )
 import Control.Monad.ST
 import Control.Seq
--- import Control.DeepSeq
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Data.STRef
@@ -35,19 +33,6 @@ import Debug.Trace
 
 import Vanda.Hypergraph
 import qualified Vanda.Algorithms.Earley.WSA as WSA
-
-instance (Show v, Show i, Show p, Show t) => Show (Item v i t p) where
-  show item
-    = show (iHead item)
-      ++ " -> ???"
-      ++ " * "
-      ++ show (bRight item)
-      ++ "\n   "
-      ++ show (iEdge item)
-      ++ "\n   "
-      ++ show (stateList item)
-      ++ "\n"
-
 
 -- Item: [iHead -> ??? * bRight] 
 -- statelist contains states of a wsa. 
@@ -64,12 +49,25 @@ data Item v i t p
     , weight :: !Double
     }
 
+instance (Show v, Show i, Show p, Show t) => Show (Item v i t p) where
+  show item
+    = show (iHead item)
+      ++ " -> ???"
+      ++ " * "
+      ++ show (bRight item)
+      ++ "\n   "
+      ++ show (iEdge item)
+      ++ "\n   "
+      ++ show (stateList item)
+      ++ "\n"
+
 instance (Eq i, Eq p) => Eq (Item v i t p) where
   i1 == i2 = (iEdge i1, stateList i1) == (iEdge i2, stateList i2)
 
 instance (Ord i, Ord p) => Ord (Item v i t p) where
   i1 `compare` i2
     = (iEdge i1, stateList i1) `compare` (iEdge i2, stateList i2)
+
 
 data Const v l i t p
   = Const
@@ -160,18 +158,6 @@ initConst hg component wsa v00
         , e <- backStar hg v
         ]
 
-{-
-initState
-  :: (Ord p, Ord v, Ord t, Ord i, Show v, Show i, Show p, Show t)
-  => WSA.WSA p t Double
-  -> Const v l i t p
-  -> State v l i t p
-initState wsa constt@Const{ v0 = v00 }
-  = foldr
-      (predict' constt)
-      State{ itemq = Q.empty, pset = S.empty, cmap = M.empty }
-      [ (p, v00) | (p, _) <- WSA.initialWeights wsa ]
--}
 
 extract
   :: (Show v, Show p, Show i, Show t)
@@ -232,13 +218,13 @@ iter
   => (Item v i t p -> Const v l i t p -> Maybe a)
   -> WSA.WSA p t Double
   -> Const v l i t p
-  -> [a]
-iter e wsa constt@Const{ v0 = v00 }
+  -> [(Hyperedge (p, v, p) l i, ([p], Double))] -- a
+iter _ wsa constt@Const{ v0 = v00 }
   = runST $ do
       iq <- newSTRef Q.empty
       ps <- newSTRef S.empty
       cm <- newSTRef M.empty
-      ls <- newSTRef ([] :: [a])
+      ls <- newSTRef ([] :: [(Hyperedge (p, v, p) l i, ([p], Double))])
       let s = State iq ps cm
       go1 s [ (p, v00) | (p, _) <- WSA.initialWeights wsa ]
       go2 s ls
@@ -246,36 +232,19 @@ iter e wsa constt@Const{ v0 = v00 }
     go1 :: State v l i t p s -> [(p, v)] -> ST s ()
     go1 s [] = return ()
     go1 s (x:xs) = predict' constt x s >> go1 s xs
-    go2 :: State v l i t p s -> STRef s [a] -> ST s [a]
+    go2 :: State v l i t p s -> STRef s [(Hyperedge (p, v, p) l i, ([p], Double))] -> ST s [(Hyperedge (p, v, p) l i, ([p], Double))]
     go2 s ls = do
       iq <- readSTRef (itemq s)
       case Q.deqMaybe iq of
         Nothing -> readSTRef ls
         Just (i, itemq')
-          -> do -- traceShow i $ do
+          -> do
             writeSTRef (itemq s) itemq'
             predict constt i s
             scan constt i s
             complete i s
-            -- es <- go2 s
-            modifySTRef' ls (maybe id (:) (e i constt))
-            -- l <- readSTRef ls
-            -- let l' = maybe id (:) (e i constt) l -- `using` rseq
-            -- l' `seq` writeSTRef ls l'  
+            modifySTRef' ls (maybe id (:) (extract i constt))
             go2 s ls
-            -- return $ (maybe id (:) (e i constt) es `using` rseq)
-            
---          s0 `seq` s1 `seq` s2 `seq` s3 `seq`
---              ( maybe id (:) (e i constt)
---              $ iter e constt s3
---              )
---              where
---                s3 = {-# SCC s3 #-} complete        i s2
---                s2 = {-# SCC s2 #-} scan     constt i s1
---                s1 = {-# SCC s1 #-} predict  constt i s0
---                   -- $ traceShow i
---                s0 = {-# SCC s0 #-} s{itemq = itemq'}
-
 
 
 predict

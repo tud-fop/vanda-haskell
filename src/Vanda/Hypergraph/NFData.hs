@@ -16,10 +16,13 @@ instance (NFData v, NFData l, NFData i) => NFData (Hyperedge v l i) where
   rnf (Binary t f1 f2 l i)
     = rnf t `seq` rnf f1 `seq` rnf f2 `seq` rnf l `seq` rnf i
   rnf (Hyperedge t f l i)
-    = rnf t `seq` V.map rnf f `seq` rnf l `seq` rnf i
+    = rnf t `seq` rnf (V.toList f) `seq` rnf l `seq` rnf i
 
 instance (NFData v, NFData l, NFData i) => NFData (EdgeList v l i) where
   rnf (EdgeList vs es) = rnf vs `seq` rnf es
+
+instance (NFData v, NFData l, NFData i) => NFData (BackwardStar v l i) where
+  rnf (BackwardStar vs b _) = rnf [ b v | v <- S.toList vs ]
   
 {-instance (NFData v) => NFData (S.Set v) where
   rnf s = rnf $ S.toList s-}

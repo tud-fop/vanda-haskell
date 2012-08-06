@@ -32,7 +32,7 @@ module Vanda.Functions
 import Codec.Compression.GZip ( compress, decompress )
 
 import Control.Arrow ( (&&&) )
-import Control.DeepSeq ( NFData, force )
+import Control.DeepSeq ( NFData, force, ($!!) )
 
 import qualified Data.Binary as B
 import qualified Data.ByteString.Lazy as B
@@ -98,7 +98,7 @@ loadGHKM file
   = fmap
     ( (uncurry SCFG)
     . (toBackwardStar &&& to . head . edges{-S.findMin . nodes-})
-    . force
+    -- . force
     . (B.decode :: B.ByteString -> EdgeList Token (GHKM Token) Int)
     . decompress
     )
