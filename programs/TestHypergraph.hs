@@ -1,14 +1,21 @@
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE BangPatterns, RankNTypes #-}
 module Main where
 
 import Codec.Compression.GZip ( decompress )
 
+import Control.Monad.ST
 import qualified Data.Map as M
 import Control.DeepSeq ( force)
 import qualified Data.Array as A
+import qualified Data.Array.IArray as IA
+import qualified Data.Array.MArray as MA
+import qualified Data.Array.ST as STA
+import qualified Data.Array.Unboxed as UA
 import qualified Data.Binary as B
 import qualified Data.ByteString.Lazy as B
 import Data.Int ( Int32 )
+import Data.STRef
+import qualified Data.Text.Lazy as T
 import qualified Data.Text.Lazy.IO as T
 import qualified Data.Tree as T
 import qualified Data.Vector as V
@@ -16,6 +23,7 @@ import qualified Data.Vector.Unboxed as VU
 import System.Environment ( getArgs )
 
 import Vanda.Features
+import Vanda.Functions ( GHKM )
 import Vanda.Hypergraph hiding ( nodes )
 import Vanda.Hypergraph.Binary ()
 import Vanda.Hypergraph.NFData ()
@@ -35,6 +43,25 @@ instance (Show v, Show l, Show i) => Show (Hyperedge v l i) where
 instance (Show v, Show l, Show i) => Show (Candidate v l i x) where
   show (Candidate w d _) = show w ++ " -- " ++ show d
 -}
+
+compute :: [Hyperedge v l i] -> [Int]
+compute es =
+  let
+    -- a :: [Hyperedge v l i] -> (forall s0. ST s0 (STA.STUArray s0 Int Int))
+    -- a :: forall s0. ST s0 (STA.STUArray s0 Int Int)
+    a es = do
+      -- test <- newSTRef (0 :: Int)
+      ar <- MA.newArray (0, 1000) 0 :: ST s (STA.STUArray s Int Int) 
+      sequence_ $ map (ac ar . arity) es
+      return ar
+    -- ac :: STA.STUArray s Int Int -> Int -> ST s ()
+    ac ar i = do
+      n :: Int <- MA.readArray ar i
+      let n' = n + 1
+      n' `seq` MA.writeArray ar i n'
+  -- in ((IA.elems . STA.runSTUArray) :: (forall s. ST s (STA.STUArray s Int Int)) -> [Int]) $ a
+  in IA.elems $ STA.runSTUArray $ a es
+
 
 makeItSo
   :: TokenArray -> TokenArray -> Candidate Token Token Int32 x -> String
@@ -56,6 +83,16 @@ main = do
     [] -> do
       let he = head (B.decode (B.encode (take 500000 (repeat (mkHyperedge (1::Int) [1] (1::Int) (1::Int)))))) :: Hyperedge Int Int Int
       print he
+    ["-b", bhgFile, "-s", statFile] -> do
+      el :: EdgeList Token (GHKM Token) Int
+        <- fmap
+           ( B.decode
+           . decompress
+           )
+           $ B.readFile (bhgFile ++ ".bhg.gz")
+      -- stat :: [Int]
+      let stat = compute (edges el)
+      T.writeFile statFile $ T.unlines $ map (T.pack . show) $ stat
     ["-z", zhgFile, "-t", tokFile] -> do
       weights :: VU.Vector Double
         <- fmap

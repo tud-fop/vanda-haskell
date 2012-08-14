@@ -497,12 +497,12 @@ main = do
                     | (r, i) <- zip rules [0..]
                     , let e = unRule r
                     ]
-          TIO.writeFile outFile (TIO.unlines (map (TIO.pack . printRule) rules))
-          TIO.writeFile (outFile ++ ".string") (TIO.unlines (map (TIO.pack . printRuleTA (toArray tmap')) rules))
-          -- let hyp = mkHypergraph rul 
-          --       :: EdgeList Token (T.Tree (Either Int Token), [Either Int Token]) Int
-          -- B.writeFile (outFile ++ ".bhg.gz") (compress $ B.encode hyp)
-          -- TIO.writeFile (mapFile ++ ".new") (toText tmap')
+          -- TIO.writeFile outFile (TIO.unlines (map (TIO.pack . printRule) rules))
+          -- TIO.writeFile (outFile ++ ".string") (TIO.unlines (map (TIO.pack . printRuleTA (toArray tmap')) rules))
+          let hyp = mkHypergraph rul 
+                :: EdgeList Token (T.Tree (Either Int Token), [Either Int Token]) Int
+          B.writeFile (outFile ++ ".bhg.gz") (compress $ B.encode hyp)
+          TIO.writeFile (mapFile ++ ".new") (toText tmap')
           -- TIO.writeFile (outFile ++ ".bhg.gz") 
               -- (TIO.unlines $ map (TIO.pack. show . unRule) rules)
           -- print $ tmap 

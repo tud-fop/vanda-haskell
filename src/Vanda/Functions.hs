@@ -1,5 +1,6 @@
 module Vanda.Functions
   ( SCFG (..)
+  , GHKM
   , loadGHKM
   , loadSCFG
   , loadWeights
