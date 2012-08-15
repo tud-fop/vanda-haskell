@@ -24,7 +24,7 @@ import Debug.Trace
 import System.Environment ( getArgs )
 
 import Vanda.Features
-import Vanda.Functions ( GHKM )
+import Vanda.Functions ( GHKM, toWSAmap )
 import Vanda.Hypergraph hiding ( nodes )
 import Vanda.Hypergraph.Binary ()
 import Vanda.Hypergraph.NFData ()
@@ -100,11 +100,14 @@ main = do
       weights :: VU.Vector Double
         <- fmap (VU.fromList . B.decode . decompress)
            $ B.readFile (zhgFile ++ ".weights.gz")
+      tm :: TokenMap
+        <- fmap fromText $ T.readFile tokFile
       tok :: TokenArray
         <- fmap fromText $ T.readFile tokFile
       nodes :: TokenArray
         <- fmap fromText $ T.readFile (zhgFile ++ ".nodes")
       let pN !_ !i xs = (weights VU.! fromIntegral i) * Prelude.product xs
+          wsa = toWSAmap tm "days"
       weights `seq` el `deepseq`
         putStr
         $ makeItSo tok nodes

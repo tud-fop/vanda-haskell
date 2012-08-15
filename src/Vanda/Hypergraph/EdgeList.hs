@@ -164,7 +164,7 @@ knuth (EdgeList vs es) feat wV
             | otherwise -> 2
           Unary{} -> 1
           Hyperedge _ f _ _ -> S.size (S.fromList (V.toList f))
-          Nullary{} -> 0
+          Nullary{} -> undefined
     -- -- --
     updateLoop
       :: CandidateHeap v l i x
@@ -175,9 +175,9 @@ knuth (EdgeList vs es) feat wV
     updateLoop !candH !bestA (c@(Candidate w (T.Node e _) _):cs) =
       let v = to e in
       case M.lookup v bestA of
-        Nothing -> updateLoop (H.insert c candH) (M.insert v [c] bestA) cs
+        Nothing -> updateLoop ({-# SCC h1 #-} H.insert c candH) ({-# SCC a1 #-} M.insert v [c] bestA) cs
         Just (Candidate w' _ _ : _)
-          | w > w' -> updateLoop (H.insert c candH) (M.insert v [c] bestA) cs
+          | w > w' -> updateLoop ({-# SCC h2 #-} H.insert c candH) ({-# SCC a2 #-} M.insert v [c] bestA) cs
           | otherwise -> updateLoop candH bestA cs
     -- -- --
     knuthLoop
@@ -213,7 +213,7 @@ knuth (EdgeList vs es) feat wV
           work e1
             = let k = ident e1
                   -- unvis' = (adjIM M.! k) - 1
-                  unvis' = M.findWithDefault (magic e1 - 1) k adjIM
+                  unvis' = M.findWithDefault (magic e1) k adjIM - 1
                   cand = Just $ topCC feat wV e1 $ map (head . (bestA M.!))
                          $ from e1
               in -- (cand, (k, unvis'))
