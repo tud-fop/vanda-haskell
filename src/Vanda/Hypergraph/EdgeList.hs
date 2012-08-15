@@ -111,13 +111,15 @@ knuth (EdgeList vs es) feat wV
   = knuthLoop
       iniCandH
       iniBestA
-      iniAdjIM
+      M.empty
+      -- iniAdjIM
   where
     (iniCandH, iniBestA)
       = updateLoop
           H.empty
-          (M.fromList [ (v, []) | v <- S.toList vs ])
-          -- (A.array vs [ (v, []) | v <- Ix.range vs ])
+          M.empty
+          -- ^^ (M.fromList [ (v, []) | v <- S.toList vs ])
+          -- ^^ (A.array vs [ (v, []) | v <- Ix.range vs ])
           [ topCC feat wV e [] | e@Nullary{} <- es ]
     -- -- --
     forwA :: M.Map v [Hyperedge v l i] -- A.Array v [Hyperedge v l i] -- ^ forward star w/edge ids
@@ -155,6 +157,14 @@ knuth (EdgeList vs es) feat wV
             _ -> True
         , let ie = ident e
         ]
+    magic e
+      = case e of
+          Binary _ f1 f2 _ _
+            | f1 == f2 -> 1
+            | otherwise -> 2
+          Unary{} -> 1
+          Hyperedge _ f _ _ -> S.size (S.fromList (V.toList f))
+          Nullary{} -> 0
     -- -- --
     updateLoop
       :: CandidateHeap v l i x
@@ -164,9 +174,9 @@ knuth (EdgeList vs es) feat wV
     updateLoop !candH !bestA [] = (candH, bestA)
     updateLoop !candH !bestA (c@(Candidate w (T.Node e _) _):cs) =
       let v = to e in
-      case bestA M.! v of
-        [] -> updateLoop (H.insert c candH) (M.insert v [c] bestA) cs
-        Candidate w' _ _ : _
+      case M.lookup v bestA of
+        Nothing -> updateLoop (H.insert c candH) (M.insert v [c] bestA) cs
+        Just (Candidate w' _ _ : _)
           | w > w' -> updateLoop (H.insert c candH) (M.insert v [c] bestA) cs
           | otherwise -> updateLoop candH bestA cs
     -- -- --
@@ -184,7 +194,8 @@ knuth (EdgeList vs es) feat wV
             | e == e' -> knuthLoop
                           candH''
                           bestA'
-                          (M.fromList adjChange `M.union` adjIM)
+                          -- (M.fromList adjChange `M.union` adjIM)
+                          (foldr (\(k, v) m -> maybe (M.delete k) (M.insert k) v m) adjIM adjChange)
                   -- union: left argument preferred
               -- candidate for a visited node, just throw it away
             | otherwise -> knuthLoop candH' bestA adjIM
@@ -193,18 +204,21 @@ knuth (EdgeList vs es) feat wV
           v = to e
           (candH'', bestA') = updateLoop candH' bestA newCand
           newCand :: [Candidate v l i x] -- < new candidates from v
-          adjChange :: [(i, Int)] -- < changes to adjacency map
+          adjChange :: [(i, Maybe Int)] -- < changes to adjacency map
           (newCand, adjChange)
             = (catMaybes *** id) . unzip . map work . (forwA M.!) $ v
           -- compute change for a given edge information
-          work :: Hyperedge v l i -> (Maybe (Candidate v l i x), (i, Int))
+          work
+            :: Hyperedge v l i -> (Maybe (Candidate v l i x), (i, Maybe Int))
           work e1
             = let k = ident e1
-                  unvis' = (adjIM M.! k) - 1
-                  cand =
-                    if (==0) unvis'
-                    then Just $ topCC feat wV e1 $ map (head . (bestA M.!))
+                  -- unvis' = (adjIM M.! k) - 1
+                  unvis' = M.findWithDefault (magic e1 - 1) k adjIM
+                  cand = Just $ topCC feat wV e1 $ map (head . (bestA M.!))
                          $ from e1
-                    else Nothing
-              in (cand, (k, unvis'))
+              in -- (cand, (k, unvis'))
+                if (==0) unvis'
+                then (cand, (k, Nothing))
+                else (Nothing, (k, Just unvis'))
+
 

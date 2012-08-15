@@ -5,7 +5,7 @@ import Codec.Compression.GZip ( decompress )
 
 import Control.Monad.ST
 import qualified Data.Map as M
-import Control.DeepSeq ( force)
+import Control.DeepSeq ( deepseq, force )
 import qualified Data.Array as A
 import qualified Data.Array.IArray as IA
 import qualified Data.Array.MArray as MA
@@ -20,6 +20,7 @@ import qualified Data.Text.Lazy.IO as T
 import qualified Data.Tree as T
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
+import Debug.Trace
 import System.Environment ( getArgs )
 
 import Vanda.Features
@@ -94,24 +95,18 @@ main = do
       let stat = compute (edges el)
       T.writeFile statFile $ T.unlines $ map (T.pack . show) $ stat
     ["-z", zhgFile, "-t", tokFile] -> do
-      weights :: VU.Vector Double
-        <- fmap
-             (VU.fromList . B.decode . decompress)
-           $ B.readFile
-           $ zhgFile ++ ".weights.gz"
       el :: EdgeList Int32 Int32 Int32
-        <- fmap
-             (force . B.decode . decompress)
-           $ B.readFile zhgFile
+        <- fmap (B.decode . decompress) (B.readFile zhgFile)
+      weights :: VU.Vector Double
+        <- fmap (VU.fromList . B.decode . decompress)
+           $ B.readFile (zhgFile ++ ".weights.gz")
       tok :: TokenArray
         <- fmap fromText $ T.readFile tokFile
       nodes :: TokenArray
         <- fmap fromText $ T.readFile (zhgFile ++ ".nodes")
       let pN !_ !i xs = (weights VU.! fromIntegral i) * Prelude.product xs
-      --el `seq` print "ok"
-      weights `seq` el `seq` putStr
-        -- $ unlines
-        -- $ map show
+      weights `seq` el `deepseq`
+        putStr
         $ makeItSo tok nodes
         $ (!! 0)
         $ (M.! 1132)

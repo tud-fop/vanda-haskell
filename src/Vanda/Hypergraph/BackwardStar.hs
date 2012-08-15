@@ -269,7 +269,7 @@ bests (BackwardStar vs b _) feat wV bestA = bestA'
     bestA' :: M.Map v [Candidate v l i x] -- BestArray v l i x
     bestA' = M.fromList -- A.array vs
       [ ( v
-        , case bestA M.! v of
+        , case lu v of
             [] -> []
             cand@(Candidate _ (T.Node e _) _) : _ ->
               cand : (flatten . concat)
@@ -281,11 +281,12 @@ bests (BackwardStar vs b _) feat wV bestA = bestA'
                       M _ ts -> ts
                 | e' <- b v
                 , let tc = topCCL feat wV e'
-                         $ map (bestA' M.!) $ from e'
+                         $ map lu (from e')
                 ]
         )
       | v <- S.toList vs
       ]
+    lu v = M.findWithDefault [] v bestA
 
 {-
 product

@@ -148,7 +148,7 @@ executable TestHypergraph
   Main-Is:  TestHypergraph.hs
   hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-  ghc-prof-options: -caf-all -auto-all
+  ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls
   Extensions:
       ScopedTypeVariables
     , TypeSynonymInstances
@@ -316,6 +316,7 @@ library
     , Data.Queue
   hs-source-dirs:  src
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+  ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls
   --  -ddump-rule-rewrites
   --  -ddump-rule-firings
   Extensions:
