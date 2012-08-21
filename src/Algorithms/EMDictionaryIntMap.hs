@@ -21,16 +21,20 @@
 module Algorithms.EMDictionaryIntMap
 ( train
 , train'
+, train''
 , main
+, corpusToInts
 ) where
 
 import Tools.PrettyPrint (putStrColumns)
 
+import Control.Exception (bracket)
 import qualified Data.Array as A
 import qualified Data.List as L
 import qualified Data.Map as M
 import qualified Data.IntMap as IM
 import System.Environment (getArgs)
+import System.IO
 
 -- import Debug.Trace
 
@@ -79,6 +83,11 @@ train' delta corpus
       $ IM.assocs m
       )
   $ iter delta corpus' s
+
+
+train'' :: Double -> [([Int], [Int])] -> [IM.IntMap (IM.IntMap Double)]
+train'' delta corpus
+  = map (\ (Array2 _ m) -> m) $ iter delta corpus $ Array2 1 IM.empty
 
 
 iter
@@ -171,6 +180,8 @@ main = do
       -> mainTrain True (read delta) corpus
     ["csv", delta, corpus]
       -> mainSteps (read delta) corpus
+    ["unzipCorpus", corpus]
+      -> mainUnzipCorpus corpus
     ["generate-test-corpus", wordCnt, wordCntPerSentence]
       -> mainGenerateTestCorpus (read wordCnt) (read wordCntPerSentence)
     (_:_)
@@ -215,6 +226,16 @@ mainSteps delta corpus = do
 --     replaceComma "" = ""
 --     replaceComma ('.' : cs) = ',' : cs
 --     replaceComma (c   : cs) = c   : replaceComma cs
+
+
+mainUnzipCorpus :: FilePath -> IO ()
+mainUnzipCorpus file
+  = bracket (openFile (file ++ ".e.txt") WriteMode) hClose $ \ hE ->
+    bracket (openFile (file ++ ".f.txt") WriteMode) hClose $ \ hF ->
+      parseCorpus file >>= mapM_ (\ (es, fs) -> do
+                                   hPutStrLn hE $ unwords es
+                                   hPutStrLn hF $ unwords fs
+                                 )
 
 
 mainGenerateTestCorpus :: Int -> Int -> IO ()
