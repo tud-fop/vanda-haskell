@@ -5,6 +5,7 @@ module Algorithms.DecoderIBM1 where
 
 import Control.Applicative
 import Control.Arrow
+import Control.DeepSeq
 import Control.Exception (bracket)
 import Control.Monad
 import qualified Control.Monad.Trans.State.Lazy as StL
@@ -25,21 +26,24 @@ import Tools.Timestamps
 
 
 data Hypothesis = Hypothesis
-  { transLen :: Int
-  , transRev :: [Int]
-  , nGramW :: Double
-  , transWs :: [Double]
-  }
+  { hLen        :: Int
+  , hTrans      :: [Int]
+  , hPNGrams    :: Double
+  , hP          :: Double
+  , hCandidates :: IM.IntMap Int
+  } deriving Show
 
 
 data Model = Model
-  { pLen   :: Int -> Int -> Double
-  , pTrans :: Int -> Int -> Double
-  , pWordE :: Int -> Double
-  , pWordF :: Int -> Double
-  , pNGram :: [Int] -> Double
-  , countE :: Int
-  , countF :: Int
+  { mMTrans :: M.Map Int (M.Map Int Double)
+  , mPTrans :: Int -> Int -> Double
+  , mPLen   :: Int -> Int -> Double
+  , mPNGram :: [Int] -> Int -> Double
+  , mPWordE :: Int -> Double
+  , mPAlign :: Int -> Int -> Int -> Int -> Double
+--   , pWordF :: Int -> Double
+  , mSizeE :: Int
+--   , countF :: Int
   }
 
 
@@ -47,25 +51,118 @@ pWordFArray :: Model -> [Int] -> IM.IntMap Double
 pWordFArray m fs
   = IM.fromList
     [ ( f
-      , sum [ pWordE m e * pTrans m e f
-            | e <- [0 .. countE m - 1]
+      , sum [ mPWordE m e * mPTrans m e f
+            | e <- [0 .. mSizeE m - 1]
             ]
       )
     | f <- fs
     ]
 
 
-expand :: Model -> Int -> [Int] -> Hypothesis -> Int -> (Hypothesis, Double)
-expand m fLen fs (Hypothesis eLen es w ws) e
-  = ( Hypothesis eLen' es' w' ws'
-    , pLen m eLen' fLen + sum (map log ws') + w'
-    )
+expandH
+  :: Model
+  -> (Int -> Double)
+  -> Int
+  -> [Int]
+  -> Hypothesis
+  -> Int
+  -> Hypothesis
+expandH m pWordF fLen fs h e
+  = updateHP m pWordF fLen fs
+  $ Hypothesis
+      (hLen h + 1)
+      (hTrans h ++ [e])
+      (hPNGrams h * mPNGram m [last ((-1) : hTrans h)] e)
+      undefined
+      (IM.update updt e $ hCandidates h)
   where
-    eLen' = eLen + 1
-    es'   = e : es
-    w'    = w * pNGram m undefined
-    ws'   = zipWith (\ f w'' -> w'' * pTrans m e f) fs ws
+    updt i | i <= 1    = Nothing
+           | otherwise = Just (i - 1)
 
+
+updateHP
+  :: Model -> (Int -> Double) -> Int -> [Int] -> Hypothesis -> Hypothesis
+updateHP m pWordF fLen fs h
+  = h { hP
+      = hPNGrams h * sum
+        [ mPLen m fLen l * product
+            [ sum [ mPAlign m l fLen i j * mPTrans m e f
+                  | (e, i) <- zip (hTrans h) [1 .. hLen h]
+                  ]
+            + sum [ mPAlign m l fLen i j * pWordF f
+                  | i <- [hLen h + 1 .. l]
+                  ]
+            | (f, j) <- zip fs [1 .. fLen]
+            ]
+        | l <- [hLen h .. 2 * fLen]
+        ]
+      }
+
+
+pAddOneSmoothedNestedMaps
+  :: (Ord k1, Ord k2, Show k1)
+  => M.Map k1 (M.Map k2 Int) -> Double -> k1 -> k2 -> Double
+pAddOneSmoothedNestedMaps m0
+  = \ add e f ->  -- lambda to allow memoization of where clause definitions
+    case M.lookup e m1 of
+      Just (m2, cntSum)
+        -> maybe add ((add +) . fromIntegral) (M.lookup f m2)
+         / fromIntegral (cntSum + cntE)
+      Nothing
+        -> error $ "Unknown condition: " ++ show e
+  where
+    (m1, cntE) = postprocessConditionalCounts m0
+
+
+-- TODO: Check for underflow
+decode m fs = (heaps)
+  where
+    h0 = updateHP m pWordF fLen fs
+       $ Hypothesis 0 [] 1 undefined
+       $ IM.fromListWith (+) $ concatMap (map (\ x -> (x, 1)) . candidateE) fs
+    fLen = length fs
+    pWordF = (pWordFArray m fs IM.!)
+    mTransSwapped = swapNestedMaps $ mMTrans m
+    candidateE f = map fst
+                 $ take 20
+                 $ L.sortBy (compare `on` FlipOrd . snd)
+                 $ M.assocs
+                 $ M.findWithDefault M.empty f mTransSwapped
+    for :: a -> [b] -> (a -> b -> a) -> a
+    for z xs f = L.foldl' f z xs
+    heaps = take (2 * fLen) $ iterate step $ phSingleton 20 (hP h0) h0
+    step ph0 = for (phEmpty 20) (phElems ph0) $ \ ph1 h ->
+                 for ph1 (IM.keys $ hCandidates h) $ \ ph2 e ->
+                   let h' = expandH m pWordF fLen fs h e
+                   in phInsert (hP h') h' ph2
+
+
+newtype FlipOrd a = FlipOrd { unflipOrd :: a } deriving (Eq)
+
+instance (Ord a) => Ord (FlipOrd a) where
+  compare (FlipOrd x) (FlipOrd y) = compare y x
+
+-- ---------------------------------------------------------------------------
+
+data PruningHeap k a = PruningHeap Int (M.Map k [a]) deriving Show
+
+
+phEmpty :: Int -> PruningHeap k a
+phEmpty n = PruningHeap n M.empty
+
+
+phSingleton :: Int -> k -> a -> PruningHeap k a
+phSingleton n k x = PruningHeap n (M.singleton k [x])
+
+
+phInsert :: Ord k => k -> a -> PruningHeap k a -> PruningHeap k a
+phInsert k x (PruningHeap n m)
+  = let m' = M.insertWith (++) k [x] m
+  in PruningHeap n $ if M.size m' > n then M.deleteMin m' else m'
+
+
+phElems :: PruningHeap k a -> [a]
+phElems (PruningHeap _ m) = concat $ M.elems m
 
 -- ---------------------------------------------------------------------------
 
@@ -101,14 +198,65 @@ main = do
   case args of
     basename : idE : idF : args' -> let df = Datafiles basename idE idF in
       case args' of
-        ["intify"] -> mainIntify df
-        ["unintify"] -> mainUnintify df
+        ["decode"          ] -> mainDecode df
+        ["intify"          ] -> mainIntify df
+        ["unintify"        ] -> mainUnintify df
         ["trainDictionary" ] -> mainTrainDictionary  df
         ["trainLengthmodel"] -> mainTrainLengthmodel df
         ["trainNGrams"     ] -> mainTrainNGrams      df
         ["trainUnigrams"   ] -> mainTrainUnigrams    df
         _ -> error "Sorry, I do not understand."
     _ -> error "Sorry, I do not understand."
+
+
+mainDecode :: Datafiles -> IO ()
+mainDecode df = do
+  lexiconE     <- load (dfLexiconE df) readLexicon
+  lexiconFInv  <- invertA2M <$> load (dfLexiconF df) readLexicon
+  dictionary   <- load (dfDictionary df)
+                $ readNestedMaps (read :: String ->  Int    )
+                                 (read :: String ->  Int    )
+                                 (read :: String ->  Double )
+  lengthmodel  <- load (dfLengthmodel df)
+                $ readNestedMaps (read :: String ->  Int    )
+                                 (read :: String ->  Int    )
+                                 (read :: String ->  Int    )
+  nGrammodel   <- load (dfNGramsE df)
+                $ readNestedMaps (read :: String -> [Int   ])
+                                 (read :: String ->  Int    )
+                                 (read :: String ->  Int    )
+  unigrammodel <- load (dfUnigramsE df)
+                $ readMap        (read :: String ->  Int    )
+                                 (read :: String ->  Int    )
+  let cntE = sum $ M.elems unigrammodel
+      model = Model
+                dictionary
+                (\ e f -> M.findWithDefault 0 f
+                        $ M.findWithDefault M.empty e dictionary)
+                (pAddOneSmoothedNestedMaps lengthmodel 1)
+                (pAddOneSmoothedNestedMaps nGrammodel 1)
+                ((/ fromIntegral cntE) . fromIntegral . (unigrammodel M.!))
+                (\ l m _{-i-} _{-j-} -> 1 / fromIntegral (l ^ m))
+                (M.size unigrammodel)
+      unlexi cs = maybe (error $ "Unknown word: " ++ cs)
+                        id (M.lookup cs lexiconFInv)
+  sentences <- lines <$> getContents
+  forM_ sentences $ \ sentence -> do
+--     putStrLn $ unwords $ map (lexiconE !)
+--       $ decode model sentence
+--     print $ pWordFArray model sentence
+    putStrLn sentence
+    putStrLn ""
+    forM_ (decode model $ map unlexi $ words sentence) $ \ ph -> do
+      forM_ (phElems ph) $ \ h -> do
+        putStr $ show $ hP h
+        putStr $ ": "
+        putStrLn $ unwords $ map (lexiconE !) (hTrans h)
+      putStrLn ""
+  where
+    load file m = do printTimestamp
+                     putStrLn ("Loading " ++ file ++ " ...")
+                     m file >>= (\ x -> x `deepseq` return x)
 
 
 mainIntify :: Datafiles -> IO ()
@@ -120,8 +268,8 @@ mainIntify df = do
       forM_ pairs $ \ (es, fs) -> do
         hPutStrLn hE $ unwords $ map show es
         hPutStrLn hF $ unwords $ map show fs
-  writeLexicon (dfLexiconE df) (invert lexiconE)
-  writeLexicon (dfLexiconF df) (invert lexiconF)
+  writeLexicon (dfLexiconE df) (invertM2A lexiconE)
+  writeLexicon (dfLexiconF df) (invertM2A lexiconF)
 
 
 mainUnintify :: Datafiles -> IO ()
@@ -384,9 +532,20 @@ firstM  f (x, y) = (flip (,) y) `liftM` f x
 secondM f (x, y) = (     (,) x) `liftM` f y
 
 
-invert :: M.Map k Int -> Array Int k
-invert m = array (0, M.size m - 1) [(v, k) | (k, v) <- M.assocs m]
+invertM2A :: M.Map k Int -> Array Int k
+invertM2A m = array (0, M.size m - 1) [(v, k) | (k, v) <- M.assocs m]
 
+
+invertA2M :: Ord k => Array Int k -> M.Map k Int
+invertA2M a = M.fromList [(v, k) | (k, v) <- assocs a]
+
+
+swapNestedMaps
+  :: (Ord k1, Ord k2) => M.Map k1 (M.Map k2 a) -> M.Map k2 (M.Map k1 a)
+swapNestedMaps
+  = flip M.foldlWithKey' M.empty $ \ m k1 ->
+      flip M.foldrWithKey' m $ \ k2 x ->
+        M.alter (Just . maybe (M.singleton k1 x) (M.insert k1 x)) k2
 
 intify
   :: Ord k
