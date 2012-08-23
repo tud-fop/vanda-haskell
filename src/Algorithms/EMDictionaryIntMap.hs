@@ -20,8 +20,8 @@
 --   <http://ldc.upenn.edu/acl/J/J99/J99-4005.pdf>
 module Algorithms.EMDictionaryIntMap
 ( train
-, train'
-, train''
+, trainInt
+, trainIntAll
 , main
 , corpusToInts
 ) where
@@ -36,103 +36,83 @@ import qualified Data.IntMap as IM
 import System.Environment (getArgs)
 import System.IO
 
--- import Debug.Trace
 
--- ---------------------------------------------------------------------------
-
-data Array2 a = Array2 a (IM.IntMap (IM.IntMap a))
-
-
-(!) :: Array2 a -> (IM.Key, IM.Key) -> a
-(Array2 def m) ! (i, j)
-  = IM.findWithDefault def j
-  $ IM.findWithDefault IM.empty i m
-
-
-(//) :: Array2 t -> [((Int, IM.Key), t)] -> Array2 t
-a // [] = a
-(Array2 def m) // (((i, j), v) : xs)
-  = Array2 def
-      ( IM.alter
-          (Just . maybe (IM.singleton j v) (IM.insert j v))
-          i
-          m
-      )
-  // xs
-
--- ---------------------------------------------------------------------------
-
-train :: (Ord e, Ord f) => Double -> [([e], [f])] -> [((e, f), Double)]
-train delta = last . train' delta
-
-
-train' :: (Ord e, Ord f) => Double -> [([e], [f])] -> [[((e, f), Double)]]
-train' delta corpus
+train :: (Ord e, Ord f) => Double -> [([e], [f])] -> [[((e, f), Double)]]
+train delta corpus
   = let (corpus', (eA, fA)) = corpusToInts corpus
-        (fLower, fUpper) = A.bounds fA
-        p = 1 / fromIntegral (fUpper - fLower + 1)
-        s = Array2 p IM.empty
-    in
-    map
-      ( \ (Array2 _ m) ->
-        concatMap
-          (\ (e, m') ->
-            map (\ (f, w) -> ((eA A.! e, fA A.! f), w))
-          $ IM.assocs m'
-          )
-      $ IM.assocs m
-      )
-  $ iter delta corpus' s
+  in map ( map (\ ((e, f), w) -> ((eA A.! e, fA A.! f), w))
+         . assocs
+         ) $ trainInt delta corpus'
 
 
-train'' :: Double -> [([Int], [Int])] -> [IM.IntMap (IM.IntMap Double)]
-train'' delta corpus
-  = map (\ (Array2 _ m) -> m) $ iter delta corpus $ Array2 1 IM.empty
+assocs :: IM.IntMap (IM.IntMap Double) -> [((IM.Key, IM.Key), Double)]
+assocs
+  = concatMap (uncurry $ \ e -> map (\ (f, w) -> ((e, f), w)) . IM.assocs)
+  . IM.assocs
 
 
-iter
+trainInt
   :: Double
   -> [([Int], [Int])]
-  -> Array2 Double
-  -> [Array2 Double]
-iter delta corpus s
-  = let s' = step corpus s
-        (Array2 _ sMM) = s
-        (Array2 _ sMM') = s'
-        d = maximum
-          $ IM.elems
-          $ IM.map (maximum . IM.elems)
-          $ IM.unionWith
-              (\ sM sM' -> IM.unionWith (\ x y -> abs (x - y)) sM sM')
-              sMM
-              sMM'
-    in {-traceShow d $-}
-    if d < delta
-    then [s']
-    else s' : iter delta corpus s'
+  -> [IM.IntMap (IM.IntMap Double)]
+trainInt delta
+  = takeWhile' (\ m1 m2 -> d m1 m2 >= delta) . trainIntAll
+  where
+    takeWhile' f (x0 : xs@(x1 : _))
+      | f x0 x1 = x0 : takeWhile' f xs
+      | otherwise = x0 : x1 : []
+    takeWhile' _ xs = xs
+    d mm1 mm2
+      = maximum
+      $ IM.elems
+      $ IM.map (maximum . IM.elems)
+      $ IM.unionWith
+          (\ m1 m2 -> IM.unionWith (\ x y -> abs (x - y)) m1 m2)
+          mm1
+          mm2
 
 
-step :: [([Int], [Int])] -> Array2 Double -> Array2 Double
-step corpus s
+trainIntAll :: [([Int], [Int])] -> [IM.IntMap (IM.IntMap Double)]
+trainIntAll c = let m0 = step c 1 IM.empty
+                 in m0 : iterate (step c 0) m0
+
+
+step
+  :: [([Int], [Int])]
+  -> Double
+  -> IM.IntMap (IM.IntMap Double)
+  -> IM.IntMap (IM.IntMap Double)
+step corpus def s
   = normalize
-  $ for (Array2 0 IM.empty) corpus $ \ c'' (es, fs) ->
+  $ for IM.empty corpus $ \ c'' (es, fs) ->
       for c'' fs $ \ c' f ->
-        let norm = (/) 1 $ for 0 es $ \ summ e -> summ + s ! (e, f) in
-        for c' es $ \ c e ->
-          let i = (e, f)
-              w = c ! i + s ! i * norm
-          in w `seq` c // [(i, w)]
+        let ps = map (fnd f) es
+            norm = 1 / L.foldl' (+) 0 ps  -- = 1 / sum ps
+        in for c' (zip es ps) $ \ c (e, p) ->
+          let w = p * norm
+          in if w == 0
+          then c
+          else (\ m -> m IM.! e `seq` m)  -- delete this for strict containers
+             $ IM.alter
+                 (Just . maybe (IM.singleton f w) (IM.insertWith' (+) f w))
+                 e c
   where
     for :: a -> [b] -> (a -> b -> a) -> a
     for i xs f = L.foldl' f i xs
+    fnd :: IM.Key -> IM.Key -> Double
+    fnd j i = IM.findWithDefault def j (IM.findWithDefault IM.empty i s)
 
 
-normalize :: Array2 Double -> Array2 Double
-normalize (Array2 def cM)
-  = Array2 def
-  $ flip IM.map cM $ \ cM' ->
-      let norm = (/) 1 $ L.foldl' (+) 0 $ IM.elems cM'
-      in  IM.map ((*) norm) cM'
+normalize :: IM.IntMap (IM.IntMap Double) -> IM.IntMap (IM.IntMap Double)
+normalize
+  = IM.mapMaybe $ \ m -> nothingWhen IM.null
+                       $ let norm = 1 / IM.foldl' (+) 0 m
+                         in IM.mapMaybe (nothingWhen (0 ==) . (norm *)) m
+
+
+nothingWhen :: (a -> Bool) -> a -> Maybe a
+nothingWhen f x | f x       = Nothing
+                | otherwise = Just x
 
 
 corpusToInts
@@ -201,13 +181,14 @@ mainTrain swap delta corpus
     . unzip3
     . fmap (\ ((e, f), w) -> (e, f, show w))
     . filter ((<) 0.1 . snd)
+    . last
     . train delta
     . (if swap then map (\ (a, b) -> (b, a)) else id)
 
 
 mainSteps :: Double -> String -> IO ()
 mainSteps delta corpus = do
-  xs <- fmap (train' delta) $ parseCorpus corpus
+  xs <- fmap (train delta) $ parseCorpus corpus
   putStr
     . unlines
     . map (L.intercalate "\t")

@@ -307,7 +307,7 @@ mainUnintify df = do
 mainTrainDictionary :: Datafiles -> IO ()
 mainTrainDictionary df = do
   pairs <- readParallelCorpus read (dfCorpusIntE df) (dfCorpusIntF df)
-  forM_ (zip [1 :: Int ..] $ Dict.train'' 0 pairs) $ \ (i, dict) -> do
+  forM_ (zip [1 :: Int ..] $ Dict.trainIntAll pairs) $ \ (i, dict) -> do
     let file = dfDictionary df ++ "." ++ printf "%04d" i
     printTimestamp
     putStrLn $ "Writing " ++ file ++ " ..."
