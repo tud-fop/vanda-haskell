@@ -1,13 +1,16 @@
-{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE Rank2Types, ScopedTypeVariables #-}
 
 module Algorithms.DecoderIBM1 where
 
 
+import Prelude hiding (catch)
+
 import Control.Applicative
 import Control.Arrow
 import Control.DeepSeq
-import Control.Exception (bracket)
+import Control.Exception (bracket, catch, SomeException)
 import Control.Monad
+import Control.Concurrent
 import qualified Control.Monad.Trans.State.Lazy as StL
 import Data.Array
 import Data.Char (isSpace)
@@ -19,7 +22,7 @@ import qualified Data.Set as S
 import System.Directory (doesFileExist)
 import System.Environment (getArgs)
 import System.IO
-import Text.Printf (printf)
+import System.Posix.Signals
 
 import qualified Algorithms.EMDictionaryIntMap as Dict
 import Tools.Timestamps
@@ -306,15 +309,48 @@ mainUnintify df = do
 
 mainTrainDictionary :: Datafiles -> IO ()
 mainTrainDictionary df = do
-  pairs <- readParallelCorpus read (dfCorpusIntE df) (dfCorpusIntF df)
-  forM_ (zip [1 :: Int ..] $ Dict.trainIntAll pairs) $ \ (i, dict) -> do
-    let file = dfDictionary df ++ "." ++ printf "%04d" i
-    printTimestamp
-    putStrLn $ "Writing " ++ file ++ " ..."
-    hFlush stdout
-    writeNestedMaps show show file $ fmap intMapToMap $ intMapToMap dict
-    printTimestamp
-    putStrLn "... done."
+  printTimestamp
+  putStrLn $
+    "Dictionary training started. On SIGUSR1 the result of the most recently \
+    \completed training step is written to " ++ dfDictionary df ++ " without \
+    \interupting the training, and on SIGINT or any exception the result of \
+    \the last successful training step is written to this file before the \
+    \program terminates."
+  varDict <- newEmptySampleVar
+  hndlr <- mutexize (handler varDict)
+  _ <- installHandler sigUSR1 (Catch hndlr) Nothing
+  catch (worker varDict) $ \ (e :: SomeException) ->
+    printTimestamp >> putStr "Worker: " >> print e >> hndlr
+  where
+    worker :: SampleVar (IM.IntMap (IM.IntMap Double)) -> IO ()
+    worker varDict = do
+      pairs <- readParallelCorpus read (dfCorpusIntE df) (dfCorpusIntF df)
+      forM_ (zip [1 :: Int ..] $ Dict.trainIntAll pairs) $ \ (i, dict) -> do
+        dict `seq` writeSampleVar varDict dict
+        printTimestamp
+        putStrLn $ "Completed dictionary training step " ++ show i ++ "."
+    handler :: SampleVar (IM.IntMap (IM.IntMap Double)) -> IO ()
+    handler varDict = do
+      isEmpty <- isEmptySampleVar varDict
+      if isEmpty
+      then printTimestamp >> putStrLn "There is no completed training step."
+      else do
+        dict <- readSampleVar varDict
+        printTimestamp
+        putStrLn $ "Writing " ++ (dfDictionary df) ++ " ..."
+        writeNestedMaps show show (dfDictionary df)
+          $ fmap intMapToMap
+          $ intMapToMap dict
+        printTimestamp
+        putStrLn "... done."
+    mutexize :: IO a -> IO (IO a)
+    mutexize m = do
+      mutex <- newMVar ()
+      return $ do
+        takeMVar mutex
+        ret <- m
+        putMVar mutex ()
+        return ret
 
 
 mainTrainNGrams :: Datafiles -> IO ()
