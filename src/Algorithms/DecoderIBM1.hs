@@ -298,6 +298,7 @@ mainUnintify df = do
                            (read :: String -> Double) (dfDictionary df)
     >>= writeNestedMapsList id id (dfDictionary df ++ ".noint.txt")
       . map (first (lexiconE ?))
+      . map (second $ L.sortBy (compare `on` (FlipOrd . snd)))
       . map (second $ map $ first (lexiconF ?))
   printTimestamp >> putStrLn "... done"
   where
