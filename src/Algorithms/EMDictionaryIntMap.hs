@@ -1,3 +1,5 @@
+{-# LANGUAGE Rank2Types #-}
+
 -- (c) 2011 Toni Dietze <Toni.Dietze@tu-dresden.de>
 --
 -- Technische Universität Dresden / Faculty of Computer Science / Institute
@@ -28,11 +30,19 @@ module Algorithms.EMDictionaryIntMap
 
 import Tools.PrettyPrint (putStrColumns)
 
+import Control.Arrow
 import Control.Exception (bracket)
-import qualified Data.Array as A
+import Control.Monad
+import Control.Monad.ST (ST)
+import qualified Control.Monad.Trans.State.Lazy as StL
+import qualified Data.Array.IArray as A
+import qualified Data.Array.ST.Safe as A
+import qualified Data.Array.Unboxed as A
+import qualified Data.Ix as Ix
 import qualified Data.List as L
 import qualified Data.Map as M
 import qualified Data.IntMap as IM
+import Data.Tuple (swap)
 import System.Environment (getArgs)
 import System.IO
 
@@ -73,46 +83,91 @@ trainInt delta
 
 
 trainIntAll :: [([Int], [Int])] -> [IM.IntMap (IM.IntMap Double)]
-trainIntAll c = let m0 = step c 1 IM.empty
-                 in m0 : iterate (step c 0) m0
+trainIntAll c
+  = map toIntMap
+  $ iterate (step corpusA mapE)
+  $ A.accumArray undefined 1 (A.bounds mapE) []
+  where
+    (corpusA, (_, (mapE, mapF))) = corpusToArrays c
+    toIntMap
+      = IM.map (IM.fromListWith (error "toIntMap: double entry"))
+      . IM.fromListWith (++)
+      . map (\ (i, p) -> (mapE A.! i, [(mapF A.! i, p)]))
+      . A.assocs
 
 
 step
-  :: [([Int], [Int])]
-  -> Double
-  -> IM.IntMap (IM.IntMap Double)
-  -> IM.IntMap (IM.IntMap Double)
-step corpus def s
-  = normalize
-  $ for IM.empty corpus $ \ c'' (es, fs) ->
-      for c'' fs $ \ c' f ->
-        let ps = map (fnd f) es
-            norm = 1 / L.foldl' (+) 0 ps  -- = 1 / sum ps
-        in for c' (zip es ps) $ \ c (e, p) ->
-          let w = p * norm
-          in if w == 0
-          then c
-          else (\ m -> m IM.! e `seq` m)  -- delete this for strict containers
-             $ IM.alter
-                 (Just . maybe (IM.singleton f w) (IM.insertWith' (+) f w))
-                 e c
+  :: A.UArray Int Int
+  -> A.UArray Int Int
+  -> A.UArray Int Double
+  -> A.UArray Int Double
+step corpusA partitionsA probA = A.runSTUArray $ do
+  let countB = A.bounds probA
+  countA <- A.newArray countB 0
+  forCorpusSegments corpusA 0 $ \ i ->
+    let norm = 1 / L.foldl' (\ s j -> s + probA A.! j)
+                            0
+                            (map (corpusA A.!) [i + 1 .. i + corpusA A.! i])
+    in forM_ (map (corpusA A.!) [i + 1 .. i + corpusA A.! i]) $ \ j ->
+         adjustArray countA j (norm * probA A.! j +)
+  let normB = (minimum $ A.elems partitionsA, maximum $ A.elems partitionsA)
+  normA <- A.newArray normB 0 :: forall s. ST s (A.STUArray s Int Double)
+  forM_ (Ix.range countB) $ \ i ->  -- sum partitions
+    A.readArray countA i >>= adjustArray normA (partitionsA A.! i) . (+)
+  forM_ (Ix.range normB) $ \ i ->  -- invert
+    adjustArray normA i (1 /)
+  forM_ (Ix.range countB) $ \ i ->  -- normalize counts
+    A.readArray normA (partitionsA A.! i) >>= adjustArray countA i . (*)
+  return countA
   where
-    for :: a -> [b] -> (a -> b -> a) -> a
-    for i xs f = L.foldl' f i xs
-    fnd :: IM.Key -> IM.Key -> Double
-    fnd j i = IM.findWithDefault def j (IM.findWithDefault IM.empty i s)
+    adjustArray a i f = A.readArray a i >>= A.writeArray a i . f
+    forCorpusSegments
+      :: (Monad m, Num i, Ix.Ix i, A.IArray a i)
+      => a i i -> i -> (i -> m b) -> m ()
+    forCorpusSegments a i f
+      | Ix.inRange (A.bounds a) i
+      = f i >> forCorpusSegments a (i + 1 + a A.! i) f
+      | otherwise
+      = return ()
 
 
-normalize :: IM.IntMap (IM.IntMap Double) -> IM.IntMap (IM.IntMap Double)
-normalize
-  = IM.mapMaybe $ \ m -> nothingWhen IM.null
-                       $ let norm = 1 / IM.foldl' (+) 0 m
-                         in IM.mapMaybe (nothingWhen (0 ==) . (norm *)) m
+corpusToArrays
+  :: [([Int], [Int])]
+  -> ( A.UArray Int Int
+     , ( IM.IntMap (IM.IntMap Int)
+       , ( A.UArray Int Int
+         , A.UArray Int Int
+     ) ) )
+corpusToArrays corpus = (\ res@(cA, (m, _)) -> cA `seq` m `seq` res) $
+  let size = sum
+           $ map (\ (es, fs) -> let lf = length fs in lf + lf * length es)
+                 corpus
+  in second (\ x -> (snd x, inv x))
+  $ first (A.listArray (0, size - 1))
+  $ flip StL.runState (0, IM.empty)
+  $ fmap concat $ forM corpus $ \ (es, fs) ->
+      let le = length es in
+      fmap concat $ forM fs $ \ f ->
+        fmap (le :) $ forM es $ \ e ->
+          lookupInsert e f
+  where
+    inv (cnt, m) = let bnds = (0, cnt - 1)
+     in ( A.array bnds
+        $ concatMap (uncurry $ (. IM.elems) . flip zip . repeat)
+        $ IM.assocs m
+        , A.array bnds $ concatMap (map swap . IM.assocs) $ IM.elems m
+        )
 
 
-nothingWhen :: (a -> Bool) -> a -> Maybe a
-nothingWhen f x | f x       = Nothing
-                | otherwise = Just x
+lookupInsert :: Int -> Int -> StL.State (Int, IM.IntMap (IM.IntMap Int)) Int
+lookupInsert k1 k2 = do
+  (cnt, m) <- StL.get
+  let m' = IM.findWithDefault IM.empty k1 m
+  case IM.lookup k2 m' of
+    Nothing -> let cnt' = cnt + 1
+            in cnt' `seq` StL.put (cnt', IM.insert k1 (IM.insert k2 cnt m') m)
+            >> return cnt
+    Just i  -> return i
 
 
 corpusToInts
@@ -174,7 +229,7 @@ main = do
 
 
 mainTrain :: Bool -> Double -> String -> IO ()
-mainTrain swap delta corpus
+mainTrain swapLangs delta corpus
   = parseCorpus corpus
   >>= putStrColumns [" | "]
     . (\ (x, y, z) -> ["e" : x, "f" : y, "p(f|e)" : z])
@@ -183,7 +238,7 @@ mainTrain swap delta corpus
     . filter ((<) 0.1 . snd)
     . last
     . train delta
-    . (if swap then map (\ (a, b) -> (b, a)) else id)
+    . (if swapLangs then map (\ (a, b) -> (b, a)) else id)
 
 
 mainSteps :: Double -> String -> IO ()
