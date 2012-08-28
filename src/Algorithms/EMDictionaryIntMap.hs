@@ -1,4 +1,4 @@
-{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE FlexibleContexts, Rank2Types #-}
 
 -- (c) 2011 Toni Dietze <Toni.Dietze@tu-dresden.de>
 --
@@ -35,6 +35,7 @@ import Control.Exception (bracket)
 import Control.Monad
 import Control.Monad.ST (ST)
 import qualified Control.Monad.Trans.State.Lazy as StL
+import qualified Data.Array.Base as AB
 import qualified Data.Array.IArray as A
 import qualified Data.Array.ST.Safe as A
 import qualified Data.Array.Unboxed as A
@@ -102,31 +103,35 @@ step
   -> A.UArray Int Double
   -> A.UArray Int Double
 step corpusA partitionsA probA = A.runSTUArray $ do
-  let countB = A.bounds probA
-  countA <- A.newArray countB 0
+  let countAMaxAt = AB.numElements probA - 1
+  countA <- A.newArray (0, countAMaxAt) 0
   forCorpusSegments corpusA 0 $ \ i ->
-    let norm = 1 / L.foldl' (\ s j -> s + probA A.! j)
+    let norm = 1 / L.foldl' (\ s j -> s + probA ! (corpusA ! j))
                             0
-                            (map (corpusA A.!) [i + 1 .. i + corpusA A.! i])
-    in forM_ (map (corpusA A.!) [i + 1 .. i + corpusA A.! i]) $ \ j ->
-         adjustArray countA j (norm * probA A.! j +)
-  let normB = (minimum $ A.elems partitionsA, maximum $ A.elems partitionsA)
-  normA <- A.newArray normB 0 :: forall s. ST s (A.STUArray s Int Double)
-  forM_ (Ix.range countB) $ \ i ->  -- sum partitions
-    A.readArray countA i >>= adjustArray normA (partitionsA A.! i) . (+)
-  forM_ (Ix.range normB) $ \ i ->  -- invert
+                            [i + 1 .. i + corpusA ! i]
+    in forM_ [i + 1 .. i + corpusA ! i] $ \ j ->
+         let k = corpusA ! j
+         in adjustArray countA k (norm * probA ! k +)
+  let normAMaxAt = maximum $ A.elems partitionsA
+  normA <- A.newArray (0, normAMaxAt) 0
+        :: forall s. ST s (A.STUArray s Int Double)
+  forM_ [0 .. countAMaxAt] $ \ i ->  -- sum partitions
+    AB.unsafeRead countA i >>= adjustArray normA (partitionsA ! i) . (+)
+  forM_ [0 .. normAMaxAt ] $ \ i ->  -- invert
     adjustArray normA i (1 /)
-  forM_ (Ix.range countB) $ \ i ->  -- normalize counts
-    A.readArray normA (partitionsA A.! i) >>= adjustArray countA i . (*)
+  forM_ [0 .. countAMaxAt] $ \ i ->  -- normalize counts
+    AB.unsafeRead normA (partitionsA ! i) >>= adjustArray countA i . (*)
   return countA
   where
-    adjustArray a i f = A.readArray a i >>= A.writeArray a i . f
+    (!) :: (A.IArray a e, Ix.Ix i) => a i e -> Int -> e
+    (!) = AB.unsafeAt
+    adjustArray a i f = AB.unsafeRead a i >>= AB.unsafeWrite a i . f
     forCorpusSegments
-      :: (Monad m, Num i, Ix.Ix i, A.IArray a i)
-      => a i i -> i -> (i -> m b) -> m ()
+      :: (A.IArray a Int, Monad m)
+      => a Int Int -> Int -> (Int -> m b) -> m ()
     forCorpusSegments a i f
-      | Ix.inRange (A.bounds a) i
-      = f i >> forCorpusSegments a (i + 1 + a A.! i) f
+      | i < AB.numElements a
+      = f i >> forCorpusSegments a (i + 1 + a ! i) f
       | otherwise
       = return ()
 
