@@ -98,6 +98,7 @@ trainIntAll c
       = IM.map (IM.fromListWith (error "toIntMap: double entry"))
       . IM.fromListWith (++)
       . map (\ (i, p) -> (mapE A.! i, [(mapF A.! i, p)]))
+      . filter ((0 /=) . snd)
       . A.assocs
 
 
