@@ -332,7 +332,7 @@ mainTrainDictionary df = do
         ++ show (sum $ map (\ (xs, ys) -> length xs * length ys) pairs)
         ++ " word pairs."
       forM_ (zip [1 :: Int ..] $ Dict.trainIntAll pairs) $ \ (i, dict) -> do
-        dict `seq` writeSampleVar varDict dict
+        dict `seq` writeSampleVar varDict (Dict.unId dict)
         printTimestamp
         putStrLn $ "Completed dictionary training step " ++ show i ++ "."
     handler :: SampleVar (IM.IntMap (IM.IntMap Double)) -> IO ()

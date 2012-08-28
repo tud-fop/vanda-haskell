@@ -24,6 +24,7 @@ module Algorithms.EMDictionaryIntMap
 ( train
 , trainInt
 , trainIntAll
+, Id(..)
 , main
 , corpusToInts
 ) where
@@ -67,7 +68,7 @@ trainInt
   -> [([Int], [Int])]
   -> [IM.IntMap (IM.IntMap Double)]
 trainInt delta
-  = takeWhile' (\ m1 m2 -> d m1 m2 >= delta) . trainIntAll
+  = takeWhile' (\ m1 m2 -> d m1 m2 >= delta) . map unId . trainIntAll
   where
     takeWhile' f (x0 : xs@(x1 : _))
       | f x0 x1 = x0 : takeWhile' f xs
@@ -83,9 +84,12 @@ trainInt delta
           mm2
 
 
-trainIntAll :: [([Int], [Int])] -> [IM.IntMap (IM.IntMap Double)]
+data Id a = Id { unId :: a } deriving (Bounded, Eq, Ord, Read, Show)
+
+
+trainIntAll :: [([Int], [Int])] -> [Id (IM.IntMap (IM.IntMap Double))]
 trainIntAll c
-  = map toIntMap
+  = map (\ a -> a `seq` Id (toIntMap a))
   $ iterate (step corpusA mapE)
   $ A.accumArray undefined 1 (A.bounds mapE) []
   where
