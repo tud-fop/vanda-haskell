@@ -67,21 +67,15 @@ trainInt
   :: Double
   -> [([Int], [Int])]
   -> [IM.IntMap (IM.IntMap Double)]
-trainInt delta
-  = takeWhile' (\ m1 m2 -> d m1 m2 >= delta) . map unId . trainIntAll
+trainInt delta corpus
+  = map (toIntMap mapE mapF) $ takeWhile' (\ a1 a2 -> d a1 a2 >= delta) arrays
   where
+    (arrays, (mapE, mapF)) = trainIntArrays corpus
+    d a1 a2 = maximum $ zipWith ((abs .) . (-)) (A.elems a1) (A.elems a2)
     takeWhile' f (x0 : xs@(x1 : _))
       | f x0 x1 = x0 : takeWhile' f xs
       | otherwise = x0 : x1 : []
     takeWhile' _ xs = xs
-    d mm1 mm2
-      = maximum
-      $ IM.elems
-      $ IM.map (maximum . IM.elems)
-      $ IM.unionWith
-          (\ m1 m2 -> IM.unionWith (\ x y -> abs (x - y)) m1 m2)
-          mm1
-          mm2
 
 
 data Id a = Id { unId :: a } deriving (Bounded, Eq, Ord, Read, Show)
@@ -89,17 +83,35 @@ data Id a = Id { unId :: a } deriving (Bounded, Eq, Ord, Read, Show)
 
 trainIntAll :: [([Int], [Int])] -> [Id (IM.IntMap (IM.IntMap Double))]
 trainIntAll c
-  = map (\ a -> a `seq` Id (toIntMap a))
-  $ iterate (step corpusA mapE)
-  $ A.accumArray undefined 1 (A.bounds mapE) []
+  = map (\ a -> a `seq` Id (toIntMap mapE mapF a)) arrays
   where
-    (corpusA, (_, (mapE, mapF))) = corpusToArrays c
-    toIntMap
-      = IM.map (IM.fromListWith (error "toIntMap: double entry"))
-      . IM.fromListWith (++)
-      . map (\ (i, p) -> (mapE A.! i, [(mapF A.! i, p)]))
-      . filter ((0 /=) . snd)
-      . A.assocs
+    (arrays, (mapE, mapF)) = trainIntArrays c
+
+
+toIntMap
+  :: A.UArray Int Int              -- ^ index → e
+  -> A.UArray Int Int              -- ^ index → f
+  -> A.UArray Int Double           -- ^ index → probability
+  -> IM.IntMap (IM.IntMap Double)  -- ^ e → f → probability
+toIntMap mapE mapF
+  = IM.map (IM.fromListWith (error "toIntMap: double entry"))
+  . IM.fromListWith (++)
+  . map (\ (i, p) -> (mapE A.! i, [(mapF A.! i, p)]))
+  . filter ((0 /=) . snd)
+  . A.assocs
+
+
+trainIntArrays
+  :: [([Int], [Int])]  -- ^ corpus
+  -> ([A.UArray Int Double], (A.UArray Int Int, A.UArray Int Int))
+                       -- ^ (index → probability, (index → e, index → f))
+trainIntArrays c
+  = ( iterate (step corpusA mapE)
+    $ A.accumArray undefined 1 (A.bounds mapE) []
+    , (mapE, mapF)
+    )
+  where
+    (corpusA, (mapE, mapF)) = corpusToArrays c
 
 
 step
@@ -142,17 +154,14 @@ step corpusA partitionsA probA = A.runSTUArray $ do
 
 
 corpusToArrays
-  :: [([Int], [Int])]
-  -> ( A.UArray Int Int
-     , ( IM.IntMap (IM.IntMap Int)
-       , ( A.UArray Int Int
-         , A.UArray Int Int
-     ) ) )
+  :: [([Int], [Int])]  -- ^ corpus
+  -> (A.UArray Int Int, (A.UArray Int Int, A.UArray Int Int))
+                       -- ^ (Int → (count or index), (index → e, index → f))
 corpusToArrays corpus = (\ res@(cA, (m, _)) -> cA `seq` m `seq` res) $
   let size = sum
            $ map (\ (es, fs) -> let lf = length fs in lf + lf * length es)
                  corpus
-  in second (\ x -> (snd x, inv x))
+  in second inv
   $ first (A.listArray (0, size - 1))
   $ flip StL.runState (0, IM.empty)
   $ fmap concat $ forM corpus $ \ (es, fs) ->
