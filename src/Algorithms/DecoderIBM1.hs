@@ -310,8 +310,7 @@ mainUnintify df = do
 
 mainTrainDictionary :: Datafiles -> IO ()
 mainTrainDictionary df = do
-  printTimestamp
-  putStrLn $
+  putStrLnTimestamped $
     "Dictionary training started. On SIGUSR1 the result of the most recently \
     \completed training step is written to " ++ dfDictionary df ++ " without \
     \interupting the training, and on SIGINT or any exception the result of \
@@ -326,6 +325,12 @@ mainTrainDictionary df = do
     worker :: SampleVar (IM.IntMap (IM.IntMap Double)) -> IO ()
     worker varDict = do
       pairs <- readParallelCorpus read (dfCorpusIntE df) (dfCorpusIntF df)
+      pairs `deepseq` putStrLnTimestamped $ "Loaded " ++ show (length pairs)
+        ++ " sentence pairs containing "
+        ++ show (length $ concatMap (uncurry (++)) pairs)
+        ++ " words. The training algorithm has to consider "
+        ++ show (sum $ map (\ (xs, ys) -> length xs * length ys) pairs)
+        ++ " word pairs."
       forM_ (zip [1 :: Int ..] $ Dict.trainIntAll pairs) $ \ (i, dict) -> do
         dict `seq` writeSampleVar varDict dict
         printTimestamp
@@ -334,16 +339,14 @@ mainTrainDictionary df = do
     handler varDict = do
       isEmpty <- isEmptySampleVar varDict
       if isEmpty
-      then printTimestamp >> putStrLn "There is no completed training step."
+      then putStrLnTimestamped "There is no completed training step."
       else do
         dict <- readSampleVar varDict
-        printTimestamp
-        putStrLn $ "Writing " ++ (dfDictionary df) ++ " ..."
+        putStrLnTimestamped $ "Writing " ++ (dfDictionary df) ++ " ..."
         writeNestedMaps show show (dfDictionary df)
           $ fmap intMapToMap
           $ intMapToMap dict
-        printTimestamp
-        putStrLn "... done."
+        putStrLnTimestamped "... done."
     mutexize :: IO a -> IO (IO a)
     mutexize m = do
       mutex <- newMVar ()
