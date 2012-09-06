@@ -19,6 +19,7 @@
 module Vanda.Hypergraph.Basic
   ( Hyperedge (..)
   , deref
+  , foldpv
   , from
   , arity
   , mapHE
@@ -80,6 +81,11 @@ instance (Show v, Show l, Show i) => Show (Hyperedge v l i) where
       ++ " # "
       ++ show (ident e)
 
+foldpv :: (v -> Bool) -> Hyperedge v l i -> Bool
+foldpv p (Nullary t _ _) = p t
+foldpv p (Unary t f1 _ _) = p t && p f1
+foldpv p (Binary t f1 f2 _ _) = p t && p f1 && p f2
+foldpv p (Hyperedge t f _ _) = V.foldr (\x y -> p x && y) (p t) f
 
 from :: Hyperedge v l i -> [v]
 from Nullary{} = []

@@ -29,7 +29,7 @@ import Vanda.Features
 import Vanda.Functions ( GHKM, toWSAmap )
 import Vanda.Hypergraph hiding ( knuth, dropNonproducing )
 import Vanda.Hypergraph.Binary ()
-import Vanda.Hypergraph.EdgeList ( knuth, dropNonproducing', dropNonproducing )
+import Vanda.Hypergraph.EdgeList ( knuth, dropNonproducing', dropNonproducing0, dropNonproducing )
 import Vanda.Hypergraph.NFData ()
 import Vanda.Token
 
@@ -194,14 +194,14 @@ main = do
         <- fmap fromText $ T.readFile (zhgFile ++ ".nodes")
       let pN !_ !i xs
             = (weights VU.! fromIntegral (fst i)) * Prelude.product xs
-          wsa = toWSAmap tm "days days days days days days" -- ""
+          wsa = toWSAmap tm "days days" -- " days days days days"
           ts = getTerminals wsa
           el' = EdgeList (nodesEL el) (filter p $ edgesEL el)
           p e = weights VU.! fromIntegral (ident e) > 1.0e-10 &&
                 case e of
                   Nullary{} -> S.member (label e) ts
                   _ -> True
-          h = dropNonproducing (dropNonproducing' el')
+          h = dropNonproducing ({- dropNonproducing' -} el')
           (h', _) = earley h (memo ta) wsa 1132
           init
             = ( fst . head . WSA.initialWeights $ wsa

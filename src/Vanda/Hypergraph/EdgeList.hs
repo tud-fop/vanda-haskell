@@ -23,6 +23,7 @@ module Vanda.Hypergraph.EdgeList
   , mapLabels
   , toSimulation
   , dropNonproducing
+  , dropNonproducing0
   , dropNonproducing'
   , knuth
   ) where
@@ -31,6 +32,8 @@ import Prelude hiding ( lookup )
 
 import Control.Arrow ( (***) )
 import Control.DeepSeq ( deepseq, NFData (..) )
+import Control.Monad ( unless )
+import Control.Monad.ST
 import qualified Data.Array as A
 import Data.Heap ( Prio, Val )
 import qualified Data.Heap as H hiding ( Prio, Val )
@@ -42,6 +45,7 @@ import qualified Data.Map.Strict as MS
 import Data.Maybe
 import qualified Data.Queue as Q
 import qualified Data.Set as S
+import Data.STRef
 import qualified Data.Tree as T
 import qualified Data.Vector as V
 
@@ -221,18 +225,14 @@ dropNonproducing' (EdgeList _ es)
                (Q.enqList (S.toList (theMap MS.! v)) vsQ')
 
 
-dropNonproducing
+dropNonproducing0
   :: forall v l i. (NFData v, NFData l, NFData i, Ord i, Ord v, Show l, Show v, Show i)
   => EdgeList v l i
   -> EdgeList v l i
-dropNonproducing (EdgeList _ es)
+dropNonproducing0 (EdgeList _ es)
   = EdgeList vsS0 es'
   where
-    es' = filter p es
-    p e@Nullary{} = to e `S.member` vsS0
-    p e@Unary{} = to e `S.member` vsS0 && from1 e `S.member` vsS0
-    p e@Binary{} = to e `S.member` vsS0 && from1 e `S.member` vsS0 && from2 e `S.member` vsS0
-    p e@Hyperedge{} = to e `S.member` vsS0 && V.foldr (\x y -> x `S.member` vsS0 && y) True (_from e)
+    es' = filter (foldpv (`S.member` vsS0)) es
     vsS0 = dropLoop (Q.fromList [ e | e@Nullary{} <- es ]) S.empty M.empty
     -- -- --
     forwA :: M.Map v [Hyperedge v l i] -- A.Array v [Hyperedge v l i] -- ^ forward star w/edge ids
@@ -306,6 +306,79 @@ dropNonproducing (EdgeList _ es)
                 then (Just e1, (k, Nothing))
                 else (Nothing, (k, Just unvis'))
 
+-- | Strict version of 'modifySTRef' 
+modifySTRef' :: STRef s a -> (a -> a) -> ST s () 
+modifySTRef' ref f = do 
+  x <- readSTRef ref 
+  let x' = f x 
+  x' `seq` writeSTRef ref x' 
+
+data He v l i = He !Int !(Hyperedge v l i)
+
+dropNonproducing
+  :: forall v l i. (NFData v, NFData l, NFData i, Ord i, Ord v, Show l, Show v, Show i)
+  => EdgeList v l i
+  -> EdgeList v l i
+dropNonproducing (EdgeList _ es)
+  = EdgeList vsS0 es'
+  where
+    es' = filter (foldpv (`S.member` vsS0)) es
+    vsS0 = runST go
+    go :: forall s . ST s (S.Set v)
+    go = do
+      forwA <- newSTRef (M.empty :: M.Map v [STRef s (He v l i)])
+      _ <- sequence
+        [ do
+            he <- newSTRef (He (magic e) e)
+            sequence
+              [ modifySTRef' forwA $ M.alter (prep he) v
+              | v <- case e of
+                       Binary _ f1 f2 _ _
+                         | f1 == f2 -> [f1]
+                         | otherwise -> [f1, f2]
+                       Unary _ f1 _ _ -> [f1]
+                       Hyperedge _ f _ _ -> S.toList (S.fromList (V.toList f))
+                       Nullary{} -> undefined -- can not happen
+              ]
+        | e <- es
+        , case e of
+            Nullary{} -> False
+            _ -> True
+        ]
+      q <- newSTRef $ Q.fromList [ e | e@Nullary{} <- es ]
+      s <- newSTRef S.empty
+      let go' = do
+            qq <- readSTRef q
+            case Q.deqMaybe qq of
+              Nothing -> readSTRef s
+              Just (e, qq') -> do
+                writeSTRef q qq'
+                ss <- readSTRef s
+                let v = to e
+                unless (v `S.member` ss) $ do
+                  modifySTRef' s $ S.insert v
+                  fa <- readSTRef forwA
+                  _ <- sequence -- forM_ (M.findWithDefault [] v fa) $ \ he ->
+                    [ do
+                        He i e <- readSTRef he
+                        if i == 1
+                          then modifySTRef' q (Q.enq e)
+                          else let i' = i - 1
+                               in i' `seq` writeSTRef he (He i' e)
+                    | he <- M.findWithDefault [] v fa
+                    ]
+                  modifySTRef' forwA $ M.delete v
+                go'
+      go'
+    prep e Nothing = Just [e]
+    prep e (Just es) = Just (e : es)
+    magic e = case e of
+      Binary _ f1 f2 _ _
+        | f1 == f2 -> 1
+        | otherwise -> 2
+      Unary{} -> 1
+      Hyperedge _ f _ _ -> S.size (S.fromList (V.toList f))
+      Nullary{} -> undefined
 
 
 -- | A phantom type to specify our kind of heap.
