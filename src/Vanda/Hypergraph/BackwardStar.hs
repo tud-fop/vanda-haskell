@@ -38,10 +38,12 @@ module Vanda.Hypergraph.BackwardStar
 import Prelude hiding ( lookup, product )
 
 import Control.Arrow ( (***), (&&&) )
+import Control.DeepSeq ( deepseq, NFData )
 import qualified Data.Array as A
 import qualified Data.Heap as H hiding ( Prio, Val )
 import Data.Heap ( Prio, Val )
 import qualified Data.Ix as Ix
+import Data.List ( foldl' )
 import qualified Data.Map as M
 import qualified Data.Queue as Q
 import qualified Data.Set as S
@@ -73,9 +75,13 @@ filterEdges p (BackwardStar vs b _) = BackwardStar vs (filter p . b) False
 fromEdgeList :: Ord v => EdgeList v l i -> BackwardStar v l i
 fromEdgeList (EdgeList vs es) = BackwardStar vs (flip (M.findWithDefault []) a) True
   where
-    lst = [ (v, [e]) | e <- es, let v = to e ]
-    a = -- M.union
-        (M.fromListWith (++) lst)
+    lst = [ (v, e) | e <- es, let v = to e ]
+    a = foldl' (\m (v, e) -> M.alter (prep e) v m) M.empty lst
+    prep e Nothing = Just [e]
+    prep e (Just es) = Just (e : es)
+    -- lst = [ (v, [e]) | e <- es, let v = to e ]
+    -- a = -- M.union
+    --     (M.fromListWith (++) lst)
         -- (M.fromList $ zip (S.toList vs) $ repeat [])
         -- A.accumArray (flip (:)) [] vs lst
 
@@ -122,12 +128,29 @@ toSimulation (BackwardStar vs b _) = Simulation vs lookup
     a = M.fromList [ (v, makeM $ b v) | v <- S.toList vs ]
         -- A.array vs [ (v, makeM $ b v) | v <- Ix.range vs ]
 
+{- fromListWithKey :: Ord k => (k -> a -> a -> a) -> [(k,a)] -> Map k a
+fromListWithKey f xs
+  = foldlStrict ins empty xs
+  where
+    ins t (k,x) = insertWithKey f k x t
+-}
+
+fromListsWith :: Ord k => (a -> a -> a) -> [[(k, a)]] -> M.Map k a
+fromListsWith f xss
+  = foldl' flw M.empty xss
+  where
+    flw t xs = foldl' ins t xs
+    ins t (k, x) = M.insertWith f k x t
+
+
 -- | Drops nonproducing nodes and corresponding edges.
 dropNonproducing
-  :: forall v l i. Ord v
+  :: forall v l i. (Ord v, NFData v)
   => BackwardStar v l i
   -> BackwardStar v l i
-dropNonproducing (BackwardStar vs b _) = BackwardStar vs' b' False
+dropNonproducing (BackwardStar vs b _)
+  = -- theMap `deepseq` vsS0 `seq`
+    BackwardStar vs' b' False
   where
     vs' = vsS0 -- S.findMin &&& S.findMax $ vsS0
     b' v = if S.member v vsS0
@@ -136,20 +159,29 @@ dropNonproducing (BackwardStar vs b _) = BackwardStar vs' b' False
     p e = S.fromList (from e) `S.isSubsetOf` vsS0
     theMap
       = M.fromListWith S.union
-      $ concat
-      $ [ if null frome
-          then [ (Nothing, stoe) ]
-          else [ (Just x, stoe) | x <- frome ]
+      $ [ (x, stoe)
         | v <- S.toList vs
         , e <- b v
-        , let frome = from e
+        , case e of
+            Nullary{} -> False
+            _ -> True
         , let stoe = S.singleton (to e)
+        , x <- from e
+        ]
+    theMap0
+      = S.fromList
+      $ [ to e
+        | v <- S.toList vs
+        , e <- b v
+        , case e of
+            Nullary{} -> True
+            _ -> False
         ]
     -- set of producing nodes
     vsS0 :: S.Set v
     vsS0 = closeProducing
              ( S.empty
-             , Q.fromList (S.toList (theMap M.! Nothing))
+             , Q.fromList (S.toList (theMap0))
              )
     -- "while loop" for computing the closure
     closeProducing :: (S.Set v, Q.Queue v) -> S.Set v
@@ -160,7 +192,7 @@ dropNonproducing (BackwardStar vs b _) = BackwardStar vs' b' False
         then closeProducing (vsS, vsQ')
         else closeProducing
                ( S.insert v vsS
-               , Q.enqList (S.toList (theMap M.! Just v)) vsQ'
+               , Q.enqList (S.toList (theMap M.! v)) vsQ'
                )
 
 -- | Drops unreachable nodes and corresponding edges.

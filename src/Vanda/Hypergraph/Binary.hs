@@ -68,6 +68,6 @@ instance (NFData v, NFData l, NFData i, B.Binary v, B.Binary l, B.Binary i, Ord 
   => B.Binary (EdgeList v l i) where
   put (EdgeList vs es) = do
     B.put vs
-    myPut es
-  get = EdgeList <$> B.get <*> myGet
+    B.put es -- myPut es
+  get = EdgeList <$> B.get <*> B.get -- myGet
 

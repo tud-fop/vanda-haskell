@@ -72,18 +72,19 @@ class Hypergraph h where
   
   -- | Drops nonproducing nodes and corresponding edges.
   dropNonproducing
-    :: Ord v
-    => h v l i            -- ^ Input hypergraph
-    -> BackwardStar v l i -- ^ Output hypergraph
-  dropNonproducing = BS.dropNonproducing . toBackwardStar
+    :: (Ord v, NFData v, Hypergraph h')
+    => h v l i -- ^ Input hypergraph
+    -> h' v l i -- ^ Output hypergraph
+  dropNonproducing = fromBackwardStar . BS.dropNonproducing . toBackwardStar
   
   -- | Drops unreachable nodes and corresponding edges.
   dropUnreachables
-    :: Ord v
-    => v                  -- ^ Target node for reachability analysis
-    -> h v l i            -- ^ Input hypergraph
-    -> BackwardStar v l i -- ^ Output hypergraph
-  dropUnreachables v0 = BS.dropUnreachables v0 . toBackwardStar
+    :: (Ord v, Hypergraph h')
+    => v        -- ^ Target node for reachability analysis
+    -> h v l i  -- ^ Input hypergraph
+    -> h' v l i -- ^ Output hypergraph
+  dropUnreachables v0
+    = fromBackwardStar . BS.dropUnreachables v0 . toBackwardStar
   
   -- | Returns the list of 'Hyperedge's.
   edges :: Ord v => h v l i -> [Hyperedge v l i]
@@ -91,6 +92,12 @@ class Hypergraph h where
   
   -- | Applies a filter to all hyperedges. Need not be memoized.
   filterEdges :: Ord v => (Hyperedge v l i -> Bool) -> h v l i -> h v l i
+  
+  fromBackwardStar :: Ord v => BackwardStar v l i -> h v l i
+  
+  fromEdgeList :: Ord v => EdgeList v l i -> h v l i
+  
+  fromForwardStar :: Ord v => ForwardStar v l i -> h v l i
   
   -- | Computes the best derivation for each node.
   knuth
@@ -122,6 +129,7 @@ class Hypergraph h where
   
   -- | Creates a Hypergraph from a list of 'Hyperedge's.
   mkHypergraph :: (Ord v) => [Hyperedge v l i] -> h v l i
+  mkHypergraph = fromEdgeList . uncurry EdgeList . (nodesL &&& id)
   
   -- | Returns the set of all nodes.
   nodes :: Ord v => h v l i -> S.Set v -- (v, v)
@@ -148,9 +156,11 @@ class Hypergraph h where
 
 instance Hypergraph EdgeList where
   filterEdges = EL.filterEdges
+  fromBackwardStar = BS.toEdgeList
+  fromEdgeList = id
+  fromForwardStar = FS.toEdgeList
   mapLabels = EL.mapLabels
   mapNodes = EL.mapNodes
-  mkHypergraph = uncurry EdgeList . (nodesL &&& id)
   nodes = nodesEL
   toEdgeList = id
   toSimulation = EL.toSimulation
@@ -158,10 +168,12 @@ instance Hypergraph EdgeList where
 instance Hypergraph BackwardStar where
   edgeCount = BS.edgeCount
   filterEdges = BS.filterEdges
+  fromBackwardStar = id
+  fromEdgeList = BS.fromEdgeList
+  fromForwardStar = BS.fromEdgeList . FS.toEdgeList
   mapLabels = BS.mapLabels
   mapNodes = BS.mapNodes
   memoize = BS.memoize
-  mkHypergraph = BS.fromEdgeList . mkHypergraph
   nodes = nodesBS
   toEdgeList = BS.toEdgeList
   toBackwardStar = id
@@ -170,10 +182,12 @@ instance Hypergraph BackwardStar where
 instance Hypergraph ForwardStar where
   edgeCount = FS.edgeCount
   filterEdges = FS.filterEdges
+  fromBackwardStar = FS.fromEdgeList . BS.toEdgeList
+  fromEdgeList = FS.fromEdgeList
+  fromForwardStar = id
   mapLabels = FS.mapLabels
   mapNodes = FS.mapNodes
   memoize = FS.memoize
-  mkHypergraph = FS.fromEdgeList . mkHypergraph
   nodes = nodesFS
   toEdgeList = FS.toEdgeList
   toForwardStar = id

@@ -104,7 +104,6 @@ p_grammar mapl mapv
     { lhss <- many1 $ noneOf "_"
     ; _ <- char '_'
     ; lhsi <- many1 $ oneOf "1234567890"
-    ; symbol <- p_mapl mapl lhss
     ; lhs <- p_mapv mapv $!! lhss ++ "_" ++ lhsi
     ; spaces; _ <- string "->"; spaces
     ; rhs1 <- p_mapv mapv =<< many1 (noneOf " ")
@@ -114,6 +113,7 @@ p_grammar mapl mapv
     ; do
       { wgt <- p_weight
       ; spaces
+      ; symbol <- p_mapl mapl (lhss ++ "/1")
       ; return $!! (mkHyperedge lhs [rhs1] symbol i, wgt)
       }
     <|> do
@@ -121,6 +121,7 @@ p_grammar mapl mapv
         ; spaces
         ; wgt <- p_weight
         ; spaces
+        ; symbol <- p_mapl mapl (lhss ++ "/2")
         ; return $!! (mkHyperedge lhs [rhs1, rhs2] symbol i, wgt)
         }
     }

@@ -24,6 +24,7 @@ import Control.Monad ( unless )
 import Control.Monad.ST
 import Control.Seq
 import qualified Data.Map as M
+import qualified Data.Map.Strict as MS
 import qualified Data.Set as S
 import Data.STRef
 import qualified Data.Queue as Q
@@ -39,17 +40,19 @@ import qualified Vanda.Algorithms.Earley.WSA as WSA
 -- Ignoring the bullet, the first symbol of the righthandside of an item
 -- (not bRight) is wrapped by the first and the second state, the second symbol 
 -- is wrapped by the second and the third state etc.
-data Item v i t p
+data Item v l i t p
   = Item 
     { iHead :: !v
-    , bRight :: ![Either v t]
-    , iEdge :: !i
+    , bRight :: ![Either Int t]
+    , edge :: Hyperedge v l i
     , stateList :: ![p]
     , firstState :: !p
     , weight :: !Double
     }
 
-instance (Show v, Show i, Show p, Show t) => Show (Item v i t p) where
+iEdge = ident . edge
+
+instance (Show v, Show i, Show p, Show t) => Show (Item v l i t p) where
   show item
     = show (iHead item)
       ++ " -> ???"
@@ -61,10 +64,10 @@ instance (Show v, Show i, Show p, Show t) => Show (Item v i t p) where
       ++ show (stateList item)
       ++ "\n"
 
-instance (Eq i, Eq p) => Eq (Item v i t p) where
-  i1 == i2 = (iEdge i1, stateList i1) == (iEdge i2, stateList i2)
+instance (Eq i, Eq p) => Eq (Item v l i t p) where
+  i1 == i2 = (iEdge i1, stateList i1) == (iEdge $ i2, stateList i2)
 
-instance (Ord i, Ord p) => Ord (Item v i t p) where
+instance (Ord i, Ord p) => Ord (Item v l i t p) where
   i1 `compare` i2
     = (iEdge i1, stateList i1) `compare` (iEdge i2, stateList i2)
 
@@ -72,7 +75,7 @@ instance (Ord i, Ord p) => Ord (Item v i t p) where
 data Const v l i t p
   = Const
     { back :: !(v -> [Hyperedge v l i])
-    , byId :: !(i -> Hyperedge v l i)
+    -- , byId :: !(i -> Hyperedge v l i)
     , comp :: !(Hyperedge v l i -> [Either Int t])
     , v0 :: !v
     , smap :: !(M.Map (p, t) [(p, Double)])
@@ -82,9 +85,9 @@ data Const v l i t p
 
 data State v l i t p s
   = State
-    { itemq :: STRef s (Q.Queue (Item v i t p))
+    { itemq :: STRef s (Q.Queue (Item v l i t p))
     , pset :: STRef s (S.Set (p, v))   -- ^ remember what has already been predicted
-    , cmap :: STRef s (M.Map (p, v) (S.Set p, [Item v i t p]))
+    , cmap :: STRef s (M.Map (p, v) (S.Set p, [Item v l i t p]))
     }
 
 
@@ -140,7 +143,7 @@ initConst hg component wsa v00
     state
       = Const
         { back = backStar hg
-        , byId = ((M.fromList idList) M.!)
+        -- , byId = ((M.fromList idList) M.!)
         , comp = component . label
         , v0 = v00
         , smap = initScanMap (WSA.transitions wsa)
@@ -152,16 +155,16 @@ initConst hg component wsa v00
             )
           | t <- ts
           ]
-    idList
+    {- idList
       = [ (ident e, e)
         | v <- S.toList (nodes hg)
         , e <- backStar hg v
-        ]
+        ] -}
 
 
 extract
   :: (Show v, Show p, Show i, Show t)
-  => Item v i t p
+  => Item v l i t p
   -> Const v l i t p
   -> Maybe (Hyperedge (p, v, p) l i, ([p], Double))
 extract
@@ -170,17 +173,17 @@ extract
     , firstState = p
     , iHead = q
     , stateList = statl
-    , iEdge = ide
+    , edge = edge
     , weight = w
     }
-  Const{ byId = byid, comp = compo }
+  Const{ {-byId = byid,-} comp = compo }
   = (`using` strategy)
   $ Just
   $ ( mkHyperedge 
         (p, q, head statl)
         (carryL (yesyes (compo edge) (reverse statl)) (from edge))
         (label edge)
-        ide
+        (ident edge)
     , ( statl
       , w -- * L.product initial_weight
       )
@@ -193,7 +196,6 @@ extract
             (seqHyperedge (seqTuple3 rseq rseq rseq) rseq rseq)
             (seqTuple2 r0 r0)
          )
-    edge = byid ide
     carryL yesbaby vert
       = [ (l, v, r)
         | (i, v) <- zip [0..] vert
@@ -215,7 +217,7 @@ modifySTRef' ref f = do
 
 iter
   :: forall v l i t p a. (Ord p, Ord v, Ord t, Ord i, Show p, Show v, Show t, Show i)
-  => (Item v i t p -> Const v l i t p -> Maybe a)
+  => (Item v l i t p -> Const v l i t p -> Maybe a)
   -> WSA.WSA p t Double
   -> Const v l i t p
   -> [(Hyperedge (p, v, p) l i, ([p], Double))] -- a
@@ -250,12 +252,12 @@ iter _ wsa constt@Const{ v0 = v00 }
 predict
   :: (Ord p, Ord v, Ord t, Ord i, Show v, Show i, Show p, Show t)
   => Const v l i t p
-  -> Item v i t p
+  -> Item v l i t p
   -> State v l i t p s
   -> ST s ()
 predict constt item
   = {-# SCC predict #-} case {-# SCC predicta #-} bRight item of
-      Left v:_ -> {-# SCC predict0 #-} predict' constt ({-# SCC predictb #-} (head (stateList item), v))
+      Left i:_ -> {-# SCC predict0 #-} predict' constt ({-# SCC predictb #-} (head (stateList item), edge item `deref` i))
       _ -> const $ return ()
 
 predict'
@@ -268,24 +270,26 @@ predict' c pv@(p, v) s
   = do
       ps <- readSTRef (pset s)
       unless (S.member pv ps) $ do
-        writeSTRef (pset s) (S.insert pv (ps))
-        modifySTRef' (itemq s) (Q.enqList itemlist)
+        let ps' = S.insert pv ps in ps' `seq` writeSTRef (pset s) ps'
+        itemlist `seq` modifySTRef' (itemq s) (Q.enqList itemlist)
   where
     itemlist
-      = [ Item
-            v
-            (map conv (comp c edge)
-              `using` seqList (seqEither rseq r0))
-            (ident edge) [p] p 1
+      = [ Item v (comp c edge) edge [p] p 1
         | edge <- back c v
-        , let conv = (either (Left . (deref edge)) (Right . id))
+        -- , let conv = (either (Left . (deref edge)) (Right . id))
+        {-, let vec = case edge of
+                      Nullary{} -> VV.empty
+                      Unary{ from1 = x1 } -> VV.singleton x1
+                      Binary{ from1 = x1, from2 = x2 } -> VV.fromList [x1, x2]
+                      Hyperedge{ _from = xs } -> xs-}
         ]
+        `using` seqList rseq
 
 
 scan
   :: (Ord p, Ord v, Ord t, Ord i, Show v, Show i, Show p, Show t)
   => Const v l i t p
-  -> Item v i t p
+  -> Item v l i t p
   -> State v l i t p s
   -> ST s ()
 scan c
@@ -307,40 +311,52 @@ scan c
 scan _ _ s = return ()
 
 
+first' f p = case p of
+               (x, y) -> let fx = f x in fx `seq` (fx, y)
+
+second' f p = case p of
+               (x, y) -> let fy = f y in fy `seq` (x, fy)
+
 complete
   :: (Ord p, Ord v, Ord t, Ord i, Show v, Show i, Show p, Show t)
-  => Item v i t p
+  => Item v l i t p
   -> State v l i t p s
   -> ST s ()
-complete i@Item{ stateList = p:_, bRight = Left v:_ } s@State{ cmap = zmap }
+complete it@Item{ stateList = p:_, bRight = Left i:_ } s@State{ cmap = zmap }
   = {-# SCC complete_1 #-}
     do
       cm <- readSTRef zmap
+      let v = edge it `deref` i
       let ps' = maybe [] (S.toList . fst) (M.lookup (p, v) cm)
-      ps' `seq` modifySTRef' (itemq s) (Q.enqListWith (flip completeItem i) ps')
-      writeSTRef zmap $
-        M.alter
-          (Just . maybe (S.empty, [i]) (second (i:)))
-          (p, v)
-          cm
+      let is' = map (flip completeItem it) ps' `using` seqList rseq
+      is' `seq` modifySTRef' (itemq s) (Q.enqList is')
+        -- (Q.enqListWith (flip completeItem i) ps')
+      let cm' = MS.alter
+                  (Just . maybe (S.empty, [it]) (second' (it:)))
+                  -- (\x -> Just $ (`using` seqTuple2 rseq)
+                  --             $ maybe (S.empty, [it]) (second (it:)) x)
+                  (p, v)
+                  cm
+          in writeSTRef zmap cm'
 complete Item{ iHead = v, stateList = p':_, firstState = p, bRight = [] } s@State{ cmap = zmap }
   = {-# SCC complete_2 #-}
     do
       cm <- readSTRef zmap
       unless (maybe False (S.member p' . fst) (M.lookup (p, v) cm)) $
         do
-          writeSTRef zmap $
-            M.alter
-              (Just . maybe (S.singleton p', []) (first (S.insert p')))
-              (p, v)
-              cm
+          let cm' = MS.alter
+                    (Just . maybe (S.singleton p', []) (first' (S.insert p')))
+                    (p, v)
+                    cm
+              in cm' `seq` writeSTRef zmap cm'
           let is = maybe [] snd (M.lookup (p, v) cm)
-          is `seq` modifySTRef' (itemq s) (Q.enqListWith (completeItem p') is)
+          let is' = map (completeItem p') is `using` seqList rseq
+          is' `seq` modifySTRef' (itemq s) (Q.enqList is')
 complete _ s
   = {-# SCC complete_3 #-} return () -- error "Earley.complete"
 
 completeItem
-  :: (Show v, Show i, Show p, Show t) => p -> Item v i t p -> Item v i t p
+  :: (Show v, Show i, Show p, Show t) => p -> Item v l i t p -> Item v l i t p
 completeItem p' i@Item{ stateList = slist, bRight = _:bright' }
   = {- mytrace -} i{ stateList = p' : slist, bRight = bright' }
 

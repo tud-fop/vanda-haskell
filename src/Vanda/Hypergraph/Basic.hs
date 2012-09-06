@@ -87,10 +87,12 @@ from (Unary _ f1 _ _) = [f1]
 from (Binary _ f1 f2 _ _) = [f1, f2]
 from (Hyperedge _ f _ _) = V.toList f
 
+deref :: Show i => Hyperedge v l i -> Int -> v
 deref (Unary _ f1 _ _) 0 = f1
 deref (Binary _ f1 f2 _ _) 0 = f1
 deref (Binary _ f1 f2 _ _) 1 = f2
 deref (Hyperedge _ f _ _) i = f V.! i
+deref e i = error (show (ident e) ++ show i) 
 
 arity :: Hyperedge v l i -> Int
 arity Nullary{} = 0

@@ -76,6 +76,8 @@ type SyncPair t = ([Either Int t], [Either Int t])
 
 type GHKM t = (T.Tree (Either Int t), [Either Int t])
 
+-- type Berkeley t = (
+
 data SCFG nt l i
   = SCFG
     { toHypergraph :: BackwardStar nt l i
@@ -344,12 +346,13 @@ pruneTerminals ts (SCFG bs@(BackwardStar _ b _) initnt)
       p he = S.null $ getTerminalsGHKM (label he) `S.difference` ts
     in SCFG bs{ backStar = b' } initnt
 
-droppNonproducing :: Ord nt => SCFG nt (GHKM t) i -> SCFG nt (GHKM t) i
+droppNonproducing
+  :: (Ord nt, NFData nt) => SCFG nt (GHKM t) i -> SCFG nt (GHKM t) i
 droppNonproducing scfg
   = scfg{ toHypergraph = dropNonproducing (toHypergraph scfg) }
 
 prepareExamplesGHKM
-  :: (Ord i, Ord nt, Show i, Show nt, NFData i, NFData nt)
+  :: (Ord i, Ord nt, Show i, Show nt, NFData i, NFData nt, NFData nt)
   => SCFG nt (GHKM Token) i
   -> TokenMap
   -> [String]

@@ -316,7 +316,7 @@ library
     , Data.Queue
   hs-source-dirs:  src
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-  ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls
+  ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2
   --  -ddump-rule-rewrites
   --  -ddump-rule-firings
   Extensions:
