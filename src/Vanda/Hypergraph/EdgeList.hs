@@ -23,7 +23,6 @@ module Vanda.Hypergraph.EdgeList
   , mapLabels
   , toSimulation
   , dropNonproducing
-  , dropNonproducing0
   , dropNonproducing'
   , knuth
   ) where
@@ -226,87 +225,6 @@ dropNonproducing' (EdgeList _ es)
                (Q.enqList (S.toList (theMap MS.! v)) vsQ')
 
 
-dropNonproducing0
-  :: forall v l i. (NFData v, NFData l, NFData i, Ord i, Ord v, Show l, Show v, Show i)
-  => EdgeList v l i
-  -> EdgeList v l i
-dropNonproducing0 (EdgeList _ es)
-  = EdgeList vsS0 es'
-  where
-    es' = filter (foldpv (`S.member` vsS0)) es
-    vsS0 = dropLoop (Q.fromList [ e | e@Nullary{} <- es ]) S.empty M.empty
-    -- -- --
-    forwA :: M.Map v [Hyperedge v l i] -- A.Array v [Hyperedge v l i] -- ^ forward star w/edge ids
-    forwA
-      = -- M.fromListWith (++) -- A.accumArray (flip (:)) [] vs
-        foldl' (\m (v, e) -> M.alter (prep e) v m) M.empty
-        [ (v, e)
-        | e <- es
-        , case e of
-            Nullary{} -> False
-            _ -> True
-        , v <- case e of
-                 Binary _ f1 f2 _ _
-                   | f1 == f2 -> [f1]
-                   | otherwise -> [f1, f2]
-                 Unary _ f1 _ _ -> [f1]
-                 Hyperedge _ f _ _ -> S.toList (S.fromList (V.toList f))
-                 Nullary{} -> undefined -- can not happen
-        ]
-    prep e Nothing = Just [e]
-    prep e (Just es) = Just (e : es)
-    magic e
-      = case e of
-          Binary _ f1 f2 _ _
-            | f1 == f2 -> 1
-            | otherwise -> 2
-          Unary{} -> 1
-          Hyperedge _ f _ _ -> S.size (S.fromList (V.toList f))
-          Nullary{} -> undefined
-    -- -- --
-    dropLoop
-      :: Q.Queue (Hyperedge v l i)
-      -> S.Set v
-      -> M.Map i Int
-      -> S.Set v
-    dropLoop !q !s !adjIM = case Q.deqMaybe q of
-      Nothing -> s
-      Just (e, q')
-        | v `S.member` s -> dropLoop q' s adjIM
-        | True -> case loopoMax q' adjIM $ M.findWithDefault [] v forwA of
-                    (q'', adjIM') -> dropLoop q'' s' adjIM'
-        where
-          v = to e
-          s' = S.insert v s
-          -- es' :: [Hyperedge v l i]
-          -- adjChange :: [(i, Maybe Int)] -- < changes to adjacency map
-          -- (es', adjChange)
-          --   = (catMaybes *** id) . unzip . map work $ M.findWithDefault [] v forwA
-          {-adjIM' = (foldl'
-                      (\m (k, v) -> maybe (M.delete k) (M.insert k) v m)
-                      adjIM
-                      adjChange)
-          q'' = Q.enqList es' q' -}
-          loopoMax !q !adjIM [] = (q, adjIM)
-          loopoMax !q !adjIM (e1 : es1) = loopoMax q1 adjIM1 es1
-            where
-              k = ident e1
-              unvis' = M.findWithDefault (magic e1) k adjIM - 1
-              (q1, adjIM1) = if (==0) unvis'
-                          then (Q.enq e1 q, M.delete k adjIM)
-                          else (q, M.insert k unvis' adjIM)
-          -- compute change for a given edge information
-          work
-            :: Hyperedge v l i -> (Maybe (Hyperedge v l i), (i, Maybe Int))
-          work e1
-            = let k = ident e1
-                  -- unvis' = (adjIM M.! k) - 1
-                  unvis' = M.findWithDefault (magic e1) k adjIM - 1
-              in -- (cand, (k, unvis'))
-                if (==0) unvis'
-                then (Just e1, (k, Nothing))
-                else (Nothing, (k, Just unvis'))
-
 -- | Strict version of 'modifySTRef' 
 modifySTRef' :: STRef s a -> (a -> a) -> ST s () 
 modifySTRef' ref f = do 
@@ -345,9 +263,6 @@ lviewSTRef' ref n j = do
 readSTRefWith :: (a -> b) -> STRef s a -> ST s b
 readSTRefWith f s = readSTRef s >>= (return . f)
 
-ite :: Bool -> a -> a -> a
-ite False x _ = x
-ite True _ x = x
 
 data He v l i = He !Int !(Hyperedge v l i)
 
@@ -369,10 +284,10 @@ computeForward es
         Nullary{} -> undefined
     in do
       forwA <- newSTRef (M.empty :: M.Map v [STRef s (He v l i)])
-      _ <- sequence
+      sequence_
         [ do
-            he <- newSTRef (He (magic e) e)
-            sequence
+            he <- let i = magic e in i `seq` newSTRef (He i e)
+            sequence_
               [ modifySTRef' forwA $ M.alter (prep he) v
               | v <- case e of
                        Binary _ f1 f2 _ _
@@ -388,6 +303,14 @@ computeForward es
             _ -> True
         ]
       return forwA
+
+
+updateHe :: (Hyperedge v l i -> ST s ()) -> STRef s (He v l i) -> ST s ()
+updateHe f he = do
+  He i e <- readSTRef he
+  if i == 1 then f e
+            else let i' = i - 1 in i' `seq` writeSTRef he (He i' e)
+
 
 
 dropNonproducing
@@ -408,63 +331,10 @@ dropNonproducing (EdgeList _ es)
               unless b $ do
                 modifySTRef' s $ S.insert v
                 hes <- fmap (M.findWithDefault [] v) $ readSTRef forwA
-                _ <- forM hes $ \ he -> do
-                      He i e <- readSTRef he
-                      if i == 1
-                        then modifySTRef' q (e:)
-                        else let i' = i - 1
-                             in i' `seq` writeSTRef he (He i' e)
+                _ <- forM hes $ updateHe (\ e -> modifySTRef' q (e:))
                 modifySTRef' forwA $ M.delete v
               go'
       go'
-
-
-dropNonproducing1
-  :: forall v l i. (NFData v, NFData l, NFData i, Ord i, Ord v, Show l, Show v, Show i)
-  => EdgeList v l i
-  -> EdgeList v l i
-dropNonproducing1 (EdgeList _ es)
-  = EdgeList vsS0 es'
-  where
-    es' = filter (foldpv (`S.member` vsS0)) es
-    vsS0 = runST $ do
-      forwA <- computeForward es
-      s <- newSTRef S.empty
-      let go' qq =
-            case qq of
-              [] -> readSTRef s
-              e : qq' -> let v = to e in do
-                ss <- readSTRef s
-                if (v `S.member` ss)
-                  then go' qq'
-                  else do
-                    modifySTRef' s $ S.insert v
-                    hes <- fmap (M.findWithDefault [] v) $ readSTRef forwA
-                    let go'' qq hes = case hes of
-                          [] -> do
-                            modifySTRef' forwA $ M.delete v
-                            go' qq
-                          he : hes' -> do
-                            He i e <- readSTRef he
-                            if i == 1
-                              then go'' (e : qq) hes'
-                              else do
-                                     let i' = i - 1
-                                       in i' `seq` writeSTRef he (He i' e)
-                                     go'' qq hes'
-                      in go'' qq' hes
-                    {-let ac he qq = do
-                          He i e <- readSTRef he
-                          if i == 1
-                            then return (e:qq)
-                            else do
-                                   let i' = i - 1
-                                   i' `seq` writeSTRef he (He i' e)
-                                   return qq
-                    qq'' <- foldrM ac qq' hes
-                    modifySTRef' forwA $ M.delete v
-                    go' qq''-}
-      go' [ e | e@Nullary{} <- es ]
 
 
 -- | A phantom type to specify our kind of heap.
@@ -486,146 +356,6 @@ instance H.HeapItem MPolicy (Candidate v l i x) where
 instance Ord (Prio MPolicy (Candidate v l i x)) where
   compare (FMP x) (FMP y) = compare y x
 
-knuth0
-  :: forall v l i x. (NFData v, NFData l, NFData i, NFData x, Ord i, Ord v, Show l, Show v, Show i)
-  => EdgeList v l i
-  -> Feature l i x
-  -> V.Vector Double
-  -> BestArray v l i x
-knuth0 (EdgeList _ es) feat wV
-  = knuthLoop
-      iniCandH
-      iniBestA
-      M.empty
-      -- iniAdjIM
-  where
-    (iniCandH, iniBestA)
-      = updateLoop
-          H.empty
-          M.empty
-          -- ^^ (M.fromList [ (v, []) | v <- S.toList vs ])
-          -- ^^ (A.array vs [ (v, []) | v <- Ix.range vs ])
-          [ topCC feat wV e [] | e@Nullary{} <- es ]
-    -- -- --
-    forwA :: M.Map v [Hyperedge v l i] -- A.Array v [Hyperedge v l i] -- ^ forward star w/edge ids
-    forwA
-      = -- M.fromListWith (++) -- A.accumArray (flip (:)) [] vs
-        foldl' (\m (v, e) -> M.alter (prep e) v m) M.empty
-        [ (v, e)
-        | e <- es
-        , case e of
-            Nullary{} -> False
-            _ -> True
-        , v <- case e of
-                 Binary _ f1 f2 _ _
-                   | f1 == f2 -> [f1]
-                   | otherwise -> [f1, f2]
-                 Unary _ f1 _ _ -> [f1]
-                 Hyperedge _ f _ _ -> S.toList (S.fromList (V.toList f))
-                 Nullary{} -> undefined -- can not happen
-        ]
-    prep e Nothing = Just [e]
-    prep e (Just es') = Just (e : es')
-    {--
-    forwA :: M.Map v [Hyperedge v l i] -- A.Array v [Hyperedge v l i] -- ^ forward star w/edge ids
-    forwA
-      = M.union
-        (M.fromListWith (++) -- A.accumArray (flip (:)) [] vs
-        [ (v, [e])
-        | e <- es
-        , case e of
-            Nullary{} -> False
-            _ -> True
-        , v <- case e of
-                 Binary _ f1 f2 _ _
-                   | f1 == f2 -> [f1]
-                   | otherwise -> [f1, f2]
-                 Unary _ f1 _ _ -> [f1]
-                 Hyperedge _ f _ _ -> S.toList (S.fromList (V.toList f))
-                 Nullary{} -> undefined -- can not happen
-        ])
-        (M.fromList $ zip (S.toList vs) $ repeat []) --}
-    -- -- --
-    {-- iniAdjIM :: M.Map i Int -- ^ # ingoing adjacencies by edge id
-    iniAdjIM
-      = M.fromList
-        [ case e of
-            Binary _ f1 f2 _ _
-              | f1 == f2 -> (ie, 1)
-              | otherwise -> (ie, 2)
-            Unary{} -> (ie, 1)
-            Hyperedge _ f _ _ -> (ie, S.size (S.fromList (V.toList f)))
-            Nullary{} -> undefined -- can not happen
-        | e <- es
-        , case e of
-            Nullary{} -> False
-            _ -> True
-        , let ie = ident e
-        ] --}
-    magic e
-      = case e of
-          Binary _ f1 f2 _ _
-            | f1 == f2 -> 1
-            | otherwise -> 2
-          Unary{} -> 1
-          Hyperedge _ f _ _ -> S.size (S.fromList (V.toList f))
-          Nullary{} -> undefined
-    -- -- --
-    updateLoop
-      :: CandidateHeap v l i x
-      -> BestArray v l i x
-      -> [Candidate v l i x]
-      -> (CandidateHeap v l i x, BestArray v l i x)
-    updateLoop !candH !bestA [] = (candH, bestA)
-    updateLoop !candH !bestA (c@(Candidate w (T.Node e _) _):cs) =
-      let v = to e in
-      case M.lookup v bestA of
-        Nothing -> updateLoop ({-# SCC h1 #-} H.insert c candH) ({-# SCC a1 #-} M.insert v [c] bestA) cs
-        Just (Candidate w' _ _ : _)
-          | w > w' -> updateLoop ({-# SCC h2 #-} H.insert c candH) ({-# SCC a2 #-} M.insert v [c] bestA) cs
-          | otherwise -> updateLoop candH bestA cs
-    -- -- --
-    knuthLoop
-      :: CandidateHeap v l i x
-      -> BestArray v l i x
-      -> M.Map i Int
-      -> BestArray v l i x
-    knuthLoop !candH !bestA !adjIM = case H.view candH of
-      Nothing -> bestA -- < no candidates, so we are done
-      Just (Candidate _ (T.Node e _) _, candH') ->
-        case bestA M.! v of
-          Candidate _ (T.Node e' _) _ : _
-              -- candidate for an as yet unvisited node
-            | e == e' -> knuthLoop
-                          candH''
-                          bestA'
-                          -- (M.fromList adjChange `M.union` adjIM)
-                          (foldr (\(k, v) m -> maybe (M.delete k) (M.insert k) v m) adjIM adjChange)
-                  -- union: left argument preferred
-              -- candidate for a visited node, just throw it away
-            | otherwise -> knuthLoop candH' bestA adjIM
-          _ -> undefined -- can not happen
-        where
-          v = to e
-          (candH'', bestA') = updateLoop candH' bestA newCand
-          newCand :: [Candidate v l i x] -- < new candidates from v
-          adjChange :: [(i, Maybe Int)] -- < changes to adjacency map
-          (newCand, adjChange)
-            = (catMaybes *** id) . unzip . map work $ M.findWithDefault [] v forwA
-          -- compute change for a given edge information
-          work
-            :: Hyperedge v l i -> (Maybe (Candidate v l i x), (i, Maybe Int))
-          work e1
-            = let k = ident e1
-                  -- unvis' = (adjIM M.! k) - 1
-                  unvis' = M.findWithDefault (magic e1) k adjIM - 1
-                  cand = Just $ topCC feat wV e1 $ map (head . (bestA M.!))
-                         $ from e1
-              in -- (cand, (k, unvis'))
-                if (==0) unvis'
-                then (cand, (k, Nothing))
-                else (Nothing, (k, Just unvis'))
-
 knuth
   :: forall v l i x. (NFData v, NFData l, NFData i, NFData x, Ord i, Ord v, Show l, Show v, Show i)
   => EdgeList v l i
@@ -637,27 +367,23 @@ knuth (EdgeList _ es) feat wV
     forwA <- computeForward es
     candH <- newSTRef (H.empty :: CandidateHeap v l i x)
     bestA <- newSTRef M.empty
-    let upd c@(Candidate w (T.Node e _) _) = let v = to e in
-            lookupSTRef' bestA (M.lookup v)
-              (modifySTRef' candH $ H.insert c)
-              $ \ (Candidate w' _ _ : _) -> when (w > w') $ do
-                             modifySTRef' candH $ H.insert c
-                             modifySTRef' bestA $ M.insert v [c]
-        work hes = forM_ hes $ \ x -> do
-          he@(He i e) <- readSTRef x
-          if i == 1
-            then do
-                   ba <- readSTRef bestA
-                   upd $ topCC feat wV e $ map (head . (ba M.!)) $ from e
-            else let i' = i - 1 in i' `seq` writeSTRef x (He i' e)
+    let upd' v c = do
+          modifySTRef' candH $ H.insert c
+          modifySTRef' bestA $ M.insert v [c]
+        upd c@(Candidate w (T.Node e _) _) = let v = to e in
+          lookupSTRef' bestA (M.lookup v) (upd' v c)
+            $ \ (Candidate w' _ _ : _) -> when (w > w') $ upd' v c
         go = do
           viewSTRef' candH H.view (readSTRef bestA) $
             \ (Candidate w (T.Node e _) _) -> let v = to e in do
-              ba <- readSTRef bestA
-              _ <- case ba M.! v of
-                Candidate w' (T.Node e' _) _ : _ -> when (w == w') $
-                  readSTRefWith (M.findWithDefault [] v) forwA >>= work
+              Candidate w' (T.Node e' _) _ : _ <- readSTRefWith (M.! v) bestA
+              when (w == w') $ do
+                hes <- readSTRefWith (M.findWithDefault [] v) forwA
+                forM_ hes $ updateHe $ \ e -> do
+                  ba <- readSTRef bestA
+                  upd $ topCC feat wV e $ map (head . (ba M.!)) $ from e
+                modifySTRef' forwA $ M.delete v
               go
-    _ <- mapM upd [ topCC feat wV e [] | e@Nullary{} <- es ]
+    mapM_ upd [ topCC feat wV e [] | e@Nullary{} <- es ]
     go
 

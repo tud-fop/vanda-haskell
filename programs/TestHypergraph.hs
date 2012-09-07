@@ -29,7 +29,7 @@ import Vanda.Features
 import Vanda.Functions ( GHKM, toWSAmap )
 import Vanda.Hypergraph hiding ( knuth, dropNonproducing )
 import Vanda.Hypergraph.Binary ()
-import Vanda.Hypergraph.EdgeList ( knuth, dropNonproducing', dropNonproducing0, dropNonproducing )
+import Vanda.Hypergraph.EdgeList ( knuth, dropNonproducing', dropNonproducing )
 import Vanda.Hypergraph.NFData ()
 import Vanda.Token
 
@@ -193,7 +193,7 @@ main = do
       na :: TokenArray
         <- fmap fromText $ T.readFile (zhgFile ++ ".nodes")
       let pN !_ !i xs
-            = (weights VU.! fromIntegral (fst i)) * Prelude.product xs
+            = (weights VU.! fromIntegral ({-fst-} i)) * Prelude.product xs
           wsa = toWSAmap tm "days days" -- " days days days days"
           ts = getTerminals wsa
           el' = EdgeList (nodesEL el) (filter p $ edgesEL el)
@@ -208,14 +208,14 @@ main = do
               , 1132
               , fst . head . WSA.finalWeights $ wsa
               )
-      weights `seq` el `deepseq` T.writeFile (zhgFile ++ ".reduce")
-        (T.unlines (map (T.pack . printRule ta na) (edges h)))
-      T.writeFile (zhgFile ++ ".intersect")
-        (T.unlines (map (T.pack . printRule ta na) (edges h')))
-      {- putStr
+      weights `seq` el `deepseq` putStr
         $ makeItSo ta undefined -- nodes
         $ (!! 0)
-        $ (M.! init)
-        $ knuth h' (Feature pN V.singleton) (V.singleton 1)-}
+        $ (M.! 1132)
+        $ knuth el (Feature pN V.singleton) (V.singleton 1)
+      {- T.writeFile (zhgFile ++ ".reduce")
+        (T.unlines (map (T.pack . printRule ta na) (edges h)))
+      T.writeFile (zhgFile ++ ".intersect")
+        (T.unlines (map (T.pack . printRule ta na) (edges h')))-}
     _ -> error "Usage: TestHypergraph -z zhgFile -t tokenFile"
 
