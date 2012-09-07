@@ -284,13 +284,13 @@ topCCL feat wV e lists
     -- [l1', ..., ln']
     combine :: [[a]] -> [[[a]]]
     combine [] = [[]]
-    combine (x:xs) = map (x:) c ++ [tail x : map (\ x' -> [head x']) xs]
+    combine (x : xs) = map (x :) c ++ [tail x : map ((: []) . head) xs]
       where c = combine xs
 
 -- | Computes the array of best derivations, given an array of one best
 -- derivations (e.g., obtained via Knuth's algorithm).
 bests
-  :: forall v l i x. (Eq i, Ord v)
+  :: forall v l i x. (Eq v, Eq l, Ord v)
   => BackwardStar v l i
   -> Feature l i x
   -> V.Vector Double
@@ -301,7 +301,7 @@ bests (BackwardStar vs b _) feat wV bestA = bestA'
     bestA' :: M.Map v [Candidate v l i x] -- BestArray v l i x
     bestA' = M.fromList -- A.array vs
       [ ( v
-        , case lu v of
+        , case M.findWithDefault [] v bestA of
             [] -> []
             cand@(Candidate _ (T.Node e _) _) : _ ->
               cand : (flatten . concat)
@@ -312,13 +312,12 @@ bests (BackwardStar vs b _) feat wV bestA = bestA'
                       E -> []
                       M _ ts -> ts
                 | e' <- b v
-                , let tc = topCCL feat wV e'
-                         $ map lu (from e')
+                , let tc = topCCL feat wV e' $ map lu (from e')
                 ]
         )
       | v <- S.toList vs
       ]
-    lu v = M.findWithDefault [] v bestA
+    lu v = M.findWithDefault [] v bestA'
 
 {-
 product

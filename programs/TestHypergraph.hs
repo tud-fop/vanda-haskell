@@ -5,7 +5,7 @@ import Codec.Compression.GZip ( decompress )
 
 import Control.Monad.ST
 import qualified Data.Map as M
-import Control.DeepSeq ( deepseq )
+import Control.DeepSeq ( deepseq, force, NFData(..) )
 import Control.Seq ( using, rseq, r0, seqTuple2, seqList )
 import qualified Data.Array as A
 import qualified Data.Array.IArray as IA
@@ -138,6 +138,8 @@ memo ta = l `seq` (a A.!)
                 | True -> [Right i]
               _ -> [Right i]
 
+instance (NFData v, NFData l, NFData i) => NFData (Candidate v l i x) where
+  rnf (Candidate w d _) = rnf w `seq` rnf d
 
 main :: IO ()
 main = do 
@@ -194,7 +196,7 @@ main = do
         <- fmap fromText $ T.readFile (zhgFile ++ ".nodes")
       let pN !_ !i xs
             = (weights VU.! fromIntegral (fst i)) * Prelude.product xs
-          wsa = toWSAmap tm "days days days days" -- " days days"
+          wsa = toWSAmap tm "days --"-- "those were the days" -- "days days days days days days" -- ""
           ts = getTerminals wsa
           el' = EdgeList (nodesEL el) (filter p $ edgesEL el)
           p e = weights VU.! fromIntegral (ident e) > 1.0e-10 &&
@@ -208,11 +210,14 @@ main = do
               , 1132
               , fst . head . WSA.finalWeights $ wsa
               )
-      weights `seq` el `deepseq` putStr
-        $ makeItSo ta undefined -- nodes
-        $ (!! 0)
-        $ (M.! init)
-        $ knuth h' (Feature pN V.singleton) (V.singleton 1)
+          dafuq
+            = take 1
+            $ (M.! init)
+            $ bests h' (Feature pN V.singleton) (V.singleton 1)
+      weights `seq` el `deepseq` dafuq `deepseq` putStr -- "Nice."
+        $ unlines
+        $ map (makeItSo ta undefined) -- nodes
+        $ dafuq
       {- T.writeFile (zhgFile ++ ".reduce")
         (T.unlines (map (T.pack . printRule ta na) (edges h)))
       T.writeFile (zhgFile ++ ".intersect")

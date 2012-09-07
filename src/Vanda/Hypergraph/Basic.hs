@@ -134,11 +134,21 @@ interlace ix (Hyperedge t1 f1 l i1) (Hyperedge t2 f2 _ i2)
 interlace _ _ _ = error "cannot interlace different arities"
   
 
-instance Eq i => Eq (Hyperedge v l i) where
-  e1 == e2 = ident e1 == ident e2
+instance (Eq v, Eq l) => Eq (Hyperedge v l i) where
+  -- instance Eq i => ...
+  -- e1 == e2 = ident e1 == ident e2
+  Nullary t1 l1 i1 == Nullary t2 l2 i2
+    = t1 == t2 && l1 == l2
+  Unary t1 f1 l1 i1 == Unary t2 f2 l2 i2
+    = t1 == t2 && l1 == l2 && f1 == f2
+  Binary t1 f11 f12 l1 i1 == Binary t2 f21 f22 l2 i2
+    = t1 == t2 && l1 == l2 && f11 == f21 && f12 == f22
+  Hyperedge t1 f1 l1 i1 == Hyperedge t2 f2 l2 i2
+    = t1 == t2 && l1 == l2 && and (zipWith (==) (V.toList f1) (V.toList f2))
+  _ == _ = False
 
-instance Ord i => Ord (Hyperedge v l i) where
-  e1 `compare` e2 = ident e1 `compare` ident e2
+-- instance Ord i => Ord (Hyperedge v l i) where
+--   e1 `compare` e2 = ident e1 `compare` ident e2
 
 -- | A derivation (tree), i.e., a tree over hyperedges.
 type Derivation v l i = T.Tree (Hyperedge v l i)
