@@ -193,8 +193,8 @@ main = do
       na :: TokenArray
         <- fmap fromText $ T.readFile (zhgFile ++ ".nodes")
       let pN !_ !i xs
-            = (weights VU.! fromIntegral ({-fst-} i)) * Prelude.product xs
-          wsa = toWSAmap tm "days days" -- " days days days days"
+            = (weights VU.! fromIntegral (fst i)) * Prelude.product xs
+          wsa = toWSAmap tm "days days days days" -- " days days"
           ts = getTerminals wsa
           el' = EdgeList (nodesEL el) (filter p $ edgesEL el)
           p e = weights VU.! fromIntegral (ident e) > 1.0e-10 &&
@@ -211,8 +211,8 @@ main = do
       weights `seq` el `deepseq` putStr
         $ makeItSo ta undefined -- nodes
         $ (!! 0)
-        $ (M.! 1132)
-        $ knuth el (Feature pN V.singleton) (V.singleton 1)
+        $ (M.! init)
+        $ knuth h' (Feature pN V.singleton) (V.singleton 1)
       {- T.writeFile (zhgFile ++ ".reduce")
         (T.unlines (map (T.pack . printRule ta na) (edges h)))
       T.writeFile (zhgFile ++ ".intersect")

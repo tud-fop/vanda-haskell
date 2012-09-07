@@ -295,6 +295,7 @@ library
     , Vanda.Functions
     , Vanda.Hypergraph
     , Vanda.Token
+    , Vanda.Util
     , Vanda.Algorithms.EarleyMonadic
     , Vanda.Algorithms.Earley.FastNub
     , Vanda.Algorithms.Earley.WSA

@@ -29,31 +29,24 @@ module Vanda.Hypergraph.EdgeList
 
 import Prelude hiding ( lookup )
 
-import Control.Arrow ( (***) )
-import Control.DeepSeq ( deepseq, NFData (..) )
-import Control.Monad ( when, unless, forM, forM_ )
+import Control.Monad ( when, unless, forM_ )
 import Control.Monad.ST
-import qualified Data.Array as A
-import Data.Foldable ( foldrM )
 import Data.Heap ( Prio, Val )
 import qualified Data.Heap as H hiding ( Prio, Val )
-import qualified Data.IntMap as IM
-import qualified Data.Ix as Ix
 import Data.List ( foldl' )
 import qualified Data.Map as M
 import qualified Data.Map.Strict as MS
-import Data.Maybe
 import qualified Data.Queue as Q
 import qualified Data.Set as S
 import Data.STRef
 import qualified Data.Tree as T
 import qualified Data.Vector as V
 
-import Debug.Trace
+-- import Debug.Trace
 
 import Vanda.Features
 import Vanda.Hypergraph.Basic
-import Vanda.Hypergraph.NFData ()
+import Vanda.Util
 
 filterEdges
   :: Ord v => (Hyperedge v l i -> Bool) -> EdgeList v l i -> EdgeList v l i
@@ -95,7 +88,7 @@ toSimulation (EdgeList vs es) = Simulation vs lookup
 
 -- | Drops nonproducing nodes and corresponding edges.
 dropNonproducing''
-  :: forall v l i. (Ord v, NFData v)
+  :: forall v l i. Ord v
   => EdgeList v l i
   -> EdgeList v l i
 dropNonproducing'' (EdgeList _ es)
@@ -184,7 +177,7 @@ dropNonproducing'' (EdgeList _ es)
 
 -- | Drops nonproducing nodes and corresponding edges.
 dropNonproducing'
-  :: forall v l i. (Ord v, NFData v)
+  :: forall v l i. Ord v
   => EdgeList v l i
   -> EdgeList v l i
 dropNonproducing' (EdgeList _ es)
@@ -223,45 +216,6 @@ dropNonproducing' (EdgeList _ es)
         else closeProducing
                (S.insert v vsS)
                (Q.enqList (S.toList (theMap MS.! v)) vsQ')
-
-
--- | Strict version of 'modifySTRef' 
-modifySTRef' :: STRef s a -> (a -> a) -> ST s () 
-modifySTRef' ref f = do 
-  x <- readSTRef ref 
-  let x' = f x 
-  x' `seq` writeSTRef ref x' 
-
-
-viewSTRef'
-  :: STRef s a -> (a -> Maybe (b, a)) -> ST s c -> (b -> ST s c) -> ST s c
-viewSTRef' ref f n j = do 
-  x <- readSTRef ref 
-  case f x of
-    Nothing -> n
-    Just (y, x') -> x' `seq` writeSTRef ref x' >> j y
-
-
-lookupSTRef'
-  :: STRef s a -> (a -> Maybe b) -> ST s () -> (b -> ST s ()) -> ST s ()
-lookupSTRef' ref f n j = do 
-  x <- readSTRef ref 
-  case f x of
-    Nothing -> n
-    Just y -> j y
-
-
-lviewSTRef'
-  :: STRef s [a] -> ST s b -> (a -> ST s b) -> ST s b
-lviewSTRef' ref n j = do 
-  x <- readSTRef ref 
-  case x of
-    [] -> n
-    y : x' -> writeSTRef ref x' >> j y
-
-
-readSTRefWith :: (a -> b) -> STRef s a -> ST s b
-readSTRefWith f s = readSTRef s >>= (return . f)
 
 
 data He v l i = He !Int !(Hyperedge v l i)
@@ -314,7 +268,7 @@ updateHe f he = do
 
 
 dropNonproducing
-  :: forall v l i. (NFData v, NFData l, NFData i, Ord i, Ord v, Show l, Show v, Show i)
+  :: forall v l i. (Ord v, Show l, Show v, Show i)
   => EdgeList v l i
   -> EdgeList v l i
 dropNonproducing (EdgeList _ es)
@@ -331,7 +285,7 @@ dropNonproducing (EdgeList _ es)
               unless b $ do
                 modifySTRef' s $ S.insert v
                 hes <- fmap (M.findWithDefault [] v) $ readSTRef forwA
-                _ <- forM hes $ updateHe (\ e -> modifySTRef' q (e:))
+                forM_ hes $ updateHe (\ e1 -> modifySTRef' q (e1 :))
                 modifySTRef' forwA $ M.delete v
               go'
       go'
@@ -357,7 +311,7 @@ instance Ord (Prio MPolicy (Candidate v l i x)) where
   compare (FMP x) (FMP y) = compare y x
 
 knuth
-  :: forall v l i x. (NFData v, NFData l, NFData i, NFData x, Ord i, Ord v, Show l, Show v, Show i)
+  :: forall v l i x. (Ord i, Ord v, Show l, Show v, Show i)
   => EdgeList v l i
   -> Feature l i x
   -> V.Vector Double
@@ -377,11 +331,11 @@ knuth (EdgeList _ es) feat wV
           viewSTRef' candH H.view (readSTRef bestA) $
             \ (Candidate w (T.Node e _) _) -> let v = to e in do
               Candidate w' (T.Node e' _) _ : _ <- readSTRefWith (M.! v) bestA
-              when (w == w') $ do
+              when (w == w' && v == to e') $ do
                 hes <- readSTRefWith (M.findWithDefault [] v) forwA
-                forM_ hes $ updateHe $ \ e -> do
+                forM_ hes $ updateHe $ \ e1 -> do
                   ba <- readSTRef bestA
-                  upd $ topCC feat wV e $ map (head . (ba M.!)) $ from e
+                  upd $ topCC feat wV e1 $ map (head . (ba M.!)) $ from e1
                 modifySTRef' forwA $ M.delete v
               go
     mapM_ upd [ topCC feat wV e [] | e@Nullary{} <- es ]
