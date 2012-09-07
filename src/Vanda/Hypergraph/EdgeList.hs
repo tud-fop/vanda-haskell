@@ -1,3 +1,4 @@
+{-# LANGUAGE EmptyDataDecls #-}
 -- (c) 2012 Matthias Büchse <Matthias.Buechse@tu-dresden.de>
 --
 -- Technische Universität Dresden / Faculty of Computer Science / Institute
@@ -33,7 +34,6 @@ import Control.Monad ( when, unless, forM_ )
 import Control.Monad.ST
 import Data.Heap ( Prio, Val )
 import qualified Data.Heap as H hiding ( Prio, Val )
-import Data.List ( foldl' )
 import qualified Data.Map as M
 import qualified Data.Map.Strict as MS
 import qualified Data.Queue as Q
@@ -85,111 +85,16 @@ toSimulation (EdgeList vs es) = Simulation vs lookup
       -- lst
 
 
-
--- | Drops nonproducing nodes and corresponding edges.
-dropNonproducing''
-  :: forall v l i. Ord v
-  => EdgeList v l i
-  -> EdgeList v l i
-dropNonproducing'' (EdgeList _ es)
-  = EdgeList vs' es'
-  where
-    vs' = vsS0 -- S.findMin &&& S.findMax $ vsS0
-    es' = filter p es
-    p e@Nullary{} = to e `S.member` vsS0
-    p e@Unary{} = to e `S.member` vsS0 && from1 e `S.member` vsS0
-    p e@Binary{} = to e `S.member` vsS0 && from1 e `S.member` vsS0 && from2 e `S.member` vsS0
-    p e@Hyperedge{} = to e `S.member` vsS0 && V.foldr (\x y -> x `S.member` vsS0 && y) True (_from e)
-    {-
-    p e@Nullary{ to = toe }
-      = toe `S.member` vsS0
-    p e@Unary{ to = toe, from1 = x }
-      = toe `S.member` vsS0 && x `S.member` vsS0
-    p e@Binary{ to = toe, from1 = x1, from2 = x2 }
-      = toe `S.member` vsS0 && x1 `S.member` vsS0 && x2 `S.member` vsS0
-    p e@Hyperedge{ to = toe, _from = xs }
-      = toe `S.member` vsS0
-        && V.foldr (\x y -> x `S.member` vsS0 && y) True xs
-    -}
-    -- S.fromList (from e) `S.isSubsetOf` vsS0
-    {- theMap
-      = MS.fromListWith (flip S.union)
-      $ [ (x, stoe)
-        | e <- es
-        , case e of
-            Nullary{} -> False
-            _ -> True
-        , let stoe = S.singleton (to e)
-        , x <- from e
-        , stoe `seq` True
-        ]-}
-    theMap
-      = foldl' (\m (v, v') -> MS.alter (f v') v m) M.empty
-      $ [ (x, to e)
-        | e <- es
-        , case e of
-            Nullary{} -> False
-            _ -> True
-        , x <- from e
-        -- , let toe = to e
-        -- , toe `seq` True
-        ]
-    f v' Nothing = Just (S.singleton v')
-    f v' (Just s) = Just (S.insert v' s)
-    {- theMap
-      = foldl' (\m l -> foldl' (\m (v, v') -> MS.alter (f v') v m) m l) MS.empty
-      $ [ case e of
-            Unary{ to = toe, from1 = x } -> [ (x, toe) ]
-            Binary{ to = toe, from1 = x1, from2 = x2 } -> [ (x1, toe), (x2, toe) ]
-            Hyperedge{ to = toe, _from = frome } -> [ (x, toe) | x <- V.toList frome ]
-            _ -> undefined
-        | e <- es
-        , case e of
-            Nullary{} -> False
-            _ -> True
-        ]
-    f v' Nothing = Just (S.singleton v')
-    f v' (Just s) = Just (S.insert v' s)-}
-    theMap0
-      = S.fromList
-      $ [ to e
-        | e <- es
-        , case e of
-            Nullary{} -> True
-            _ -> False
-        ]
-    -- set of producing nodes
-    vsS0 :: S.Set v
-    vsS0 = closeProducing
-             S.empty
-             (Q.fromList (S.toList (theMap0)))
-    -- "while loop" for computing the closure
-    closeProducing :: S.Set v -> Q.Queue v -> S.Set v
-    closeProducing !vsS !vsQ = case Q.deqMaybe vsQ of
-      Nothing -> vsS
-      Just (v, vsQ') ->
-        if S.member v vsS
-        then closeProducing vsS vsQ'
-        else closeProducing
-               (S.insert v vsS)
-               (Q.enqList (S.toList (theMap MS.! v)) vsQ')
-
-
 -- | Drops nonproducing nodes and corresponding edges.
 dropNonproducing'
   :: forall v l i. Ord v
   => EdgeList v l i
   -> EdgeList v l i
 dropNonproducing' (EdgeList _ es)
-  = EdgeList vs' es'
+  = EdgeList vsS0 es'
   where
-    vs' = vsS0 -- S.findMin &&& S.findMax $ vsS0
-    es' = filter p es
-    p e@Nullary{} = to e `S.member` vsS0
-    p e@Unary{} = to e `S.member` vsS0 && from1 e `S.member` vsS0
-    p e@Binary{} = to e `S.member` vsS0 && from1 e `S.member` vsS0 && from2 e `S.member` vsS0
-    p e@Hyperedge{} = to e `S.member` vsS0 && V.foldr (\x y -> x `S.member` vsS0 && y) True (_from e)
-    -- S.fromList (from e) `S.isSubsetOf` vsS0
+    -- vs' = vsS0 -- S.findMin &&& S.findMax $ vsS0
+    es' = filter (foldpv (`S.member` vsS0)) es
     theMap
       = MS.fromListWith (flip S.union)
       $ [ (x, stoe)
@@ -228,7 +133,7 @@ computeForward es
   = let
       prep e x = case x of
         Nothing -> Just [e]
-        Just es -> Just (e : es)
+        Just es_ -> Just (e : es_)
       magic e = case e of
         Binary _ f1 f2 _ _
           | f1 == f2 -> 1
@@ -292,7 +197,7 @@ dropNonproducing (EdgeList _ es)
 
 
 -- | A phantom type to specify our kind of heap.
-data MPolicy = MPolicy
+data MPolicy -- = MPolicy
 
 -- | Heap type used to efficiently flatten the merge data structure.
 type CandidateHeap v l i x = H.Heap MPolicy (Candidate v l i x)
