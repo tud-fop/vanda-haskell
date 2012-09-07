@@ -199,7 +199,7 @@ scfgProduct component wsa (SCFG hg initnt) f1
             )
         }
     (hg', wgt) = earley hg component wsa initnt
-    f2 = Feature (\_ !i xs -> (wgt VU.! i) * Prelude.product xs) V.singleton
+    f2 = Feature (\_ !i xs -> (wgt VU.! fromIntegral i) * Prelude.product xs) V.singleton
 
 scfgProduct'
   :: (Show t, Show nt, Show p, Show i, Ord t, Ord nt, Ord p, Ord i, NFData p, NFData nt, NFData i, NFData t, NFData l)
@@ -352,7 +352,7 @@ droppNonproducing scfg
   = scfg{ toHypergraph = dropNonproducing (toHypergraph scfg) }
 
 prepareExamplesGHKM
-  :: (Ord i, Ord nt, Show i, Show nt, NFData i, NFData nt, NFData nt)
+  :: (Ord i, Ord nt, Show i, Show nt, NFData i, NFData nt)
   => SCFG nt (GHKM Token) i
   -> TokenMap
   -> [String]

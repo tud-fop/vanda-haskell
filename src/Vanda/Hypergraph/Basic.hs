@@ -95,8 +95,8 @@ from (Hyperedge _ f _ _) = V.toList f
 
 deref :: Show i => Hyperedge v l i -> Int -> v
 deref (Unary _ f1 _ _) 0 = f1
-deref (Binary _ f1 f2 _ _) 0 = f1
-deref (Binary _ f1 f2 _ _) 1 = f2
+deref (Binary _ f1 _ _ _) 0 = f1
+deref (Binary _ _ f2 _ _) 1 = f2
 deref (Hyperedge _ f _ _) i = f V.! i
 deref e i = error (show (ident e) ++ show i) 
 
@@ -137,13 +137,13 @@ interlace _ _ _ = error "cannot interlace different arities"
 instance (Eq v, Eq l) => Eq (Hyperedge v l i) where
   -- instance Eq i => ...
   -- e1 == e2 = ident e1 == ident e2
-  Nullary t1 l1 i1 == Nullary t2 l2 i2
+  Nullary t1 l1 _ == Nullary t2 l2 _
     = t1 == t2 && l1 == l2
-  Unary t1 f1 l1 i1 == Unary t2 f2 l2 i2
+  Unary t1 f1 l1 _ == Unary t2 f2 l2 _
     = t1 == t2 && l1 == l2 && f1 == f2
-  Binary t1 f11 f12 l1 i1 == Binary t2 f21 f22 l2 i2
+  Binary t1 f11 f12 l1 _ == Binary t2 f21 f22 l2 _
     = t1 == t2 && l1 == l2 && f11 == f21 && f12 == f22
-  Hyperedge t1 f1 l1 i1 == Hyperedge t2 f2 l2 i2
+  Hyperedge t1 f1 l1 _ == Hyperedge t2 f2 l2 _
     = t1 == t2 && l1 == l2 && and (zipWith (==) (V.toList f1) (V.toList f2))
   _ == _ = False
 

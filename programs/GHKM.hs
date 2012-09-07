@@ -462,7 +462,7 @@ main = do
       let tmap = fromText mapContents :: TokenMap
       case parseAlign updateToken tmap alignContents of
         (tmap', alignments) -> do
-          let parseTrees = parsePenn parseContents :: [T.Tree Int32]
+          let parseTrees = parsePenn parseContents :: [T.Tree Token]
           let rules = S.toList . S.fromList
                     $ -- evalState
                         ( process4

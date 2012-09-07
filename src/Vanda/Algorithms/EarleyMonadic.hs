@@ -19,9 +19,11 @@
 
 module Vanda.Algorithms.EarleyMonadic ( earley ) where
 
-import Control.Monad ( unless )
+import Control.Arrow ( first )
+import Control.Monad ( unless, liftM2 )
 import Control.Monad.ST
 import Control.Seq
+import qualified Data.Array as A ( array, elems )
 import qualified Data.Map as M
 import qualified Data.Map.Strict as MS
 import qualified Data.Set as S
@@ -93,19 +95,21 @@ earley
   -> v            -- an initial node of the Hypergraph
   -> (EdgeList (p, v, p) l (i, Int), V.Vector Double)
 earley hg comp wsa v0
-  = (mkHypergraph $ map doIt trans, V.fromList (snd (unzip theList)))
+  = first mkHypergraph
+  $ iter (backStar $ toBackwardStar hg) (comp . label) wsa v0 extract
+  {- = (mkHypergraph $ map doIt trans, V.fromList theList)
   where
     trans = iter (backStar $ toBackwardStar hg) (comp . label) wsa v0 extract
     theList = S.toList $ S.fromList $ snd $ unzip trans
     theMap = M.fromList (zip theList [0..])
-    doIt (he, w) = mapHEi (\ i -> (i, theMap M.! w)) he
+    doIt (he, w) = mapHEi (\ i -> (i, theMap M.! w)) he -}
 
 
 extract
   :: (Show v, Show p, Show i, Show t)
   => (Hyperedge v l i -> [Either Int t])
   -> Item v l i t p
-  -> Maybe (Hyperedge (p, v, p) l i, ([p], Double))
+  -> Maybe (Hyperedge (p, v, p) l i, Double)
 extract
   comp
   Item
@@ -123,9 +127,7 @@ extract
         (carryL (yesyes (comp e) (reverse statl)) (from e))
         (label e)
         (ident e)
-    , ( statl
-      , w -- * L.product initial_weight
-      )
+    , w -- * L.product initial_weight
     )
   where
     -- strategy = r0
@@ -133,7 +135,7 @@ extract
       = seqMaybe
          (seqTuple2
             (seqHyperedge (seqTuple3 rseq rseq rseq) rseq rseq)
-            (seqTuple2 r0 r0)
+            r0
          )
     carryL yesbaby vert
       = [ (l, v, r)
@@ -155,13 +157,15 @@ iter
   -> WSA.WSA p t Double
   -> v            -- an initial node of the Hypergraph
   -> ((Hyperedge v l i -> [Either Int t]) -> Item v l i t p -> Maybe a)
-  -> [(Hyperedge (p, v, p) l i, ([p], Double))] -- a
+  -> ([Hyperedge (p, v, p) l (i, Int)], V.Vector Double) -- a
 iter back comp wsa v0 _
   = runST $ do
       iq <- newSTRef Q.empty
       pvs <- newSTRef (S.fromList pv0)
       cm <- newSTRef M.empty
-      ls <- newSTRef ([] :: [(Hyperedge (p, v, p) l i, ([p], Double))])
+      ls <- newSTRef ([] :: [Hyperedge (p, v, p) l (i, Int)])
+      ws <- newSTRef (M.empty :: M.Map Double Int)
+      cn <- newSTRef (0 :: Int)
       let enqueue is
             = (is `using` seqList rseq) `seq` modifySTRef' iq $ Q.enqList is
           modifycm = modifySTRef' cm
@@ -191,12 +195,33 @@ iter back comp wsa v0 _
                       enqueue $ map (compItem p') is
                       modifycm $ MS.adjust (first' (S.insert p')) pv
                 _ -> return ()
+          mapw w = do
+            mb <- readSTRefWith (M.lookup w) ws
+            case mb of
+              Nothing -> do
+                i <- readSTRef cn
+                modifySTRef' cn (+ 1)
+                modifySTRef' ws $ M.insert w i
+                return i
+              Just i -> return i
+          doExtract it = case extract comp it of
+            Nothing -> return ()
+            Just (e, w) -> do
+              i <- mapw w
+              let ide = ident e
+                  e' = e{ ident = (ide, i) }
+              ide `seq` e' `seq` modifySTRef' ls (e' :)
           go2 = do
-            viewSTRef' iq Q.deqMaybe (readSTRef ls) $ \ i -> do
-              predscan i
-              complete i
-              modifySTRef' ls (maybe id (:) (extract comp i))
-              go2
+            viewSTRef' iq Q.deqMaybe
+              (readSTRef cn >>= \ cn' -> liftM2 (,) (readSTRef ls)
+                (fmap (V.fromList . A.elems . A.array (0, cn') 
+                . map (\(x,y) -> (y,x)) . M.toList) (readSTRef ws)))
+              $ \ i -> do
+                predscan i
+                complete i
+                doExtract i
+                -- modifySTRef' ls (maybe id (:) (extract comp i))
+                go2
       mapM_ (enqueue . predItem) pv0
       go2
   where

@@ -5,7 +5,7 @@ import Codec.Compression.GZip ( decompress )
 
 import Control.Monad.ST
 import qualified Data.Map as M
-import Control.DeepSeq ( deepseq, force, NFData(..) )
+import Control.DeepSeq ( rnf, force, NFData(..) )
 import Control.Seq ( using, rseq, r0, seqTuple2, seqList )
 import qualified Data.Array as A
 import qualified Data.Array.IArray as IA
@@ -122,7 +122,7 @@ bin = [Left 0, Left 1]
 
 una = [Left 0]
 
-memo :: TokenArray -> Int32 -> [Either Int Int32]
+memo :: TokenArray -> Int -> [Either Int Int]
 memo ta = l `seq` (a A.!)
   where
     b = getBounds ta
@@ -174,7 +174,7 @@ main = do
       let stat = compute (edges el)
       T.writeFile statFile $ T.unlines $ map (T.pack . show) $ stat
     ["-z", zhgFile, "-t", tokFile, "--intersect"] -> do
-      el :: EdgeList Int32 Int32 Int32
+      el :: EdgeList Int Int Int
         <- fmap (B.decode . decompress) (B.readFile zhgFile)
       tok :: TokenArray
         <- fmap fromText $ T.readFile tokFile
@@ -183,7 +183,7 @@ main = do
       let s0 = S.fromList [ label e | e@Nullary{} <- edges el ]
       putStr (unwords (map (getString tok) (S.toList (s0 `S.intersection` (s1 `S.union` s2)))))
     ["-z", zhgFile, "-t", tokFile] -> do
-      el :: EdgeList Int32 Int32 Int32
+      el :: EdgeList Int Int Int
         <- fmap (B.decode . decompress) (B.readFile zhgFile)
       weights :: VU.Vector Double
         <- fmap (VU.fromList . B.decode . decompress)
@@ -196,10 +196,10 @@ main = do
         <- fmap fromText $ T.readFile (zhgFile ++ ".nodes")
       let pN !_ !i xs
             = (weights VU.! fromIntegral (fst i)) * Prelude.product xs
-          wsa = toWSAmap tm "days --"-- "those were the days" -- "days days days days days days" -- ""
+          wsa = toWSAmap tm "those were the days" -- "days days days days days days" -- ""
           ts = getTerminals wsa
           el' = EdgeList (nodesEL el) (filter p $ edgesEL el)
-          p e = weights VU.! fromIntegral (ident e) > 1.0e-10 &&
+          p e = weights VU.! (ident e) > 1.0e-10 &&
                 case e of
                   Nullary{} -> S.member (label e) ts
                   _ -> True
@@ -213,8 +213,9 @@ main = do
           dafuq
             = take 1
             $ (M.! init)
-            $ bests h' (Feature pN V.singleton) (V.singleton 1)
-      weights `seq` el `deepseq` dafuq `deepseq` putStr -- "Nice."
+            $ knuth h' (Feature pN V.singleton) (V.singleton 1)
+      weights `seq` rnf el `seq` rnf dafuq `seq` putStr "Nice."
+      putStr
         $ unlines
         $ map (makeItSo ta undefined) -- nodes
         $ dafuq

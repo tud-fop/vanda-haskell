@@ -16,7 +16,6 @@ module Vanda.Grammar.Berkeley.Text where
 import Control.Applicative ( (<|>), many )
 import Control.Arrow ( first )
 import Control.DeepSeq ( NFData, ($!!) )
-import Data.Int ( Int32 )
 import qualified Data.Text.Lazy as T
 import Text.Parsec hiding ( many, (<|>) )
 import Text.Parsec.Text.Lazy
@@ -32,7 +31,7 @@ parseBerkeleyMap
   -> uv                       -- ^ initial token structure
   -> T.Text                   -- ^ lexicon file
   -> T.Text                   -- ^ grammar file
-  -> ((ul, uv), [(Hyperedge v l Int32, Double)])
+  -> ((ul, uv), [(Hyperedge v l Int, Double)])
                               -- ^ resulting token structure and hyperedges
 parseBerkeleyMap mapl ul0 mapv uv0 lx gr = (snd iu2, concat es1 ++ es2)
   where
@@ -73,7 +72,7 @@ lazyMany p file ustate contents
 p_mapl
   :: (ul -> String -> (ul, l))
   -> String
-  -> GenParser (Int32, (ul, uv)) l
+  -> GenParser (Int, (ul, uv)) l
 p_mapl mapper !s = do
   (i, (ul, uv)) <- getState
   let (u', l) = mapper ul s
@@ -85,7 +84,7 @@ p_mapl mapper !s = do
 p_mapv
   :: (uv -> String -> (uv, v))
   -> String
-  -> GenParser (Int32, (ul, uv)) v
+  -> GenParser (Int, (ul, uv)) v
 p_mapv mapper !s = do
   (i, (ul, uv)) <- getState
   let (u', v) = mapper uv s
@@ -98,7 +97,7 @@ p_grammar
   :: (NFData v, NFData l)
   => (ul -> String -> (ul, l))
   -> (uv -> String -> (uv, v))
-  -> GenParser (Int32, (ul, uv)) (Hyperedge v l Int32, Double)
+  -> GenParser (Int, (ul, uv)) (Hyperedge v l Int, Double)
 p_grammar mapl mapv
   = do
     { lhss <- many1 $ noneOf "_"
@@ -130,7 +129,7 @@ p_lexicon
   :: (NFData v, NFData l)
   => (ul -> String -> (ul, l))
   -> (uv -> String -> (uv, v))
-  -> GenParser (Int32, (ul, uv)) [(Hyperedge v l Int32, Double)]
+  -> GenParser (Int, (ul, uv)) [(Hyperedge v l Int, Double)]
 p_lexicon mapl mapv
   = do
     { lhs <- many1 $ noneOf " "

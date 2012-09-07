@@ -5,7 +5,6 @@ import Control.Arrow ( (***) )
 import Control.DeepSeq ( ($!!) )
 import qualified Data.Binary as B
 import qualified Data.ByteString.Lazy as B
-import Data.Int ( Int32 )
 import qualified Data.Text.Lazy.IO as TIO
 import System.Environment ( getArgs )
 
@@ -35,7 +34,7 @@ main = do
       mf <- TIO.readFile mapFile
       lf <- TIO.readFile lexiconFile
       gf <- TIO.readFile grammarFile
-      let ((ml, mv), (es :: [Hyperedge Int32 Int32 Int32], wgts))
+      let ((ml, mv), (es :: [Hyperedge Int Int Int], wgts))
             = id *** unzip
             $!! parseBerkeleyMap
                 updateToken

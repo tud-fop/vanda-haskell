@@ -36,12 +36,11 @@ module Vanda.Token
 import Control.Arrow ( (&&&) )
 import Control.DeepSeq ( NFData(..) )
 import qualified Data.Array as A
-import Data.Int ( Int32 )
 -- import Data.Word ( Word16 )
 import qualified Data.Map as M
 import qualified Data.Text.Lazy as T
 
-type Token = Int32
+type Token = Int
 newtype TokenMap = TokenMap { unTokenMap :: M.Map String Token } deriving Show
 newtype TokenArray = TokenArray { unTokenArray :: A.Array Token String }
 
