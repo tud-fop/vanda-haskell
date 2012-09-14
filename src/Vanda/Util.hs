@@ -40,10 +40,7 @@ second' f p = case p of
 
 -- | Strict version of 'modifySTRef' 
 modifySTRef' :: STRef s a -> (a -> a) -> ST s () 
-modifySTRef' ref f = do 
-  x <- readSTRef ref 
-  let x' = f x 
-  x' `seq` writeSTRef ref x' 
+modifySTRef' ref f = readSTRef ref >>= (\ x -> writeSTRef ref $! f x)
 
 
 viewSTRef'

@@ -148,7 +148,7 @@ executable TestHypergraph
   Main-Is:  TestHypergraph.hs
   hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-  ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls
+  ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
   Extensions:
       ScopedTypeVariables
     , TypeSynonymInstances
@@ -158,7 +158,37 @@ executable TestHypergraph
     , FlexibleContexts
     , BangPatterns
 
-    
+
+executable TestIntHypergraph
+  build-depends:
+      base
+    , containers
+    , array
+    , vector
+    , heap
+    , bytestring
+    , text
+    , parsec >= 3.1.2
+    , binary
+    , deepseq
+    , zlib
+    , mtl
+    , parallel >= 3.2
+    , Vanda
+  Main-Is:  TestIntHypergraph.hs
+  hs-source-dirs:  programs
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+  ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
+  Extensions:
+      ScopedTypeVariables
+    , TypeSynonymInstances
+    , FlexibleInstances
+    , MultiParamTypeClasses
+    , TypeFamilies
+    , FlexibleContexts
+    , BangPatterns
+
+
 executable GHKM
   build-depends:
       base
@@ -296,11 +326,13 @@ library
     , Vanda.Hypergraph
     , Vanda.Token
     , Vanda.Util
+    , Vanda.Algorithms.Earley
     , Vanda.Algorithms.EarleyMonadic
     , Vanda.Algorithms.Earley.FastNub
     , Vanda.Algorithms.Earley.WSA
     , Vanda.Algorithms.ExpectationMaximization
     , Vanda.Algorithms.InsideOutsideWeights
+    , Vanda.Algorithms.IntEarley
     , Vanda.Corpus.Negra
     , Vanda.Corpus.Negra.Binary
     , Vanda.Corpus.Negra.NFData
@@ -312,12 +344,13 @@ library
     , Vanda.Hypergraph.Basic
     , Vanda.Hypergraph.EdgeList
     , Vanda.Hypergraph.ForwardStar
+    , Vanda.Hypergraph.IntHypergraph
     , Vanda.Hypergraph.NFData
     , Vanda.Hypergraph.Text
     , Data.Queue
   hs-source-dirs:  src
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-  ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2
+  ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
   --  -ddump-rule-rewrites
   --  -ddump-rule-firings
   Extensions:

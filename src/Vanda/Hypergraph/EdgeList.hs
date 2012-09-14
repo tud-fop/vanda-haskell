@@ -125,6 +125,7 @@ dropNonproducing' (EdgeList _ es)
 
 data He v l i = He !Int !(Hyperedge v l i)
 
+-- used to count UNIQUE nodes here, but it's not faster and more code
 computeForward
   :: Ord v
   => [Hyperedge v l i]
@@ -134,32 +135,14 @@ computeForward es
       prep e x = case x of
         Nothing -> Just [e]
         Just es_ -> Just (e : es_)
-      magic e = case e of
-        Binary _ f1 f2 _ _
-          | f1 == f2 -> 1
-          | otherwise -> 2
-        Unary{} -> 1
-        Hyperedge _ f _ _ -> S.size (S.fromList (V.toList f))
-        Nullary{} -> undefined
     in do
       forwA <- newSTRef (M.empty :: M.Map v [STRef s (He v l i)])
       sequence_
         [ do
-            he <- let i = magic e in i `seq` newSTRef (He i e)
-            sequence_
-              [ modifySTRef' forwA $ M.alter (prep he) v
-              | v <- case e of
-                       Binary _ f1 f2 _ _
-                         | f1 == f2 -> [f1]
-                         | otherwise -> [f1, f2]
-                       Unary _ f1 _ _ -> [f1]
-                       Hyperedge _ f _ _ -> S.toList (S.fromList (V.toList f))
-                       Nullary{} -> undefined -- can not happen
-              ]
+            he <- newSTRef $! He (arity e) e
+            mapM_ (modifySTRef' forwA . M.alter (prep he)) (from e)
         | e <- es
-        , case e of
-            Nullary{} -> False
-            _ -> True
+        , case e of { Nullary{} -> False ; _ -> True }
         ]
       return forwA
 
@@ -167,9 +150,7 @@ computeForward es
 updateHe :: (Hyperedge v l i -> ST s ()) -> STRef s (He v l i) -> ST s ()
 updateHe f he = do
   He i e <- readSTRef he
-  if i == 1 then f e
-            else let i' = i - 1 in i' `seq` writeSTRef he (He i' e)
-
+  if i == 1 then f e else writeSTRef he $! He (i - 1) e
 
 
 dropNonproducing

@@ -43,7 +43,7 @@ instance (NFData v, NFData l, NFData i, B.Binary v, B.Binary l, B.Binary i, Ord 
     x2 <- x1 `deepseq` B.get
     x3 <- x2 `deepseq` B.get
     x4 <- x3 `deepseq` B.get
-    x4 `deepseq` return (mkHyperedge x1 x2 x3 x4)
+    x4 `deepseq` return $! mkHyperedge x1 x2 x3 x4
      
 
 myGet :: (NFData v, NFData l, NFData i, B.Binary v, B.Binary l, B.Binary i, Ord v) => B.Get [Hyperedge v l i]

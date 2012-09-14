@@ -196,7 +196,8 @@ main = do
         <- fmap fromText $ T.readFile (zhgFile ++ ".nodes")
       let pN !_ !i xs
             = (weights VU.! fromIntegral (fst i)) * Prelude.product xs
-          wsa = toWSAmap tm "those were the days" -- "days days days days days days" -- ""
+          -- wsa = toWSAmap tm "those were the days"
+          wsa = toWSAmap tm "days days days days days days" -- ""
           ts = getTerminals wsa
           el' = EdgeList (nodesEL el) (filter p $ edgesEL el)
           p e = weights VU.! (ident e) > 1.0e-10 &&

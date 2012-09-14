@@ -17,10 +17,10 @@
 -- Left : nonterminals
 -- Right: terminals
 
-module Vanda.Algorithms.EarleyMonadic ( earley ) where
+module Vanda.Algorithms.Earley ( earley ) where
 
 import Control.Arrow ( first )
-import Control.Monad ( unless, liftM2 )
+import Control.Monad ( unless, liftM3 )
 import Control.Monad.ST
 import Control.Seq
 import qualified Data.Array as A ( array, elems )
@@ -86,16 +86,18 @@ seqHyperedge sv sl si he
       Hyperedge t f l i -> sv t `seq` seqList sv (VV.toList f)
                            `seq` sl l `seq` si i
 
+second3 :: (b -> d) -> (a, b, c) -> (a, d, c)
+second3 f (a, b, c) = (a, f b, c)
 
 earley
-  :: (Ord p, Ord v, Ord i, Ord t, Show p, Show v, Show i, Show t, Hypergraph h)
-  => h v l i
+  :: (Ord p, Ord i, Ord t, Show p, Show i, Show t, Hypergraph h)
+  => h Int l i
   -> (l -> [Either Int t])
   -> WSA.WSA p t Double
-  -> v            -- an initial node of the Hypergraph
-  -> (EdgeList (p, v, p) l (i, Int), V.Vector Double)
+  -> Int            -- an initial node of the Hypergraph
+  -> (M.Map (p, Int, p) Int, EdgeList Int l (i, Int), V.Vector Double)
 earley hg comp wsa v0
-  = first mkHypergraph
+  = second3 mkHypergraph
   $ iter (backStar $ toBackwardStar hg) (comp . label) wsa v0 extract
   {- = (mkHypergraph $ map doIt trans, V.fromList theList)
   where
@@ -151,21 +153,23 @@ extract _ _ = Nothing
 
 
 iter
-  :: forall v l i t p a. (Ord p, Ord v, Ord t, Ord i, Show p, Show v, Show t, Show i)
-  => (v -> [Hyperedge v l i]) 
-  -> (Hyperedge v l i -> [Either Int t])
+  :: forall l i t p a. (Ord p, Ord t, Ord i, Show p, Show t, Show i)
+  => (Int -> [Hyperedge Int l i]) 
+  -> (Hyperedge Int l i -> [Either Int t])
   -> WSA.WSA p t Double
-  -> v            -- an initial node of the Hypergraph
-  -> ((Hyperedge v l i -> [Either Int t]) -> Item v l i t p -> Maybe a)
-  -> ([Hyperedge (p, v, p) l (i, Int)], V.Vector Double) -- a
+  -> Int            -- an initial node of the Hypergraph
+  -> ((Hyperedge Int l i -> [Either Int t]) -> Item Int l i t p -> Maybe a)
+  -> (M.Map (p, Int, p) Int, [Hyperedge Int l (i, Int)], V.Vector Double) -- a
 iter back comp wsa v0 _
   = runST $ do
       iq <- newSTRef Q.empty
       pvs <- newSTRef (S.fromList pv0)
       cm <- newSTRef M.empty
-      ls <- newSTRef ([] :: [Hyperedge (p, v, p) l (i, Int)])
+      ls <- newSTRef ([] :: [Hyperedge Int l (i, Int)])
       ws <- newSTRef (M.empty :: M.Map Double Int)
       cn <- newSTRef (0 :: Int)
+      cn2 <- newSTRef (0 :: Int)
+      s2n <- newSTRef (M.empty :: M.Map (p, Int, p) Int) 
       let enqueue is
             = (is `using` seqList rseq) `seq` modifySTRef' iq $ Q.enqList is
           modifycm = modifySTRef' cm
@@ -204,16 +208,28 @@ iter back comp wsa v0 _
                 modifySTRef' ws $ M.insert w i
                 return i
               Just i -> return i
+          register pip' = do
+            mb <- readSTRefWith (M.lookup pip') s2n
+            case mb of
+              Nothing -> do
+                i <- readSTRef cn2
+                modifySTRef' cn2 (+ 1)
+                modifySTRef' s2n $ M.insert pip' i
+              Just _ -> return ()
           doExtract it = case extract comp it of
             Nothing -> return ()
             Just (e, w) -> do
               i <- mapw w
+              register (to e)
+              s2n' <- readSTRef s2n
               let ide = ident e
-                  e' = e{ ident = (ide, i) }
+                  e' = (mapHE (s2n' M.!) e){ ident = (ide, i) }
               ide `seq` e' `seq` modifySTRef' ls (e' :)
           go2 = do
             viewSTRef' iq Q.deqMaybe
-              (readSTRef cn >>= \ cn' -> liftM2 (,) (readSTRef ls)
+              (readSTRef cn >>= \ cn' -> liftM3 (,,)
+                (readSTRef s2n)
+                (readSTRef ls)
                 (fmap (V.fromList . A.elems . A.array (0, cn') 
                 . map (\(x,y) -> (y,x)) . M.toList) (readSTRef ws)))
               $ \ i -> do -- traceShow i $ do
