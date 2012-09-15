@@ -154,7 +154,7 @@ main = do
               )
           dafuq
             = take 1
-            $ (IM.! (s2n M.! init))
+            $ (A.! (s2n M.! init))
             $ knuth h' pN
       weights `seq` putStrLn "Gewichte geladen... "
       rnf (edges el) `seq` putStrLn "Hypergraph geladen... "

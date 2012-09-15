@@ -46,6 +46,7 @@ import Prelude hiding ( lookup )
 import Control.Monad ( when, unless, forM_ )
 import Control.Monad.ST
 import Data.Heap ( Prio, Val )
+import qualified Data.Array as A
 import qualified Data.Array.Base as AB
 import qualified Data.Array.MArray as MA
 import qualified Data.Array.ST as STA
@@ -319,7 +320,7 @@ topCC feat e cs
 -- | Heap type used to efficiently flatten the merge data structure.
 type CandidateHeap l i = H.Heap MPolicy (Candidate l i)
 
-type BestArray l i = IM.IntMap [Candidate l i]
+type BestArray l i = A.Array Int [Candidate l i]
 
 -- | We order candidates by their weights, and instances of 'M' by their
 -- head candidate.
@@ -336,25 +337,27 @@ instance Ord (Prio MPolicy (Candidate l i)) where
 
 knuth
   :: Hypergraph l i -> Feature l i -> BestArray l i
-knuth hg@(Hypergraph _ es) feat = runST $ do
+knuth hg@(Hypergraph vs es) feat = STA.runSTArray $ do
   forwA <- computeForwardA hg
   candH <- newSTRef (H.empty :: CandidateHeap l i)
-  bestA <- newSTRef IM.empty
+  bestA <- MA.newArray (0, vs + 1) []
   let upd' v c = do
         modifySTRef' candH $ H.insert c
-        modifySTRef' bestA $ IM.insert v [c]
-      upd c@(Candidate w (T.Node e _)) = let v = to e in
-        lookupSTRef' bestA (IM.lookup v) (upd' v c)
-          $ \ (Candidate w' _ : _) -> when (w > w') $ upd' v c
+        AB.unsafeWrite bestA v [c]
+      upd c@(Candidate w (T.Node e _)) = let v = to e in do
+        cs <- AB.unsafeRead bestA v
+        case cs of
+          [] -> upd' v c
+          Candidate w' _ : _ -> when (w > w') $ upd' v c
       go = do
-        viewSTRef' candH H.view (readSTRef bestA) $
+        viewSTRef' candH H.view (return bestA) $
           \ (Candidate w (T.Node e _)) -> let v = to e in do
-            Candidate w' (T.Node e' _) : _ <- readSTRefWith (IM.! v) bestA
+            Candidate w' (T.Node e' _) : _ <- AB.unsafeRead bestA v
             when (w == w' && v == to e') $ do
               hes <- AB.unsafeRead forwA v
               forM_ hes $ updateHe $ \ e1 -> do
-                ba <- readSTRef bestA
-                upd $ topCC feat e1 $ map (head . (ba IM.!)) $ from e1
+                scs <- mapM (AB.unsafeRead bestA) $ from e1
+                upd $ topCC feat e1 $ map head scs
               AB.unsafeWrite forwA v []
             go
   mapM_ upd [ topCC feat e [] | e@Nullary{} <- es ]
