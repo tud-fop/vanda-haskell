@@ -46,6 +46,9 @@ import Prelude hiding ( lookup )
 import Control.Monad ( when, unless, forM_ )
 import Control.Monad.ST
 import Data.Heap ( Prio, Val )
+import qualified Data.Array.Base as AB
+import qualified Data.Array.MArray as MA
+import qualified Data.Array.ST as STA
 import qualified Data.Heap as H hiding ( Prio, Val )
 import qualified Data.IntMap as IM
 import qualified Data.IntSet as IS
@@ -246,23 +249,22 @@ dropNonproducing' (Hypergraph vs es) = Hypergraph vs es'
 
 data He l i = He !Int !(Hyperedge l i)
 
-computeForward
-  :: [Hyperedge l i] -> ST s (STRef s (IM.IntMap [STRef s (He l i)])) 
-computeForward es
-  = let
-      prep e x = case x of
-        Nothing -> Just [e]
-        Just es_ -> Just (e : es_)
-    in do
-      forwA <- newSTRef (IM.empty :: IM.IntMap [STRef s (He l i)])
-      sequence_
-        [ do
-            he <- newSTRef $! He (arity e) e
-            mapM_ (modifySTRef' forwA . IM.alter (prep he)) (from e)
-        | e <- es
-        , case e of { Nullary{} -> False ; _ -> True }
-        ]
-      return forwA
+
+computeForwardA
+  :: Hypergraph l i -> ST s (STA.STArray s Int [STRef s (He l i)]) 
+computeForwardA (Hypergraph vs es) = do
+  forwA <- MA.newArray (0, vs + 1) []
+  sequence_
+    [ do
+        he <- newSTRef $! He (arity e) e
+        forM_ (from e) $
+          \ v -> do
+            hes <- AB.unsafeRead forwA v
+            AB.unsafeWrite forwA v $! he : hes
+    | e <- es
+    , case e of { Nullary{} -> False ; _ -> True }
+    ]
+  return forwA
 
 
 updateHe :: (Hyperedge l i -> ST s ()) -> STRef s (He l i) -> ST s ()
@@ -272,11 +274,11 @@ updateHe f he = do
 
 
 dropNonproducing :: Hypergraph l i -> Hypergraph l i
-dropNonproducing (Hypergraph vs es) = Hypergraph vs es'
+dropNonproducing hg@(Hypergraph vs es) = Hypergraph vs es'
   where
     es' = filter (foldpv (`IS.member` vsS0)) es
     vsS0 = runST $ do
-      forwA <- computeForward es
+      forwA <- computeForwardA hg
       q <- newSTRef $ [ e | e@Nullary{} <- es ]
       s <- newSTRef IS.empty
       let go' = do
@@ -284,9 +286,9 @@ dropNonproducing (Hypergraph vs es) = Hypergraph vs es'
               b <- readSTRefWith (v `IS.member`) s
               unless b $ do
                 modifySTRef' s $ IS.insert v
-                hes <- fmap (IM.findWithDefault [] v) $ readSTRef forwA
+                hes <- AB.unsafeRead forwA v
                 forM_ hes $ updateHe (\ e1 -> modifySTRef' q (e1 :))
-                modifySTRef' forwA $ IM.delete v
+                AB.unsafeWrite forwA v []
               go'
       go'
 
@@ -334,8 +336,8 @@ instance Ord (Prio MPolicy (Candidate l i)) where
 
 knuth
   :: Hypergraph l i -> Feature l i -> BestArray l i
-knuth (Hypergraph _ es) feat = runST $ do
-  forwA <- computeForward es
+knuth hg@(Hypergraph _ es) feat = runST $ do
+  forwA <- computeForwardA hg
   candH <- newSTRef (H.empty :: CandidateHeap l i)
   bestA <- newSTRef IM.empty
   let upd' v c = do
@@ -349,11 +351,11 @@ knuth (Hypergraph _ es) feat = runST $ do
           \ (Candidate w (T.Node e _)) -> let v = to e in do
             Candidate w' (T.Node e' _) : _ <- readSTRefWith (IM.! v) bestA
             when (w == w' && v == to e') $ do
-              hes <- readSTRefWith (IM.findWithDefault [] v) forwA
+              hes <- AB.unsafeRead forwA v
               forM_ hes $ updateHe $ \ e1 -> do
                 ba <- readSTRef bestA
                 upd $ topCC feat e1 $ map (head . (ba IM.!)) $ from e1
-              modifySTRef' forwA $ IM.delete v
+              AB.unsafeWrite forwA v []
             go
   mapM_ upd [ topCC feat e [] | e@Nullary{} <- es ]
   go

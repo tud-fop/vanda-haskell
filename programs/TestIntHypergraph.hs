@@ -137,14 +137,14 @@ main = do
         <- fmap fromText $ T.readFile (zhgFile ++ ".nodes") -}
       let pN !_ !i xs
             = (weights VU.! fromIntegral (fst i)) * Prelude.product xs
-          -- wsa = toWSAmap tm "those were the days"
-          wsa = toWSAmap tm "days days days days days days days days" -- ""
+          wsa = toWSAmap tm "those were the days"
+          -- wsa = toWSAmap tm "days days days days days days days days" -- ""
           ts = getTerminals wsa
-          el' = Hypergraph (nodes el) (filter p $ edges el)
-          p e = weights VU.! (ident e) > 1.0e-10 &&
+          el' = Hypergraph (nodes el) (map snd $ filter p $ zip [0..] $ edges el)
+          p (i, e) = i `mod` 2 == 0 && weights VU.! (ident e) > 1.0e-10 {-&&
                 case e of
                   Nullary{} -> S.member (label e) ts
-                  _ -> True
+                  _ -> True-}
           h = dropNonproducing ({- dropNonproducing' -} el')
           (s2n, h', _) = earley h (memo ta) wsa 1132
           init
