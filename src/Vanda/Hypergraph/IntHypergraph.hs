@@ -154,6 +154,23 @@ instance (Eq l) => Eq (Hyperedge l i) where
     = t1 == t2 && l1 == l2 && and (zipWith (==) (VU.toList f1) (VU.toList f2))
   _ == _ = False
 
+instance (Ord l) => Ord (Hyperedge l i) where
+  Nullary t1 l1 _ `compare` Nullary t2 l2 _
+    = (t1, l1) `compare` (t2, l2)
+  Nullary{} `compare` _ = LT
+  Unary t1 f1 l1 _ `compare` Unary t2 f2 l2 _
+    = (t1, l2, f1) `compare` (t2, l2, f2)
+  Unary{} `compare` Nullary{} = GT
+  Unary{} `compare` _ = LT
+  Binary t1 f11 f12 l1 _ `compare` Binary t2 f21 f22 l2 _
+    = (t1, l1, f11, f12) `compare` (t2, l2, f21, f22)
+  Binary{} `compare` Nullary{} = GT
+  Binary{} `compare` Unary{} = GT
+  Binary{} `compare` _ = LT
+  Hyperedge t1 f1 l1 _ `compare` Hyperedge t2 f2 l2 _
+    = (t1, l1, VU.toList f1) `compare` (t2, l2, VU.toList f2)
+  Hyperedge{} `compare` _ = GT
+
 -- | A derivation (tree), i.e., a tree over hyperedges.
 type Derivation l i = T.Tree (Hyperedge l i)
 
@@ -335,8 +352,7 @@ instance H.HeapItem MPolicy (Candidate l i) where
 instance Ord (Prio MPolicy (Candidate l i)) where
   compare (FMP x) (FMP y) = compare y x
 
-knuth
-  :: Hypergraph l i -> Feature l i -> BestArray l i
+knuth :: Hypergraph l i -> Feature l i -> BestArray l i
 knuth hg@(Hypergraph vs es) feat = STA.runSTArray $ do
   forwA <- computeForwardA hg
   candH <- newSTRef (H.empty :: CandidateHeap l i)

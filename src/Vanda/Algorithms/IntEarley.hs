@@ -16,7 +16,6 @@
 
 module Vanda.Algorithms.IntEarley ( earley, NTT (..) ) where
 
-import Control.Arrow ( first )
 import Control.Monad ( unless, liftM3, forM_ )
 import Control.Monad.ST
 import Control.Seq
@@ -45,6 +44,7 @@ data Trie l i
     }
     deriving Show
 
+emptyTrie :: Trie l i
 emptyTrie = Trie MS.empty []
 
 addRule :: Hyperedge l i -> [NTT] -> Trie l i -> Trie l i
@@ -103,7 +103,7 @@ second3 f (a, b, c) = (a, f b, c)
 
 
 toBackwardStar :: Hypergraph l i -> (l -> [NTT]) -> Int -> Trie l i
-toBackwardStar (Hypergraph vs es) f = flip (MS.findWithDefault emptyTrie) a
+toBackwardStar (Hypergraph _ es) f = flip (MS.findWithDefault emptyTrie) a
   where
     lst = [ (v, e) | e <- es, let v = to e ]
     a = foldl' (\m (v, e) -> MS.alter (prep e) v m) M.empty lst
@@ -117,26 +117,28 @@ earley
   => Hypergraph l i
   -> (l -> [NTT])
   -> WSA.WSA p Int Double
+  -> ((i, Int) -> i')
   -> Int            -- an initial node of the Hypergraph
-  -> (M.Map (p, Int, p) Int, Hypergraph l (i, Int), VU.Vector Double)
-earley hg comp wsa v0
+  -> (M.Map (p, Int, p) Int, Hypergraph l i', VU.Vector Double)
+earley hg comp wsa mki' v0
   = second3 mkHypergraph
-  $ iter (toBackwardStar hg comp) (comp . label) wsa v0
+  $ iter (toBackwardStar hg comp) (comp . label) wsa mki' v0
 
 
 iter
-  :: forall l i p. (Ord p, Ord i, Show p, Show i, Show l)
+  :: forall l i p i'. (Ord p, Ord i, Show p, Show i, Show l)
   => (Int -> Trie l i) 
   -> (Hyperedge l i -> [NTT])
   -> WSA.WSA p Int Double
+  -> ((i, Int) -> i')
   -> Int            -- an initial node of the Hypergraph
-  -> (M.Map (p, Int, p) Int, [Hyperedge l (i, Int)], VU.Vector Double)
-iter back comp wsa v0
+  -> (M.Map (p, Int, p) Int, [Hyperedge l i'], VU.Vector Double)
+iter back comp wsa mki' v0
   = runST $ do
       iq <- newSTRef Q.empty
       pvs <- newSTRef (S.fromList pv0)
       cm <- newSTRef M.empty
-      ls <- newSTRef ([] :: [Hyperedge l (i, Int)])
+      ls <- newSTRef ([] :: [Hyperedge l i'])
       ws <- newSTRef (M.empty :: M.Map Double Int)
       cn <- newSTRef (0 :: Int)
       cn2 <- newSTRef (0 :: Int)
@@ -152,8 +154,7 @@ iter back comp wsa v0
                     modifySTRef' pvs $ S.insert pv
                     enqueue $ [predItem pv]
                 T t -> enqueue $ scanItem it (p, t) subtrie
-          complete1
-            it@Item{ stateList = p' : _, firstState = p } (ntt, subtrie)
+          complete1 it@Item{ stateList = p' : _ } (ntt, subtrie)
             = case ntt of
                 NT v -> let pv = (p', v) in do
                   mb <- readSTRefWith (M.lookup pv) cm
@@ -163,8 +164,7 @@ iter back comp wsa v0
                       enqueue $ map (compItem1 subtrie it) (S.toList ps)
                       modifycm $ MS.adjust (second' (it :)) pv
                 _ -> return ()
-          complete2
-            it@Item{ stateList = p':_, iHead = v, firstState = p, trie = t }
+          complete2 Item{ stateList = p':_, iHead = v, firstState = p }
             = let pv = (p, v) in do
                 mb <- readSTRefWith (M.lookup pv) cm
                 case mb of
@@ -201,9 +201,9 @@ iter back comp wsa v0
                           (map (s2n' M.!) (carryL (yesyes (comp e)
                                             (reverse statl)) (from e)))
                           (label e)
-                          (ident e, i)
+                          (mki' (ident e, i))
                          `using`
-                         (seqHyperedge rseq r0 (seqTuple2 rseq r0))
+                         (seqHyperedge rseq r0 rseq {-(seqTuple2 rseq r0)-})
                 e' `seq` modifySTRef' ls (e' :)
             _ -> return ()
           go2 = do
@@ -224,7 +224,7 @@ iter back comp wsa v0
   where
     pv0 = [ (p, v0) | (p, _) <- WSA.initialWeights wsa ]
     predItem (p, v) = let t = back v in t `seq` Item v t [p] p 1
-    scanItem it@Item{ trie = t, stateList = ps, weight = w } pt subtrie
+    scanItem it@Item{ stateList = ps, weight = w } pt subtrie
       = [ it{ trie = subtrie, stateList = p : ps, weight = w' * w }
         | (p, w') <- M.findWithDefault [] pt scanMap ]
     compItem1 subtrie i@Item{ stateList = ps } p'
