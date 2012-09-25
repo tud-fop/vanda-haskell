@@ -75,7 +75,7 @@ expandH m pWordF fLen fs h e
   $ Hypothesis
       (hLen h + 1)
       (hTrans h ++ [e])
-      (hPNGrams h * mPNGram m [last ((-1) : hTrans h)] e)
+      (hPNGrams h +{-*-} log (mPNGram m [last ((-1) : hTrans h)] e))
       undefined
       (IM.update updt e $ hCandidates h)
   where
@@ -87,9 +87,10 @@ updateHP
   :: Model -> (Int -> Double) -> Int -> [Int] -> Hypothesis -> Hypothesis
 updateHP m pWordF fLen fs h
   = h { hP
-      = hPNGrams h * sum
-        [ mPLen m fLen l * product
-            [ sum [ mPAlign m l fLen i j * mPTrans m e f
+      = hPNGrams h +{-*-} maximum{-sum-}
+        [ mPLen m fLen l +{-*-} sum{-product-}
+            [ log
+            $ sum [ mPAlign m l fLen i j * mPTrans m e f
                   | (e, i) <- zip (hTrans h) [1 .. hLen h]
                   ]
             + sum [ mPAlign m l fLen i j * pWordF f
@@ -121,7 +122,7 @@ pAddOneSmoothedNestedMaps m0
 decode m fs = (heaps)
   where
     h0 = updateHP m pWordF fLen fs
-       $ Hypothesis 0 [] 1 undefined
+       $ Hypothesis 0 [] (log 1) undefined
        $ IM.fromListWith (+) $ concatMap (map (\ x -> (x, 1)) . candidateE) fs
     fLen = length fs
     pWordF = (pWordFArray m fs IM.!)
@@ -252,7 +253,10 @@ mainDecode df = do
     putStrLn ""
     forM_ (decode model $ map unlexi $ words sentence) $ \ ph -> do
       forM_ (phElems ph) $ \ h -> do
+        putStr "exp "
         putStr $ show $ hP h
+        putStr " = "
+        putStr $ show $ exp $ hP h
         putStr $ ": "
         putStrLn $ unwords $ map (lexiconE !) (hTrans h)
       putStrLn ""
