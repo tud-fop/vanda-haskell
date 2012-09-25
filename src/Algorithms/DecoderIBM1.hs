@@ -239,7 +239,7 @@ mainDecode df = do
                 (pAddOneSmoothedNestedMaps lengthmodel 1)
                 (pAddOneSmoothedNestedMaps nGrammodel 1)
                 ((/ fromIntegral cntE) . fromIntegral . (unigrammodel M.!))
-                (\ l m _{-i-} _{-j-} -> 1 / fromIntegral (l ^ m))
+                (\ l _{-m-} _{-i-} _{-j-} -> 1 / fromIntegral l)
                 (M.size unigrammodel)
       unlexi cs = maybe (error $ "Unknown word: " ++ cs)
                         id (M.lookup cs lexiconFInv)
