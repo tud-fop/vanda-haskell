@@ -16,7 +16,7 @@ category:       NLP
 tested-with:    GHC
 Build-Type:     Simple
 
-executable TestIntHypergraph
+executable XRSToHypergraph
   build-depends:
       base
     , containers
@@ -32,7 +32,7 @@ executable TestIntHypergraph
     , mtl
     , parallel >= 3.2
     , Vanda
-  Main-Is:  TestIntHypergraph.hs
+  Main-Is:  XRSToHypergraph.hs
   hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
@@ -80,11 +80,15 @@ library
     , Vanda.Corpus.Negra.Text
     , Vanda.Corpus.Penn.Text
     , Vanda.Grammar.Berkeley.Text
+    , Vanda.Grammar.XRS.Binary
+    , Vanda.Grammar.XRS.IRTG
+    , Vanda.Grammar.XRS.Text
     , Vanda.Hypergraph.Binary
     , Vanda.Hypergraph.BackwardStar
     , Vanda.Hypergraph.Basic
     , Vanda.Hypergraph.EdgeList
     , Vanda.Hypergraph.ForwardStar
+    , Vanda.Hypergraph.IntBinary
     , Vanda.Hypergraph.IntHypergraph
     , Vanda.Hypergraph.NFData
     , Vanda.Hypergraph.Text

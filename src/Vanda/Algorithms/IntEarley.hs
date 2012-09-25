@@ -154,6 +154,7 @@ iter back comp wsa mki' v0
                     modifySTRef' pvs $ S.insert pv
                     enqueue $ [predItem pv]
                 T t -> enqueue $ scanItem it (p, t) subtrie
+          predscan _ _ = undefined -- can not happen
           complete1 it@Item{ stateList = p' : _ } (ntt, subtrie)
             = case ntt of
                 NT v -> let pv = (p', v) in do
@@ -164,6 +165,7 @@ iter back comp wsa mki' v0
                       enqueue $ map (compItem1 subtrie it) (S.toList ps)
                       modifycm $ MS.adjust (second' (it :)) pv
                 _ -> return ()
+          complete1 _ _ = undefined -- can not happen
           complete2 Item{ stateList = p':_, iHead = v, firstState = p }
             = let pv = (p, v) in do
                 mb <- readSTRefWith (M.lookup pv) cm
@@ -172,6 +174,7 @@ iter back comp wsa mki' v0
                   Just (ps, is) -> unless (p' `S.member` ps) $ do
                     enqueue $ map (compItem2 (NT v) p') is
                     modifycm $ MS.adjust (first' (S.insert p')) pv
+          complete2 _ = undefined -- can not happen
           mapw w = do
             mb <- readSTRefWith (M.lookup w) ws
             case mb of

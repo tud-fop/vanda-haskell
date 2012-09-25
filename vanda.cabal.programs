@@ -1,3 +1,33 @@
+executable Binarize
+  build-depends:
+      base
+    , containers
+    , array
+    , vector
+    , heap
+    , bytestring
+    , text
+    , parsec >= 3.1.2
+    , binary
+    , deepseq
+    , zlib
+    , mtl
+    , parallel >= 3.2
+    , Vanda
+  Main-Is:  Binarize.hs
+  hs-source-dirs:  programs
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+  ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
+  Extensions:
+      ScopedTypeVariables
+    , TypeSynonymInstances
+    , FlexibleInstances
+    , MultiParamTypeClasses
+    , TypeFamilies
+    , FlexibleContexts
+    , BangPatterns
+
+
 executable Train
   build-depends:
       base
@@ -128,6 +158,35 @@ executable TestHypergraph
     , parallel >= 3.2
     , Vanda
   Main-Is:  TestHypergraph.hs
+  hs-source-dirs:  programs
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+  ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
+  Extensions:
+      ScopedTypeVariables
+    , TypeSynonymInstances
+    , FlexibleInstances
+    , MultiParamTypeClasses
+    , TypeFamilies
+    , FlexibleContexts
+    , BangPatterns
+
+executable TestIntHypergraph
+  build-depends:
+      base
+    , containers
+    , array
+    , vector
+    , heap
+    , bytestring
+    , text
+    , parsec >= 3.1.2
+    , binary
+    , deepseq
+    , zlib
+    , mtl
+    , parallel >= 3.2
+    , Vanda
+  Main-Is:  TestIntHypergraph.hs
   hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields

@@ -51,7 +51,6 @@ import qualified Data.Array.Base as AB
 import qualified Data.Array.MArray as MA
 import qualified Data.Array.ST as STA
 import qualified Data.Heap as H hiding ( Prio, Val )
-import qualified Data.IntMap as IM
 import qualified Data.IntSet as IS
 import qualified Data.List as L ( foldl' )
 import qualified Data.Map.Strict as MS
@@ -121,7 +120,7 @@ deref (Unary _ f1 _ _) 0 = f1
 deref (Binary _ f1 _ _ _) 0 = f1
 deref (Binary _ _ f2 _ _) 1 = f2
 deref (Hyperedge _ f _ _) i = f VU.! i
--- deref e i = error (show (ident e) ++ show i) 
+deref _ _ = error "attempt to reference non-existing tail node"
 
 arity :: Hyperedge l i -> Int
 arity Nullary{} = 0
@@ -159,7 +158,7 @@ instance (Ord l) => Ord (Hyperedge l i) where
     = (t1, l1) `compare` (t2, l2)
   Nullary{} `compare` _ = LT
   Unary t1 f1 l1 _ `compare` Unary t2 f2 l2 _
-    = (t1, l2, f1) `compare` (t2, l2, f2)
+    = (t1, l1, f1) `compare` (t2, l2, f2)
   Unary{} `compare` Nullary{} = GT
   Unary{} `compare` _ = LT
   Binary t1 f11 f12 l1 _ `compare` Binary t2 f21 f22 l2 _
@@ -197,6 +196,7 @@ data Hypergraph l i
     { nodes :: Int -- ^ Number of nodes (interval 0..nodes-1)
     , edges :: [Hyperedge l i] -- ^ List of 'Hyperedge's
     }
+    deriving Show
 
 -- | Extracts the nodes occurring in a list of edges. Does /not/ remove
 -- duplicates.
@@ -205,6 +205,7 @@ nodesLL es = [ v | e <- es, v <- to e : from e ]
 
 -- | Obtains the interval of nodes occurring in a list of edges.
 nodesL :: [Int] -> (Int, Int)
+nodesL [] = (0, -1)
 nodesL (x : xs) = L.foldl' minimax (x, x) xs
   where
     minimax (min0, max0) a

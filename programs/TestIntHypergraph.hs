@@ -24,6 +24,7 @@ import qualified Vanda.Algorithms.Earley.WSA as WSA
 import Vanda.Algorithms.IntEarley ( earley, NTT (..) )
 import Vanda.Functions ( toWSAmap )
 import Vanda.Hypergraph.IntHypergraph
+import Vanda.Hypergraph.IntBinary ()
 import Vanda.Token
 
 
@@ -101,31 +102,6 @@ instance (NFData l, NFData i) => NFData (Hyperedge l i) where
 
 instance (NFData l, NFData i) => NFData (Candidate l i) where
   rnf (Candidate w d) = rnf w `seq` rnf d
-
-instance (NFData l, NFData i, B.Binary l, B.Binary i)
-  => B.Binary (Hyperedge l i) where
-  put e = do
-    B.put (to e)
-    B.put (from e)
-    B.put (label e)
-    B.put (ident e)
-  get = do
-    x1 <- B.get
-    x2 <- x1 `deepseq` B.get
-    x3 <- x2 `deepseq` B.get
-    x4 <- x3 `deepseq` B.get
-    x4 `deepseq` return $! mkHyperedge x1 x2 x3 x4
-     
-
-instance (NFData l, NFData i, B.Binary l, B.Binary i)
-  => B.Binary (Hypergraph l i) where
-  put (Hypergraph vs es) = do
-    B.put (S.fromList $ enumFromTo 0 $ vs - 1)
-    B.put es -- myPut es
-  get = do
-    vs <- fmap ((+ 1) . snd . nodesL . S.toList) (B.get :: B.Get (S.Set Int))
-    es <- B.get
-    return (Hypergraph vs es)
 
 p0 <&> p1 = \ x -> p0 x && p1 x
 

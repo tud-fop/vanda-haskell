@@ -20,15 +20,13 @@
 module Vanda.Hypergraph.Binary () where
 
 import Control.Applicative ( (<$>), (<*>) )
-import Control.Seq
-import Control.DeepSeq ( NFData, force, deepseq )
+import Control.DeepSeq ( NFData, deepseq )
 import qualified Data.Binary as B
-import Debug.Trace ( trace )
 
 import Vanda.Hypergraph.Basic
 import Vanda.Hypergraph.NFData ()
 
-mkHyperedge' x1 x2 x3 x4 = mkHyperedge x1 (x2 `using` seqList rseq) x3 x4
+-- mkHyperedge' x1 x2 x3 x4 = mkHyperedge x1 (x2 `using` seqList rseq) x3 x4
 
 instance (NFData v, NFData l, NFData i, B.Binary v, B.Binary l, B.Binary i, Ord v)
   => B.Binary (Hyperedge v l i) where
@@ -44,11 +42,17 @@ instance (NFData v, NFData l, NFData i, B.Binary v, B.Binary l, B.Binary i, Ord 
     x3 <- x2 `deepseq` B.get
     x4 <- x3 `deepseq` B.get
     x4 `deepseq` return $! mkHyperedge x1 x2 x3 x4
-     
 
+instance (NFData v, NFData l, NFData i, B.Binary v, B.Binary l, B.Binary i, Ord v)
+  => B.Binary (EdgeList v l i) where
+  put (EdgeList vs es) = do
+    B.put vs
+    B.put es -- myPut es
+  get = EdgeList <$> B.get <*> B.get -- myGet
+     
+{-
 myGet :: (NFData v, NFData l, NFData i, B.Binary v, B.Binary l, B.Binary i, Ord v) => B.Get [Hyperedge v l i]
 myGet = do
-  -- es1 <- fmap {-(`using` seqList rseq)-} force B.get
   es1 <- B.get
   if null es1
     then return []
@@ -63,11 +67,5 @@ myPut es@[] = B.put es -- ([] :: [Hyperedge v l i])
 myPut es = do
   B.put (take 10000 es)
   myPut (drop 10000 es)
-
-instance (NFData v, NFData l, NFData i, B.Binary v, B.Binary l, B.Binary i, Ord v)
-  => B.Binary (EdgeList v l i) where
-  put (EdgeList vs es) = do
-    B.put vs
-    B.put es -- myPut es
-  get = EdgeList <$> B.get <*> B.get -- myGet
+-}
 

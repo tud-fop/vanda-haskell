@@ -33,7 +33,7 @@ module Vanda.Functions
 import Codec.Compression.GZip ( compress, decompress )
 
 import Control.Arrow ( (&&&) )
-import Control.DeepSeq ( NFData, force, ($!!) )
+import Control.DeepSeq ( NFData, force )
 
 import qualified Data.Binary as B
 import qualified Data.ByteString.Lazy as B
@@ -52,7 +52,7 @@ import qualified Vanda.Algorithms.Earley.WSA as WSA
 import Vanda.Features
 import Vanda.Hypergraph
 import Vanda.Hypergraph.Binary ()
-import Vanda.Token
+import Vanda.Token hiding ( getString )
 
 import Vanda.Algorithms.ExpectationMaximization
 
