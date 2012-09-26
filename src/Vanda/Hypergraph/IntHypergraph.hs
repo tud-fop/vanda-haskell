@@ -33,6 +33,9 @@ module Vanda.Hypergraph.IntHypergraph
   , filterEdges
   , mapNodes
   , mapLabels
+  , He (..)
+  , computeForwardA
+  , updateHe
   , dropNonproducing
   , dropNonproducing'
   , Feature
@@ -98,9 +101,9 @@ instance (Show l, Show i) => Show (Hyperedge l i) where
     = show (to e)
       ++ " -> "
       ++ show (label e)
-      ++ " "
+      ++ " ["
       ++ unwords (map show $ from e)
-      ++ " # "
+      ++ "] # "
       ++ show (ident e)
 
 foldpv :: (Int -> Bool) -> Hyperedge l i -> Bool

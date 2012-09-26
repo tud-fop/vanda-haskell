@@ -18,6 +18,7 @@ import Control.DeepSeq ( NFData )
 import Control.Monad ( liftM2 )
 import Data.IntMap as IM
 import Data.Map as M
+import Data.NTT
 import qualified Data.Text.Lazy as T
 import qualified Data.Tree as T
 import Text.Parsec hiding ( many )

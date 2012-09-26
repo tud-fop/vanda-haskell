@@ -23,6 +23,7 @@ import qualified Data.Array as A ( array, elems )
 import Data.List ( foldl' )
 import qualified Data.Map as M
 import qualified Data.Map.Strict as MS
+import Data.NTT
 import qualified Data.Set as S
 import Data.STRef
 import qualified Data.Queue as Q
@@ -34,8 +35,6 @@ import Vanda.Hypergraph.IntHypergraph hiding ( weight )
 import qualified Vanda.Algorithms.Earley.WSA as WSA
 import Vanda.Util
 
-
-data NTT = NT !Int | T !Int deriving (Eq, Ord, Show)
 
 data Trie l i
   = Trie

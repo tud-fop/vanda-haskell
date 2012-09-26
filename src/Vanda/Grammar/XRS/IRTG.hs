@@ -1,5 +1,6 @@
 module Vanda.Grammar.XRS.IRTG where
 
+import Data.NTT
 import qualified Data.Tree as T
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
@@ -7,9 +8,11 @@ import qualified Data.Vector.Unboxed as VU
 import Vanda.Hypergraph.IntHypergraph
 
 
-data NTT = NT !Int | T !Int deriving (Eq, Ord, Show)
-
-data StrictIntPair = SIP !Int !Int deriving (Eq, Ord, Show)
+data StrictIntPair
+  = SIP
+    { _fst :: !Int
+    , _snd :: !Int
+    } deriving (Eq, Ord, Show)
 
 data IRTG i
   = IRTG

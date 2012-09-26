@@ -2,15 +2,28 @@
            , ExistentialQuantification
            , RankNTypes
            , TupleSections
-           , EmptyDataDecls #-}
+           , EmptyDataDecls
+           , RecordWildCards #-}
 
 module Main where
 
+import Control.Monad ( when, forM_, forM, liftM3 )
+import Control.Monad.ST
+import qualified Data.Array.Base as AB
+-- import qualified Data.Array.MArray as MA
+import qualified Data.Array.ST as STA
+import qualified Data.IntMap as IM
+import qualified Data.IntSet as IS
 import qualified Data.Ix as Ix
+import qualified Data.Map as M
+import Data.STRef
 import qualified Data.Tree as T
+
+import Debug.Trace
 
 -- import Vanda.Hypergraph.EdgeList as EL
 import Vanda.Hypergraph.IntHypergraph
+import Vanda.Util
 
 data Var l = Var Int | NV l deriving Show
 
@@ -52,6 +65,88 @@ varta _ _ _ = error "Variables cannot have children"
 
 regrep :: RegRep l l' -> T.Tree (Var l) -> WTA (Var l')
 regrep rr = let go (T.Node l ts) = varta rr l (map go ts) in go
+
+
+{- chTo :: Int -> Hyperedge l i -> Hyperedge l i
+chTo i e@Nullary{} = e{ to = i } -} 
+
+type GigaMap = M.Map IS.IntSet Int
+
+forwMskel
+  :: forall l' . Show l' => GigaMap -> Int -> WTA (Var l') -> (WTA Int, GigaMap, Int)
+forwMskel gm_ gmi_ WTA{ .. } = runST $ do
+  gm <- newSTRef gm_         -- maps variable sets to terminal symbols
+  gmi <- newSTRef gmi_       -- max. terminal symbol
+  nt <- STA.newArray (0, nodes transitions - 1) []
+        :: ST s (STA.STArray s Int [Hyperedge Int ()])
+  -- mmap :: GigaMap <- M.empty -- maps variable sets to states of the wta
+  imap <- newSTRef (IM.empty :: IM.IntMap (IS.IntSet, Int))
+  -- ^ maps each state to its var. set and the gm image of that var. set
+  forwA <- computeForwardA transitions
+  q <- newSTRef [ e | e@Nullary{} <- edges transitions ]
+  let -- addt v e = AB.unsafeRead nt v >>= AB.unsafeWrite nt v . (e :)
+      register s = do
+        mb <- fmap (M.lookup s) $ readSTRef gm
+        case mb of
+          Nothing -> do
+                       i <- readSTRef gmi
+                       modifySTRef' gmi (+ 1)
+                       modifySTRef' gm $ M.insert s i
+                       return i
+          Just i -> return i
+      construct = fmap concat
+                $ forM [0 .. nodes transitions - 1]
+                $ AB.unsafeRead nt
+      go = do
+        lviewSTRef' q
+          ( liftM3 (,,)
+              (fmap (WTA finalState . mkHypergraph) construct)
+              (readSTRef gm)
+              (readSTRef gmi)
+          )
+          $ \ e -> do
+            case e of
+              Nullary{ label = Var i, .. } -> let s = IS.singleton i in do
+                ti <- register s
+                modifySTRef' imap $ IM.insert to (s, ti)
+                es <- AB.unsafeRead nt to
+                AB.unsafeWrite nt to (Nullary{ label = ti, .. } : es)
+              Nullary{ .. } -> do
+                es <- AB.unsafeRead nt to
+                when (null es) $ let s = IS.empty in do
+                  ti <- register s
+                  modifySTRef' imap $ IM.insert to (s, ti)
+                  AB.unsafeWrite nt to (Nullary{ label = ti, ..} : es)
+              Unary{ .. } -> do
+                sti <- fmap (IM.! from1) $ readSTRef imap
+                modifySTRef' imap $ IM.insert to sti
+                -- divert transitions that end in from also to to
+                esf <- AB.unsafeRead nt from1
+                est <- AB.unsafeRead nt to
+                AB.unsafeWrite nt to $ est ++ map (\ e1 -> e1{ to = to }) esf
+              Binary{ .. } -> do
+                (s1, ti1) <- fmap (IM.! from1) $ readSTRef imap
+                (s2, ti2) <- fmap (IM.! from2) $ readSTRef imap
+                let s = s1 `IS.union` s2
+                ti <- register s
+                modifySTRef imap $ IM.insert to (s, ti)
+                est <- AB.unsafeRead nt to
+                case (ti == ti1, ti == ti2, to /= from1, to /= from2) of
+                  (False, False, _, _) ->   -- insert new edge
+                    AB.unsafeWrite nt to (Binary{ label = ti, .. } : est)
+                  (True, False, True, _) -> do -- divert from1 also to to
+                    esf <- AB.unsafeRead nt from1
+                    AB.unsafeWrite nt to $ est ++ map (\ e1 -> e1{ to = to }) esf
+                  (False, True, _, True) -> do -- divert from2 also to to
+                    esf <- AB.unsafeRead nt from2
+                    AB.unsafeWrite nt to $ est ++ map (\ e1 -> e1{ to = to }) esf
+                  _ -> return () -- probably s1 = s2 = s = empty
+              _ -> error "WTA is not BINARY"
+            hes <- AB.unsafeRead forwA (to e)
+            forM_ hes $ updateHe $ \ e1 -> modifySTRef' q (e1 :)
+            AB.unsafeWrite forwA (to e) []
+            go
+  go
 
 
 data StrLabel = StrConcat | StrConst !Int deriving Show
@@ -128,12 +223,27 @@ data IRTG l i = IRTG
                 , 
 -}
 
+fst3 (x, _, _) = x
+
+myshow WTA { .. } = "Final state: " ++ show finalState ++ "\nTransitions:\n"
+                    ++ unlines (map show (edges transitions))
+
 main :: IO ()
-main = print
-     $ relab [ [1, 2, 3], [4, 5, 6], [7, 8, 9] ]
-     $ regrep strrr
-     $ T.Node (NV StrConcat)
-     $ [ T.Node (Var 0) []
-       , T.Node (Var 1) []
-       , T.Node (Var 2) []
-       ]
+main = let wta = regrep strrr
+               $ T.Node (NV StrConcat)
+               $ [ T.Node (Var 0) []
+                 , T.Node (Var 1) []
+                 , T.Node (Var 2) []
+                 , T.Node (Var 3) []
+                 , T.Node (Var 4) []
+                 , T.Node (Var 5) []
+                 , T.Node (Var 6) []
+                 , T.Node (Var 7) []
+                 , T.Node (Var 8) []
+                 , T.Node (Var 9) []
+                 ]
+       in do
+            putStrLn $ myshow wta
+            putStrLn $ myshow $ fst3 $ forwMskel M.empty 0 wta
+     -- $ relab [ [1, 2, 3], [4, 5, 6], [7, 8, 9] ]
+

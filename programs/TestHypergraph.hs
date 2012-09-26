@@ -4,7 +4,6 @@ module Main where
 import Codec.Compression.GZip ( decompress )
 
 import Control.Monad.ST
-import qualified Data.Map as M
 import Control.DeepSeq ( rnf, force, NFData(..) )
 import Control.Seq ( using, rseq, r0, seqTuple2, seqList )
 import qualified Data.Array as A
@@ -14,6 +13,7 @@ import qualified Data.Array.ST as STA
 import qualified Data.Binary as B
 import qualified Data.ByteString.Lazy as B
 import Data.Int ( Int32 )
+import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Text.Lazy as T
 import qualified Data.Text.Lazy.IO as T
