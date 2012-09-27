@@ -81,7 +81,7 @@ deq (Queue []     []      ) = error "Cannot dequeue from empty queue."
 -- the 'Queue' without the element.
 deqMaybe :: Queue a -> Maybe (a, Queue a)
 deqMaybe (Queue (x:xs) ys      ) = Just (x, Queue xs ys)
-deqMaybe (Queue []     ys@(_:_)) = deqMaybe (Queue ({-reverse-} ys) [])
+deqMaybe (Queue []     ys@(_:_)) = deqMaybe (Queue (reverse ys) [])
 deqMaybe (Queue []     []      ) = Nothing
 
 -- | Add all elements of the given list to the 'Queue'.
