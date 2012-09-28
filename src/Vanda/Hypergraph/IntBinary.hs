@@ -24,6 +24,7 @@ import qualified Data.Binary as B
 import qualified Data.Set as S
 
 import Vanda.Hypergraph.IntHypergraph
+import qualified Vanda.Hypergraph.Tree as T
 
 
 instance (NFData l, NFData i, B.Binary l, B.Binary i)
@@ -51,3 +52,9 @@ instance (NFData l, NFData i, B.Binary l, B.Binary i)
     es <- B.get
     return (Hypergraph vs es)
 
+instance B.Binary l => B.Binary (T.Tree l) where
+  get = do
+          x1 <- B.get
+          x2 <- B.get
+          return $! T.node x1 x2
+  put t = B.put (T.rootLabel t) >> B.put (T.subForest t)

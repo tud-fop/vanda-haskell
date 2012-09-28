@@ -57,6 +57,7 @@ executable XRSToHypergraph
     , FlexibleContexts
     , BangPatterns
 
+
 executable Train
   build-depends:
       base

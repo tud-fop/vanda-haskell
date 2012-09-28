@@ -1,11 +1,11 @@
 module Vanda.Grammar.XRS.IRTG where
 
 import Data.NTT
-import qualified Data.Tree as T
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
 
 import Vanda.Hypergraph.IntHypergraph
+import qualified Vanda.Hypergraph.Tree as T
 
 
 data StrictIntPair

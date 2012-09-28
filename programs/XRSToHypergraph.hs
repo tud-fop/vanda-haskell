@@ -15,7 +15,6 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Text.Lazy as T
 import qualified Data.Text.Lazy.IO as TIO
-import qualified Data.Tree as T
 import qualified Data.Vector as V
 import System.Environment ( getArgs )
 
@@ -26,6 +25,7 @@ import Vanda.Grammar.XRS.Binary ()
 import Vanda.Grammar.XRS.IRTG
 import Vanda.Grammar.XRS.Text
 import Vanda.Hypergraph.IntHypergraph
+import qualified Vanda.Hypergraph.Tree as T
 import Vanda.Token
 
 swap :: (a, b) -> (b, a)
@@ -46,16 +46,17 @@ compute _es =
 
 
 derivToTree :: (l -> T.Tree NTT) -> Derivation l i -> T.Tree NTT
-derivToTree comp (T.Node e ds)
-  = subst (map (derivToTree comp) ds) (comp (label e))
+derivToTree comp t = subst (map (derivToTree comp) (T.subForest t))
+                           (comp (label (T.rootLabel t)))
 
 subst :: [T.Tree NTT] -> T.Tree NTT -> T.Tree NTT
-subst ts (T.Node t@(T _) ts') = T.Node t (map (subst ts) ts')
-subst ts n@(T.Node (NT i) []) = ts !! i
+subst ts (T.Nullary (NT i)) = ts !! i
+subst ts t = case T.rootLabel t of
+               T _ -> T.mapChildren (subst ts) t
 
 nttToString :: TokenArray -> TokenArray -> T.Tree NTT -> T.Tree String
 nttToString ta na (T.Node (T i) ts)
-  = T.Node (getString ta i) (map (nttToString ta na) ts)
+  = T.Node (if i < 0 then "@" else getString ta i) (map (nttToString ta na) ts)
 nttToString ta na (T.Node (NT i) ts)
   = T.Node (getString na i) (map (nttToString ta na) ts) 
 
@@ -66,7 +67,7 @@ prune :: (l -> [NTT]) -> S.Set Int -> Hypergraph l i -> Hypergraph l i
 prune comp s hg
   = Hypergraph (nodes hg) (filter p $ edges hg)
   where
-    p e = foldl' p' True (comp (label e))
+    p e = arity e <= 2 && foldl' p' True (comp (label e))
     p' b (NT _) = b
     p' b (T i) = b && i `S.member` s
 
@@ -89,6 +90,14 @@ main = do
       print (V.length ws)
       let stat = compute (edges rtg)
       TIO.writeFile statFile $ T.unlines $ map (T.pack . show) $ stat
+    ["-z", zhgFile, "-s2", statFile] -> do
+      irtg@IRTG{ .. } :: IRTG Int
+        <- fmap (B.decode . decompress) $ B.readFile (zhgFile ++ ".bhg.gz")
+      TIO.writeFile statFile $ T.unlines $ concat
+        $ [ map (T.pack . show) (edges rtg)
+          , map (T.pack . show) (V.toList h1)
+          , map (T.pack . show) (V.toList h2)
+          ]
     ["-e", eMapFile, "-f", fMapFile, "-z", zhgFile] -> do
       irtg@IRTG{ .. } :: IRTG Int
         <- fmap (B.decode . decompress) $ B.readFile (zhgFile ++ ".bhg.gz")
@@ -98,16 +107,16 @@ main = do
       em :: TokenArray <- fmap fromText $ TIO.readFile eMapFile
       fm :: TokenMap <- fmap fromText $ TIO.readFile fMapFile
       let wsa = toWSAmap fm -- "Guten Tag meine Damen und Herren ."
-                "-LRB- Das Parlament erhebt sich zu einer Schweigeminute . -RRB-"
+                -- "-LRB- Das Parlament erhebt sich zu einer Schweigeminute . -RRB-"
                 -- "Zu Montag und Dienstag liegen keine Änderungen vor ."
                 -- "Es besteht sogar die Gefahr eines Militärputsches ."
                 -- "Frau Präsidentin , zur Geschäftsordnung ."
                 -- "Ich bitte Sie , sich zu einer Schweigeminute zu erheben ."
-                -- "Meine Frage betrifft eine Angelegenheit , die am Donnerstag zur Sprache kommen wird und auf die ich dann erneut verweisen werde ."
+                "Meine Frage betrifft eine Angelegenheit , die am Donnerstag zur Sprache kommen wird und auf die ich dann erneut verweisen werde ."
           comp = ((h2 V.!) . _snd)
           rrtg = dropNonproducing $ prune comp (getTerminals wsa) rtg
           (mm, ip, _) = earley rrtg comp wsa fst 7
-          feat _ i xs = (ws V.! i) * product xs
+          feat _ i xs = (if i < 0 then 1 else ws V.! i) * product xs
           ba = knuth ip feat
       print $ map (nttToString em em . derivToTree ((h1 V.!) . _fst) . deriv)
             $ ba A.! (mm M.! (0, 7, fst . head . WSA.finalWeights $ wsa))

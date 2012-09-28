@@ -20,26 +20,27 @@ import Data.IntMap as IM
 import Data.Map as M
 import Data.NTT
 import qualified Data.Text.Lazy as T
-import qualified Data.Tree as T
 import Text.Parsec hiding ( many )
 import Text.Parsec.Text.Lazy
 
 import Vanda.Grammar.XRS.IRTG
 import Vanda.Hypergraph.IntHypergraph
 import Vanda.Hypergraph.NFData ()
+import qualified Vanda.Hypergraph.Tree as T
 import Vanda.Util
 
 type GenMapper u s = u -> s -> (u, Int)
 
 type Mapper u = GenMapper u String
 
-instance Ord l => Ord (T.Tree l) where
+{- instance Ord l => Ord (T.Tree l) where
   T.Node l1 ts1 `compare` T.Node l2 ts2
     = case (l1 `compare` l2, ts1 `compare` ts2) of
         (LT, _) -> LT
         (EQ, LT) -> LT
         (EQ, EQ) -> EQ
         _ -> GT
+-}
 
 parseXRSMap
   :: (NFData ue, NFData uf, NFData un)
@@ -131,7 +132,7 @@ p_tterm pme = do
   si <- pme =<< many (noneOf "\"")
   _ <- char '"'
   spaces
-  return (T.Node (T si) [], IM.empty)
+  return (T.node (tt si) [], IM.empty)
 
 p_tvar
   :: (String -> GenParser u Int)
@@ -142,7 +143,7 @@ p_tvar pmn = do
   _ <- char ':'
   si <- pmn =<< many (noneOf " )")
   spaces
-  return (T.Node (NT i) [], IM.singleton i si)
+  return (T.node (nt i) [], IM.singleton i si)
 
 p_tnonterm
   :: (String -> GenParser u Int)
@@ -154,7 +155,7 @@ p_tnonterm pme pmn = do
   (ts, ms) <- fmap unzip $ many $ p_tree pme pmn
   _ <- char ')'
   spaces
-  return (T.Node (T si) ts, Prelude.foldr IM.union IM.empty ms)
+  return (T.node (tt si) ts, Prelude.foldr IM.union IM.empty ms)
 
 
 p_string
@@ -168,14 +169,14 @@ p_sterm pmf = do
   si <- pmf =<< many (noneOf "\"")
   _ <- char '"'
   spaces
-  return (T si)
+  return (tt si)
 
 p_svar :: GenParser u NTT
 p_svar = do
   _ <- char 'x'
   i <- fmap (read . (: "")) $ oneOf "0123456789"
   spaces
-  return (NT i)
+  return (nt i)
 
 p_grammar
   :: (String -> GenParser u Int)

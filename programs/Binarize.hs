@@ -25,7 +25,6 @@ import Data.NTT
 import qualified Data.Queue as Q
 -- import qualified Data.Set as S
 import Data.STRef
-import qualified Data.Tree as T
 import qualified Data.Vector as V
 import System.Environment ( getArgs )
 
@@ -34,12 +33,11 @@ import System.Environment ( getArgs )
 import Vanda.Grammar.XRS.Binary ()
 import Vanda.Grammar.XRS.IRTG
 import Vanda.Hypergraph.IntHypergraph
+import qualified Vanda.Hypergraph.Tree as T
 import Vanda.Util
 
 
 instance NFData StrictIntPair
-
-data Var l = Var Int | NV l deriving (Eq, Ord, Show)
 
 data WTA l = WTA
              { finalState :: Int
@@ -59,7 +57,7 @@ rene i i' (WTA v0 (Hypergraph vs es))
           then []
           else [ mkHyperedge i' (map (i +) $ from e) (label e) (ident e)
                | e <- es
-               , to e == 0
+               , to e == v0
                ]
 
 relab :: [l'] -> WTA l -> WTA (l, l')
@@ -78,7 +76,8 @@ varta _ _ _ = error "Variables cannot have children"
 
 
 regrep :: RegRep l l' -> T.Tree (Var l) -> WTA (Var l')
-regrep rr = let go (T.Node l ts) = varta rr l (map go ts) in go
+regrep rr = let go t = varta rr (T.rootLabel t) (map go (T.subForest t))
+            in go
 
 
 {- chTo :: Int -> Hyperedge l i -> Hyperedge l i
@@ -93,8 +92,8 @@ forwMskel
 forwMskel gm_ gmi_ WTA{ .. } = runST $ do
   gm <- newSTRef gm_         -- maps variable sets to terminal symbols
   gmi <- newSTRef gmi_       -- max. terminal symbol
-  nt <- STA.newArray (0, nodes transitions - 1) []
-        :: ST s (STA.STArray s Int [Hyperedge Int ()])
+  ntr <- STA.newArray (0, nodes transitions - 1) []
+         :: ST s (STA.STArray s Int [Hyperedge Int ()])
   -- mmap :: GigaMap <- M.empty -- maps variable sets to states of the wta
   amap <- newSTRef (IM.empty :: AnalMap)
   -- ^ maps each state to its var. set and the gm image of that var. set
@@ -112,7 +111,7 @@ forwMskel gm_ gmi_ WTA{ .. } = runST $ do
           Just i -> return i
       construct = fmap concat
                 $ forM [0 .. nodes transitions - 1]
-                $ AB.unsafeRead nt
+                $ AB.unsafeRead ntr
       go = do
         viewSTRef' q (Q.deqMaybe)
           ( liftM4 (,,,)
@@ -126,41 +125,41 @@ forwMskel gm_ gmi_ WTA{ .. } = runST $ do
               Nullary{ label = Var i, .. } -> let s = IS.singleton i in do
                 ti <- register s
                 modifySTRef' amap $ IM.insert to (s, ti)
-                es <- AB.unsafeRead nt to
-                AB.unsafeWrite nt to (Nullary{ label = ti, .. } : es)
+                es <- AB.unsafeRead ntr to
+                AB.unsafeWrite ntr to (Nullary{ label = ti, .. } : es)
               Nullary{ .. } -> do
-                es <- AB.unsafeRead nt to
+                es <- AB.unsafeRead ntr to
                 when (null es) $ let s = IS.empty in do
                   ti <- register s
                   modifySTRef' amap $ IM.insert to (s, ti)
-                  AB.unsafeWrite nt to (Nullary{ label = ti, ..} : es)
+                  AB.unsafeWrite ntr to (Nullary{ label = ti, ..} : es)
               Unary{ .. } -> do
                 sti <- fmap (IM.! from1) $ readSTRef amap
                 modifySTRef' amap $ IM.insert to sti
                 -- divert transitions that end in from also to to
-                esf <- AB.unsafeRead nt from1
-                est <- AB.unsafeRead nt to
-                AB.unsafeWrite nt to $ est ++ map (\ e1 -> e1{ to = to }) esf
+                esf <- AB.unsafeRead ntr from1
+                est <- AB.unsafeRead ntr to
+                AB.unsafeWrite ntr to $ est ++ map (\ e1 -> e1{ to = to }) esf
               Binary{ .. } -> do
                 (s1, ti1) <- fmap (IM.! from1) $ readSTRef amap
                 (s2, ti2) <- fmap (IM.! from2) $ readSTRef amap
                 let s = s1 `IS.union` s2
                 ti <- register s
                 modifySTRef amap $ IM.insert to (s, ti)
-                est <- AB.unsafeRead nt to
+                est <- AB.unsafeRead ntr to
                 case (ti == ti1, ti == ti2, to /= from1, to /= from2) of
                   (False, False, _, _) ->      -- insert new edges
-                    AB.unsafeWrite nt to
+                    AB.unsafeWrite ntr to
                       $ Binary{ label = ti, .. }
                       : Binary{ label = ti, from1 = from2, from2 = from1, .. }
                       : est
                   (True, False, True, _) -> do -- divert from1 also to to
-                    esf <- AB.unsafeRead nt from1
-                    AB.unsafeWrite nt to
+                    esf <- AB.unsafeRead ntr from1
+                    AB.unsafeWrite ntr to
                       $ est ++ map (\ e1 -> e1{ to = to }) esf
                   (False, True, _, True) -> do -- divert from2 also to to
-                    esf <- AB.unsafeRead nt from2
-                    AB.unsafeWrite nt to
+                    esf <- AB.unsafeRead ntr from2
+                    AB.unsafeWrite ntr to
                       $ est ++ map (\ e1 -> e1{ to = to }) esf
                   _ -> return ()               -- probably s1 = s2 = s = empty
               _ -> error "WTA is not BINARY"
@@ -191,16 +190,16 @@ inters (WTA fs1 (Hypergraph vs1 tr1)) (WTA fs2 (Hypergraph vs2 tr2))
 
 type Branches = IM.IntMap (Int, Int)
 
-derivToTree :: Derivation l i -> T.Tree l
-derivToTree (T.Node e ds) = T.Node (label e) (map derivToTree ds)
+-- derivToTree :: Derivation l i -> T.Tree l
+-- derivToTree (T.Node e ds) = T.Node (label e) (map derivToTree ds)
 
 extractBranches :: Branches -> [T.Tree Int] -> Branches
 extractBranches !s [] = s
-extractBranches !s (T.Node _ [] : ts) = extractBranches s ts
-extractBranches !s (T.Node _ [t] : ts) = extractBranches s (t : ts)
-extractBranches !s (T.Node i [t1@(T.Node i1 _), t2@(T.Node i2 _)] : ts)
-  = extractBranches (IM.insert i (i1, i2) s) (t1 : t2 : ts)
-extractBranches _ (T.Node _ _ : _) = error "Tree not BINARY" 
+extractBranches !s (T.Nullary{} : ts) = extractBranches s ts
+extractBranches !s (T.Unary{ .. } : ts) = extractBranches s (sub1 : ts)
+extractBranches !s (T.Binary i t1 t2 : ts) = extractBranches
+              (IM.insert i (T.rootLabel t1, T.rootLabel t2) s) (t1 : t2 : ts)
+extractBranches _ (T.Node _ _ : _) = error "Tree not BINARY1" 
 
 backMskel
   :: AnalMap
@@ -241,20 +240,23 @@ backMskel amap wta@WTA{ transitions = tr@Hypergraph{ .. } } branches
     lu q = snd $ amap IM.! q
     lus q = first' IS.size $ amap IM.! q
 
-
 dissect
   :: Branches -> T.Tree (Var l', (Int, Int)) -> IM.IntMap (T.Tree (Var l'))
 dissect br = go IM.empty . (: [])
   where
     go !m [] = m
-    go !m (t@T.Node{ rootLabel = (_, (_, i)) } : ts)
-      = case go2 i t ts of
-          (trm, ts') -> go (IM.insert i trm m) ts'
-    makevar i' i = T.Node (Var $ if fst (br IM.! i') == i then 0 else 1) []
-    go2 i' (T.Node (Var _, (_, i)) _) ts = (makevar i' i, ts)
-    go2 i' t@(T.Node (l, (vc, i)) ch) ts
-      | vc < 2 || i == i' = first' (T.Node l) $ fold (go2 i') ch ts
-      | otherwise = (makevar i' i, t : ts)
+    go !m (t : ts)
+      = case T.rootLabel t of
+          (_, (_, i)) ->
+            case go2 i t ts of
+              (trm, ts') -> go (IM.insert i trm m) ts'
+    makevar i' i = T.Nullary (if fst (br IM.! i') == i then var 0 else var 1)
+    go2 i' (T.Nullary (Var _, (_, i))) ts = (makevar i' i, ts)
+    go2 i' t ts = case T.rootLabel t of
+                    (l, (vc, i))
+                      | vc < 2 || i == i' -> first' (T.node l)
+                                          $ fold (go2 i') (T.subForest t) ts
+                      | otherwise -> (makevar i' i, t : ts)
       where
         fold _ [] ts0 = ([], ts0)
         fold f (c : cs) ts0 = let (c1, ts1) = f c ts0
@@ -275,7 +277,7 @@ cumu a (x : xs) = let x' = a + x in x' : cumu x' xs
 
 strrr :: RegRep StrLabel StrLabel
 strrr sc@StrConst{} []
-  = WTA 0
+  = WTA 1
   $ Hypergraph 3
   $ [ mkHyperedge 0 [] (NV StrConcat) ()     -- [0,0] -> eps
     , mkHyperedge 2 [] (NV StrConcat) ()     -- [1,1] -> eps
@@ -286,6 +288,38 @@ strrr sc@StrConst{} []
     , mkHyperedge 2 [2, 2] (NV StrConcat) () -- [1,1] -> [1,1]*[1,1]
     ]
 strrr sc@StrConcat tas
+  = WTA (st (0, k))
+  $ Hypergraph (last bnds)
+  $ concat
+  $ [ [ mkHyperedge (st (i, j)) [st (i, i'), st (i', j)] (NV sc) ()
+      | i <- [0 .. k], i' <- [i + 1 .. k], j <- [i' + 1 .. k]
+      ]
+    ]
+    ++ 
+    [ edges $ transitions $ rene b (st (i - 1, i)) ta
+    | (i, b, ta) <- zip3 [1 ..] bnds tas
+    ]
+  where
+    k = length tas
+    ix = ((0, 0), (k, k))
+    bnd = Ix.rangeSize ix
+    bnds = cumu bnd $ 0 : map (nodes . transitions) tas
+    st ij = Ix.index ix ij
+strrr _ _ = error "String constants must be nullary"
+
+strrr' :: RegRep StrLabel StrLabel
+strrr' sc@StrConst{} []
+  = WTA 1
+  $ Hypergraph 3
+  $ [ mkHyperedge 0 [] (NV StrConcat) ()     -- [0,0] -> eps
+    , mkHyperedge 2 [] (NV StrConcat) ()     -- [1,1] -> eps
+    , mkHyperedge 1 [] (NV sc) ()            -- [0,1] -> i
+    , mkHyperedge 0 [0, 0] (NV StrConcat) () -- [0,0] -> [0,0]*[0,0]
+    , mkHyperedge 1 [0, 1] (NV StrConcat) () -- [0,1] -> [0,0]*[0,1]
+    , mkHyperedge 1 [1, 2] (NV StrConcat) () -- [0,1] -> [0,1]*[1,1]
+    , mkHyperedge 2 [2, 2] (NV StrConcat) () -- [1,1] -> [1,1]*[1,1]
+    ]
+strrr' sc@StrConcat tas
   = WTA (st (0, k))
   $ Hypergraph (last bnds)
   $ concat
@@ -304,7 +338,7 @@ strrr sc@StrConcat tas
     bnd = Ix.rangeSize ix
     bnds = cumu bnd $ 0 : map (nodes . transitions) tas
     st ij = Ix.index ix ij
-strrr _ _ = error "String constants must be nullary"
+strrr' _ _ = error "String constants must be nullary"
 
 
 data TreeLabel = TreeConcat !Int | ForestLeft | ForestRight | ForestEmpty
@@ -312,32 +346,58 @@ data TreeLabel = TreeConcat !Int | ForestLeft | ForestRight | ForestEmpty
 
 treerr :: RegRep TreeLabel TreeLabel
 treerr tc@TreeConcat{} tas
-  = WTA (st (-1, 0))
-  $ Hypergraph (last bnds)
+  = WTA fin
+  $ Hypergraph (fin + 1)
   $ concat
   $ [ [ transition (i, i) [] ForestEmpty | i <- [0..k] ]
-    , [ transition (i - 1, j) [(-1, i), (i, j)] ForestLeft
-      | i <- [1 .. k], j <- [i .. k]
+    , [ transition (i, j) [(i, i'), (i', j)] ForestLeft  {- (-1, i) -}
+      | i <- [0 .. k], i' <- [i + 1 .. k], j <- [i' + 1 .. k] {- i .. k -}
       ]
-    , [ transition (i, j) [(i, j - 1), (-1, j)] ForestRight
-      | i <- [0 .. k], j <- [i + 1 .. k]
-      ]
-    , [ transition (-1, 0) [(0, k)] tc ]
+    , [ mkHyperedge {- (-1, 0) -} fin [st (0, k)] (NV tc) () ]
     ]
     ++
-    [ edges $ transitions $ rene b (st (-1, i)) ta
+    [ edges $ transitions $ rene b (st (i - 1, i)) ta {- (-1, i) -}
     | (i, b, ta) <- zip3 [1 ..] bnds tas
     ]
   where
     k = length tas
-    ix = ((-1, 0), (k, k))
+    ix = (({- -1 -} 0, 0), (k, k))
     bnd = Ix.rangeSize ix
     bnds = cumu bnd $ 0 : map (nodes . transitions) tas
+    fin = last bnds
     st ij = Ix.index ix ij
     transition q qs l = mkHyperedge (st q) (map st qs) (NV l) ()
 treerr _ _ = error "Only tree concatenation allowed for reg. repr."
 
 
+
+treerr' :: RegRep TreeLabel TreeLabel
+treerr' tc@TreeConcat{} tas
+  = WTA fin
+  $ Hypergraph (fin + 1)
+  $ concat
+  $ [ [ transition (i, i) [] ForestEmpty | i <- [0..k] ]
+    , [ transition (i - 1, j) [(i - 1, i), (i, j)] ForestLeft  {- (-1, i) -}
+      | i <- [1 .. k], j <- [i + 1 .. k] {- i .. k -}
+      ]
+    , [ transition (i, j) [(i, j - 1), (j - 1, j)] ForestRight {- (-1, j) -}
+      | i <- [0 .. k], j <- [i + 2 .. k] {- i + 1 .. k -}
+      ]
+    , [ mkHyperedge {- (-1, 0) -} fin [st (0, k)] (NV tc) () ]
+    ]
+    ++
+    [ edges $ transitions $ rene b (st (i - 1, i)) ta {- (-1, i) -}
+    | (i, b, ta) <- zip3 [1 ..] bnds tas
+    ]
+  where
+    k = length tas
+    ix = (({- -1 -} 0, 0), (k, k))
+    bnd = Ix.rangeSize ix
+    bnds = cumu bnd $ 0 : map (nodes . transitions) tas
+    fin = last bnds
+    st ij = Ix.index ix ij
+    transition q qs l = mkHyperedge (st q) (map st qs) (NV l) ()
+treerr' _ _ = error "Only tree concatenation allowed for reg. repr."
 
 
 
@@ -375,9 +435,7 @@ data IRTG l i = IRTG
                 { rtg :: IntHypergraph l i
                 , 
 -}
-
--- trick: initialize gigamap so that emptyset and singletons are clear
-
+{-
 instance Ord l => Ord (T.Tree l) where
   T.Node l1 ts1 `compare` T.Node l2 ts2
     = case (l1 `compare` l2, ts1 `compare` ts2) of
@@ -385,6 +443,9 @@ instance Ord l => Ord (T.Tree l) where
         (EQ, LT) -> LT
         (EQ, EQ) -> EQ
         _ -> GT
+-}
+
+-- trick: initialize gigamap so that emptyset and singletons are clear
 
 binarizeXRS :: IRTG Int -> IRTG Int
 binarizeXRS irtg@IRTG{ .. }
@@ -396,7 +457,8 @@ binarizeXRS irtg@IRTG{ .. }
     h2c <- newSTRef (0 :: Int)
     virt <- newSTRef M.empty
     vc <- newSTRef $ nodes $ rtg
-    let register :: Ord v => STRef s (M.Map v Int) -> STRef s Int -> (Int -> ST s ()) -> v -> ST s Int
+    let noact = \ _ -> return ()
+        register :: (Show v, Ord v) => STRef s (M.Map v Int) -> STRef s Int -> (Int -> ST s ()) -> v -> ST s Int
         register h hc act v = do
           mb <- fmap (M.lookup v) $ readSTRef h
           case mb of
@@ -409,8 +471,9 @@ binarizeXRS irtg@IRTG{ .. }
             Just i -> return i
         takeover e = case label e of
           SIP ti0 si0 -> do
-            ti <- register newh1 h1c (\ _ -> return ()) $ fmap h1convert $ h1 V.! ti0
-            si <- register newh2 h2c (\ _ -> return ()) $ T.Node (NV StrConcat) . map h2cv $ h2 V.! si0
+            ti <- register newh1 h1c noact $ fmap h1convert $ h1 V.! ti0
+            si <- register newh2 h2c noact
+                  $ T.Node (NV StrConcat) . map h2cv $ h2 V.! si0
             modifySTRef' tr (e{ label = SIP ti si } :)
     forM_ (edges rtg) $ \ e ->
       case e of
@@ -421,7 +484,7 @@ binarizeXRS irtg@IRTG{ .. }
               (fswta, samap, _, _)      = forwMskel gm1 gmi1 swta
               inter = inters ftwta fswta
               options (WTA fs tr_) = (A.! fs) $ knuth tr_ (\ _ _ _ -> 1.0)
-              choose = derivToTree . deriv . head
+              choose = fmap label . deriv . head
               cand = choose (options inter)
               bran = extractBranches IM.empty [cand]
               (tbran, tback) = backMskel tamap twta bran
@@ -430,19 +493,26 @@ binarizeXRS irtg@IRTG{ .. }
               stree = choose (options sback)
               tmap = dissect tbran ttree
               smap = dissect sbran stree
-              go (T.Node i []) = return $ e `deref` (i - 1)
-              go (T.Node i cs@[_, _]) = do
-                vs@[v1, v2] <- mapM go cs
-                ti <- register newh1 h1c (\ _ -> return ()) $ tmap IM.! i
-                si <- register newh2 h2c (\ _ -> return ()) $ smap IM.! i
-                v <- flip (register virt vc) (ti, si, v1, v2)
-                     $ \ v -> modifySTRef' tr
-                                (mkHyperedge v vs (SIP ti si) (-1) :)
-                return v
-              go _ = error "Tree not BINARY"
+              go False (T.Nullary i) = return $ e `deref` (i - 1)
+              go atroot (T.Binary i c1 c2) = do
+                -- vs@[v1, v2] <- mapM (go False) cs
+                v1 <- go False c1
+                v2 <- go False c2
+                ti <- register newh1 h1c noact $ tmap IM.! i
+                si <- register newh2 h2c noact $ smap IM.! i
+                if atroot
+                  then let v = to e in do
+                    modifySTRef' tr (Binary v v1 v2 (SIP ti si) (ident e) :)
+                    return v
+                  else do
+                    v <- flip (register virt vc) (ti, si, v1, v2)
+                         $ \ v -> modifySTRef' tr
+                                    (Binary v v1 v2 (SIP ti si) (-1) :)
+                    return v
+              go _ _ = error "Tree not BINARY2"
           in case options inter of
                [] -> takeover e
-               os -> go (choose os) >> return ()
+               os -> go True (choose os) >> return ()
         _ -> takeover e
     nodes <- readSTRef vc
     edges <- readSTRef tr
@@ -453,25 +523,26 @@ binarizeXRS irtg@IRTG{ .. }
     let h1new = V.fromList $ A.elems $ A.array (0, h1c_ - 1)
                 $ map (swap . first' (fmap h1cc)) $ M.toList h1_
     let h2new = V.fromList $ A.elems $ A.array (0, h2c_ - 1)
-                $ map (swap . first' (map h2cc . T.subForest)) $ M.toList h2_
+                $ map (swap . first' h2cc) $ M.toList h2_
     return irtg{ rtg = Hypergraph{ .. }, h1 = h1new, h2 = h2new } 
   where
     gm0 = M.fromList
         $ (IS.empty, 0) : [ (IS.singleton i, i + 1) | i <- [ 0 .. 99 ] ]
     gmi0 = M.size gm0
     h1term = (V.map (regrep treerr . fmap h1convert) h1 V.!)
-    h1convert (NT i) = Var i
+    h1convert (NT i) = var i
     h1convert (T i) = NV (TreeConcat i)
     h2term = (V.map (regrep strrr . T.Node (NV StrConcat) . map h2cv) h2 V.!)
-    h2cv (NT i) = T.Node (Var i) []
+    h2cv (NT i) = T.Node (var i) []
     h2cv (T i) = T.Node (NV (StrConst i)) []
-    h1cc (Var i) = NT i
-    h1cc (NV (TreeConcat i)) = T i
+    h1cc (Var i) = nt i
+    h1cc (NV (TreeConcat i)) = tt i
     h1cc (NV ForestEmpty) = T (-1)
     h1cc (NV ForestLeft) = T (-2)
     h1cc (NV ForestRight) = T (-3)
-    h2cc (T.Node (Var i) []) = NT i
-    h2cc (T.Node (NV (StrConst i)) []) = T i
+    h2cc (T.Node (Var i) []) = [nt i]
+    h2cc (T.Node (NV (StrConst i)) []) = [tt i]
+    h2cc (T.Node (NV StrConcat) cs) = concatMap h2cc cs
     h2cc _ = error "should not happen"
     swap (x, y) = (y, x)
 
@@ -489,8 +560,7 @@ main = do
       irtg@IRTG{ .. } :: IRTG Int
         <- fmap (B.decode . decompress) $ B.readFile (zhgFile ++ ".bhg.gz")
       let birtg = binarizeXRS irtg
-      B.writeFile (zhgFile ++ "bin.bhg.gz") $ compress $ B.encode birtg 
-
+      B.writeFile (zhgFile ++ ".bin.bhg.gz") $ compress $ B.encode birtg
 
 {-
 main :: IO ()
@@ -520,13 +590,13 @@ main = let swta = regrep strrr
            ttree = choose (options tback)
        in do
             -- putStrLn $ myshow swta
-            -- putStrLn $ myshow twta
+            putStrLn $ myshow twta
             -- putStrLn $ myshow inter
             -- putStrLn $ myshow sback
             -- putStrLn $ myshow tback
             -- print $ choose inter
-            print $ stree
-            print $ dissect sswap stree
+            -- print $ stree
+            -- print $ dissect sswap stree
             print $ ttree
             print $ dissect tswap ttree
      -- $ relab [ [1, 2, 3], [4, 5, 6], [7, 8, 9] ]

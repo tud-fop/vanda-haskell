@@ -59,12 +59,12 @@ import qualified Data.List as L ( foldl' )
 import qualified Data.Map.Strict as MS
 import qualified Data.Queue as Q
 import Data.STRef
-import qualified Data.Tree as T
 import qualified Data.Vector.Unboxed as VU
 
 -- import Debug.Trace
 
 import Vanda.Util
+import qualified Vanda.Hypergraph.Tree as T
 
 -- | A Hyperedge, consisting of head node, tail nodes, label, and identifier.
 -- The identifier can be used for interfacing with feature functions.
@@ -335,7 +335,7 @@ topCC
 topCC feat e cs
   = Candidate
       (feat (label e) (ident e) $ map weight cs)
-      (T.Node e $ map deriv cs)
+      (T.node e $ map deriv cs)
 
 
 -- | Heap type used to efficiently flatten the merge data structure.
@@ -364,16 +364,16 @@ knuth hg@(Hypergraph vs es) feat = STA.runSTArray $ do
   let upd' v c = do
         modifySTRef' candH $ H.insert c
         AB.unsafeWrite bestA v [c]
-      upd c@(Candidate w (T.Node e _)) = let v = to e in do
+      upd c@(Candidate w d) = let v = to (T.rootLabel d) in do
         cs <- AB.unsafeRead bestA v
         case cs of
           [] -> upd' v c
           Candidate w' _ : _ -> when (w > w') $ upd' v c
       go = do
         viewSTRef' candH H.view (return bestA) $
-          \ (Candidate w (T.Node e _)) -> let v = to e in do
-            Candidate w' (T.Node e' _) : _ <- AB.unsafeRead bestA v
-            when (w == w' && v == to e') $ do
+          \ (Candidate w d) -> let v = to (T.rootLabel d) in do
+            Candidate w' d' : _ <- AB.unsafeRead bestA v
+            when (w == w' && v == to (T.rootLabel d')) $ do
               hes <- AB.unsafeRead forwA v
               forM_ hes $ updateHe $ \ e1 -> do
                 scs <- mapM (AB.unsafeRead bestA) $ from e1
