@@ -54,11 +54,9 @@ subst ts (T.Nullary (NT i)) = ts !! i
 subst ts t = case T.rootLabel t of
                T _ -> T.mapChildren (subst ts) t
 
-nttToString :: TokenArray -> TokenArray -> T.Tree NTT -> T.Tree String
-nttToString ta na (T.Node (T i) ts)
-  = T.Node (if i < 0 then "@" else getString ta i) (map (nttToString ta na) ts)
-nttToString ta na (T.Node (NT i) ts)
-  = T.Node (getString na i) (map (nttToString ta na) ts) 
+nttToString :: TokenArray -> TokenArray -> NTT -> String
+nttToString ta _ (T i) = if i < 0 then "@" else getString ta i
+nttToString _ na (NT i) = getString na i 
 
 getTerminals :: Ord t => WSA.WSA Int t Double -> S.Set t
 getTerminals = S.fromList . map WSA.transTerminal . WSA.transitions
@@ -78,7 +76,7 @@ main = do
   args <- getArgs
   case args of
     ["-z", zhgFile, "-s", statFile] -> do
-      irtg@IRTG{ .. } :: IRTG Int
+      IRTG{ .. } :: IRTG Int
         <- fmap (B.decode . decompress) $ B.readFile (zhgFile ++ ".bhg.gz")
       ws :: V.Vector Double
         <- fmap (V.fromList . B.decode . decompress)
@@ -91,7 +89,7 @@ main = do
       let stat = compute (edges rtg)
       TIO.writeFile statFile $ T.unlines $ map (T.pack . show) $ stat
     ["-z", zhgFile, "-s2", statFile] -> do
-      irtg@IRTG{ .. } :: IRTG Int
+      IRTG{ .. } :: IRTG Int
         <- fmap (B.decode . decompress) $ B.readFile (zhgFile ++ ".bhg.gz")
       TIO.writeFile statFile $ T.unlines $ concat
         $ [ map (T.pack . show) (edges rtg)
@@ -99,7 +97,7 @@ main = do
           , map (T.pack . show) (V.toList h2)
           ]
     ["-e", eMapFile, "-f", fMapFile, "-z", zhgFile] -> do
-      irtg@IRTG{ .. } :: IRTG Int
+      IRTG{ .. } :: IRTG Int
         <- fmap (B.decode . decompress) $ B.readFile (zhgFile ++ ".bhg.gz")
       ws :: V.Vector Double
         <- fmap (V.fromList . B.decode . decompress)
@@ -118,7 +116,7 @@ main = do
           (mm, ip, _) = earley rrtg comp wsa fst 7
           feat _ i xs = (if i < 0 then 1 else ws V.! i) * product xs
           ba = knuth ip feat
-      print $ map (nttToString em em . derivToTree ((h1 V.!) . _fst) . deriv)
+      print $ map (fmap (nttToString em em) . derivToTree ((h1 V.!) . _fst) . deriv)
             $ ba A.! (mm M.! (0, 7, fst . head . WSA.finalWeights $ wsa))
     ["-e", eMapFile, "-f", fMapFile, "-g", grammarFile, "-z", zhgFile] -> do
       emf <- TIO.readFile eMapFile
