@@ -248,7 +248,7 @@ inters (WTA fs1 h1@(Hypergraph vs1 tr1)) (WTA fs2 h2@(Hypergraph vs2 tr2))
          , arity e1 == arity e2
          , let ll = label e1
          , ll == label e2
-         ] 
+         ]
 
 type Branches = IM.IntMap (Int, Int)
 

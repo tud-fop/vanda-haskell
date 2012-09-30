@@ -35,3 +35,7 @@ mapChildren f t = case t of
                     Unary{ .. } -> t{ sub1 = f sub1 }
                     Binary{ .. } -> t{ sub1 = f sub1, sub2 = f sub2 }
                     Node{ .. } -> t{ _subForest = map f _subForest }
+
+front :: Tree l -> [l]
+front Nullary{ .. } = [rootLabel]
+front t = concatMap front $ subForest t
