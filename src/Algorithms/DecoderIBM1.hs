@@ -23,6 +23,7 @@ import System.Directory (doesFileExist)
 import System.Environment (getArgs)
 import System.IO
 import System.Posix.Signals
+import Text.Printf (printf)
 
 import qualified Algorithms.EMDictionaryIntMap as Dict
 import Tools.Timestamps
@@ -32,7 +33,8 @@ data Hypothesis = Hypothesis
   { hLen        :: Int
   , hTrans      :: [Int]
   , hPNGrams    :: Double
-  , hP          :: Double
+  , hPIncomplete:: Double
+  , hPComplete  :: Double
   , hCandidates :: IM.IntMap Int
   } deriving Show
 
@@ -77,6 +79,7 @@ expandH m pWordF fLen fs h e
       (hTrans h ++ [e])
       (hPNGrams h +{-*-} log (mPNGram m [last ((-1) : hTrans h)] e))
       undefined
+      undefined
       (IM.update updt e $ hCandidates h)
   where
     updt i | i <= 1    = Nothing
@@ -86,9 +89,10 @@ expandH m pWordF fLen fs h e
 updateHP
   :: Model -> (Int -> Double) -> Int -> [Int] -> Hypothesis -> Hypothesis
 updateHP m pWordF fLen fs h
-  = h { hP
-      = hPNGrams h +{-*-} maximum{-sum-}
-        [ mPLen m fLen l +{-*-} sum{-product-}
+  = h { hPIncomplete
+      = hPNGrams h + log (1 - mPNGram m [last ((-1) : hTrans h)] (-1))
+      + maximum
+        [ mPLen m fLen l + sum
             [ log
             $ sum [ mPAlign m l fLen i j * mPTrans m e f
                   | (e, i) <- zip (hTrans h) [1 .. hLen h]
@@ -100,6 +104,15 @@ updateHP m pWordF fLen fs h
             ]
         | l <- [hLen h .. 2 * fLen]
         ]
+      , hPComplete
+      = hPNGrams h + log (mPNGram m [last ((-1) : hTrans h)] (-1))
+      + mPLen m fLen (hLen h)
+      + sum [ log
+            $ sum [ mPAlign m (hLen h) fLen i j * mPTrans m e f
+                  | (e, i) <- zip (hTrans h) [1 .. hLen h]
+                  ]
+            | (f, j) <- zip fs [1 .. fLen]
+            ]
       }
 
 
@@ -122,7 +135,7 @@ pAddOneSmoothedNestedMaps m0
 decode m fs = (heaps)
   where
     h0 = updateHP m pWordF fLen fs
-       $ Hypothesis 0 [] (log 1) undefined
+       $ Hypothesis 0 [] (log 1) undefined undefined
        $ IM.fromListWith (+) $ concatMap (map (\ x -> (x, 1)) . candidateE) fs
     fLen = length fs
     pWordF = (pWordFArray m fs IM.!)
@@ -134,11 +147,14 @@ decode m fs = (heaps)
                  $ M.findWithDefault M.empty f mTransSwapped
     for :: a -> [b] -> (a -> b -> a) -> a
     for z xs f = L.foldl' f z xs
-    heaps = take (2 * fLen) $ iterate step $ phSingleton 20 (hP h0) h0
-    step ph0 = for (phEmpty 20) (phElems ph0) $ \ ph1 h ->
-                 for ph1 (IM.keys $ hCandidates h) $ \ ph2 e ->
-                   let h' = expandH m pWordF fLen fs h e
-                   in phInsert (hP h') h' ph2
+    heaps = take (2 * fLen) $ iterate step $ (\x -> (x, x)) $ phSingleton 20 (hPIncomplete h0) h0
+    step (ph0, trans0)
+      = for (phEmpty 20, phEmpty 20) (phElems ph0) $ \ x h ->
+          for x (IM.keys $ hCandidates h) $ \ (ph1, trans1) e ->
+            let h' = expandH m pWordF fLen fs h e
+            in ( phInsert (hPIncomplete h') h' ph1
+               , phInsert (hPComplete   h') h' trans1
+               )
 
 
 newtype FlipOrd a = FlipOrd { unflipOrd :: a } deriving (Eq)
@@ -252,13 +268,14 @@ mainDecode df = do
     putStrLn sentence
     putStrLn ""
     forM_ (decode model $ map unlexi $ words sentence) $ \ ph -> do
-      forM_ (phElems ph) $ \ h -> do
-        putStr "exp "
-        putStr $ show $ hP h
-        putStr " = "
-        putStr $ show $ exp $ hP h
-        putStr $ ": "
-        putStrLn $ unwords $ map (lexiconE !) (hTrans h)
+      forM_ (take 10 $ L.sortBy (compare `on` FlipOrd . hPComplete) $ phElems $ snd ph) $ \ h -> do
+        void $ printf "exp %10.3g = %10.3g / exp %10.3g = %10.3g: %s"
+          (hPIncomplete h)
+          (exp $ hPIncomplete h)
+          (hPComplete h)
+          (exp $ hPComplete h)
+          (unwords $ map (lexiconE !) (hTrans h))
+        putStrLn ""
       putStrLn ""
   where
     load file m = do printTimestamp
