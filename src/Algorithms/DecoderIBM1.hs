@@ -36,6 +36,8 @@ data Hypothesis = Hypothesis
   , hPIncomplete:: Double
   , hPComplete  :: Double
   , hCandidates :: IM.IntMap Int
+  , hCachePLen  :: [Double]
+  , hCachePTrans:: [[Double]]
   } deriving Show
 
 
@@ -73,46 +75,39 @@ expandH
   -> Int
   -> Hypothesis
 expandH m pWordF fLen fs h e
-  = updateHP m pWordF fLen fs
-  $ Hypothesis
-      (hLen h + 1)
-      (hTrans h ++ [e])
-      (hPNGrams h +{-*-} log (mPNGram m [last ((-1) : hTrans h)] e))
-      undefined
-      undefined
-      (IM.update updt e $ hCandidates h)
+  = updateHP m
+  $ h { hLen         = len
+      , hTrans       = hTrans h ++ [e]
+      , hPNGrams     = hPNGrams h + log (mPNGram m [last ((-1) : hTrans h)] e)
+      , hPIncomplete = undefined
+      , hPComplete   = undefined
+      , hCandidates  = IM.update updt e $ hCandidates h
+      , hCachePLen   = tail (hCachePLen h)
+      , hCachePTrans
+        = [ [ max 0 (c - mPAlign m l fLen len j * pWordF f)
+            + mPAlign m l fLen len j * mPTrans m e f
+            | (f, j, c) <- zip3 fs [1 .. fLen] cache
+            ]
+          | (l, cache) <- zip [len .. 2 * fLen] $ tail $ hCachePTrans h
+          ]
+      }
   where
+    len = hLen h + 1
     updt i | i <= 1    = Nothing
            | otherwise = Just (i - 1)
 
 
 updateHP
-  :: Model -> (Int -> Double) -> Int -> [Int] -> Hypothesis -> Hypothesis
-updateHP m pWordF fLen fs h
+  :: Model -> Hypothesis -> Hypothesis
+updateHP m h
   = h { hPIncomplete
-      = hPNGrams h + log (1 - mPNGram m [last ((-1) : hTrans h)] (-1))
-      + maximum
-        [ mPLen m fLen l + sum
-            [ log
-            $ sum [ mPAlign m l fLen i j * mPTrans m e f
-                  | (e, i) <- zip (hTrans h) [1 .. hLen h]
-                  ]
-            + sum [ mPAlign m l fLen i j * pWordF f
-                  | i <- [hLen h + 1 .. l]
-                  ]
-            | (f, j) <- zip fs [1 .. fLen]
-            ]
-        | l <- [hLen h .. 2 * fLen]
-        ]
+        = hPNGrams h + log (1 - mPNGram m [last ((-1) : hTrans h)] (-1))
+        + maximum
+           (zipWith (+) (hCachePLen h) (map (sum . map log) (hCachePTrans h)))
       , hPComplete
-      = hPNGrams h + log (mPNGram m [last ((-1) : hTrans h)] (-1))
-      + mPLen m fLen (hLen h)
-      + sum [ log
-            $ sum [ mPAlign m (hLen h) fLen i j * mPTrans m e f
-                  | (e, i) <- zip (hTrans h) [1 .. hLen h]
-                  ]
-            | (f, j) <- zip fs [1 .. fLen]
-            ]
+        = hPNGrams h + log (mPNGram m [last ((-1) : hTrans h)] (-1))
+        + head (hCachePLen h)
+        + (sum $ map log $ head $ hCachePTrans h)
       }
 
 
@@ -134,9 +129,17 @@ pAddOneSmoothedNestedMaps m0
 -- TODO: Check for underflow
 decode m fs = (heaps)
   where
-    h0 = updateHP m pWordF fLen fs
+    h0 = updateHP m
        $ Hypothesis 0 [] (log 1) undefined undefined
-       $ IM.fromListWith (+) $ concatMap (map (\ x -> (x, 1)) . candidateE) fs
+           (IM.fromListWith (+) $ concatMap (map (\ x -> (x, 1)) . candidateE) fs)
+           [mPLen m fLen l | l <- [0 .. 2 * fLen]]
+           [ [ sum [ mPAlign m l fLen i j * pWordF f
+                   | i <- [1 .. l]
+                   ]
+             | (f, j) <- zip fs [1 .. fLen]
+             ]
+           | l <- [0 .. 2 * fLen]
+           ]
     fLen = length fs
     pWordF = (pWordFArray m fs IM.!)
     mTransSwapped = swapNestedMaps $ mMTrans m
@@ -148,7 +151,7 @@ decode m fs = (heaps)
     for :: a -> [b] -> (a -> b -> a) -> a
     for z xs f = L.foldl' f z xs
     heaps = take (2 * fLen) $ iterate step $ (\x -> (x, x)) $ phSingleton 20 (hPIncomplete h0) h0
-    step (ph0, trans0)
+    step (ph0, _)
       = for (phEmpty 20, phEmpty 20) (phElems ph0) $ \ x h ->
           for x (IM.keys $ hCandidates h) $ \ (ph1, trans1) e ->
             let h' = expandH m pWordF fLen fs h e
@@ -161,6 +164,17 @@ newtype FlipOrd a = FlipOrd { unflipOrd :: a } deriving (Eq)
 
 instance (Ord a) => Ord (FlipOrd a) where
   compare (FlipOrd x) (FlipOrd y) = compare y x
+
+-- ---------------------------------------------------------------------------
+
+exactSum :: [Double] -> Double
+exactSum = go . (0 :) . L.sort
+  where
+    go [x] = x
+    go (x0 : x1 : xs) = go (insert (x0 + x1) xs)
+    go _ = error "DecoderIBM1.exactSum.go: empty list"
+    insert y (x : xs) | y > x = x : insert y xs
+    insert y      xs          = y : xs
 
 -- ---------------------------------------------------------------------------
 
@@ -276,6 +290,8 @@ mainDecode df = do
           (exp $ hPComplete h)
           (unwords $ map (lexiconE !) (hTrans h))
         putStrLn ""
+--         print h
+--         print $ map (map log) (hCachePTrans h)
       putStrLn ""
   where
     load file m = do printTimestamp
