@@ -155,9 +155,8 @@ decode m fs = (heaps)
       = for (phEmpty 20, phEmpty 20) (phElems ph0) $ \ x h ->
           for x (IM.keys $ hCandidates h) $ \ (ph1, trans1) e ->
             let h' = expandH m pWordF fLen fs h e
-            in ( phInsert (hPIncomplete h') h' ph1
-               , phInsert (hPComplete   h') h' trans1
-               )
+            in ((,) $! phInsert (hPIncomplete h') h' ph1)
+                    $! phInsert (hPComplete   h') h' trans1
 
 
 newtype FlipOrd a = FlipOrd { unflipOrd :: a } deriving (Eq)
@@ -178,7 +177,7 @@ exactSum = go . (0 :) . L.sort
 
 -- ---------------------------------------------------------------------------
 
-data PruningHeap k a = PruningHeap Int (M.Map k [a]) deriving Show
+data PruningHeap k a = PruningHeap !Int !(M.Map k [a]) deriving Show
 
 
 phEmpty :: Int -> PruningHeap k a
@@ -186,13 +185,17 @@ phEmpty n = PruningHeap n M.empty
 
 
 phSingleton :: Int -> k -> a -> PruningHeap k a
-phSingleton n k x = PruningHeap n (M.singleton k [x])
+phSingleton n k x = PruningHeap (n - 1) (M.singleton k [x])
 
 
 phInsert :: Ord k => k -> a -> PruningHeap k a -> PruningHeap k a
 phInsert k x (PruningHeap n m)
-  = let m' = M.insertWith (++) k [x] m
-  in PruningHeap n $ if M.size m' > n then M.deleteMin m' else m'
+  | n > 0     = PruningHeap (n - 1) m'
+  | otherwise = PruningHeap n $ M.updateMin updt m'
+  where
+    m' = M.insertWith (++) k [x] m
+    updt (_ : xs@(_ : _)) = Just xs
+    updt _                = Nothing
 
 
 phElems :: PruningHeap k a -> [a]
