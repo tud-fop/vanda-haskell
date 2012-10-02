@@ -127,7 +127,11 @@ pAddOneSmoothedNestedMaps m0
 
 
 -- TODO: Check for underflow
-decode m fs = (heaps)
+decode m fs
+  = ( heaps
+    , L.foldl' (\ ph h -> phInsert (hPComplete h) h ph) (phEmpty 20)
+    $ concatMap (phElems . snd) heaps
+    )
   where
     h0 = updateHP m
        $ Hypothesis 0 [] (log 1) undefined undefined
@@ -284,8 +288,9 @@ mainDecode df = do
 --     print $ pWordFArray model sentence
     putStrLn sentence
     putStrLn ""
-    forM_ (decode model $ map unlexi $ words sentence) $ \ ph -> do
-      forM_ (take 10 $ L.sortBy (compare `on` FlipOrd . hPComplete) $ phElems $ snd ph) $ \ h -> do
+    let (heaps, heap) = first (map snd) $ decode model $ map unlexi $ words sentence
+    forM_ (heaps ++ [heap]) $ \ ph -> do
+      forM_ (take 10 $ L.sortBy (compare `on` FlipOrd . hPComplete) $ phElems ph) $ \ h -> do
         void $ printf "exp %10.3g = %10.3g / exp %10.3g = %10.3g: %s"
           (hPIncomplete h)
           (exp $ hPIncomplete h)
