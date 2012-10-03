@@ -221,6 +221,11 @@ iter back comp wsa mki' v0
                 unless (null (bin t)) (complete2 i)
                 mapM_ (doExtract i) (bin t)
                 go2
+      _ <- register
+             ( fst . head . WSA.initialWeights $ wsa
+             , v0
+             , fst . head . WSA.finalWeights $ wsa
+             )
       mapM_ (enqueue . (: []) . predItem) pv0
       go2
   where

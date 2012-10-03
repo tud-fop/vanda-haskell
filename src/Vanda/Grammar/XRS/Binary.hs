@@ -34,5 +34,5 @@ instance (B.Binary i, NFData i, NFData StrictIntPair)
           rtg <- B.get
           h1 <- rtg `seq` fmap V.fromList B.get
           h2 <- h1 `seq` fmap V.fromList B.get
-          h2 `seq` return $! IRTG { .. }
+          h2 `seq` return $! IRTG { initial = 7, .. } -- FIXME
   put IRTG{ .. } = B.put rtg >> B.put (V.toList h1) >> B.put (V.toList h2)

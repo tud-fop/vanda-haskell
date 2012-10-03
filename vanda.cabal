@@ -111,6 +111,7 @@ library
     , Vanda.Corpus.Penn.Text
     , Vanda.Grammar.Berkeley.Text
     , Vanda.Grammar.XRS.Binary
+    , Vanda.Grammar.XRS.Functions
     , Vanda.Grammar.XRS.IRTG
     , Vanda.Grammar.XRS.Text
     , Vanda.Hypergraph.Binary

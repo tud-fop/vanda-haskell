@@ -17,6 +17,7 @@ data StrictIntPair
 data IRTG i
   = IRTG
     { rtg :: Hypergraph StrictIntPair i
+    , initial :: Int
     , h1 :: V.Vector (T.Tree NTT)
     , h2 :: V.Vector [NTT]
     }

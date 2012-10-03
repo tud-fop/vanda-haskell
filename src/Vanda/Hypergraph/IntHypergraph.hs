@@ -23,6 +23,7 @@ module Vanda.Hypergraph.IntHypergraph
   , deref
   , arity
   , mapHE
+  , mapHEl
   , mapHEi
   , Derivation
   , mkHyperedge
@@ -136,6 +137,12 @@ mapHE g (Nullary t l i) = Nullary (g t) l i
 mapHE g (Unary t f1 l i) = Unary (g t) (g f1) l i
 mapHE g (Binary t f1 f2 l i) = Binary (g t) (g f1) (g f2) l i
 mapHE g (Hyperedge t f l i) = Hyperedge (g t) (VU.map g f) l i
+
+mapHEl :: (l -> l') -> Hyperedge l i -> Hyperedge l' i
+mapHEl g (Nullary t l i) = Nullary t (g l) i
+mapHEl g (Unary t f1 l i) = Unary t f1 (g l) i
+mapHEl g (Binary t f1 f2 l i) = Binary t f1 f2 (g l) i
+mapHEl g (Hyperedge t f l i) = Hyperedge t f (g l) i
 
 mapHEi :: (i -> i') -> Hyperedge l i -> Hyperedge l i'
 mapHEi g (Nullary t l i) = Nullary t l (g i)

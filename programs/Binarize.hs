@@ -1,35 +1,25 @@
-{-# LANGUAGE LiberalTypeSynonyms
-           , ExistentialQuantification
-           , RankNTypes
-           , TupleSections
-           , EmptyDataDecls
-           , RecordWildCards #-}
-
+{-# LANGUAGE TupleSections, RecordWildCards #-}
 module Main where
 
 import Codec.Compression.GZip ( compress, decompress )
 import Control.DeepSeq ( NFData )
-import Control.Monad ( when, unless, forM_, forM, liftM4 )
+import Control.Monad ( when, forM_, forM, liftM4 )
 import Control.Monad.ST
 import qualified Data.Array as A
 import qualified Data.Array.Base as AB
--- import qualified Data.Array.MArray as MA
 import qualified Data.Array.ST as STA
 import qualified Data.Binary as B
 import qualified Data.ByteString.Lazy as B
 import qualified Data.IntMap as IM
 import qualified Data.IntSet as IS
 import qualified Data.Ix as Ix
-import Data.List ( foldl' )
 import qualified Data.Map as M
 import Data.NTT
 import qualified Data.Queue as Q
--- import qualified Data.Set as S
 import Data.STRef
 import qualified Data.Vector as V
-import System.Environment ( getArgs )
-
 -- import Debug.Trace
+import System.Environment ( getArgs )
 
 import Vanda.Grammar.XRS.Binary ()
 import Vanda.Grammar.XRS.IRTG
@@ -46,29 +36,19 @@ data WTA l = WTA
              }
              deriving Show
 
-data BOT -- =
-
 type RegRep l l' = l -> [WTA (Var l')] -> WTA (Var l')
 
 rene :: Int -> Int -> WTA l -> WTA l
 rene i i' (WTA v0 (Hypergraph vs es))
   = WTA (v0 + i) $ Hypergraph (vs + i) (es' ++ map (mapHE (i +)) es)
   where
-    es' = if i' == 0
+    es' = if i' == v0
           then []
           else [ mkHyperedge i' (map (i +) $ from e) (label e) (ident e)
                | e <- es
                , to e == v0
                ]
 
-relab :: [l'] -> WTA l -> WTA (l, l')
-relab ls (WTA v0 (Hypergraph vs es))
-  = WTA v0
-  $ Hypergraph vs
-  $ [ mkHyperedge (to e) (from e) (label e, l') (ident e)
-    | e <- es
-    , l' <- ls
-    ]
 
 varta :: RegRep l l' -> Var l -> [WTA (Var l')] -> WTA (Var l')
 varta _ (Var i) [] = WTA 0 $ Hypergraph 1 [mkHyperedge 0 [] (var i) ()]
@@ -80,9 +60,6 @@ regrep :: RegRep l l' -> T.Tree (Var l) -> WTA (Var l')
 regrep rr = let go t = varta rr (T.rootLabel t) (map go (T.subForest t))
             in go
 
-
-{- chTo :: Int -> Hyperedge l i -> Hyperedge l i
-chTo i e@Nullary{} = e{ to = i } -} 
 
 type GigaMap = M.Map IS.IntSet Int
 
@@ -170,74 +147,13 @@ forwMskel gm_ gmi_ WTA{ .. } = runST $ do
             go
   go
 
+
 inters :: WTA Int -> WTA Int -> WTA Int
-inters (WTA fs1 h1@(Hypergraph vs1 tr1)) (WTA fs2 h2@(Hypergraph vs2 tr2))
-  = WTA (st (fs1, fs2)) $ Hypergraph (Ix.rangeSize ix) $ tr{-runST $ do
-    tr <- newSTRef []
-    forw1 <- computeForwardA h1
-    forw2 <- computeForwardA h2
-    stat <- STA.newArray (0, vs1 - 1) IS.IntSet
-    una1 <- STA.newArray (0, vs1 - 1) []
-            :: ST s (STA.STArray s Int [Hyperedge Int ()])
-    una2 <- STA.newArray (0, vs2 - 1) []
-            :: ST s (STA.STArray s Int [Hyperedge Int ()])
-    bin1 <- STA.newArray (0, vs1 - 1) []
-            :: ST s (STA.STArray s Int [Hyperedge Int ()])
-    bin2 <- STA.newArray (0, vs2 - 1) []
-            :: ST s (STA.STArray s Int [Hyperedge Int ()])
-    q <- newSTRef [ (q1, q2, Nullary (st (q1, q2)) l1 ())
-                  | (Nullary q1 l1 ()) <- tr1
-                  , (Nullary q2 _  ()) <- nul2 IM.! l1
-                  ]
-    let add1 e1@Unary{ to = q1, from1 = q11, label = l1 } = do
-          es1 <- AB.unsafeRead una1 l1
-          AB.unsafeWrite una1 l1 (e1 : es1)
-          es2 <- AB.unsafeRead una2 l1
-          modifySTRef' q
-            $ (++) [ (q1, q2, Unary (st (q1, q2)) (st (q11, q21)) l1 ())
-                   | (Unary q2 q21 _ ()) <- es2
-                   ]
-        add1 e1@Binary{ to = q1, from1 = q11, from2 = q12, label = l1 } = do
-          es1 <- AB.unsafeRead bin1 l1
-          AB.unsafeWrite bin1 l1 (e1 : es1)
-          es2 <- AB.unsafeRead bin2 l1
-          modifySTRef' q $ (++)
-            [ (q1, q2, Binary (st (q1, q2)) (st (q11, q21)) (st (q12, q22)) l1 ())
-            | (Binary q2 q21 q22 _ ()) <- es2
-            ]
-        add2 e2@Unary{ to = q2, from1 = q21, label = l2 } = do
-          es2 <- AB.unsafeRead una2 l2
-          AB.unsafeWrite una2 l2 (e2 : es2)
-          es1 <- AB.unsafeRead una1 l2
-          modifySTRef' q
-            $ (++) [ (q1, q2, Unary (st (q1, q2)) (st (q11, q21)) l2 ())
-                   | (Unary q1 q11 _ ()) <- es1
-                   ]
-        add2 e2@Binary{ to = q2, from1 = q21, from2 = q22, label = l2 } = do
-          es2 <- AB.unsafeRead bin2 l2
-          AB.unsafeWrite bin2 l2 (e2 : es2)
-          es1 <- AB.unsafeRead bin1 l2
-          modifySTRef' q $ (++)
-            [ (q1, q2, Binary (st (q1, q2)) (st (q11, q21)) (st (q12, q22)) l2 ())
-            | (Binary q1 q11 q12 _ ()) <- es1
-            ]
-        go = do
-          lviewSTRef' q (readSTRef tr) $ \ (q1, q2, e) -> do
-            modifySTRef' tr (e :)
-            mapM_ (updateHe add1) =<< AB.unsafeRead forw1 q1
-            AB.unsafeWrite forw1 q1 []
-            mapM_ (updateHe add2) =<< AB.unsafeRead forw2 q2
-            AB.unsafeWrite forw2 q2 []
-            go
-    go-}
+inters (WTA fs1 (Hypergraph vs1 tr1)) (WTA fs2 (Hypergraph vs2 tr2))
+  = WTA (st (fs1, fs2)) $ Hypergraph (Ix.rangeSize ix) tr
   where
     ix = ((0, 0), (vs1 - 1, vs2 - 1))
     st ij = Ix.index ix ij
-    -- nul2 = IM.fromListWith (++) [ (label e, [e]) | e@Nullary{} <- tr2 ]
-    nul2 = foldl' (\m (l, e) -> IM.alter (prep e) l m) IM.empty
-           [ (label e, e) | e@Nullary{} <- tr2 ]
-    prep e Nothing = Just [e]
-    prep e (Just es) = Just (e : es)
     tr = [ mkHyperedge
              (st (to e1, to e2))
              (map st (zip (from e1) (from e2)))
@@ -250,10 +166,8 @@ inters (WTA fs1 h1@(Hypergraph vs1 tr1)) (WTA fs2 h2@(Hypergraph vs2 tr2))
          , ll == label e2
          ]
 
-type Branches = IM.IntMap (Int, Int)
 
--- derivToTree :: Derivation l i -> T.Tree l
--- derivToTree (T.Node e ds) = T.Node (label e) (map derivToTree ds)
+type Branches = IM.IntMap (Int, Int)
 
 extractBranches :: Branches -> [T.Tree Int] -> Branches
 extractBranches !s [] = s
@@ -262,6 +176,7 @@ extractBranches !s (T.Unary{ .. } : ts) = extractBranches s (sub1 : ts)
 extractBranches !s (T.Binary i t1 t2 : ts) = extractBranches
               (IM.insert i (T.rootLabel t1, T.rootLabel t2) s) (t1 : t2 : ts)
 extractBranches _ (T.Node _ _ : _) = error "Tree not BINARY1" 
+
 
 backMskel
   :: AnalMap
@@ -302,6 +217,7 @@ backMskel amap wta@WTA{ transitions = tr@Hypergraph{ .. } } branches
     lu q = snd $ amap IM.! q
     lus q = first' IS.size $ amap IM.! q
 
+
 dissect
   :: Branches -> T.Tree (Var l', (Int, Int)) -> IM.IntMap (T.Tree (Var l'))
 dissect br = go IM.empty . (: [])
@@ -326,11 +242,6 @@ dissect br = go IM.empty . (: [])
                               in (c1 : cs1, ts2)
 
 
-
-
-
-
-
 data StrLabel = StrConcat | StrConst !Int deriving (Eq, Ord, Show)
 
 cumu :: Int -> [Int] -> [Int]
@@ -342,14 +253,6 @@ strrr sc@StrConst{} []
   = WTA 1
   $ Hypergraph 3
   $ [ mkHyperedge 1 [] (NV sc) () ]          -- [0,1] -> i
-  {-[ mkHyperedge 0 [] (NV StrConcat) ()     -- [0,0] -> eps
-    , mkHyperedge 2 [] (NV StrConcat) ()     -- [1,1] -> eps
-    , mkHyperedge 1 [] (NV sc) ()            -- [0,1] -> i
-    , mkHyperedge 0 [0, 0] (NV StrConcat) () -- [0,0] -> [0,0]*[0,0]
-    , mkHyperedge 1 [0, 1] (NV StrConcat) () -- [0,1] -> [0,0]*[0,1]
-    , mkHyperedge 1 [1, 2] (NV StrConcat) () -- [0,1] -> [0,1]*[1,1]
-    , mkHyperedge 2 [2, 2] (NV StrConcat) () -- [1,1] -> [1,1]*[1,1]
-    ]-}
 strrr sc@StrConcat tas
   = WTA (st (0, k))
   $ Hypergraph (last bnds)
@@ -369,39 +272,6 @@ strrr sc@StrConcat tas
     bnds = cumu bnd $ 0 : map (nodes . transitions) tas
     st ij = Ix.index ix ij
 strrr _ _ = error "String constants must be nullary"
-
-strrr' :: RegRep StrLabel StrLabel
-strrr' sc@StrConst{} []
-  = WTA 1
-  $ Hypergraph 3
-  $ [ mkHyperedge 0 [] (NV StrConcat) ()     -- [0,0] -> eps
-    , mkHyperedge 2 [] (NV StrConcat) ()     -- [1,1] -> eps
-    , mkHyperedge 1 [] (NV sc) ()            -- [0,1] -> i
-    , mkHyperedge 0 [0, 0] (NV StrConcat) () -- [0,0] -> [0,0]*[0,0]
-    , mkHyperedge 1 [0, 1] (NV StrConcat) () -- [0,1] -> [0,0]*[0,1]
-    , mkHyperedge 1 [1, 2] (NV StrConcat) () -- [0,1] -> [0,1]*[1,1]
-    , mkHyperedge 2 [2, 2] (NV StrConcat) () -- [1,1] -> [1,1]*[1,1]
-    ]
-strrr' sc@StrConcat tas
-  = WTA (st (0, k))
-  $ Hypergraph (last bnds)
-  $ concat
-  $ [ [ mkHyperedge (st (i, i)) [] (NV sc) () | i <- [0..k] ]
-    , [ mkHyperedge (st (i, j)) [st (i, i'), st (i', j)] (NV sc) ()
-      | i <- [0 .. k], i' <- [i .. k], j <- [i' .. k]
-      ]
-    ]
-    ++ 
-    [ edges $ transitions $ rene b (st (i - 1, i)) ta
-    | (i, b, ta) <- zip3 [1 ..] bnds tas
-    ]
-  where
-    k = length tas
-    ix = ((0, 0), (k, k))
-    bnd = Ix.rangeSize ix
-    bnds = cumu bnd $ 0 : map (nodes . transitions) tas
-    st ij = Ix.index ix ij
-strrr' _ _ = error "String constants must be nullary"
 
 
 data TreeLabel = TreeConcat !Int | ForestLeft | ForestRight | ForestEmpty
@@ -432,81 +302,6 @@ treerr tc@TreeConcat{} tas
     transition q qs l = mkHyperedge (st q) (map st qs) (NV l) ()
 treerr _ _ = error "Only tree concatenation allowed for reg. repr."
 
-
-
-treerr' :: RegRep TreeLabel TreeLabel
-treerr' tc@TreeConcat{} tas
-  = WTA fin
-  $ Hypergraph (fin + 1)
-  $ concat
-  $ [ [ transition (i, i) [] ForestEmpty | i <- [0..k] ]
-    , [ transition (i - 1, j) [(i - 1, i), (i, j)] ForestLeft  {- (-1, i) -}
-      | i <- [1 .. k], j <- [i + 1 .. k] {- i .. k -}
-      ]
-    , [ transition (i, j) [(i, j - 1), (j - 1, j)] ForestRight {- (-1, j) -}
-      | i <- [0 .. k], j <- [i + 2 .. k] {- i + 1 .. k -}
-      ]
-    , [ mkHyperedge {- (-1, 0) -} fin [st (0, k)] (NV tc) () ]
-    ]
-    ++
-    [ edges $ transitions $ rene b (st (i - 1, i)) ta {- (-1, i) -}
-    | (i, b, ta) <- zip3 [1 ..] bnds tas
-    ]
-  where
-    k = length tas
-    ix = (({- -1 -} 0, 0), (k, k))
-    bnd = Ix.rangeSize ix
-    bnds = cumu bnd $ 0 : map (nodes . transitions) tas
-    fin = last bnds
-    st ij = Ix.index ix ij
-    transition q qs l = mkHyperedge (st q) (map st qs) (NV l) ()
-treerr' _ _ = error "Only tree concatenation allowed for reg. repr."
-
-
-
-
--- an IRTG is an IntHypergraph l i together with mappings
--- l -> Data.Tree l'
-{-
-data IntTree
-  = Nullary { label :: !Int }
-  | Unary   { label :: !Int, succ1 :: IntTree }
-  | Binary  { label :: !Int, succ1 :: IntTree, succ2 :: IntTree }
-  | Node    { label :: !Int, succ :: [IntTree] }
-
-mkIntTree :: Int -> [IntTree] -> IntTree
-mkIntTree l s
-  = case s of
-      []       -> Nullary { label = l }
-      [s1]     -> Unary   { label = l, succ1 = s1 }
-      [s1, s2] -> Binary  { label = l, succ1 = s1, succ2 = s2 }
-      _        -> Node    { label = l, succ = s }
-
-
-arity :: IntTree -> Int
-arity Nullary{} = 0
-arity Unary{} = 1
-arity Binary{} = 2
-arity Node{ succ = s } = length s
-
-
-type RegRep = Int -> Int -> IntHypergraph Int ()
-
-
-
-data IRTG l i = IRTG
-                { rtg :: IntHypergraph l i
-                , 
--}
-{-
-instance Ord l => Ord (T.Tree l) where
-  T.Node l1 ts1 `compare` T.Node l2 ts2
-    = case (l1 `compare` l2, ts1 `compare` ts2) of
-        (LT, _) -> LT
-        (EQ, LT) -> LT
-        (EQ, EQ) -> EQ
-        _ -> GT
--}
 
 -- trick: initialize gigamap so that emptyset and singletons are clear
 
@@ -557,7 +352,6 @@ binarizeXRS irtg@IRTG{ .. }
               smap = dissect sbran stree
               go False (T.Nullary i) = return $ e `deref` (i - 1)
               go atroot (T.Binary i c1 c2) = do
-                -- vs@[v1, v2] <- mapM (go False) cs
                 v1 <- go False c1
                 v2 <- go False c2
                 ti <- register newh1 h1c noact $ tmap IM.! i
@@ -616,7 +410,6 @@ fst3 (x, _, _) = x
 myshow WTA { .. } = "Final state: " ++ show finalState ++ "\nTransitions:\n"
                     ++ unlines (map show (edges transitions))
 
-{-
 main :: IO ()
 main = do
   args <- getArgs
@@ -626,8 +419,8 @@ main = do
         <- fmap (B.decode . decompress) $ B.readFile (zhgFile ++ ".bhg.gz")
       let birtg = binarizeXRS irtg
       B.writeFile (zhgFile ++ ".bin.bhg.gz") $ compress $ B.encode birtg
--}
 
+{-
 main :: IO ()
 main = let swta = regrep strrr
                 $ T.Node (NV StrConcat)
@@ -665,4 +458,4 @@ main = let swta = regrep strrr
             -- print $ ttree
             -- print $ dissect tswap ttree
      -- $ relab [ [1, 2, 3], [4, 5, 6], [7, 8, 9] ]
-
+-}
