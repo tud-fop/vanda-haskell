@@ -25,7 +25,7 @@ import System.IO
 import System.Posix.Signals
 import Text.Printf (printf)
 
-import qualified Algorithms.EMDictionaryIntMap as Dict
+import qualified Algorithms.EMDictionary as Dict
 import Tools.Timestamps
 
 

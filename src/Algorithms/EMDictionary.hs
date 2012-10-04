@@ -20,7 +20,7 @@
 --   /Squibs and discussions - Decoding complexity in word-replacement translation models./
 --   Computational Linguistics, 25(4), 1999.
 --   <http://ldc.upenn.edu/acl/J/J99/J99-4005.pdf>
-module Algorithms.EMDictionaryIntMap
+module Algorithms.EMDictionary
 ( train
 , trainInt
 , trainIntAll
