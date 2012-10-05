@@ -119,20 +119,10 @@ main = do
       ws <- loadWeights (zhgFile ++ ".weights.gz")
       em <- loadTokenArray eMapFile
       fm <- loadTokenMap fMapFile
-      let wsa = toWSAmap fm -- "Guten Tag meine Damen und Herren ."
-                -- "-LRB- Das Parlament erhebt sich zu einer Schweigeminute . -RRB-"
-                -- "Zu Montag und Dienstag liegen keine Änderungen vor ."
-                "Es besteht sogar die Gefahr eines Militärputsches ."
-                -- "Frau Präsidentin , zur Geschäftsordnung ."
-                -- "Ich bitte Sie , sich zu einer Schweigeminute zu erheben ."
-                -- "Meine Frage betrifft eine Angelegenheit , die am Donnerstag zur Sprache kommen wird und auf die ich dann erneut verweisen werde ."
-          ip = inputProduct irtg wsa
-          bs = bestDeriv ip ws
-          os = getOutputTree irtg bs
-          st = toString em os
-      putStrLn st
-            -- $ map (fmap (nttToString em em) . derivToTree ((h1 V.!) . _fst) . deriv)
-            -- $ ba A.! (mm M.! (0, 7, fst . head . WSA.finalWeights $ wsa))
+      let translate input
+            = let inp = toWSAmap fm input `inputProduct` irtg
+              in toString em (getOutputTree irtg (bestDeriv inp ws))
+      interact (unlines . map translate . lines)
     ["-e", eMapFile, "-f", fMapFile, "-g", grammarFile, "-z", zhgFile] -> do
       emf <- TIO.readFile eMapFile
       fmf <- TIO.readFile fMapFile

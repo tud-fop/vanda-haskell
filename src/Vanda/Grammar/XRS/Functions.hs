@@ -9,9 +9,9 @@ import qualified Data.Binary as B
 import qualified Data.ByteString.Lazy as B
 import qualified Data.List as L
 import qualified Data.Map as M
-import Data.Maybe ( listToMaybe )
 import Data.NTT
 import qualified Data.Set as S
+import qualified Data.Text.Lazy as T
 import qualified Data.Text.Lazy.IO as TIO
 import qualified Data.Vector as V
 
@@ -25,8 +25,18 @@ import Vanda.Token
 
 instance NFData StrictIntPair
 
+
+loadText :: String -> IO String
+loadText file = fmap (T.unpack . head . T.lines) $ TIO.readFile file
+
+saveText :: String -> String -> IO ()
+saveText text file = TIO.writeFile file (T.pack text)
+
+
 toWSAmap :: TokenMap -> String -> WSA.WSA Int Token Double 
 toWSAmap tm = WSA.fromList 1.0 . map (getToken tm) . L.words
+
+toWSAMap = flip toWSAmap
 
 loadIRTG :: String -> IO (IRTG Int)
 loadIRTG = fmap (B.decode . decompress) . B.readFile
@@ -53,8 +63,8 @@ prune comp s hg
 
 
 
-inputProduct :: IRTG Int -> WSA.WSA Int Int Double -> IRTG Int
-inputProduct irtg@IRTG{ .. } wsa
+inputProduct :: WSA.WSA Int Int Double -> IRTG Int -> IRTG Int
+inputProduct wsa irtg@IRTG{ .. }
   = let comp = ((h2 V.!) . _snd)
         rrtg = dropNonproducing $ prune comp (getTerminals wsa) rtg
         (mm, ip, _) = earley rrtg comp wsa fst initial
@@ -62,16 +72,14 @@ inputProduct irtg@IRTG{ .. } wsa
                            (0, initial, fst . head . WSA.finalWeights $ wsa)
            }
 
-bestDeriv
-  :: IRTG Int -> V.Vector Double -> Maybe (Candidate StrictIntPair Int)
+bestDeriv :: IRTG Int -> V.Vector Double -> [Candidate StrictIntPair Int]
 bestDeriv IRTG{ .. } ws
   = let feat _ i xs = (if i < 0 then 1 else ws V.! i) * product xs
         ba = knuth rtg feat
-    in listToMaybe (ba A.! initial)
+    in ba A.! initial
 
-getOutputTree
- :: IRTG Int -> Maybe (Candidate StrictIntPair Int) -> Maybe (T.Tree Int)
-getOutputTree irtg = fmap (getOutputTree' irtg . deriv)
+getOutputTree :: IRTG Int -> [Candidate StrictIntPair Int] -> [T.Tree Int]
+getOutputTree irtg = map (getOutputTree' irtg . deriv)
 
 getOutputTree' :: IRTG Int -> Derivation StrictIntPair Int -> T.Tree Int
 getOutputTree' irtg@IRTG{ .. } n
@@ -82,9 +90,9 @@ getOutputTree' irtg@IRTG{ .. } n
     subst t = case T.rootLabel t of
                 T i -> T.node i (map subst (T.subForest t))
 
-toString :: TokenArray -> Maybe (T.Tree Int) -> String
-toString _ Nothing = "(no parse)"
-toString ta (Just t) = toString' ta t
+toString :: TokenArray -> [T.Tree Int] -> String
+toString _ [] = "(no parse)"
+toString ta (t : _) = toString' ta t
 
 toString' :: TokenArray -> T.Tree Int -> String
 toString' ta = go
@@ -96,6 +104,4 @@ toString' ta = go
       = "(" ++ gs i ++ " " ++ go t1 ++ " "  ++ go t2 ++ ")"
     go (T.Node i sF)
       = "(" ++ gs i ++ " " ++ (unwords (map go sF)) ++ ")"
-
---      print $ map (fmap (nttToString em em) . derivToTree ((h1 V.!) . _fst) . deriv)
 
