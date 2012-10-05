@@ -49,18 +49,21 @@ import System.Environment (getArgs)
 import System.IO
 
 
-train :: (Ord e, Ord f) => Double -> [([e], [f])] -> [[((e, f), Double)]]
+train
+  :: (Ord e, Ord f) => Double -> [([e], [f])] -> [M.Map e (M.Map f Double)]
 train delta corpus
-  = let (corpus', (eA, fA)) = corpusToInts corpus
-  in map ( map (\ ((e, f), w) -> ((eA A.! e, fA A.! f), w))
-         . assocs
-         ) $ trainInt delta corpus'
+  = map (unIntMap eA . IM.map (unIntMap fA)) $ trainInt delta corpus'
+  where
+    (corpus', (eA, fA)) = corpusToInts corpus
+    unIntMap a = M.fromListWith err . map (first (a A.!)) . IM.toList
+    err _ = error
+           "Algorithms.EMDictionary.train.unIntMap: key mapping not injective"
 
 
-assocs :: IM.IntMap (IM.IntMap Double) -> [((IM.Key, IM.Key), Double)]
+assocs :: M.Map k1 (M.Map k2 a) -> [((k1, k2), a)]
 assocs
-  = concatMap (uncurry $ \ e -> map (\ (f, w) -> ((e, f), w)) . IM.assocs)
-  . IM.assocs
+  = concatMap (uncurry $ \ e -> map (\ (f, w) -> ((e, f), w)) . M.assocs)
+  . M.assocs
 
 
 trainInt
@@ -255,6 +258,7 @@ mainTrain swapLangs delta corpus
     . unzip3
     . fmap (\ ((e, f), w) -> (e, f, show w))
     . filter ((<) 0.1 . snd)
+    . assocs
     . last
     . train delta
     . (if swapLangs then map (\ (a, b) -> (b, a)) else id)
@@ -263,18 +267,22 @@ mainTrain swapLangs delta corpus
 mainSteps :: Double -> String -> IO ()
 mainSteps delta corpus = do
   xs <- fmap (train delta) $ parseCorpus corpus
+  let fullMap = M.map (M.map (const 0)) $ head xs
   putStr
     . unlines
     . map (L.intercalate "\t")
     . (\ (x, y, z) -> [x, y, z])
     . unzip3
     . fmap (\ ((e, f), w) -> (e, f, {-replaceComma $-} show w))
+    . assocs
     $ head xs
   putStr
     . unlines
     . fmap
       ( L.intercalate "\t"
       . fmap ({-replaceComma .-} show . snd)
+      . assocs
+      . M.unionWith (M.unionWith (+)) fullMap
       )
     $ tail xs
 --   where
