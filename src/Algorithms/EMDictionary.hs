@@ -35,7 +35,7 @@ import Control.Arrow
 import Control.Exception (bracket)
 import Control.Monad
 import Control.Monad.ST (ST)
-import qualified Control.Monad.Trans.State.Lazy as StL
+import qualified Control.Monad.Trans.State.Strict as StS
 import qualified Data.Array.Base as AB
 import qualified Data.Array.IArray as A
 import qualified Data.Array.ST.Safe as A
@@ -166,7 +166,7 @@ corpusToArrays corpus = (\ res@(cA, (m, _)) -> cA `seq` m `seq` res) $
                  corpus
   in second inv
   $ first (A.listArray (0, size - 1))
-  $ flip StL.runState (0, IM.empty)
+  $ flip StS.runState (0, IM.empty)
   $ fmap concat $ forM corpus $ \ (es, fs) ->
       let le = length es in
       fmap concat $ forM fs $ \ f ->
@@ -181,13 +181,13 @@ corpusToArrays corpus = (\ res@(cA, (m, _)) -> cA `seq` m `seq` res) $
         )
 
 
-lookupInsert :: Int -> Int -> StL.State (Int, IM.IntMap (IM.IntMap Int)) Int
+lookupInsert :: Int -> Int -> StS.State (Int, IM.IntMap (IM.IntMap Int)) Int
 lookupInsert k1 k2 = do
-  (cnt, m) <- StL.get
+  (cnt, m) <- StS.get
   let m' = IM.findWithDefault IM.empty k1 m
   case IM.lookup k2 m' of
     Nothing -> let cnt' = cnt + 1
-            in cnt' `seq` StL.put (cnt', IM.insert k1 (IM.insert k2 cnt m') m)
+            in cnt' `seq` StS.put (cnt', IM.insert k1 (IM.insert k2 cnt m') m)
             >> return cnt
     Just i  -> return i
 
