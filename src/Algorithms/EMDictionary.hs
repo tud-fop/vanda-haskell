@@ -238,6 +238,8 @@ main = do
       -> mainTrain True (read delta) corpus
     ["csv", delta, corpus]
       -> mainSteps (read delta) corpus
+    ["csvAndBest", delta, corpus, csv]
+      -> mainCsvAndBests (read delta) corpus csv
     ["unzipCorpus", corpus]
       -> mainUnzipCorpus corpus
     ["generate-test-corpus", wordCnt, wordCntPerSentence]
@@ -299,6 +301,13 @@ toCSV (m : ms)
 --     replaceComma "" = ""
 --     replaceComma ('.' : cs) = ',' : cs
 --     replaceComma (c   : cs) = c   : replaceComma cs
+
+
+mainCsvAndBests :: Double -> FilePath -> FilePath -> IO ()
+mainCsvAndBests delta corpus csv = do
+  ms <- fmap (train delta) (parseCorpus corpus)
+  writeFile csv $ toCSV ms
+  putStr $ prettyPrintBests $ last ms
 
 
 mainUnzipCorpus :: FilePath -> IO ()
