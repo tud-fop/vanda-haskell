@@ -312,9 +312,19 @@ toCSV (m : ms)
 
 mainCsvAndBests :: Double -> FilePath -> FilePath -> IO ()
 mainCsvAndBests delta corpus csv = do
-  ms <- fmap (train delta) (parseCorpus corpus)
+  (ms, m) <- fmap (last' . train delta) (parseCorpus corpus)
   writeFile csv $ toCSV ms
-  putStr $ prettyPrintBests $ last ms
+  putStr $ prettyPrintBests m
+
+
+-- | You can consume the resulting list lazily while the last element is
+-- determined.
+-- /Do not use an irrefutable pattern to match the tuple!/
+last' :: [a] -> ([a], a)
+last' = go $ error "last': empty list"
+  where
+    go _ (x : xs) = let (xs', l) = go x xs in (x : xs', l)
+    go s [] = ([], s)
 
 
 mainUnzipCorpus :: FilePath -> IO ()
