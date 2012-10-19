@@ -12,7 +12,7 @@
 module Tools.PrettyPrint
 ( lazyAlign
 , prettyIndentBracktes
-, putStrColumns
+, columnize
 ) where
 
 
@@ -63,10 +63,9 @@ prettyIndentBracktes s
             | otherwise      = (if l then '\n' : indentation i else []) ++ c : pp cs i False
 
 
-putStrColumns :: [String] -> [[String]] -> IO ()
-putStrColumns seps cols
-  = putStr
-  . unlines
+columnize :: [String] -> [[String]] -> String
+columnize seps cols
+  = unlines
   . map concat
   . transpose
   $ columnalign seps cols

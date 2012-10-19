@@ -29,7 +29,7 @@ module Algorithms.EMDictionary
 , corpusToInts
 ) where
 
-import Tools.PrettyPrint (putStrColumns)
+import Tools.PrettyPrint (columnize)
 
 import Control.Arrow
 import Control.Exception (bracket)
@@ -254,39 +254,48 @@ main = do
 mainTrain :: Bool -> Double -> String -> IO ()
 mainTrain swapLangs delta corpus
   = parseCorpus corpus
-  >>= putStrColumns [" | "]
-    . (\ (x, y, z) -> ["e" : x, "f" : y, "p(f|e)" : z])
-    . unzip3
-    . fmap (\ ((e, f), w) -> (e, f, show w))
-    . filter ((<) 0.1 . snd)
-    . assocs
+  >>= putStr
+    . prettyPrintBests
     . last
     . train delta
     . (if swapLangs then map (\ (a, b) -> (b, a)) else id)
 
 
+prettyPrintBests :: M.Map String (M.Map String Double) -> String
+prettyPrintBests
+  = columnize [" | "]
+  . (\ (x, y, z) -> ["e" : x, "f" : y, "p(f|e)" : z])
+  . unzip3
+  . fmap (\ ((e, f), w) -> (e, f, show w))
+  . filter ((<) 0.1 . snd)
+  . assocs
+
+
 mainSteps :: Double -> String -> IO ()
-mainSteps delta corpus = do
-  xs <- fmap (train delta) $ parseCorpus corpus
-  let fullMap = M.map (M.map (const 0)) $ head xs
-  putStr
-    . unlines
+mainSteps delta corpus = parseCorpus corpus >>= putStr . toCSV . train delta
+
+
+toCSV ::(Num a, Show a) => [M.Map String (M.Map String a)] -> String
+toCSV [] = ""
+toCSV (m : ms)
+  = ( unlines
     . map (L.intercalate "\t")
     . (\ (x, y, z) -> [x, y, z])
     . unzip3
     . fmap (\ ((e, f), w) -> (e, f, {-replaceComma $-} show w))
-    . assocs
-    $ head xs
-  putStr
-    . unlines
-    . fmap
+    $ assocs m
+    ) ++
+    ( unlines
+    $ fmap
       ( L.intercalate "\t"
       . fmap ({-replaceComma .-} show . snd)
       . assocs
       . M.unionWith (M.unionWith (+)) fullMap
       )
-    $ tail xs
---   where
+      ms
+    )
+  where
+    fullMap = M.map (M.map (const 0)) m
 --     replaceComma "" = ""
 --     replaceComma ('.' : cs) = ',' : cs
 --     replaceComma (c   : cs) = c   : replaceComma cs
