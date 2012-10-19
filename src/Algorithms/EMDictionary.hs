@@ -245,12 +245,19 @@ main = do
     ["generate-test-corpus", wordCnt, wordCntPerSentence]
       -> mainGenerateTestCorpus (read wordCnt) (read wordCntPerSentence)
     (_:_)
-      -> error "Unknown action or wrong number of arguments."
-    _
-      -> do
-          putStrLn "Expecting an action with its arguments:"
-          putStrLn "  best <maximal delta> <corpus file>"
-          putStrLn "  csv <maximal delta> <corpus file>"
+      -> hPutStr stderr . unlines
+       $ "Unknown action or wrong number of arguments." : "" : helpLines
+    _ -> putStr $ unlines helpLines
+  where
+    helpLines =
+      [ "Expecting an action with its arguments:"
+      , "  best <maximal delta> <corpus file>"
+      , "  bestSwap <maximal delta> <corpus file>"
+      , "  csv <maximal delta> <corpus file>"
+      , "  csvAndBest <maximal delta> <corpus file> <csv output file>"
+      , "  unzipCorpus <corpus file>"
+      , "  generate-test-corpus <type count> <token count per sentence>"
+      ]
 
 
 mainTrain :: Bool -> Double -> String -> IO ()
