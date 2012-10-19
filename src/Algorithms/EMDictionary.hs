@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, Rank2Types #-}
+{-# LANGUAGE BangPatterns, FlexibleContexts, Rank2Types #-}
 
 -- (c) 2011 Toni Dietze <Toni.Dietze@tu-dresden.de>
 --
@@ -42,8 +42,8 @@ import qualified Data.Array.ST.Safe as A
 import qualified Data.Array.Unboxed as A
 import qualified Data.Ix as Ix
 import qualified Data.List as L
-import qualified Data.Map as M
-import qualified Data.IntMap as IM
+import qualified Data.Map.Strict as M
+import qualified Data.IntMap.Strict as IM
 import Data.Tuple (swap)
 import System.Environment (getArgs)
 import System.IO
@@ -186,10 +186,11 @@ lookupInsert k1 k2 = do
   (cnt, m) <- StS.get
   let m' = IM.findWithDefault IM.empty k1 m
   case IM.lookup k2 m' of
-    Nothing -> let cnt' = cnt + 1
-            in cnt' `seq` StS.put (cnt', IM.insert k1 (IM.insert k2 cnt m') m)
+    Nothing -> StS.put (pair (cnt + 1) (IM.insert k1 (IM.insert k2 cnt m') m))
             >> return cnt
     Just i  -> return i
+  where
+    pair !x !y = (x, y)
 
 
 corpusToInts
