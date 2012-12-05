@@ -384,14 +384,14 @@ mainTrainDictionary df = do
     handler varDict = do
       isEmpty <- isEmptySampleVar varDict
       if isEmpty
-      then putStrLnTimestamped "There is no completed training step."
-      else do
-        dict <- readSampleVar varDict
-        putStrLnTimestamped $ "Writing " ++ (dfDictionary df) ++ " ..."
-        writeNestedMaps show show (dfDictionary df)
-          $ fmap intMapToMap
-          $ intMapToMap dict
-        putStrLnTimestamped "... done."
+        then putStrLnTimestamped "There is no completed training step."
+        else do
+          dict <- readSampleVar varDict
+          putStrLnTimestamped $ "Writing " ++ (dfDictionary df) ++ " ..."
+          writeNestedMaps show show (dfDictionary df)
+            $ fmap intMapToMap
+            $ intMapToMap dict
+          putStrLnTimestamped "... done."
     mutexize :: IO a -> IO (IO a)
     mutexize m = do
       mutex <- newMVar ()

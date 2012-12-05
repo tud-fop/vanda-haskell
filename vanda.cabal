@@ -25,7 +25,7 @@ Flag oldContainers
 
 library
   build-depends:
-    array, base >= 4, binary, bytestring, heap, mtl, parsec, random, text, time
+    array, base >= 4, binary, bytestring, directory, heap, mtl, parsec, random, text, time, transformers, unix
   if !flag(oldContainers)
     build-depends: containers >= 0.4.2, deepseq >= 1.2
   else
@@ -33,8 +33,8 @@ library
   exposed-modules:
       Algorithms.CYK
     , Algorithms.CYKExtended
-    , Algorithms.EMDictionaryArray
-    , Algorithms.EMDictionaryIntMap
+    , Algorithms.DecoderIBM1
+    , Algorithms.EMDictionary
     , Algorithms.EMTrees
     , Algorithms.ExpectationMaximization
     , Algorithms.InsideOutsideWeights
@@ -72,27 +72,15 @@ library
     -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
 
 
-Executable vanda-EMDictionaryIntMap
+Executable vanda-EMDictionary
   Build-Depends:
-    array, base >= 4, binary, bytestring, containers, heap, mtl, parsec, random, time
+    array, base >= 4, containers, transformers
   Main-Is:
-    Algorithms/EMDictionaryIntMap.hs
+    Algorithms/EMDictionary.hs
   hs-source-dirs:
     src
   GHC-Options:
-    -main-is Algorithms.EMDictionaryIntMap
-    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-
-
-Executable vanda-EMDictionaryArray
-  Build-Depends:
-    array, base >= 4, binary, bytestring, containers, heap, mtl, parsec, random, time
-  Main-Is:
-    Algorithms/EMDictionaryArray.hs
-  hs-source-dirs:
-    src
-  GHC-Options:
-    -main-is Algorithms.EMDictionaryArray
+    -main-is Algorithms.EMDictionary
     -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
 
 
