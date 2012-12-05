@@ -187,6 +187,3 @@ instance (B.Binary a) => B.Binary (LazyBinaryList a) where
 -- !!! This violates DeepSeq properties  !!!
 instance NFData ParseError where
   rnf _ = ()
-
-instance NFData ByteString where
-  rnf _ = ()
