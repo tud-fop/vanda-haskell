@@ -49,8 +49,8 @@ instance (NFData l, NFData i, B.Binary l, B.Binary i)
     B.put es -- myPut es
   get = do
     vs <- fmap ((+ 1) . snd . nodesL . S.toList) (B.get :: B.Get (S.Set Int))
-    es <- B.get
-    return (Hypergraph vs es)
+    es <- vs `seq` B.get
+    es `seq` return (Hypergraph vs es)
 
 instance B.Binary l => B.Binary (T.Tree l) where
   get = do

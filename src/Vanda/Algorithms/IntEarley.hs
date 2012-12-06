@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 -- (c) 2012 Matthias Büchse <Matthias.Buechse@mailbox.tu-dresden.de>
 --
 -- Technische Universität Dresden / Faculty of Computer Science / Institute
@@ -14,13 +15,14 @@
 -- Stability   :  unbekannt
 -- Portability :  portable
 
-module Vanda.Algorithms.IntEarley ( earley, NTT (..) ) where
+module Vanda.Algorithms.IntEarley ( earley, NTT (..), toBackwardStar, Trie ) where
 
 import Control.Monad ( unless, liftM3, forM_ )
 import Control.Monad.ST
 import Control.Seq
 import qualified Data.Array as A ( array, elems )
 import Data.List ( foldl' )
+import qualified Data.IntMap.Strict as IMS
 import qualified Data.Map as M
 import qualified Data.Map.Strict as MS
 import Data.NTT
@@ -38,24 +40,26 @@ import Vanda.Util
 
 data Trie l i
   = Trie
-    { subTries :: MS.Map NTT (Trie l i)
+    { nextNT :: IMS.IntMap (Trie l i)
+    , nextT :: IMS.IntMap (Trie l i)
     , bin :: [Hyperedge l i]
     }
     deriving Show
 
 emptyTrie :: Trie l i
-emptyTrie = Trie MS.empty []
+emptyTrie = Trie IMS.empty IMS.empty []
 
 addRule :: Hyperedge l i -> [NTT] -> Trie l i -> Trie l i
-addRule e [] t@Trie{ bin = b } = t{ bin = (e : b) }
-addRule e (ntt : ntts) t@Trie{ subTries = sub }
-  = let st = MS.alter f ntt' sub in st `seq` t{ subTries = st }
+addRule e [] t@Trie{ .. } = t{ bin = e : bin }
+addRule e (ntt : ntts) t@Trie{ .. }
+  = case ntt of
+      NT i -> let st = IMS.alter f (e `deref` i) nextNT
+              in st `seq` t{ nextNT = st } 
+      T i -> let st = IMS.alter f i nextT
+             in st `seq` t{ nextT = st }
   where
     f Nothing = Just $ addRule e ntts emptyTrie
     f (Just t') = Just $ addRule e ntts t'
-    ntt' = case ntt of
-      T _  -> ntt
-      NT i -> NT (e `deref` i)
 
 data Item l i p
   = Item 
@@ -112,26 +116,26 @@ toBackwardStar (Hypergraph _ es) f = flip (MS.findWithDefault emptyTrie) a
 
 
 earley
-  :: (Ord p, Ord i, Show p, Show i, Show l)
-  => Hypergraph l i
+  :: (Ord i, Show i, Show l)
+  => (Int -> Trie l i)
   -> (l -> [NTT])
-  -> WSA.WSA p Int Double
+  -> WSA.WSA Int Int Double
   -> ((i, Int) -> i')
   -> Int            -- an initial node of the Hypergraph
-  -> (M.Map (p, Int, p) Int, Hypergraph l i', VU.Vector Double)
+  -> (M.Map (Int, Int, Int) Int, Hypergraph l i', VU.Vector Double)
 earley hg comp wsa mki' v0
   = second3 mkHypergraph
-  $ iter (toBackwardStar hg comp) (comp . label) wsa mki' v0
+  $ iter hg (comp . label) wsa mki' v0
 
 
 iter
-  :: forall l i p i'. (Ord p, Ord i, Show p, Show i, Show l)
+  :: forall l i i'. (Ord i, Show i, Show l)
   => (Int -> Trie l i) 
   -> (Hyperedge l i -> [NTT])
-  -> WSA.WSA p Int Double
+  -> WSA.WSA Int Int Double
   -> ((i, Int) -> i')
   -> Int            -- an initial node of the Hypergraph
-  -> (M.Map (p, Int, p) Int, [Hyperedge l i'], VU.Vector Double)
+  -> (M.Map (Int, Int, Int) Int, [Hyperedge l i'], VU.Vector Double)
 iter back comp wsa mki' v0
   = runST $ do
       iq <- newSTRef Q.empty
@@ -142,28 +146,28 @@ iter back comp wsa mki' v0
       cn <- newSTRef (0 :: Int)
       cn2 <- newSTRef (0 :: Int)
       s2n <- newSTRef (M.empty :: M.Map (p, Int, p) Int) 
-      let enqueue is
-            = (is `using` seqList rseq) `seq` modifySTRef' iq $ Q.enqList is
+      let enqueue !it
+            = {-(is `using` seqList rseq) `seq`-} modifySTRef' iq $ Q.enq it
           modifycm = modifySTRef' cm
-          predscan it@Item{ stateList = p : _ } (ntt, subtrie)
-            = case ntt of
-                NT v -> let pv = (p, v) in do
-                  b <- readSTRefWith (S.member pv) pvs
-                  unless b $ do
-                    modifySTRef' pvs $ S.insert pv
-                    enqueue $ [predItem pv]
-                T t -> enqueue $ scanItem it (p, t) subtrie
-          predscan _ _ = undefined -- can not happen
-          complete1 it@Item{ stateList = p' : _ } (ntt, subtrie)
-            = case ntt of
-                NT v -> let pv = (p', v) in do
-                  mb <- readSTRefWith (M.lookup pv) cm
-                  case mb of
-                    Nothing -> modifycm $ MS.insert pv (S.empty, [it])
-                    Just (ps, _) -> do
-                      enqueue $ map (compItem1 subtrie it) (S.toList ps)
-                      modifycm $ MS.adjust (second' (it :)) pv
-                _ -> return ()
+          predict Item{ stateList = p : _ } (v, _)
+            = let pv = (p, v) in do
+                b <- readSTRefWith (S.member pv) pvs
+                unless b $ do
+                  modifySTRef' pvs $ S.insert pv
+                  enqueue $ predItem pv
+          scan it@Item{ stateList = ps, trie = Trie{ nextT = nt }, weight = w } (t, p', w')
+            = case IMS.lookup t nt of
+                Nothing -> return ()
+                Just tr -> enqueue
+                  $ it{ trie = tr, stateList = p' : ps, weight = w' * w }
+          complete1 it@Item{ stateList = p' : _ } (v, subtrie)
+            = let pv = (p', v) in do
+                mb <- readSTRefWith (M.lookup pv) cm
+                case mb of
+                  Nothing -> modifycm $ MS.insert pv (S.empty, [it])
+                  Just (ps, _) -> do
+                    mapM_ enqueue $ map (compItem1 subtrie it) (S.toList ps)
+                    modifycm $ MS.adjust (second' (it :)) pv
           complete1 _ _ = undefined -- can not happen
           complete2 Item{ stateList = p':_, iHead = v, firstState = p }
             = let pv = (p, v) in do
@@ -171,7 +175,7 @@ iter back comp wsa mki' v0
                 case mb of
                   Nothing -> modifycm $ MS.insert pv (S.singleton p', [])
                   Just (ps, is) -> unless (p' `S.member` ps) $ do
-                    enqueue $ map (compItem2 (NT v) p') is
+                    mapM_ enqueue $ map (compItem2 v p') is
                     modifycm $ MS.adjust (first' (S.insert p')) pv
           complete2 _ = undefined -- can not happen
           mapw w = do
@@ -215,9 +219,12 @@ iter back comp wsa mki' v0
                 (readSTRef ls)
                 (fmap (VU.fromList . A.elems . A.array (0, cn') 
                 . map (\(x,y) -> (y,x)) . M.toList) (readSTRef ws)))
-              $ \ i@Item{ trie = t } -> do
-                forM_ (M.assocs (subTries t)) $
-                  \x -> predscan i x >> complete1 i x
+              $ \ i@Item{ trie = t, stateList = p : _ } -> do
+                forM_ (IMS.assocs (nextNT t)) $
+                  \x -> predict i x >> complete1 i x
+                unless (IMS.null (nextT t)) $
+                  forM_ (IMS.findWithDefault [] p scanMap) $
+                    \x -> scan i x
                 unless (null (bin t)) (complete2 i)
                 mapM_ (doExtract i) (bin t)
                 go2
@@ -226,23 +233,20 @@ iter back comp wsa mki' v0
              , v0
              , fst . head . WSA.finalWeights $ wsa
              )
-      mapM_ (enqueue . (: []) . predItem) pv0
+      mapM_ (enqueue . predItem) pv0
       go2
   where
     pv0 = [ (p, v0) | (p, _) <- WSA.initialWeights wsa ]
-    predItem (p, v) = let t = back v in t `seq` Item v t [p] p 1
-    scanItem it@Item{ stateList = ps, weight = w } pt subtrie
-      = [ it{ trie = subtrie, stateList = p : ps, weight = w' * w }
-        | (p, w') <- M.findWithDefault [] pt scanMap ]
+    predItem (p, v) = let t = back v in Item v t [p] p 1
     compItem1 subtrie i@Item{ stateList = ps } p'
       = i{ stateList = p' : ps, trie = subtrie }
     compItem2 v p' i@Item{ stateList = ps, trie = t }
-      = let t' = subTries t M.! v
+      = let t' = nextNT t IMS.! v
         in t' `seq` i{ stateList = p' : ps, trie = t' } 
     scanMap
-      = M.fromListWith (++)
-          [ ( (WSA.transStateIn t, WSA.transTerminal t)
-            , [(WSA.transStateOut t, WSA.transWeight t)]
+      = IMS.fromListWith (++)
+          [ ( WSA.transStateIn t
+            , [(WSA.transTerminal t, WSA.transStateOut t, WSA.transWeight t)]
             )
           | t <- WSA.transitions wsa
           ]

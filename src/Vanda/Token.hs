@@ -38,22 +38,23 @@ import Control.DeepSeq ( NFData(..) )
 import qualified Data.Array as A
 -- import Data.Word ( Word16 )
 import qualified Data.Map as M
+import qualified Data.Text.Lazy as TS
 import qualified Data.Text.Lazy as T
 
 type Token = Int
-newtype TokenMap = TokenMap { unTokenMap :: M.Map String Token } deriving Show
-newtype TokenArray = TokenArray { unTokenArray :: A.Array Token String }
+newtype TokenMap = TokenMap { unTokenMap :: M.Map TS.Text Token } deriving Show
+newtype TokenArray = TokenArray { unTokenArray :: A.Array Token TS.Text }
 
 instance NFData TokenMap where
   rnf = rnf . M.toList . unTokenMap
 
-getToken :: TokenMap -> String -> Token
+getToken :: TokenMap -> TS.Text -> Token
 getToken = flip (M.findWithDefault (-1)) . unTokenMap
 
-getString :: TokenArray -> Token -> String
+getString :: TokenArray -> Token -> TS.Text
 getString = (A.!) . unTokenArray
 
-updateToken :: TokenMap -> String -> (TokenMap, Token)
+updateToken :: TokenMap -> TS.Text -> (TokenMap, Token)
 updateToken orig@(TokenMap m) s
   = let t' = fromIntegral $ M.size m
         f _ _ = id
@@ -69,27 +70,27 @@ updateToken orig@(TokenMap m) s
 -- | This class provides common operations for 'TokenArray's and 'TokenMap's.
 class TokenStructure t where
   emptyTS :: t -- ^ empty token structure
-  fromText :: T.Text -> t
+  fromText :: TS.Text -> t
   getBounds :: t -> (Token, Token)
   toArray :: t -> TokenArray
   toMap :: t -> TokenMap
-  toText :: t -> T.Text
+  toText :: t -> TS.Text
 
 instance TokenStructure TokenArray where
   emptyTS = TokenArray $ A.array (0,-1) []
   getBounds = A.bounds . unTokenArray
   toText
-    = T.unlines
+    = TS.unlines
     . uncurry (:)
-    . ( T.pack . show . (+1) . snd . A.bounds
-      &&& map T.pack . A.elems )
+    . ( TS.pack . show . (+1) . snd . A.bounds
+      &&& A.elems )
     . unTokenArray
   fromText
     = TokenArray
     . uncurry A.array
-    . ( (,) 0 . (-1+) . read . T.unpack . head
-      &&& zip [0..] . map T.unpack . tail )
-    . T.lines
+    . ( (,) 0 . (-1+) . read . TS.unpack . head
+      &&& zip [0..] . tail )
+    . TS.lines
   toArray = id
   toMap
     = TokenMap . M.fromList . map (snd &&& fst) . A.assocs . unTokenArray
@@ -102,9 +103,9 @@ instance TokenStructure TokenMap where
     = TokenMap
     . M.fromList
     . flip zip [0..]
-    . map T.unpack
+    -- . map TS.unpack
     . tail
-    . T.lines
+    . TS.lines
   toArray
     = TokenArray
     . uncurry A.array

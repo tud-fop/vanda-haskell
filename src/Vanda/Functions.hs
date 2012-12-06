@@ -46,6 +46,7 @@ import qualified Data.Vector.Unboxed as VU
 import Debug.Trace
 import qualified Data.Text.Lazy as TIO
 import qualified Data.Text.Lazy.IO as TIO
+import qualified Data.Text.IO as TSIO
 
 import Vanda.Algorithms.EarleyMonadic ( earley )
 import qualified Vanda.Algorithms.Earley.WSA as WSA
@@ -116,18 +117,17 @@ loadWeights file
     )
   $ B.readFile (file ++ ".weights.gz")
 
-loadText :: String -> IO String
+loadText :: String -> IO TS.Text
 loadText file
-  = fmap (TIO.unpack . head . TIO.lines) $ TIO.readFile file
+  = fmap (head . TSIO.lines) $ TSIO.readFile file
 
 loadTokenMap :: String -> IO TokenMap
 loadTokenMap file
-  = fmap fromText
-  $ TIO.readFile file
+  = fmap fromText $ TSIO.readFile file
 
-loadSentenceCorpus :: String -> IO [String]
+loadSentenceCorpus :: String -> IO [TS.Text]
 loadSentenceCorpus file
-  = fmap (map TIO.unpack . TIO.lines) $ TIO.readFile file
+  = fmap TS.lines $ TSIO.readFile file
 
 
 saveText :: String -> String -> IO ()
