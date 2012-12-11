@@ -27,7 +27,7 @@ import qualified Data.Array as A ( array, elems )
 import qualified Data.Map as M
 import qualified Data.Map.Strict as MS
 import qualified Data.Set as S
-import Data.STRef
+import Data.STRef hiding ( modifySTRef' )
 import qualified Data.Queue as Q
 import qualified Data.Vector as VV
 import qualified Data.Vector.Unboxed as V

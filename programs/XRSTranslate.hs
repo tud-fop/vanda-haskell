@@ -14,11 +14,13 @@ import qualified Data.Text.Lazy.IO as TIO
 import Vanda.Grammar.XRS.Functions
 import System.Environment ( getArgs )
 
+import Debug.Trace ( traceShow )
+
 main :: IO ()
 main = do
   args <- getArgs
   case args of
-    ["-e", eMapFile, "-f", fMapFile, "-z", zhgFile] -> do
+    ["-e", eMapFile, "-f", fMapFile, "-z", zhgFile, "--single"] -> do
       IRTG{ .. } <- loadIRTG (zhgFile ++ ".bhg.gz")
       ws <- loadWeights (zhgFile ++ ".weights.gz")
       em <- loadTokenArray eMapFile
@@ -41,3 +43,22 @@ main = do
 --      TIO.interact (T.unlines . map translate . T.lines)
 --      TIO.interact translate
       TIO.putStr translate
+    ["-e", eMapFile, "-f", fMapFile, "-z", zhgFile] -> do
+      IRTG{ .. } <- loadIRTG (zhgFile ++ ".bhg.gz")
+      ws <- loadWeights (zhgFile ++ ".weights.gz")
+      em <- loadTokenArray eMapFile
+      fm <- loadTokenMap fMapFile
+      inp <- TIO.getContents
+      let translate input = output
+            where
+            wsa = toWSAmap fm input
+            comp = ((h2 V.!) . _snd)
+            -- rrtg = dropNonproducing $ prune comp (getTerminals wsa) rtg
+            (mm, ip, _) = earley (toBackwardStar rtg comp) comp wsa fst initial
+            initial' = mm M.! (0, initial, fst . head . WSA.finalWeights $ wsa)
+            feat _ i xs = (if i < 0 then 1 else ws V.! i) * product xs
+            ba = knuth ip feat
+            best = ba A.! initial'
+            otree = map (getTree' ((h1 V.!) . _fst) . deriv) best
+            output = toString em otree
+      TIO.putStr (T.unlines (map translate (T.lines inp)))

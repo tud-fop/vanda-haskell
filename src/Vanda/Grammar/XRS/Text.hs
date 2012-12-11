@@ -29,9 +29,11 @@ import Vanda.Hypergraph.NFData ()
 import qualified Vanda.Hypergraph.Tree as T
 import Vanda.Util
 
+-- import Debug.Trace ( trace, traceShow )
+
 type GenMapper u s = u -> s -> (u, Int)
 
-type Mapper u = GenMapper u String
+type Mapper u = GenMapper u T.Text
 
 {- instance Ord l => Ord (T.Tree l) where
   T.Node l1 ts1 `compare` T.Node l2 ts2
@@ -55,11 +57,11 @@ parseXRSMap
      , [(Hyperedge StrictIntPair Int, Double)]
      )           -- ^ resulting token structure and hyperedges
 parseXRSMap me ue0 mf uf0 mn un0 gr
-  = lazyMany (p_grammar me' mf' mn' mt' ms') "xrs" u0 (tail $ T.lines gr)
+  = lazyMany (p_grammar me' mf' mn' mt' ms') "xrs" u0 ({-tail $-} T.lines gr)
   where
-    me' = p_map $ liftMapper me in_15 out_15
-    mf' = p_map $ liftMapper mf in_25 out_25
-    mn' = p_map $ liftMapper mn in_35 out_35
+    me' = (p_map $ liftMapper me in_15 out_15) . T.pack
+    mf' = (p_map $ liftMapper mf in_25 out_25) . T.pack
+    mn' = (p_map $ liftMapper mn in_35 out_35) . T.pack
     mt' = p_map $ liftMapper mapit in_45 out_45
     ms' = p_map $ liftMapper mapit in_55 out_55
     u0 = (ue0, uf0, un0, (M.empty, 0), (M.empty, 0))
@@ -80,9 +82,10 @@ lazyMany parser _ ustate contents
   where
     go !u [] = (u, [])
     go !u ((i, x) : xs) =
-      let Right (x', u') = runParser (liftM2 (,) parser getState) u ("line " ++ show i) x
-          (u'', xs') = go u' xs
-      in (u'', x' : xs')
+      case runParser (liftM2 (,) parser getState) u ("line " ++ show i) x of
+        Right (x', u') -> let (u'', xs') = go u' xs
+                          in (u'', x' : xs')
+        Left ed -> error $ show ed
 
 {-
 lazyMany :: GenParser u a -> SourceName -> u -> [T.Text] -> (u, [a])
@@ -115,6 +118,7 @@ p_map mapper !s = do
   setState u'
   return l
 
+-- trace' x = traceShow x x
 
 -- XXX I am using pme throughout because it would be too complicated to
 -- also register root labels with pmn  ---  see {- ! -}
@@ -186,13 +190,16 @@ p_grammar
   -> ([NTT] -> GenParser u Int)
   -> GenParser u (Hyperedge StrictIntPair Int, Double)
 p_grammar pme pmf _ {- ! -} pmt pms = do
-  (t@(T.Node (T i) _), m) <- p_tree pme pme {- ! -}
-  _ <- string "-> "
-  si <- pms =<< p_string pmf
-  _ <- string "||| "
-  w <- p_weight
-  ti <- pmt t
-  return (mkHyperedge i{- ! -} (IM.elems m) (SIP ti si) 0, w)
+  (t, m) <- p_tree pme pme {- ! -}
+  case T.rootLabel t of
+    T i -> do
+      _ <- string "-> "
+      si <- pms =<< p_string pmf
+      _ <- string "||| "
+      w <- p_weight
+      ti <- pmt t
+      return (mkHyperedge i{- ! -} (IM.elems m) (SIP ti si) 0, w)
+    _ -> unexpected "terminal or variable at root"
 
 p_weight :: GenParser u Double
 p_weight

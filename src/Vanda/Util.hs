@@ -28,7 +28,7 @@ module Vanda.Util
 
 import Control.Monad.ST
 import Control.Seq
-import Data.STRef
+import Data.STRef hiding ( modifySTRef' )
 
 first' :: (a -> b) -> (a, c) -> (b, c)
 first' f p = case p of

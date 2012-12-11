@@ -131,5 +131,5 @@ toString' ta = go
     go (T.Binary i t1 t2)
       = TS.concat [lrb, gs i, spa, go t1, spa, go t2, rrb]
     go (T.Node i sF)
-      = TS.concat [lrb, gs i, TS.unwords (map go sF), rrb]
+      = TS.concat [lrb, gs i, spa, TS.unwords (map go sF), rrb]
 
