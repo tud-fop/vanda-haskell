@@ -23,6 +23,7 @@ module Vanda.Util
   , lookupSTRef'
   , lviewSTRef'
   , readSTRefWith
+  , seqEither
   , seqMaybe
   ) where
 
@@ -72,6 +73,11 @@ lviewSTRef' ref n j = do
 
 readSTRefWith :: (a -> b) -> STRef s a -> ST s b
 readSTRefWith f s = readSTRef s >>= (return . f)
+
+
+seqEither :: Strategy a -> Strategy b -> Strategy (Either a b)
+seqEither sa _ (Left a)  = sa a `seq` ()
+seqEither _ sb (Right b) = sb b `seq` ()
 
 
 seqMaybe :: Strategy a -> Strategy (Maybe a)

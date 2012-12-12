@@ -53,6 +53,7 @@ library
     , Vanda.Grammar.XRS.Binarize
     , Vanda.Grammar.XRS.Binary
     , Vanda.Grammar.XRS.Functions
+    , Vanda.Grammar.XRS.GHKM
     , Vanda.Grammar.XRS.IRTG
     , Vanda.Grammar.XRS.Text
     , Vanda.Hypergraph.Binary

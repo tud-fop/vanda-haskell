@@ -145,16 +145,9 @@ main :: IO ()
 main = do 
   args <- getArgs
   case args of
-    {- [] -> do
-      let he = head (B.decode (B.encode (take 500000 (repeat (mkHyperedge (1::Int) [1] (1::Int) (1::Int)))))) :: Hyperedge Int Int Int
-      print he -}
     ["-b", bhgFile] -> do
       el :: EdgeList Token (GHKM Token) Int
-        <- fmap
-           ( B.decode
-           . decompress
-           )
-           $ B.readFile (bhgFile ++ ".bhg.gz")
+        <- fmap (B.decode . decompress) $ B.readFile (bhgFile ++ ".bhg.gz")
       let s1 = S.fromList . map label . edges $ el
       let s2 = S.fromList . map (fst . label) . edges $ el
       let s3 = S.fromList . map (snd . label) . edges $ el
