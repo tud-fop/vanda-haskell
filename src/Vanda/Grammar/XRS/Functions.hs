@@ -12,7 +12,7 @@ import qualified Data.Map as M
 import Data.NTT
 import qualified Data.Set as S
 import qualified Data.Text.Lazy as TS
-import qualified Data.Text.Lazy as T
+-- import qualified Data.Text.Lazy as T
 import qualified Data.Text.Lazy.IO as TIO
 import qualified Data.Text.Lazy.IO as TSIO
 import qualified Data.Vector as V
@@ -29,15 +29,16 @@ instance NFData StrictIntPair
 
 
 loadText :: String -> IO String
-loadText file = fmap (T.unpack . head . T.lines) $ TIO.readFile file
+loadText file = fmap (TS.unpack . head . TS.lines) $ TIO.readFile file
 
 saveText :: String -> String -> IO ()
-saveText text file = TIO.writeFile file (T.pack text)
+saveText text file = TIO.writeFile file (TS.pack text)
 
 
 toWSAmap :: TokenMap -> TS.Text -> WSA.WSA Int Token Double 
 toWSAmap tm = WSA.fromList 1.0 . map (getToken tm) . TS.words
 
+toWSAMap :: TS.Text -> TokenMap -> WSA.WSA Int Token Double
 toWSAMap = flip toWSAmap
 
 loadIRTG :: String -> IO (IRTG Int)
@@ -87,8 +88,8 @@ doInputProduct wsa (irtg@IRTG{ .. }, bs)
 inputProduct :: WSA.WSA Int Int Double -> IRTG Int -> IRTG Int
 inputProduct wsa irtg@IRTG{ .. }
   = let comp = ((h2 V.!) . _snd)
-        rrtg = dropNonproducing $ prune comp (getTerminals wsa) rtg
-        (mm, ip, _) = earley (toBackwardStar rrtg comp) comp wsa fst initial
+        -- rrtg = dropNonproducing $ prune comp (getTerminals wsa) rtg
+        (mm, ip, _) = earley (toBackwardStar rtg comp) comp wsa fst initial
         initial' = mm M.! (0, initial, fst . head . WSA.finalWeights $ wsa)
     in initial' `seq` irtg{ rtg = ip, initial = initial' }
 
@@ -117,9 +118,16 @@ toString :: TokenArray -> [T.Tree Int] -> TS.Text
 toString _ [] = TS.pack "(no parse)"
 toString ta (t : _) = toString' ta t
 
+att :: TS.Text
 att = TS.singleton '@'
+
+lrb :: TS.Text
 lrb = TS.singleton '('
+
+rrb :: TS.Text
 rrb = TS.singleton ')'
+
+spa :: TS.Text
 spa = TS.singleton ' '
 
 toString' :: TokenArray -> T.Tree Int -> TS.Text

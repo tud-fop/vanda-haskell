@@ -282,7 +282,7 @@ data He l i = He !Int !(Hyperedge l i)
 computeForwardA
   :: Hypergraph l i -> ST s (STA.STArray s Int [STRef s (He l i)]) 
 computeForwardA (Hypergraph vs es) = do
-  forwA <- MA.newArray (0, vs + 1) []
+  forwA <- MA.newArray (0, vs - 1) []
   sequence_
     [ do
         he <- newSTRef $! He (arity e) e

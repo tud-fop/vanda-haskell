@@ -1,4 +1,4 @@
--- (c) 2012 Linda Leuschner <Leuschner.Linda@mailbox.tu-dresden.de>
+-- (c) 2012 Matthias Büchse <Matthias.Buechse@tu-dresden.de>
 --
 -- Technische Universität Dresden / Faculty of Computer Science / Institute
 -- of Theoretical Computer Science / Chair of Foundations of Programming

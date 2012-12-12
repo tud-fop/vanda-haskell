@@ -26,9 +26,6 @@ module Vanda.Hypergraph.ForwardStar
   , toEdgeList
   ) where
 
-import Control.Arrow ( (***) )
-import qualified Data.Array as A
-import qualified Data.Ix as Ix
 import qualified Data.Set as S
 import qualified Data.Map as M
 

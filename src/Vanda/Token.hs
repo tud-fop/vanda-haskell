@@ -39,7 +39,7 @@ import qualified Data.Array as A
 -- import Data.Word ( Word16 )
 import qualified Data.Map as M
 import qualified Data.Text.Lazy as TS
-import qualified Data.Text.Lazy as T
+-- import qualified Data.Text.Lazy as T
 
 type Token = Int
 newtype TokenMap = TokenMap { unTokenMap :: M.Map TS.Text Token } deriving Show

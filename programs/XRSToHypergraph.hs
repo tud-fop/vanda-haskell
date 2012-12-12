@@ -1,4 +1,13 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE
+      RecordWildCards
+    , ScopedTypeVariables
+    , TypeSynonymInstances
+    , FlexibleInstances
+    , MultiParamTypeClasses
+    , TypeFamilies
+    , FlexibleContexts
+    , BangPatterns
+    #-}
 module Main where
 
 import Codec.Compression.GZip ( compress, decompress )
@@ -56,75 +65,66 @@ main :: IO ()
 main = do
   args <- getArgs
   case args of
---    ["-z", zhgFile, "-s", statFile] -> do
---      IRTG{ .. } :: IRTG Int
---        <- fmap (B.decode . decompress) $ B.readFile (zhgFile ++ ".bhg.gz")
---      ws :: V.Vector Double
---        <- fmap (V.fromList . B.decode . decompress)
---           $ B.readFile (zhgFile ++ ".weights.gz")
---      print (nodes rtg)
---      print (length (edges rtg))
---      print (V.length h1)
---      print (V.length h2)
---      print (V.length ws)
---      let stat = compute (edges rtg)
---      TIO.writeFile statFile $ T.unlines $ map (T.pack . show) $ stat
---    ["-z", zhgFile, "-s2", statFile] -> do
---      IRTG{ .. } :: IRTG Int
---        <- fmap (B.decode . decompress) $ B.readFile (zhgFile ++ ".bhg.gz")
---      TIO.writeFile statFile $ T.unlines $ concat
---        $ [ map (T.pack . show) (edges rtg)
---          , map (T.pack . show) (V.toList h1)
---          , map (T.pack . show) (V.toList h2)
---          ]
---    ["-e", eMapFile, "-f", fMapFile, "-z", zhgFile, "--convert"] -> do
---      IRTG{ .. } :: IRTG Int
---        <- fmap (B.decode . decompress) $ B.readFile (zhgFile ++ ".bhg.gz")
---      ws :: V.Vector Double
---        <- fmap (V.fromList . B.decode . decompress)
---           $ B.readFile (zhgFile ++ ".weights.gz")
---      em :: TokenArray <- fmap fromText $ TIO.readFile eMapFile
---      fm :: TokenArray <- fmap fromText $ TIO.readFile fMapFile
---      let rules
---            = "[S] ||| [7,1] ||| [7,1] ||| 1.0"
---            : [ "[" ++ show (to e) ++ "] ||| "
---                ++ concat (intersperse " "
---                   [ case x of
---                       NT i -> let Just j = elemIndex i l
---                               in "[" ++ show (from e !! j) ++ "," ++ show (j + 1) ++ "]"
---                       T i -> getString fm i
---                   | x <- lhs
---                   ])
---                ++ " ||| "
---                ++ concat (intersperse " "
---                   [ case x of
---                       NT i -> let j = l !! i
---                               in "[" ++ show (from e !! j) ++ "," ++ show (j + 1) ++ "]"
---                       T i -> if i < 0 then "" else getString em i
---                   | x <- rhs
---                   ])
---                ++ " ||| "
---                ++ show w
---              | e <- edges rtg
---              , arity e <= 2
---              , let lhs = h2 V.! _snd (label e)
---              , lhs /= [NT 0]
---              , let rhs = T.front $ h1 V.! _fst (label e)
---              , let l = [ i | NT i <- lhs ]
---              , let idente = ident e
---              , let w = if idente < 0 then 1.0 else ws V.! idente
---              , w `seq` True
---              ]
---      TIO.writeFile (zhgFile ++ ".joshua") $ T.unlines $ map T.pack rules
---    ["-e", eMapFile, "-f", fMapFile, "-z", zhgFile] -> do
---      irtg <- loadIRTG (zhgFile ++ ".bhg.gz")
---      ws <- loadWeights (zhgFile ++ ".weights.gz")
---      em <- loadTokenArray eMapFile
---      fm <- loadTokenMap fMapFile
---      let translate input
---            = let inp = toWSAmap fm input `inputProduct` irtg
---              in toString em (getOutputTree irtg (bestDeriv inp ws))
---      interact (unlines . map translate . lines)
+    ["-z", zhgFile, "-s", statFile] -> do
+      IRTG{ .. } :: IRTG Int
+        <- fmap (B.decode . decompress) $ B.readFile (zhgFile ++ ".bhg.gz")
+      ws :: V.Vector Double
+        <- fmap (V.fromList . B.decode . decompress)
+           $ B.readFile (zhgFile ++ ".weights.gz")
+      print (nodes rtg)
+      print (length (edges rtg))
+      print (V.length h1)
+      print (V.length h2)
+      print (V.length ws)
+      let stat = compute (edges rtg)
+      TIO.writeFile statFile $ T.unlines $ map (T.pack . show) $ stat
+    ["-z", zhgFile, "-s2", statFile] -> do
+      IRTG{ .. } :: IRTG Int
+        <- fmap (B.decode . decompress) $ B.readFile (zhgFile ++ ".bhg.gz")
+      TIO.writeFile statFile $ T.unlines $ concat
+        $ [ map (T.pack . show) (edges rtg)
+          , map (T.pack . show) (V.toList h1)
+          , map (T.pack . show) (V.toList h2)
+          ]
+    ["-e", eMapFile, "-f", fMapFile, "-z", zhgFile, "--convert"] -> do
+      IRTG{ .. } :: IRTG Int
+        <- fmap (B.decode . decompress) $ B.readFile (zhgFile ++ ".bhg.gz")
+      ws :: V.Vector Double
+        <- fmap (V.fromList . B.decode . decompress)
+           $ B.readFile (zhgFile ++ ".weights.gz")
+      em :: TokenArray <- fmap fromText $ TIO.readFile eMapFile
+      fm :: TokenArray <- fmap fromText $ TIO.readFile fMapFile
+      let rules
+            = ("[S] ||| [" ++ show initial ++ ",1] ||| [" ++ show initial ++ ",1] ||| 1.0")
+            : [ "[" ++ show (to e) ++ "] ||| "
+                ++ concat (intersperse " "
+                   [ case x of
+                       NT i -> let Just j = elemIndex i l
+                               in "[" ++ show (from e !! j) ++ "," ++ show (j + 1) ++ "]"
+                       T i -> T.unpack $ getString fm i
+                   | x <- lhs
+                   ])
+                ++ " ||| "
+                ++ concat (intersperse " "
+                   [ case x of
+                       NT i -> let j = l !! i
+                               in "[" ++ show (from e !! j) ++ "," ++ show (j + 1) ++ "]"
+                       T i -> if i < 0 then "" else T.unpack $ getString em i
+                   | x <- rhs
+                   ])
+                ++ " ||| "
+                ++ show w
+              | e <- edges rtg
+              , arity e <= 2
+              , let lhs = h2 V.! _snd (label e)
+              , lhs /= [NT 0]
+              , let rhs = T.front $ h1 V.! _fst (label e)
+              , let l = [ i | NT i <- lhs ]
+              , let idente = ident e
+              , let w = if idente < 0 then 1.0 else ws V.! idente
+              , w `seq` True
+              ]
+      TIO.writeFile (zhgFile ++ ".joshua") $ T.unlines $ map T.pack rules
     ["-e", eMapFile, "-f", fMapFile, "-g", grammarFile, "-z", zhgFile] -> do
       emf <- TIO.readFile eMapFile
       fmf <- TIO.readFile fMapFile
