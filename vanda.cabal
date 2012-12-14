@@ -49,6 +49,8 @@ library
     , Vanda.Corpus.Negra.NFData
     , Vanda.Corpus.Negra.Text
     , Vanda.Corpus.Penn.Text
+    , Vanda.Grammar.Berkeley.Binary
+    , Vanda.Grammar.Berkeley.IRTG
     , Vanda.Grammar.Berkeley.Text
     , Vanda.Grammar.XRS.Binarize
     , Vanda.Grammar.XRS.Binary
@@ -67,6 +69,7 @@ library
     , Vanda.Hypergraph.Text
     , Vanda.Hypergraph.Tree
     , Data.NTT
+    , Data.NTTBinary
     , Data.Queue
   hs-source-dirs:  src
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind

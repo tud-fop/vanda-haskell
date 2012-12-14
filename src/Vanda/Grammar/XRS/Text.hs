@@ -16,10 +16,13 @@ module Vanda.Grammar.XRS.Text where
 import Control.Applicative ( many )
 import Control.DeepSeq ( NFData )
 import Control.Monad ( liftM2 )
-import Data.IntMap as IM
-import Data.Map as M
+import qualified Data.Array as A
+import qualified Data.IntMap as IM
+import qualified Data.Map as M
 import Data.NTT
+import qualified Data.Set as S
 import qualified Data.Text.Lazy as T
+import qualified Data.Vector as V
 import Text.Parsec hiding ( many )
 import Text.Parsec.Text.Lazy
 
@@ -27,6 +30,7 @@ import Vanda.Grammar.XRS.IRTG
 import Vanda.Hypergraph.IntHypergraph
 import Vanda.Hypergraph.NFData ()
 import qualified Vanda.Hypergraph.Tree as T
+import Vanda.Token
 import Vanda.Util
 
 -- import Debug.Trace ( trace, traceShow )
@@ -86,6 +90,35 @@ lazyMany parser _ ustate contents
         Right (x', u') -> let (u'', xs') = go u' xs
                           in (u'', x' : xs')
         Left ed -> error $ show ed
+
+
+swap :: (a, b) -> (b, a)
+swap (a, b) = (b, a)
+
+
+makeIRTG
+  :: ( ( TokenMap
+       , TokenMap
+       , TokenMap
+       , (M.Map (T.Tree NTT) Int, Int)
+       , (M.Map [NTT] Int, Int)
+       )
+     , [(Hyperedge StrictIntPair Int, Double)]
+     )
+  -> (IRTG Int, [Double], TokenMap, TokenMap, TokenMap)
+makeIRTG ((em, fm, nm, (tm, tmc), (sm, smc)), ews)
+  = let ws = S.toList $ S.fromList $ map snd ews
+        wmap = M.fromList $ zip ws [(0 :: Int) ..]
+        es = [ mapHEi (const (wmap M.! w)) e
+             | (e, w) <- ews
+             ]
+        rtg = mkHypergraph es
+        h1 = V.fromList $ A.elems $ A.array (0, tmc - 1)
+           $ map swap $ M.toList tm
+        h2 = V.fromList $ A.elems $ A.array (0, smc - 1)
+           $ map swap $ M.toList sm
+        initial = getToken em (T.pack "ROOT")
+    in (IRTG { .. }, ws, em, fm, nm) 
 
 {-
 lazyMany :: GenParser u a -> SourceName -> u -> [T.Text] -> (u, [a])

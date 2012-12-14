@@ -39,9 +39,6 @@ import Vanda.Token
 
 import Debug.Trace ( traceShow )
 
-swap :: (a, b) -> (b, a)
-swap (a, b) = (b, a)
-
 compute :: [Hyperedge l i] -> [Int]
 compute _es =
   let
@@ -129,33 +126,20 @@ main = do
       emf <- TIO.readFile eMapFile
       fmf <- TIO.readFile fMapFile
       gf <- TIO.readFile grammarFile
-      case parseXRSMap
+      -- TODO mit ghc deutlich schneller als mit runghc, untersuchen!
+      case makeIRTG $ parseXRSMap
              updateToken
              (fromText emf)
              updateToken
              (fromText fmf)
              updateToken
              (emptyTS :: TokenMap)
-             gf
-        of ((em, fm, nm, (tm, tmc), (sm, smc)), ews) ->
-            let ws = S.toList $ S.fromList $ map snd ews
-                wmap = M.fromList $ zip ws [(0 :: Int) ..]
-                es = [ mapHEi (const (wmap M.! w)) e
-                     | (e, w) <- ews
-                     ]
-                rtg = mkHypergraph es
-                h1 = V.fromList $ A.elems $ A.array (0, tmc - 1)
-                   $ map swap $ M.toList tm
-                h2 = V.fromList $ A.elems $ A.array (0, smc - 1)
-                   $ map swap $ M.toList sm
-                initial = getToken em (T.pack "ROOT")
-                irtg = IRTG { .. } 
-            in do
-                 B.writeFile (zhgFile ++ ".bhg.gz") $ compress $ B.encode irtg 
-                 B.writeFile (zhgFile ++ ".weights.gz") $ compress
-                                                        $ B.encode ws
-                 TIO.writeFile (eMapFile ++ ".new") (toText em)
-                 TIO.writeFile (fMapFile ++ ".new") (toText fm)
-                 TIO.writeFile (zhgFile ++ ".nodes") (toText nm)
+             gf of
+        (irtg, ws, em, fm, nm) -> do
+          B.writeFile (zhgFile ++ ".bhg.gz") $ compress $ B.encode irtg 
+          B.writeFile (zhgFile ++ ".weights.gz") $ compress $ B.encode ws
+          TIO.writeFile (eMapFile ++ ".new") (toText em)
+          TIO.writeFile (fMapFile ++ ".new") (toText fm)
+          TIO.writeFile (zhgFile ++ ".nodes") (toText nm)
     _ -> error $ "Usage: XRSToHypergraph -e eMapFile -f fMapFile "
                  ++ "-g grammarFile -z zhgFile"

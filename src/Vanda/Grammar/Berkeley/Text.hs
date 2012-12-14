@@ -11,7 +11,7 @@
 
 {-# LANGUAGE FlexibleContexts #-}  -- for 'Stream'
 
-module Vanda.Grammar.Berkeley.Text where
+module Vanda.Grammar.Berkeley.Text ( parseBerkeleyMap ) where
 
 import Control.Applicative ( (<|>), many )
 import Control.Arrow ( first )
@@ -20,6 +20,7 @@ import qualified Data.Text.Lazy as T
 import Text.Parsec hiding ( many, (<|>) )
 import Text.Parsec.Text.Lazy
 
+import Vanda.Grammar.Berkeley.IRTG
 import Vanda.Hypergraph.Basic ( Hyperedge, mkHyperedge )
 import Vanda.Hypergraph.NFData ()
 
@@ -37,6 +38,20 @@ parseBerkeleyMap mapl ul0 mapv uv0 lx gr = (snd iu2, concat es1 ++ es2)
   where
     (iu1, es1) = lazyMany (p_lexicon mapl mapv) "lexicon" (0, (ul0, uv0)) lx
     (iu2, es2) = lazyMany (p_grammar mapl mapv) "grammar" iu1 gr
+
+{-
+makeIRTG :: [(Hyperedge Int Int Int, Double)] -> Int -> IRTG Int
+makeIRTG ews initial
+  = let ws = S.toList $ S.fromList $ map snd ews
+        wmap = M.fromList $ zip ws [(0 :: Int) ..]
+        es = [ mapHEi (const (wmap M.! w)) e
+             | (e, w) <- ews
+             ]
+        rtg = mkHypergraph es
+        h1 = V.fromList $ A.elems $ A.array (0, tmc - 1)
+           $ map swap $ M.toList tm
+    in IRTG { .. }
+-}
 
 lazyMany :: NFData a => GenParser u a -> SourceName -> u -> T.Text -> (u, [a])
 lazyMany p file ustate contents
