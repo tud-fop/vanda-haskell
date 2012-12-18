@@ -22,6 +22,7 @@ module Vanda.Hypergraph.Binary () where
 import Control.Applicative ( (<$>), (<*>) )
 import Control.DeepSeq ( NFData, deepseq )
 import qualified Data.Binary as B
+import qualified Data.Set as S
 
 import Vanda.Hypergraph.Basic
 import Vanda.Hypergraph.NFData ()
@@ -46,9 +47,13 @@ instance (NFData v, NFData l, NFData i, B.Binary v, B.Binary l, B.Binary i, Ord 
 instance (NFData v, NFData l, NFData i, B.Binary v, B.Binary l, B.Binary i, Ord v)
   => B.Binary (EdgeList v l i) where
   put (EdgeList vs es) = do
-    B.put vs
+    B.put (S.toAscList vs)
     B.put es -- myPut es
-  get = EdgeList <$> B.get <*> B.get -- myGet
+  -- get = EdgeList <$> B.get <*> B.get -- myGet
+  get = do
+    vs <- fmap S.fromDistinctAscList B.get
+    es <- B.get
+    return $ EdgeList vs es
      
 {-
 myGet :: (NFData v, NFData l, NFData i, B.Binary v, B.Binary l, B.Binary i, Ord v) => B.Get [Hyperedge v l i]

@@ -45,10 +45,10 @@ instance (NFData l, NFData i, B.Binary l, B.Binary i)
 instance (NFData l, NFData i, B.Binary l, B.Binary i)
   => B.Binary (Hypergraph l i) where
   put (Hypergraph vs es) = do
-    B.put (S.fromList $ enumFromTo 0 $ vs - 1)
+    B.put (enumFromTo 0 $ vs - 1)
     B.put es -- myPut es
   get = do
-    vs <- fmap ((+ 1) . snd . nodesL . S.toList) (B.get :: B.Get (S.Set Int))
+    vs <- fmap ((+ 1) . snd . nodesL) (B.get :: B.Get [Int])
     es <- vs `seq` B.get
     es `seq` return (Hypergraph vs es)
 

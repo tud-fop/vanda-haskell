@@ -20,14 +20,14 @@ Build-Type:     Simple
 library
   build-depends:
       base
-    , containers
+    , containers >= 0.5.1
     , array
     , vector
     , heap
     , bytestring
     , text
     , parsec >= 3.1.2
-    , binary
+    , binary >= 0.6.4
     , deepseq
     , zlib
     , mtl
