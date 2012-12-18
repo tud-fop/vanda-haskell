@@ -27,7 +27,6 @@ import qualified Data.Map as M
 import qualified Data.Map.Strict as MS
 import Data.NTT
 import qualified Data.Set as S
-import Data.STRef
 import qualified Data.Queue as Q
 import qualified Data.Vector.Unboxed as VU
 
@@ -155,8 +154,8 @@ iter back comp wsa mki' v0
                 unless b $ do
                   modifySTRef' pvs $ S.insert pv
                   enqueue $ predItem pv
-          scan it@Item{ stateList = ps, trie = Trie{ nextT = nt }, weight = w } (t, p', w')
-            = case IMS.lookup t nt of
+          scan it@Item{ stateList = ps, trie = Trie{ nextT = nxt }, weight = w } (t, p', w')
+            = case IMS.lookup t nxt of
                 Nothing -> return ()
                 Just tr -> enqueue
                   $ it{ trie = tr, stateList = p' : ps, weight = w' * w }

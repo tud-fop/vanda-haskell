@@ -22,7 +22,6 @@ import qualified Data.Ix as Ix
 import qualified Data.Map as M
 import Data.NTT
 import qualified Data.Queue as Q
-import Data.STRef
 import qualified Data.Vector as V
 
 import Vanda.Grammar.XRS.IRTG

@@ -2,7 +2,6 @@
 module Vanda.Grammar.XRS.Functions where
 
 import Codec.Compression.GZip ( decompress )
-import Control.DeepSeq ( NFData )
 
 import qualified Data.Array as A
 import qualified Data.Binary as B
@@ -24,8 +23,6 @@ import Vanda.Grammar.XRS.IRTG
 import Vanda.Hypergraph.IntHypergraph
 import qualified Vanda.Hypergraph.Tree as T
 import Vanda.Token
-
-instance NFData StrictIntPair
 
 
 loadText :: String -> IO String

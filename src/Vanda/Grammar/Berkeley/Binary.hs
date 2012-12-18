@@ -1,9 +1,9 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Vanda.Grammar.Berkeley.Binary () where
 
 import Control.DeepSeq ( NFData )
 import qualified Data.Binary as B
-import Data.NTT
 import Data.NTTBinary ()
 import qualified Data.Vector as V
 

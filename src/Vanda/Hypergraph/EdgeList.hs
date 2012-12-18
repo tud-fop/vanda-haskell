@@ -38,7 +38,6 @@ import qualified Data.Map as M
 import qualified Data.Map.Strict as MS
 import qualified Data.Queue as Q
 import qualified Data.Set as S
-import Data.STRef
 import qualified Data.Tree as T
 import qualified Data.Vector as V
 

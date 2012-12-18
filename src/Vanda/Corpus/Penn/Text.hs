@@ -22,7 +22,7 @@ module Vanda.Corpus.Penn.Text
   ) where
 
 import Control.Applicative ( (<*), (*>), (<|>), (<$>), many )
-import Control.Arrow ( (***), second )
+import Control.Arrow ( (***) )
 import qualified Data.Text.Lazy as T
 import qualified Data.Tree as T
 import Data.Int ( Int32 )
@@ -79,6 +79,7 @@ treeToPenn f (T.Node t1 ts)
 
 -- every p_-function should scan trailing spaces
 
+{-
 lazyMany :: GenParser u a -> SourceName -> u -> T.Text -> (u, [a])
 lazyMany p file ustate contents = lm state0
   where
@@ -99,7 +100,7 @@ lazyMany p file ustate contents = lm state0
                 state' <- getParserState
                 return $ second (x:) $ lm state'
             ]
-
+-}
 
 p_Sentence :: GenParser u t -> GenParser u (T.Tree t)
 p_Sentence p_word =
@@ -110,13 +111,13 @@ p_Sentence p_word =
           )
        <* char ')' <* spaces
 
-
+{-
 p_comment :: GenParser u ()
 p_comment =
         lookAhead (string "%%")
      *> manyTill anyChar newline
      *> spaces
-
+-}
 
 p_tag :: (u -> String -> (u, b)) -> GenParser u b
 p_tag lookupToken = do

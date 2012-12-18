@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Data.NTTBinary () where
 
 import qualified Data.Binary as B

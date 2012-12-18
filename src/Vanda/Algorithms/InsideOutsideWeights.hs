@@ -32,7 +32,7 @@ import Control.Arrow
 import qualified Data.Map as M
 import qualified Data.Set as S
 
-import Debug.Trace
+-- import Debug.Trace
 
 
 -- | Computes the inside and outside weights for a given 'Hypergraph'.

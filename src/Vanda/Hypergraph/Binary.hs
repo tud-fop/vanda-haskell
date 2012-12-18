@@ -19,7 +19,7 @@
 
 module Vanda.Hypergraph.Binary () where
 
-import Control.Applicative ( (<$>), (<*>) )
+-- import Control.Applicative ( (<$>), (<*>) )
 import Control.DeepSeq ( NFData, deepseq )
 import qualified Data.Binary as B
 import qualified Data.Set as S

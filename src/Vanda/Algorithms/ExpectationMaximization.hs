@@ -27,7 +27,7 @@ import qualified Data.List as L
 import qualified Data.Map as M
 import qualified Data.Vector.Unboxed as V
 
-import Debug.Trace
+-- import Debug.Trace
 
 -- | Canonical iter function.
 iter

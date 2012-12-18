@@ -5,12 +5,13 @@ module Vanda.Grammar.XRS.Binary where
 import Control.Applicative ( (<$>), (<*>) )
 import Control.DeepSeq ( NFData )
 import qualified Data.Binary as B
-import Data.NTT
 import Data.NTTBinary ()
 import qualified Data.Vector as V
 
 import Vanda.Grammar.XRS.IRTG
 import Vanda.Hypergraph.IntBinary ()
+
+instance NFData StrictIntPair
 
 instance B.Binary StrictIntPair where
   get = SIP <$> B.get <*> B.get 

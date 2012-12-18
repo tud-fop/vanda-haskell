@@ -59,7 +59,6 @@ import qualified Data.IntSet as IS
 import qualified Data.List as L ( foldl' )
 import qualified Data.Map.Strict as MS
 import qualified Data.Queue as Q
-import Data.STRef
 import qualified Data.Vector.Unboxed as VU
 
 -- import Debug.Trace

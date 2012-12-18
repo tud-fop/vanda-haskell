@@ -21,7 +21,6 @@ module Vanda.Hypergraph.IntBinary () where
 
 import Control.DeepSeq ( NFData, deepseq )
 import qualified Data.Binary as B
-import qualified Data.Set as S
 
 import Vanda.Hypergraph.IntHypergraph
 import qualified Vanda.Hypergraph.Tree as T

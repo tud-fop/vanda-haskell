@@ -9,7 +9,7 @@
 -- of Programming.
 -- ---------------------------------------------------------------------------
 
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables, EmptyDataDecls #-}
 
 -- |
 -- Maintainer  :  Matthias Buechse
@@ -37,12 +37,8 @@ module Vanda.Hypergraph.BackwardStar
 
 import Prelude hiding ( lookup, product )
 
-import Control.Arrow ( (***), (&&&) )
-import Control.DeepSeq ( deepseq, NFData )
-import qualified Data.Array as A
 import qualified Data.Heap as H hiding ( Prio, Val )
 import Data.Heap ( Prio, Val )
-import qualified Data.Ix as Ix
 import Data.List ( foldl' )
 import qualified Data.Map as M
 import qualified Data.Queue as Q
@@ -53,7 +49,6 @@ import qualified Data.Vector as V
 import Vanda.Features
   ( Feature
   , Candidate (..)
-  , BestArray
   , topCC )
 import Vanda.Hypergraph.Basic
   ( Hyperedge(..)
@@ -78,7 +73,7 @@ fromEdgeList (EdgeList vs es) = BackwardStar vs (flip (M.findWithDefault []) a) 
     lst = [ (v, e) | e <- es, let v = to e ]
     a = foldl' (\m (v, e) -> M.alter (prep e) v m) M.empty lst
     prep e Nothing = Just [e]
-    prep e (Just es) = Just (e : es)
+    prep e (Just es_) = Just (e : es_)
     -- lst = [ (v, [e]) | e <- es, let v = to e ]
     -- a = -- M.union
     --     (M.fromListWith (++) lst)
@@ -135,17 +130,18 @@ fromListWithKey f xs
     ins t (k,x) = insertWithKey f k x t
 -}
 
+{-
 fromListsWith :: Ord k => (a -> a -> a) -> [[(k, a)]] -> M.Map k a
 fromListsWith f xss
   = foldl' flw M.empty xss
   where
     flw t xs = foldl' ins t xs
     ins t (k, x) = M.insertWith f k x t
-
+-}
 
 -- | Drops nonproducing nodes and corresponding edges.
 dropNonproducing
-  :: forall v l i. (Ord v, NFData v)
+  :: forall v l i. Ord v
   => BackwardStar v l i
   -> BackwardStar v l i
 dropNonproducing (BackwardStar vs b _)
@@ -233,7 +229,7 @@ data M a
   | M a [M a] -- ^ the first argument is the head (best) candidate
 
 -- | A phantom type to specify our kind of heap.
-data MPolicy = MPolicy
+data MPolicy
 
 -- | Heap type used to efficiently flatten the merge data structure.
 type Heap v l i x = H.Heap MPolicy (M (Candidate v l i x))
