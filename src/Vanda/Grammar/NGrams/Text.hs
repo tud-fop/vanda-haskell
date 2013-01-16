@@ -19,14 +19,15 @@ module Vanda.Grammar.NGrams.Text
 
 import qualified Data.List as L
 import qualified Data.Text.Lazy as T
+
 import qualified Vanda.Grammar.NGrams as N
 
 parseNGrams
   :: T.Text                  -- Text to parse
   -> N.NGrams T.Text Double  -- generated NGrams
-parseNGrams t
+parseNGrams
   = L.foldl' parseLine N.empty
-  . L.filter isWantedLine
+  . L.filter isAWantedLine
   . T.lines
 
 isAWantedLine
@@ -35,18 +36,19 @@ isAWantedLine
 isAWantedLine l
   = not
   . or
-  . map (\ f. f l)
-  . [ T.isPrefixOf "\\" , T.isPrefixOf "ngram ", T.null ]
+  . map (\ f -> f l)
+  $ [ T.isPrefixOf (T.pack "\\") , T.isPrefixOf (T.pack "ngram "), T.null ]
 
 parseLine
   :: N.NGrams T.Text Double  -- old NGrams
   -> T.Text                  -- line to read from
   -> N.NGrams T.Text Double  -- new NGrams
 parseLine n t
-  = let s1 = T.split (=="\t") t
-        p  = read . head $ s1 :: Double
+  = --trace (show t) $
+    let s1 = T.split (=='\t') t
+        p  = read . T.unpack . head $ s1 :: Double
         ws = T.words . head . tail $ s1
-        b  = if   L.length == 2
-             then Nothing
-             else Just (read . last $ s1 :: Double)
+        b  = if   L.length s1 == 2
+             then Just (0 :: Double)
+             else Just (read . T.unpack . last $ s1 :: Double)
     in  N.addNGram n ws p b
