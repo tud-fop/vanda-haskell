@@ -24,7 +24,7 @@ import qualified Vanda.Grammar.NGrams as N
 
 parseNGrams
   :: T.Text                  -- Text to parse
-  -> N.NGrams T.Text Double  -- generated NGrams
+  -> N.NGrams T.Text         -- generated NGrams
 parseNGrams
   = L.foldl' parseLine N.empty
   . L.filter isAWantedLine
@@ -40,12 +40,11 @@ isAWantedLine l
   $ [ T.isPrefixOf (T.pack "\\") , T.isPrefixOf (T.pack "ngram "), T.null ]
 
 parseLine
-  :: N.NGrams T.Text Double  -- old NGrams
+  :: N.NGrams T.Text         -- old NGrams
   -> T.Text                  -- line to read from
-  -> N.NGrams T.Text Double  -- new NGrams
+  -> N.NGrams T.Text         -- new NGrams
 parseLine n t
-  = --trace (show t) $
-    let s1 = T.split (=='\t') t
+  = let s1 = T.split (=='\t') t
         p  = read . T.unpack . head $ s1 :: Double
         ws = T.words . head . tail $ s1
         b  = if   L.length s1 == 2

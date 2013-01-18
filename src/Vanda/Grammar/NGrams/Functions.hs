@@ -25,12 +25,12 @@ import Vanda.Grammar.NGrams.Text
 
 loadNGrams
   :: FilePath
-  -> IO (NGrams T.Text Double)
+  -> IO (NGrams T.Text)
 loadNGrams
   = fmap parseNGrams . TIO.readFile
 
 evaluateLine
-  :: NGrams T.Text Double
+  :: NGrams T.Text
   -> Int
   -> T.Text
   -> Double
