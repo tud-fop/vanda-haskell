@@ -13,20 +13,24 @@
 --
 -----------------------------------------------------------------------------
 
-module KenLM
+{-# LANGUAGE ForeignFunctionInterface #-}
+
+module Vanda.Grammar.NGrams.KenLM
   ( loadNGrams
   , evaluateLine
   ) where
 
-import Data.Text as T
+import Data.Text.Lazy as T
+import Data.List as L
 import Foreign.C
-import Foreign.C.String 
+import Foreign.C.String
+import Foreign.Ptr
 import Control.Monad
 
 data KenTrieModel = KenTrieModel
 
 foreign import ccall "loadModel" cLoadNGrams :: CString -> IO (Ptr KenTrieModel)
-foreign import ccall "score" cEvaluateLine :: (Ptr KenTrieModel) -> CString -> CFloat
+foreign import ccall "score" cEvaluateLine :: (Ptr KenTrieModel) -> CString -> IO CFloat
 
 loadNGrams
   :: FilePath
@@ -39,6 +43,4 @@ evaluateLine
   -> T.Text
   -> IO Float
 evaluateLine m s
-  = fmap fromRational
-  . withCString s
-  $ cEvaluateLine m
+  = withCString (T.unpack s) (fmap realToFrac . cEvaluateLine m)
