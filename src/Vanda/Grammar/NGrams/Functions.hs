@@ -11,6 +11,8 @@
 -- Stability   :  unknown
 -- Portability :  portable
 --
+-- Top level functionality for NGrams.
+--
 -----------------------------------------------------------------------------
 
 
@@ -23,19 +25,28 @@ import qualified Data.Text.Lazy.IO as TIO
 import Vanda.Grammar.NGrams
 import Vanda.Grammar.NGrams.Text
 
+-- | Loads an NGram language model from a file.
 loadNGrams
-  :: FilePath
-  -> IO (NGrams T.Text)
+  :: FilePath                -- ^ file to load the model from
+  -> IO (NGrams T.Text)      -- ^ NGrams model
 loadNGrams
-  = fmap parseNGrams . TIO.readFile
+  = fmap parseNGrams
+  . TIO.readFile
 
+-- | Evaluates a sentence given a NGrams model.
 evaluateLine
-  :: NGrams T.Text
-  -> Int
-  -> T.Text
-  -> Double
+  :: NGrams T.Text           -- ^ NGrams model
+  -> Int                     -- ^ length of an n-gram
+  -> T.Text                  -- ^ sentence to score
+  -> Double                  -- ^ score
 evaluateLine g i l
   = evaluate g i
-  . (\ x -> (L.replicate (i - 1) . T.pack $ "<s>") L.++ x L.++ [(T.pack "</s>")])
+  . (\ x -> ( L.replicate (i - 1)
+            . T.pack
+            $ "<s>"
+            )
+       L.++ x
+       L.++ [(T.pack "</s>")]
+    )
   . T.words
   $ l

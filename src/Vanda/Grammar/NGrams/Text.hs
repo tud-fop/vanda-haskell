@@ -11,6 +11,8 @@
 -- Stability   :  unknown
 -- Portability :  portable
 --
+-- Parses textual ARPA format to provide a NGrams language model.
+--
 -----------------------------------------------------------------------------
 
 module Vanda.Grammar.NGrams.Text
@@ -22,17 +24,18 @@ import qualified Data.Text.Lazy as T
 
 import qualified Vanda.Grammar.NGrams as N
 
+-- | Parses textual ARPA format to provide a NGrams language model.
 parseNGrams
-  :: T.Text                  -- Text to parse
-  -> N.NGrams T.Text         -- generated NGrams
+  :: T.Text                  -- ^ Text to parse
+  -> N.NGrams T.Text         -- ^ generated NGrams
 parseNGrams
   = L.foldl' parseLine N.empty
   . L.filter isAWantedLine
   . T.lines
 
 isAWantedLine
-  :: T.Text                  -- line to check
-  -> Bool                    -- true iff the line contains an NGram
+  :: T.Text                  -- ^ line to check
+  -> Bool                    -- ^ true iff the line contains an NGram
 isAWantedLine l
   = not
   . or
@@ -40,9 +43,9 @@ isAWantedLine l
   $ [ T.isPrefixOf (T.pack "\\") , T.isPrefixOf (T.pack "ngram "), T.null ]
 
 parseLine
-  :: N.NGrams T.Text         -- old NGrams
-  -> T.Text                  -- line to read from
-  -> N.NGrams T.Text         -- new NGrams
+  :: N.NGrams T.Text         -- ^ old NGrams
+  -> T.Text                  -- ^ line to read from
+  -> N.NGrams T.Text         -- ^ new NGrams
 parseLine n t
   = let s1 = T.split (=='\t') t
         p  = read . T.unpack . head $ s1 :: Double

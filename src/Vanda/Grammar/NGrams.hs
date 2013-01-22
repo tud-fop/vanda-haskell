@@ -11,7 +11,7 @@
 -- Stability   :  unknown
 -- Portability :  portable
 --
--- This module implements a representation for n-grams.
+-- Implements a representation for NGrams language model.
 --
 -----------------------------------------------------------------------------
 
@@ -58,41 +58,44 @@ getWeight (NGrams { dict = (d, _), weights = wt }) vs
           Just (a, Nothing)  -> (a, 0)
           Just (a, Just b)   -> (a, b)
 
+-- | Returns an empty NGrams language model.
 empty
-  :: NGrams v
+  :: NGrams v              -- ^ empty NGrams model
 empty
   = NGrams (M.empty, 0) M.empty
 
 addWord
   :: (Show v, Ord v)
-  => NGrams v    -- original NGrams
-  -> v           -- word
-  -> NGrams v    -- new NGrams
+  => NGrams v              -- ^ original NGrams
+  -> v                     -- ^ word
+  -> NGrams v              -- ^ new NGrams
 addWord n ve
   = let (m, c) = dict n
     in  if   M.notMember ve m
         then n { dict = (M.insert ve c m, c + 1) }
         else n
 
+-- | Adds an n-gram to the model.
 addNGram
   :: (Show v, Ord v)
-  => NGrams v              -- original NGrams
-  -> [v]                   -- new NGram
-  -> Double                -- NGram-weight
-  -> Maybe Double          -- backoff-weight
-  -> NGrams v              -- new NGrams
+  => NGrams v              -- ^ original NGrams
+  -> [v]                   -- ^ new NGram
+  -> Double                -- ^ NGram-weight
+  -> Maybe Double          -- ^ backoff-weight
+  -> NGrams v              -- ^ new NGrams
 addNGram n@(NGrams { weights = wt }) vs w1 w2
   = let n' = L.foldl' addWord n vs
         vi = L.map (\ x -> fst (dict n') M.! x) vs
     in  n' { weights = M.insert vi (w1, w2) wt }
 
---  P_katz(w0...wn) = / P(w0...wn)                    , if C(w0...wn) > 0
---                    \ b(w0...wn-1) * P_katz(w1...wn), otherwise.
-find            -- uses Katz Backoff
+-- | Determines the weight of a single n-gram using Katz Backoff.
+--   P_katz(w0...wn) = / P(w0...wn)                    , if C(w0...wn) > 0
+--                     \ b(w0...wn-1) * P_katz(w1...wn), otherwise.
+find
   :: (Show v, Ord v)
-  => NGrams v   -- NGrams on which to base the evaluation
-  -> [v]        -- sequence to evaluate
-  -> Double     -- single NGram probability
+  => NGrams v              -- ^ NGrams on which to base the evaluation
+  -> [v]                   -- ^ sequence to evaluate
+  -> Double                -- ^ single NGram probability
 find n vs
   = if   hasWeight n vs                             -- if C(w0...wn) > 0
     then fst . getWeight n $ vs
@@ -101,12 +104,13 @@ find n vs
              (_, b) = getWeight n vs1
          in  b + find n vs2
 
+-- | Scores a sentence.
 evaluate
   :: (Show v, Ord v)
-  => NGrams v   -- NGrams on which to base the evaluation
-  -> Int        -- maximum length of NGram
-  -> [v]        -- sequence to evaluate
-  -> Double     -- n-gram model's probability for the sequence
+  => NGrams v              -- ^ NGrams on which to base the evaluation
+  -> Int                   -- ^ maximum length of the n-grams
+  -> [v]                   -- ^ sentence to evaluate
+  -> Double                -- ^ score
 evaluate n i vs
   = if   i >= L.length vs
     then find n vs
