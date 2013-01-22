@@ -77,7 +77,7 @@ forwMskel gm_ gmi_ WTA{ .. } = runST $ do
          :: ST s (STA.STArray s Int [Hyperedge Int ()])
   -- mmap :: GigaMap <- M.empty -- maps variable sets to states of the wta
   amap <- newSTRef (IM.empty :: AnalMap)
-  -- ^ maps each state to its var. set and the gm image of that var. set
+  -- maps each state to its var. set and the gm image of that var. set
   forwA <- computeForwardA transitions
   q <- newSTRef $ Q.fromList [ e | e@Nullary{} <- edges transitions ]
   let -- addt v e = AB.unsafeRead nt v >>= AB.unsafeWrite nt v . (e :)

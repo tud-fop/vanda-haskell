@@ -127,7 +127,7 @@ extract
         (carryL (yesyes (comp e) (reverse statl)) (from e))
         (label e)
         (ident e)
-    , w -- * L.product initial_weight
+    , w -- L.product initial_weight
     )
   where
     -- strategy = r0
