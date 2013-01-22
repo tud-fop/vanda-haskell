@@ -2,7 +2,7 @@
 
 set -e
 
-CXXFLAGS="-I. -fPIC -O3 -DNDEBUG -DHAVE_ZLIB -DKENLM_MAX_ORDER=6 $CXXFLAGS"
+CXXFLAGS="-I. -fPIC -O3 -DNDEBUG -DHAVE_ZLIB -DKENLM_MAX_ORDER=6 -lz $CXXFLAGS"
 
 if [ ! -d "kenlm" ]
 then
@@ -21,17 +21,22 @@ echo -n "Building"
 cp kenlm.cc kenlm/.
 cd kenlm/
 
-for i in util/{bit_packing,ersatz_progress,exception,file,file_piece,murmur_hash,mmap,pool,read_compressed,string_piece,usage} lm/{bhiksha,binary_format,config,lm_exception,model,quantize,read_arpa,search_hashed,search_trie,trie,trie_sort,value_build,virtual_interface,vocab}
-do
-	g++ $CXXFLAGS -c $i.cc -o $i.o
-	echo -n "."
+#Grab all cc files in these directories except those ending in test.cc or main.cc
+objects=""
+for i in util/double-conversion/*.cc util/*.cc lm/*.cc; do
+	if [ "${i%test.cc}" == "$i" ] && [ "${i%main.cc}" == "$i" ]; then
+		g++ $CXXFLAGS -c $i -o ${i%.cc}.o
+		objects="$objects ${i%.cc}.o"
+		echo -n "."
+	fi
 done
 
 g++ $CXXFLAGS -Wall -c kenlm.cc -o kenlm.o
+objects="$objects kenlm.o"
 echo -n "."
-g++ $CXXFLAGS -Wall -shared -o kenlm.so {lm,util,.}/*.o
+g++ $CXXFLAGS -Wall -shared -o libkenlm.so $objects
 echo -n "."
 
-cp kenlm.so ../.
+cp libkenlm.so ../.
 cd ..
 echo " Done."

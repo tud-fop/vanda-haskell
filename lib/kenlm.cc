@@ -7,13 +7,14 @@ using namespace lm::ngram;
 
 extern "C" {
 
-	extern TrieModel* loadModel(char* path) {
+	extern TrieModel* loadModel(const char* path) {
 		return new TrieModel(path);
 	}
 
-	extern float score(TrieModel* model, char* sentence) {
+	extern float score(const TrieModel* model, const char* sentence) {
 		const SortedVocabulary &vocab = model->GetVocabulary();
-		State oldState(model->BeginSentenceState()), newState;
+		State oldState(model->BeginSentenceState());
+		State newState;
 		std::string word;
 		std::stringstream ss(sentence);
 		float sum = 0;
@@ -23,11 +24,27 @@ extern "C" {
 		}
 		return sum;
 	}
-	
-}
 
-int main(int argc, char* argv[]) {
-	TrieModel* model = loadModel(argv[1]);
-	printf("%f\n", score(model, argv[2]));
-	return 0;
+	extern State beginSentenceState(const TrieModel* model) {
+		return model->BeginSentenceState();
+	}
+
+	extern State nullContextState(const TrieModel* model) {
+		return model->NullContextState();
+	}
+
+	extern float lookup(const TrieModel* model, const char* sentence, const State* startState) {
+		const SortedVocabulary &vocab = model->GetVocabulary();
+		State oldState(*startState);
+		State newState;
+		std::string word;
+		std::stringstream ss(sentence);
+		float sum = 0;
+		while (ss >> word) {
+			sum = sum + model->Score(oldState, vocab.Index(word), newState);
+			oldState = newState;
+		}
+		return sum;
+	}
+
 }
