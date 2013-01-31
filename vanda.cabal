@@ -76,6 +76,7 @@ library
     , Data.NTTBinary
     , Data.Queue
   hs-source-dirs:  src
+  extra-libraries:  kenlm
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
   --  -ddump-rule-rewrites
@@ -89,4 +90,4 @@ library
     , FlexibleContexts
     , BangPatterns
     , RecordWildCards
-
+    , ForeignFunctionInterface
