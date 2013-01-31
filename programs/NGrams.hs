@@ -18,3 +18,13 @@ main = do
       let i = read n :: Int
           wts   = L.map (evaluateLine nGrams i) . T.lines $ input
       TIO.putStr . T.unlines . map (T.pack . show) $ wts
+    ["-n", n, "-g", grammar, text] -> do
+      nGrams <- loadNGrams grammar
+      input  <- TIO.readFile text
+      let i = read n :: Int
+          wts   = L.map (evaluateLine nGrams i) . T.lines $ input
+      TIO.putStr . T.unlines . map (T.pack . show) $ wts
+    _ -> do
+      TIO.putStr
+      . T.pack
+      $ "usage: NGrams -g <grammar> -n <n> <inputFile> > <outputFile>\n"
