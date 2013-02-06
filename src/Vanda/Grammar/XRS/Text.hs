@@ -176,7 +176,7 @@ p_tvar
   -> GenParser u (T.Tree NTT, IM.IntMap Int)
 p_tvar pmn = do
   _ <- char 'x'
-  i <- fmap (read . (: "")) $ oneOf "0123456789"
+  i <- fmap read $ many1 $ oneOf "0123456789"
   _ <- char ':'
   si <- pmn =<< many (noneOf " )")
   spaces
@@ -211,7 +211,7 @@ p_sterm pmf = do
 p_svar :: GenParser u NTT
 p_svar = do
   _ <- char 'x'
-  i <- fmap (read . (: "")) $ oneOf "0123456789"
+  i <- fmap read $ many1 $ oneOf "0123456789"
   spaces
   return (nt i)
 

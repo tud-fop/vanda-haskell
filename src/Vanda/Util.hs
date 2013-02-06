@@ -24,6 +24,7 @@ module Vanda.Util
   , lookupSTRef'
   , lviewSTRef'
   , readSTRefWith
+  , pairM
   , seqEither
   , seqMaybe
   ) where
@@ -55,7 +56,7 @@ viewSTRef' ref f n j = do
 
 
 lookupSTRef'
-  :: STRef s a -> (a -> Maybe b) -> ST s () -> (b -> ST s ()) -> ST s ()
+  :: STRef s a -> (a -> Maybe b) -> ST s c -> (b -> ST s c) -> ST s c
 lookupSTRef' ref f n j = do 
   x <- readSTRef ref 
   case f x of
@@ -74,6 +75,11 @@ lviewSTRef' ref n j = do
 
 readSTRefWith :: (a -> b) -> STRef s a -> ST s b
 readSTRefWith f s = readSTRef s >>= (return . f)
+
+
+pairM :: Monad m => (m a, m b) -> m (a, b)
+pairM (x1, x2) = do { y1 <- x1; y2 <- x2; return (y1, y2) }
+
 
 
 seqEither :: Strategy a -> Strategy b -> Strategy (Either a b)
