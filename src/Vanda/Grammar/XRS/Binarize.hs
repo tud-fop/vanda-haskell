@@ -1,3 +1,4 @@
+{-# LANGUAGE ImpredicativeTypes #-}
 -- (c) 2012 Matthias Büchse <Matthias.Buechse@tu-dresden.de>
 --
 -- Technische Universität Dresden / Faculty of Computer Science / Institute
@@ -13,20 +14,17 @@ module Vanda.Grammar.XRS.Binarize ( binarizeXRS ) where
 
 import Prelude hiding ( sequence )
 
-import Control.Arrow ( (***) )
-import Control.Monad ( when, forM_, forM, liftM2 )
+import Control.Monad ( forM_, forM )
 import Control.Monad.ST
 import qualified Data.Array as A
-import qualified Data.Array.Base as AB
-import qualified Data.Array.ST as STA
 import Data.Function ( on )
 import qualified Data.IntMap as IM
 import qualified Data.IntSet as IS
 import qualified Data.Ix as Ix
 import Data.List ( foldl', sortBy )
 import qualified Data.Map as M
+import Data.Maybe ( listToMaybe )
 import Data.NTT
-import qualified Data.Queue as Q
 import qualified Data.Set as S
 import qualified Data.Vector as V
 
@@ -112,22 +110,20 @@ vars (Var i) = IS.singleton i
 vars _ = IS.empty
 
 
-computeVars :: (GigaMap, Int) -> WTA (Var l') -> ((GigaMap, Int), VarMap)
-computeVars (gm_, gmi_) WTA{ .. } = runST $ do
+computeVars :: GigaMap -> WTA (Var l) -> (GigaMap, VarMap)
+computeVars gm_ WTA{ transitions = ts, .. } = runST $ do
   gm <- newSTRef gm_
-  gmi <- newSTRef gmi_
   amap <- newSTRef (IM.empty :: VarMap)
-  traverseForward transitions
-    (\ _ -> pairM (pairM (readSTRef gm, readSTRef gmi), readSTRef amap))
-    $ \ e -> do
-      s <- fmap ( foldl' IS.union (vars (label e)) . flip map (from e)
-                . \ am -> fst . (am IM.!) ) $ readSTRef amap
-      ti <- flip (lookupSTRef' gm (M.lookup s)) return $ do
-        i <- readSTRef gmi
-        modifySTRef' gmi (+ 1)
-        modifySTRef' gm $ M.insert s i
-        return i
-      modifySTRef amap $ IM.insert (to e) (s, ti)
+  traverseForward ts (\ _ -> pairM (readSTRef gm, readSTRef amap)) $ \ e -> do
+    s <- fmap ( foldl' IS.union (vars (label e)) . flip map (from e)
+              . \ am -> fst . (am IM.!) ) $ readSTRef amap
+    ti <- register gm s
+    modifySTRef amap $ IM.insert (to e) (s, ti)
+
+
+computeVars' :: [WTA (Var l)] -> [VarMap]
+computeVars' = snd . flip foldl' (M.empty, [])
+                  (\ (gm, vs) ta -> second' (: vs) $ computeVars gm ta)
 
 
 sequence :: VarMap -> [Int] -> [Int]
@@ -181,7 +177,6 @@ extractBranches !s (T.Nullary{} : ts) = extractBranches s ts
 extractBranches !s (T.Binary i t1 t2 : ts) = extractBranches
               (IM.insert i [T.rootLabel t1, T.rootLabel t2] s) (t1 : t2 : ts)
 extractBranches _ _ = error "should not happen: branches"
--- extractBranches !s (T.Unary{ .. } : ts) = extractBranches s (sub1 : ts)
 
 
 backMskel :: Branches -> VarMap -> WTA (Var l') -> WTA (Var l')
@@ -246,101 +241,89 @@ decompose t
                  (map snd sorted)
 
 
--- trick: initialize gigamap so that emptyset and singletons are clear
+mkHom :: (t -> t') -> M.Map t Int -> V.Vector t'
+mkHom f m = V.fromList $ A.elems $ A.array (0, M.size m - 1)
+          $ map (swap . first' f) $ M.toList m
+
+
+binarizeTerms
+  :: RegSeed l
+  -> RegSeed l
+  -> (forall l'. (WTA l' -> Maybe (T.Tree l')))
+  -> (T.Tree (Var l), T.Tree (Var l))
+  -> Maybe (T.Tree (Var (T.Tree (Var l))), T.Tree (Var (T.Tree (Var l))))
+binarizeTerms b1 b2 select (h1alpha, h2alpha)
+  = let rhs1 = liftSeed b1 h1alpha
+        rhs2 = liftSeed b2 h2alpha
+        [m1, m2] = computeVars' [rhs1, rhs2]
+        vb1 = forwMskel m1 rhs1
+        vb2 = forwMskel m2 rhs2
+        b' = inters vb1 vb2
+    in do
+       t' <- select b'
+       let bran = extractBranches IM.empty [t']
+       t1 <- select $ backMskel bran m1 rhs1
+       t2 <- select $ backMskel bran m2 rhs1
+       return (fmap fst $ decompose t1, fmap fst $ decompose t2)
+
+
+smallest :: WTA l -> Maybe (T.Tree l)
+smallest (WTA fs _ tr)
+  = fmap (fmap label . deriv) $ listToMaybe
+  $ (A.! fs) $ knuth tr (\ _ _ _ -> 1.0)
+
 
 binarizeXRS :: IRTG Int -> IRTG Int
 binarizeXRS irtg@IRTG{ .. }
   = runST $ do
     tr <- newSTRef []
     newh1 <- newSTRef M.empty
-    h1c <- newSTRef (0 :: Int)
     newh2 <- newSTRef M.empty
-    h2c <- newSTRef (0 :: Int)
     virt <- newSTRef M.empty
-    vc <- newSTRef $ nodes $ rtg
-    let register :: (Show v, Ord v) => STRef s (M.Map v Int) -> STRef s Int -> v -> (Int -> ST s ()) -> ST s Int
-        register h hc v act = do
-          mb <- fmap (M.lookup v) $ readSTRef h
-          case mb of
-            Nothing -> do
-              i <- readSTRef hc
-              modifySTRef' hc (+ 1)
-              modifySTRef' h $ M.insert v i
-              act i
-              return i
-            Just i -> return i
-        -- takeover :: Hyperedge StrictIntPair Int -> T.Tree (Var l1) -> T.Tree (Var l2) -> ST s ()
-        takeover e (tterm, sterm) = do
-            ti <- register newh1 h1c tterm $ const $ return ()
-            si <- register newh2 h2c sterm $ const $ return ()
-            modifySTRef' tr (e{ label = SIP ti si } :)
+    let addRule v vs ti si i
+          = modifySTRef' tr (mkHyperedge v vs (SIP ti si) i :)
+    let mkRules atroot e (t1, t2)
+          = case (T.rootLabel t1, T.rootLabel t2) of
+              (Var i, Var _) -> return $ e `deref` (i - 1)
+              (NV f1, NV f2) -> do
+                vs <- forM (zip (T.subForest t1) (T.subForest t2))
+                        $ mkRules False e
+                ti <- register newh1 f1
+                si <- register newh2 f2
+                if atroot
+                  then let v = to e
+                       in addRule v vs ti si (ident e) >> return v
+                  else register' virt (+ nodes rtg) (ti, si, vs)
+                         $ \ v -> addRule v vs ti si (-1)
+              _ -> error "something BAD has happened"
     forM_ (edges rtg) $ \ e ->
       case label e of
         SIP i1 i2 ->
-          let term = (h1term *** h2term) (i1, i2)
-              wta@(twta, swta) = (h1rhs *** h2rhs) term
-              (gmi1, tamap) = computeVars gmi0 twta
-              (_,    samap) = computeVars gmi1 swta
-              fwta = (forwMskel tamap *** forwMskel samap) wta
-              inter = uncurry inters fwta
-              kn (WTA fs _ tr_) = (A.! fs) $ knuth tr_ (\ _ _ _ -> 1.0)
-              options = kn inter
-              choose = fmap label . deriv . head 
-              cand = choose options
-              bran = extractBranches IM.empty [cand]
-              back = (backMskel bran tamap *** backMskel bran samap) wta
-              tree = (choose . kn *** choose .kn) back
-              decomp = (fmap fst . decompose *** fmap fst . decompose) tree
-              -- go :: Bool -> (T.Tree (Var (T.Tree (Var l1))), T.Tree (Var (T.Tree (Var l2)))) -> ST s Int
-              go atroot (t1, t2)
-                = case (T.rootLabel t1, T.rootLabel t2) of
-                    (Var i, Var _) -> return $ e `deref` (i - 1)
-                    (NV f1, NV f2) -> do
-                      vs <- mapM (go False) (zip (T.subForest t1) (T.subForest t2))
-                      ti <- register newh1 h1c f1 $ const $ return ()
-                      si <- register newh2 h2c f2 $ const $ return ()
-                      if atroot
-                        then let v = to e in do
-                          modifySTRef' tr (mkHyperedge v vs (SIP ti si) (ident e) :)
-                          return v
-                        else do
-                          v <- register virt vc (ti, si, vs)
-                               $ \ v -> modifySTRef' tr
-                                          (mkHyperedge v vs (SIP ti si) (-1) :)
-                          return v
-                    _ -> error "something BAD has happened"
-          in case options of
-               [] -> takeover e term
-               _ -> go True decomp >> return ()
-    nodes <- readSTRef vc
+          let tterm = h1convert (h1 V.! i1)
+              sterm = h2convert (h2 V.! i2)
+          in case binarizeTerms treerr strrr smallest (tterm, sterm) of
+            Just decomp ->
+              mkRules True e decomp >> return ()
+            Nothing -> do -- carry over
+              ti <- register newh1 tterm
+              si <- register newh2 sterm
+              modifySTRef' tr (e{ label = SIP ti si } :)
+    nodes <- fmap ((+ nodes rtg) . M.size) $ readSTRef virt
     edges <- readSTRef tr
-    h1_ <- readSTRef newh1
-    h1c_ <- readSTRef h1c
-    h2_ <- readSTRef newh2
-    h2c_ <- readSTRef h2c
-    let h1new = V.fromList $ A.elems $ A.array (0, h1c_ - 1)
-                $ map (swap . first' (fmap h1cc)) $ M.toList h1_
-    let h2new = V.fromList $ A.elems $ A.array (0, h2c_ - 1)
-                $ map (swap . first' h2cc) $ M.toList h2_
-    return irtg{ rtg = Hypergraph{ .. }, h1 = h1new, h2 = h2new } 
+    h1_ <- fmap (mkHom $ fmap h1cc) $ readSTRef newh1
+    h2_ <- fmap (mkHom h2cc) $ readSTRef newh2
+    return irtg{ rtg = Hypergraph{ .. }, h1 = h1_, h2 = h2_ } 
   where
-    gm0 = M.fromList
-        $ (IS.empty, 0) : [ (IS.singleton i, i + 1) | i <- [ 0 .. 99 ] ]
-    gmi0 = (gm0, M.size gm0)
     h1convert t
       = case T.rootLabel t of
           NT i -> T.Nullary (var i)
           T i -> case T.subForest t of
                    ts -> T.Unary (NV (Symbol i))
                          $ T.node (NV (Concat (length ts))) (map h1convert ts)
-    h1term = h1convert . (h1 V.!)
-    h1rhs = liftSeed treerr
     h2convert [x] = h2cv x
     h2convert xs = T.node (NV (Concat (length xs))) (map h2cv xs)
     h2cv (NT i) = T.Nullary (var i)
     h2cv (T i) = T.Nullary (NV (Symbol i))
-    h2term = h2convert . (h2 V.!)
-    h2rhs = liftSeed strrr
     h1cc (Var i) = nt i
     h1cc (NV (Symbol i)) = tt i
     h1cc (NV (Concat _)) = T (-1)
@@ -349,7 +332,6 @@ binarizeXRS irtg@IRTG{ .. }
     h2cc (T.Binary (NV (Concat _)) c1 c2) = h2cc c1 ++ h2cc c2
     h2cc (T.Node (NV (Concat _)) cs) = concatMap h2cc cs
     h2cc t = error (show t) -- "should not happen"
-    swap (x, y) = (y, x)
 
 -- fst3 (x, _, _) = x
 

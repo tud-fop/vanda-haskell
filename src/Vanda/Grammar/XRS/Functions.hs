@@ -10,10 +10,10 @@ import qualified Data.List as L
 import qualified Data.Map as M
 import Data.NTT
 import qualified Data.Set as S
-import qualified Data.Text.Lazy as TS
--- import qualified Data.Text.Lazy as T
+import qualified Data.Text as TS
+import qualified Data.Text.Lazy as T
 import qualified Data.Text.Lazy.IO as TIO
-import qualified Data.Text.Lazy.IO as TSIO
+import qualified Data.Text.IO as TSIO
 import qualified Data.Vector as V
 
 import Vanda.Algorithms.IntEarley
@@ -26,10 +26,10 @@ import Vanda.Token
 
 
 loadText :: String -> IO String
-loadText file = fmap (TS.unpack . head . TS.lines) $ TIO.readFile file
+loadText file = fmap (T.unpack . head . T.lines) $ TIO.readFile file
 
 saveText :: String -> String -> IO ()
-saveText text file = TIO.writeFile file (TS.pack text)
+saveText text file = TIO.writeFile file (T.pack text)
 
 
 toWSAmap :: TokenMap -> TS.Text -> WSA.WSA Int Token Double 
@@ -42,10 +42,10 @@ loadIRTG :: String -> IO (IRTG Int)
 loadIRTG = fmap (B.decode . decompress) . B.readFile
 
 loadTokenMap :: String -> IO TokenMap
-loadTokenMap = fmap fromText . TSIO.readFile
+loadTokenMap = fmap fromText . TIO.readFile
 
 loadTokenArray :: String -> IO TokenArray
-loadTokenArray = fmap fromText . TSIO.readFile
+loadTokenArray = fmap fromText . TIO.readFile
 
 loadWeights :: String -> IO (V.Vector Double)
 loadWeights = fmap (V.fromList . B.decode . decompress) . B.readFile

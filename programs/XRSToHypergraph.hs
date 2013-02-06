@@ -22,6 +22,7 @@ import qualified Data.ByteString.Lazy as B
 import Data.List ( foldl', intersperse, elemIndex )
 import qualified Data.Map as M
 import qualified Data.Set as S
+import qualified Data.Text as TS
 import qualified Data.Text.Lazy as T
 import qualified Data.Text.Lazy.IO as TIO
 import qualified Data.Vector as V
@@ -98,7 +99,7 @@ main = do
                    [ case x of
                        NT i -> let Just j = elemIndex i l
                                in "[" ++ show (from e !! j) ++ "," ++ show (j + 1) ++ "]"
-                       T i -> T.unpack $ getString fm i
+                       T i -> TS.unpack $ getString fm i
                    | x <- lhs
                    ])
                 ++ " ||| "
@@ -106,7 +107,7 @@ main = do
                    [ case x of
                        NT i -> let j = l !! i
                                in "[" ++ show (from e !! j) ++ "," ++ show (j + 1) ++ "]"
-                       T i -> if i < 0 then "" else T.unpack $ getString em i
+                       T i -> if i < 0 then "" else TS.unpack $ getString em i
                    | x <- rhs
                    ])
                 ++ " ||| "
@@ -122,19 +123,14 @@ main = do
               , w `seq` True
               ]
       TIO.writeFile (zhgFile ++ ".joshua") $ T.unlines $ map T.pack rules
-    ["-e", eMapFile, "-f", fMapFile, "-g", grammarFile, "-z", zhgFile] -> do
+    ["-e", eMapFile, "-f", fMapFile, "-z", zhgFile] -> do
       emf <- TIO.readFile eMapFile
       fmf <- TIO.readFile fMapFile
-      gf <- TIO.readFile grammarFile
+      gf <- TIO.getContents
       -- TODO mit ghc deutlich schneller als mit runghc, untersuchen!
-      case makeIRTG $ parseXRSMap
-             updateToken
-             (fromText emf)
-             updateToken
-             (fromText fmf)
-             updateToken
-             (emptyTS :: TokenMap)
-             gf of
+      case mkIRTG
+             (fromText emf, fromText fmf, emptyTS :: TokenMap)
+             (map parseXRSRule $ T.lines gf) of
         (irtg, ws, em, fm, nm) -> do
           B.writeFile (zhgFile ++ ".bhg.gz") $ compress $ B.encode irtg 
           B.writeFile (zhgFile ++ ".weights.gz") $ compress $ B.encode ws

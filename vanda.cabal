@@ -21,6 +21,8 @@ library
   build-depends:
       base
     , containers >= 0.5.1
+    , hashable
+    , unordered-containers
     , array
     , vector
     , heap

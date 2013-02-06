@@ -37,79 +37,74 @@ import Control.Arrow ( (&&&) )
 import Control.DeepSeq ( NFData(..) )
 import qualified Data.Array as A
 -- import Data.Word ( Word16 )
-import qualified Data.Map as M
-import qualified Data.Text.Lazy as TS
--- import qualified Data.Text.Lazy as T
+-- import qualified Data.Map as M
+import qualified Data.HashMap.Strict as M
+import qualified Data.Text as TS
+import qualified Data.Text.Lazy as T
+import Vanda.Util
 
 type Token = Int
-newtype TokenMap = TokenMap { unTokenMap :: M.Map TS.Text Token } deriving Show
+type TokenMap = Interner TS.Text
 newtype TokenArray = TokenArray { unTokenArray :: A.Array Token TS.Text }
 
-instance NFData TokenMap where
-  rnf = rnf . M.toList . unTokenMap
-
 getToken :: TokenMap -> TS.Text -> Token
-getToken = flip (M.findWithDefault (-1)) . unTokenMap
+getToken = flip (M.lookupDefault (-1)) . inMap
 
 getString :: TokenArray -> Token -> TS.Text
 getString = (A.!) . unTokenArray
 
 updateToken :: TokenMap -> TS.Text -> (TokenMap, Token)
-updateToken orig@(TokenMap m) s
-  = let t' = fromIntegral $ M.size m
-        f _ _ = id
-    in
-    case M.insertLookupWithKey' f s t' m of
-      (Nothing, m') -> (TokenMap m', t')
-      (Just t, _) -> (orig, t)
-  -- = case M.lookup s m of
-  --     Nothing -> let t = fromIntegral $ M.size m
-  --                in (TokenMap $ M.insert s t m, t)
-  --     Just t -> (orig, t)
+updateToken = intern
+  -- = let t' = fromIntegral $ M.size m
+  --       f _ _ = id
+  --   in
+  --   case M.insertLookupWithKey' f s t' m of
+  --     (Nothing, m') -> (TokenMap m', t')
+  --     (Just t, _) -> (orig, t)
 
 -- | This class provides common operations for 'TokenArray's and 'TokenMap's.
 class TokenStructure t where
   emptyTS :: t -- ^ empty token structure
-  fromText :: TS.Text -> t
+  fromText :: T.Text -> t
   getBounds :: t -> (Token, Token)
   toArray :: t -> TokenArray
   toMap :: t -> TokenMap
-  toText :: t -> TS.Text
+  toText :: t -> T.Text
 
 instance TokenStructure TokenArray where
   emptyTS = TokenArray $ A.array (0,-1) []
   getBounds = A.bounds . unTokenArray
   toText
-    = TS.unlines
+    = T.unlines
     . uncurry (:)
-    . ( TS.pack . show . (+1) . snd . A.bounds
-      &&& A.elems )
+    . ( T.pack . show . (+ 1) . snd . A.bounds
+      &&& map (T.pack . TS.unpack) . A.elems )
     . unTokenArray
   fromText
     = TokenArray
     . uncurry A.array
-    . ( (,) 0 . (-1+) . read . TS.unpack . head
-      &&& zip [0..] . tail )
-    . TS.lines
+    . ( (,) 0 . (-1+) . read . T.unpack . head
+      &&& zip [0..] . map (TS.pack . T.unpack) . tail )
+    . T.lines
   toArray = id
-  toMap
-    = TokenMap . M.fromList . map (snd &&& fst) . A.assocs . unTokenArray
+  toMap TokenArray{ .. }
+    = let (_, n) = A.bounds unTokenArray
+          inSize = n + 1
+          inMap = M.fromList $ map swap $ A.assocs $ unTokenArray
+      in Interner{ .. }
 
 instance TokenStructure TokenMap where
-  emptyTS = TokenMap M.empty
-  getBounds = (,) 0 . (-1+) . fromIntegral . M.size . unTokenMap
+  emptyTS = Interner{ inMap = M.empty, inSize = 0 }
+  getBounds = (,) 0 . (-1+) . inSize
   toText = toText . toArray
-  fromText
-    = TokenMap
-    . M.fromList
-    . flip zip [0..]
-    -- . map TS.unpack
-    . tail
-    . TS.lines
-  toArray
+  fromText t
+    = let (l : ls) = T.lines t
+          inSize = read $ T.unpack $ l
+          inMap = M.fromList $ flip zip [0..] $ map (TS.pack . T.unpack) $ ls
+      in Interner{ .. }
+  toArray Interner{ .. }
     = TokenArray
-    . uncurry A.array
-    . ( (,) 0 . (-1+) . fromIntegral . M.size
-      &&& map (snd &&& fst) . M.toList )
-    . unTokenMap
+    $ A.array (0, inSize - 1)
+    $ map (snd &&& fst)
+    $ M.toList inMap
   toMap = id

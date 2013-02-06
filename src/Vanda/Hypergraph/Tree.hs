@@ -1,12 +1,25 @@
 {-# LANGUAGE RecordWildCards #-}
 module Vanda.Hypergraph.Tree where
 
+import Data.Hashable ( Hashable (..) )
+
 data Tree l
   = Nullary { rootLabel :: l }
   | Unary { rootLabel :: l, sub1 :: Tree l }
   | Binary { rootLabel :: l, sub1 :: Tree l, sub2 :: Tree l }
   | Node { rootLabel :: l, _subForest :: [Tree l] }
   deriving (Eq, Ord, Show)
+  
+
+instance Hashable l => Hashable (Tree l) where
+  hashWithSalt salt Nullary{ .. } = hashWithSalt salt rootLabel
+  hashWithSalt salt Unary{ .. }
+    = salt `hashWithSalt` rootLabel `hashWithSalt` sub1
+  hashWithSalt salt Binary{ .. }
+    = salt `hashWithSalt` rootLabel `hashWithSalt` sub1 `hashWithSalt` sub2
+  hashWithSalt salt Node{ .. }
+    = salt `hashWithSalt` rootLabel `hashWithSalt` _subForest
+
 
 node :: l -> [Tree l] -> Tree l
 node l cs = case cs of
