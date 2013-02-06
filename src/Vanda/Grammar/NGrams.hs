@@ -26,11 +26,14 @@ module Vanda.Grammar.NGrams
 import qualified Data.Map as M
 import qualified Data.List as L
 
+{-- snippet NGrams --}
 data NGrams v
   = NGrams
-    { dict    :: (M.Map v Int, Int)
+    { dict    :: M.Map v Int
+    , dLength :: Int
     , weights :: M.Map [Int] (Double, Maybe Double)
     }
+{-- /snippet NGrams --}
 
 hasWeight
   :: (Ord v, Show v)
@@ -39,7 +42,7 @@ hasWeight
   -> Bool
 hasWeight _ []
   = True
-hasWeight (NGrams { dict = (d, _), weights = wt }) vs
+hasWeight (NGrams { dict = d, weights = wt }) vs
   = let vi = L.map (\x -> M.findWithDefault (-1) x d) vs
     in  M.member vi wt
 
@@ -51,7 +54,7 @@ getWeight
   -> (Double, Double)
 getWeight _ []
   = (0, 0)
-getWeight (NGrams { dict = (d, _), weights = wt }) vs
+getWeight (NGrams { dict = d, weights = wt }) vs
   = let vi = L.map (\x -> M.findWithDefault (-1) x d) vs
     in  case (M.lookup vi $ wt) of
           Nothing            -> (0, 0)
@@ -62,7 +65,7 @@ getWeight (NGrams { dict = (d, _), weights = wt }) vs
 empty
   :: NGrams v              -- ^ empty NGrams model
 empty
-  = NGrams (M.empty, 0) M.empty
+  = NGrams M.empty 0 M.empty
 
 addWord
   :: (Show v, Ord v)
@@ -70,9 +73,9 @@ addWord
   -> v                     -- ^ word
   -> NGrams v              -- ^ new NGrams
 addWord n ve
-  = let (m, c) = dict n
+  = let (m, c) = (dict n, dLength n)
     in  if   M.notMember ve m
-        then n { dict = (M.insert ve c m, c + 1) }
+        then n { dict = M.insert ve c m, dLength = c + 1 }
         else n
 
 -- | Adds an n-gram to the model.
@@ -85,12 +88,13 @@ addNGram
   -> NGrams v              -- ^ new NGrams
 addNGram n@(NGrams { weights = wt }) vs w1 w2
   = let n' = L.foldl' addWord n vs
-        vi = L.map (\ x -> fst (dict n') M.! x) vs
+        vi = L.map (\ x -> (dict n') M.! x) vs
     in  n' { weights = M.insert vi (w1, w2) wt }
 
 -- | Determines the weight of a single n-gram using Katz Backoff.
 --   P_katz(w0...wn) = / P(w0...wn)                    , if C(w0...wn) > 0
 --                     \ b(w0...wn-1) * P_katz(w1...wn), otherwise.
+{-- snippet KatzBackoff --}
 find
   :: (Show v, Ord v)
   => NGrams v              -- ^ NGrams on which to base the evaluation
@@ -103,6 +107,7 @@ find n vs
              vs2    = L.drop 1 vs                   -- w1...wn
              (_, b) = getWeight n vs1
          in  b + find n vs2
+{-- /snippet KatzBackoff --}
 
 -- | Scores a sentence.
 evaluate
