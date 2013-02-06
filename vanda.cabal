@@ -63,7 +63,7 @@ library
     , Vanda.Grammar.NGrams
     , Vanda.Grammar.NGrams.Text
     , Vanda.Grammar.NGrams.Functions
-    -- , Vanda.Grammar.NGrams.KenLM
+    , Vanda.Grammar.NGrams.KenLM
     , Vanda.Hypergraph.Binary
     , Vanda.Hypergraph.BackwardStar
     , Vanda.Hypergraph.Basic
