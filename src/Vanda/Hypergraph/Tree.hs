@@ -21,6 +21,14 @@ instance Hashable l => Hashable (Tree l) where
     = salt `hashWithSalt` rootLabel `hashWithSalt` _subForest
 
 
+arity :: Tree l -> Int
+arity t = case t of
+            Nullary{} -> 0
+            Unary{} -> 1
+            Binary{} -> 2
+            Node{ .. } -> length _subForest
+
+
 node :: l -> [Tree l] -> Tree l
 node l cs = case cs of
               [] -> Nullary{ rootLabel = l }

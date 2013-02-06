@@ -1,5 +1,6 @@
 module Vanda.Grammar.XRS.IRTG where
 
+import Data.Hashable ( Hashable (..) )
 import Data.NTT
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
@@ -19,7 +20,7 @@ data IRTG i
     { rtg :: Hypergraph StrictIntPair i
     , initial :: Int
     , h1 :: V.Vector (T.Tree NTT)
-    , h2 :: V.Vector [NTT]
+    , h2 :: V.Vector (V.Vector NTT)
     }
 
 data XRS
@@ -28,3 +29,5 @@ data XRS
     , weights :: VU.Vector Double
     }
 
+instance Hashable (V.Vector NTT) where
+  hashWithSalt salt = hashWithSalt salt . V.toList

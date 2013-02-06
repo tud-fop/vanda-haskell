@@ -143,14 +143,14 @@ registerTree m t = do
       let i' = tt i in i' `seq` return $! T.node i' t'
 
 
-registerString :: STRef s TokenMap -> [Var TS.Text] -> ST s [NTT]
-registerString m xs = do
-  forM xs $ \ x ->
-    case x of
-      Var i -> let i' = nt i in i' `seq` return i' -- return $! nt i
-      NV s -> do
-        i <- registerToken m s
-        let i' = tt i in i' `seq` return i' -- return $! tt i
+registerString :: STRef s TokenMap -> [Var TS.Text] -> ST s (V.Vector NTT)
+registerString m xs
+  = fmap V.fromList $ forM xs $ \ x ->
+      case x of
+        Var i -> let i' = nt i in i' `seq` return i' -- return $! nt i
+        NV s -> do
+          i <- registerToken m s
+          let i' = tt i in i' `seq` return i' -- return $! tt i
 
 
 mkIRTG
@@ -162,7 +162,7 @@ mkIRTG (em_, fm_, nm_) rs_ = runST $ do
   fm <- newSTRef fm_
   nm <- newSTRef nm_
   tm <- newSTRef (emptyInterner :: Interner (T.Tree NTT))
-  sm <- newSTRef (emptyInterner :: Interner [NTT])
+  sm <- newSTRef (emptyInterner :: Interner (V.Vector NTT))
   ws <- newSTRef (emptyInterner :: Interner Double)
   rs <- newSTRef ([] :: [Hyperedge StrictIntPair Int])
   forM_ rs_ $ \ XRSRule{ .. } -> let NV q = T.rootLabel lhs in do

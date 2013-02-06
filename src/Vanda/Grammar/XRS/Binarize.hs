@@ -23,7 +23,7 @@ import qualified Data.IntSet as IS
 import qualified Data.Ix as Ix
 import Data.List ( foldl', sortBy )
 import qualified Data.Map as M
-import Data.Maybe ( listToMaybe )
+import Data.Maybe ( listToMaybe, fromJust )
 import Data.NTT
 import qualified Data.Set as S
 import qualified Data.Vector as V
@@ -32,6 +32,8 @@ import Vanda.Grammar.XRS.IRTG
 import Vanda.Hypergraph.IntHypergraph
 import qualified Vanda.Hypergraph.Tree as T
 import Vanda.Util
+
+-- import Debug.Trace ( traceShow )
 
 
 -- myshow WTA { .. } = "Final state: " ++ show finalState ++ "\nTransitions:\n"
@@ -80,6 +82,10 @@ data Label = Concat !Int | Symbol !Int deriving (Eq, Ord, Show)
 strrr :: RegSeed Label
 strrr sc@Symbol{}
   = WTA 0 [] $ Hypergraph 1 $ [ mkHyperedge 0 [] (NV sc) () ]
+strrr (Concat 0)
+  = WTA 0 [] $ Hypergraph 1 $ [ mkHyperedge 0 [] (NV (Concat 0)) () ]
+strrr (Concat 1)
+  = error "no concat 1, please"
 strrr (Concat k)
   = WTA (st (0, k)) [ st (i - 1, i) | i <- [1..k] ]
   $ Hypergraph (Ix.rangeSize ix)
@@ -122,7 +128,7 @@ computeVars gm_ WTA{ transitions = ts, .. } = runST $ do
 
 
 computeVars' :: [WTA (Var l)] -> [VarMap]
-computeVars' = snd . flip foldl' (M.empty, [])
+computeVars' = reverse . snd . flip foldl' (M.empty, [])
                   (\ (gm, vs) ta -> second' (: vs) $ computeVars gm ta)
 
 
@@ -184,12 +190,12 @@ backMskel branches am wta@WTA{ transitions = tr@Hypergraph{ .. } }
   = wta{ transitions = tr{ edges = filter p edges } }
   where
     p e = let s = sequence am (from e)
-          in length s <= 2 || s == IM.findWithDefault [] (to e) branches
+          in length s < 2 || s == IM.findWithDefault [] (snd $ am IM.! to e) branches
 
 
 fmap' :: (Int -> Int) -> Var l -> Var l
 fmap' _ nv@NV{} = nv
-fmap' f (Var i) = Var (f i)
+fmap' f (Var i) = var (f i)
 
 
 freshen :: (Int -> Int) -> T.Tree (Var l) -> T.Tree (Var l)
@@ -197,10 +203,10 @@ freshen f = fmap (fmap' f)
 
 
 replace
-  :: T.Tree (Var l) -> Int -> T.Tree (Var l) -> T.Tree (Var l)
-replace t i t'
+  :: Int -> T.Tree (Var l) -> T.Tree (Var l) -> T.Tree (Var l)
+replace i t' t
   = case T.rootLabel t of
-      NV _ -> t
+      NV _ -> T.mapChildren (replace i t') t
       Var i' | i == i' -> t'
              | otherwise -> t
 
@@ -215,30 +221,34 @@ merge frag _ _ [] ts' = (frag, ts')
 merge frag k l (it@(i, t) : ts) ts'
   = case T.rootLabel t of
       (Var _, _) -> merge frag k l ts (it : ts')
-      (NV t', _) -> let l' = length (T.subForest t) in
-        case k + l' of
+      (NV t', _) -> let l' = T.arity t in
+        case k + l' - 1 of
           k' | k' <= 2 -> merge
-                            (replace frag i (freshen (+ l) t'))
-                            (k + l' - 1) (l + l') ts
+                            (replace i (freshen (+ l) t') frag)
+                            k' (l + l') ts
                             (map (first' (+ l)) (zip [0..] (T.subForest t))
                               ++ ts')
              | otherwise -> merge frag k l ts (it : ts')
 
 
-decompose :: T.Tree (Var l) -> T.Tree (Var (T.Tree (Var l)), IS.IntSet)
-decompose (T.Nullary (Var i)) = T.Nullary (Var i, IS.singleton i)
+decompose :: Show l => T.Tree (Var l) -> T.Tree (Var (T.Tree (Var l)), IS.IntSet)
+decompose (T.Nullary (Var i))
+  = let is = IS.singleton i
+    in T.Unary (NV (T.Nullary (var 0)), is) (T.Nullary (var i, is))
+-- above: inserted NV (T.Nullary ...), otherwise we can get "empty" decompositions (only x0)
 decompose (T.Nullary (NV l)) = T.Nullary (NV (T.Nullary (NV l)), IS.empty)
 decompose t
   = case T.rootLabel t of
       NV l -> let ts = map decompose (T.subForest t)
                   k = length ts
                   ini = T.node (NV l) [ T.Nullary (var i) | i <- [0..k - 1] ]
-                  (mg, ts') = merge ini k k (zip [0..] ts) []
+                  tssort = sortBy (compare `on` fst) [ (T.arity $ snd p, p) | p <- zip [0..] ts ]
+                  (mg, ts') = merge ini k k (map snd tssort) []
                   sorted = sortBy (compare `on` (IS.findMin . snd . T.rootLabel . snd)) ts'
                   revar = IM.fromList $ zip (map fst sorted) [0..]
                   fin = freshen (revar IM.!) mg
               in T.node (NV fin, foldl' IS.union IS.empty (map (snd . T.rootLabel . snd) ts'))
-                 (map snd sorted)
+                   (map snd sorted)
 
 
 mkHom :: (t -> t') -> M.Map t Int -> V.Vector t'
@@ -247,12 +257,14 @@ mkHom f m = V.fromList $ A.elems $ A.array (0, M.size m - 1)
 
 
 binarizeTerms
-  :: RegSeed l
+  :: Show l
+  => RegSeed l
   -> RegSeed l
+  -> (forall l'. (WTA l' -> Maybe (T.Tree l')))
   -> (forall l'. (WTA l' -> Maybe (T.Tree l')))
   -> (T.Tree (Var l), T.Tree (Var l))
   -> Maybe (T.Tree (Var (T.Tree (Var l))), T.Tree (Var (T.Tree (Var l))))
-binarizeTerms b1 b2 select (h1alpha, h2alpha)
+binarizeTerms b1 b2 select select1 (h1alpha, h2alpha)
   = let rhs1 = liftSeed b1 h1alpha
         rhs2 = liftSeed b2 h2alpha
         [m1, m2] = computeVars' [rhs1, rhs2]
@@ -262,8 +274,8 @@ binarizeTerms b1 b2 select (h1alpha, h2alpha)
     in do
        t' <- select b'
        let bran = extractBranches IM.empty [t']
-       t1 <- select $ backMskel bran m1 rhs1
-       t2 <- select $ backMskel bran m2 rhs1
+       let t1 = fromJust $ select1 $ backMskel bran m1 rhs1
+       let t2 = fromJust $ select1 $ backMskel bran m2 rhs2
        return (fmap fst $ decompose t1, fmap fst $ decompose t2)
 
 
@@ -271,6 +283,13 @@ smallest :: WTA l -> Maybe (T.Tree l)
 smallest (WTA fs _ tr)
   = fmap (fmap label . deriv) $ listToMaybe
   $ (A.! fs) $ knuth tr (\ _ _ _ -> 1.0)
+
+
+smallestLeftHeavy :: WTA l -> Maybe (T.Tree l)
+smallestLeftHeavy (WTA fs _ tr)
+  = fmap (fmap label . deriv) $ listToMaybe
+  $ (A.! fs) $ knuth tr
+  $ \ _ _ ds -> foldl' (\ x (y, z) -> x - y * z) 0.0 (zip [1..] ds)
 
 
 binarizeXRS :: IRTG Int -> IRTG Int
@@ -281,10 +300,11 @@ binarizeXRS irtg@IRTG{ .. }
     newh2 <- newSTRef M.empty
     virt <- newSTRef M.empty
     let addRule v vs ti si i
-          = modifySTRef' tr (mkHyperedge v vs (SIP ti si) i :)
+          = let e = mkHyperedge v vs (SIP ti si) i
+            in e `seq` modifySTRef' tr (e :)
     let mkRules atroot e (t1, t2)
           = case (T.rootLabel t1, T.rootLabel t2) of
-              (Var i, Var _) -> return $ e `deref` (i - 1)
+              (Var i, Var _) -> return $ e `deref` i
               (NV f1, NV f2) -> do
                 vs <- forM (zip (T.subForest t1) (T.subForest t2))
                         $ mkRules False e
@@ -300,8 +320,9 @@ binarizeXRS irtg@IRTG{ .. }
       case label e of
         SIP i1 i2 ->
           let tterm = h1convert (h1 V.! i1)
-              sterm = h2convert (h2 V.! i2)
-          in case binarizeTerms treerr strrr smallest (tterm, sterm) of
+              sterm = h2convert $ V.toList (h2 V.! i2)
+          in case binarizeTerms treerr strrr smallest smallest -- LeftHeavy
+                    (tterm, sterm) of
             Just decomp ->
               mkRules True e decomp >> return ()
             Nothing -> do -- carry over
@@ -311,13 +332,14 @@ binarizeXRS irtg@IRTG{ .. }
     nodes <- fmap ((+ nodes rtg) . M.size) $ readSTRef virt
     edges <- readSTRef tr
     h1_ <- fmap (mkHom $ fmap h1cc) $ readSTRef newh1
-    h2_ <- fmap (mkHom h2cc) $ readSTRef newh2
+    h2_ <- fmap (mkHom (V.fromList . h2cc)) $ readSTRef newh2
     return irtg{ rtg = Hypergraph{ .. }, h1 = h1_, h2 = h2_ } 
   where
     h1convert t
       = case T.rootLabel t of
           NT i -> T.Nullary (var i)
           T i -> case T.subForest t of
+                   [t'] -> T.Unary (NV (Symbol i)) (h1convert t')
                    ts -> T.Unary (NV (Symbol i))
                          $ T.node (NV (Concat (length ts))) (map h1convert ts)
     h2convert [x] = h2cv x

@@ -114,7 +114,7 @@ main = do
                 ++ show w
               | e <- edges rtg
               , arity e <= 2
-              , let lhs = h2 V.! _snd (label e)
+              , let lhs = V.toList $ h2 V.! _snd (label e)
               , lhs /= [NT 0]
               , let rhs = T.front $ h1 V.! _fst (label e)
               , let l = [ i | NT i <- lhs ]

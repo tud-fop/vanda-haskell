@@ -21,8 +21,8 @@ import Vanda.Grammar.XRS.Binarize ( binarizeXRS )
 import Vanda.Grammar.XRS.Binary ()
 import Vanda.Grammar.XRS.IRTG
 
-{-# OPTIONS_GHC -fno-warn-orphans #-}
-instance NFData StrictIntPair
+-- {-# OPTIONS_GHC -fno-warn-orphans #-}
+-- instance NFData StrictIntPair
 
 main :: IO ()
 main = do

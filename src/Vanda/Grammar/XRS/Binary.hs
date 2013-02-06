@@ -20,9 +20,9 @@ instance B.Binary StrictIntPair where
 instance (B.Binary i, NFData i, NFData StrictIntPair)
   => B.Binary (IRTG i) where
   get = do
-          rtg <- B.get
-          initial <- rtg `seq` B.get
-          h1 <- initial `seq` fmap V.fromList B.get
-          h2 <- h1 `seq` fmap V.fromList B.get
-          h2 `seq` return $! IRTG { .. }
-  put IRTG{ .. } = B.put rtg >> B.put initial >> B.put (V.toList h1) >> B.put (V.toList h2)
+          !rtg <- B.get
+          !initial <- B.get
+          !h1 <- fmap V.fromList B.get
+          !h2 <- fmap (V.fromList . map V.fromList) B.get
+          return $! IRTG { .. }
+  put IRTG{ .. } = B.put rtg >> B.put initial >> B.put (V.toList h1) >> B.put (map V.toList $ V.toList h2)
