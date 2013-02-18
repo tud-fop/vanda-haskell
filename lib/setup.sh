@@ -49,9 +49,9 @@ install () {
 	else
 		mkdir -p ~/.local/lib/
 		cp libkenlm.so ~/.local/lib/.
-		echo "Installed library to '$HOME/local/lib/libkenlm.so',"
-		echo "add '$HOME/local/lib' to 'LD_LIBRARY_PATH':"
-		echo "  export LD_LIBRARY_PATH=\"$HOME/local/lib:\$LD_LIBRARY_PATH\""
+		echo "Installed library to '$HOME/.local/lib/libkenlm.so',"
+		echo "add '$HOME/.local/lib' to 'LD_LIBRARY_PATH':"
+		echo "  export LD_LIBRARY_PATH=\"$HOME/.local/lib:\$LD_LIBRARY_PATH\""
 		echo "or move the library to the global library path."
 	fi
 }
