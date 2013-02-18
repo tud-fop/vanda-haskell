@@ -19,8 +19,11 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 
 module Vanda.Grammar.NGrams.KenLM
-  ( -- * Loading models
-    loadNGrams
+  ( -- * Types
+    KenLM
+  , KenLMState
+    -- * Loading models
+  , loadNGrams
     -- * Constants
   , beginSentenceState
   , nullContextState
@@ -29,55 +32,82 @@ module Vanda.Grammar.NGrams.KenLM
   , evaluateLine
   ) where
 
-import Data.Text.Lazy as T
+import qualified Data.Text.Lazy as T
+import qualified Data.List as L
 import Foreign.C
 import Foreign.Ptr
 import System.IO.Unsafe
+import Data.Array.Storable
 
 data KenTrieModel = KenTrieModel
 data State = State
 
+type KenLM = Ptr KenTrieModel
+type KenLMState = Ptr State
+
 foreign import ccall "loadModel" cLoadNGrams
                  :: CString -> IO (Ptr KenTrieModel)
 
+foreign import ccall "order" cOrder
+                 :: KenLM -> CInt
+
+foreign import ccall "index" cIndex
+                 :: KenLM -> CString -> IO CInt
+
 foreign import ccall "beginSentenceState" cBeginSentenceState
-                 :: Ptr KenTrieModel -> Ptr State
+                 :: KenLM -> KenLMState
 
 foreign import ccall "nullContextState" cNullContextState
-                 :: Ptr KenTrieModel -> Ptr State
+                 :: KenLM -> KenLMState
 
 foreign import ccall "lookup" cLookup
-                 :: Ptr KenTrieModel -> Ptr State -> CString -> IO CFloat
+                 :: KenLM -> KenLMState -> CString -> IO CFloat
+
+foreign import ccall "lookupInt" cLookupInt
+                 :: KenLM -> KenLMState -> Ptr CInt -> CInt -> IO CFloat
 
 foreign import ccall "score" cEvaluateLine
-                 :: Ptr KenTrieModel -> CString -> IO CFloat
+                 :: KenLM -> CString -> IO CFloat
+
+foreign import ccall "scoreInt" cEvaluateLineInt
+                 :: KenLM -> Ptr CInt -> CInt -> IO CFloat
 
 -- | Loads a KenTrieModel from a binary ARPA file containing a TrieModel OR
 -- a textual ARPA file.
 loadNGrams
   :: FilePath                  -- ^ file name
-  -> Ptr KenTrieModel          -- ^ model
+  -> KenLM                     -- ^ model
 loadNGrams s
   = unsafePerformIO $ withCString s cLoadNGrams
 
+dictIndex
+  :: KenLM
+  -> T.Text
+  -> Int
+dictIndex m t
+  = unsafePerformIO
+  $ withCString
+      (T.unpack t)
+      (fmap fromIntegral . cIndex m) 
+
 -- | Returns the State to use when at the beginning of a sentence.
 beginSentenceState
-  :: Ptr KenTrieModel          -- ^ model
-  -> Ptr State                 -- ^ 'State' for the beginning of a sentence
+  :: KenLM                     -- ^ model
+  -> KenLMState                -- ^ 'State' for the beginning of a sentence
 beginSentenceState
   = cBeginSentenceState
 
 -- | Returns the State to use when there is no context.
 nullContextState
-  :: Ptr KenTrieModel          -- ^ model
-  -> Ptr State                 -- ^ 'State' for empty context
+  :: KenLM                     -- ^ model
+  -> KenLMState                -- ^ 'State' for empty context
 nullContextState
   = cNullContextState
 
 -- | Scores a phrase beginning with a 'State'.
 evaluate
-  :: Ptr KenTrieModel          -- ^ model
-  -> Ptr State                 -- ^ 'State' to start with
+  :: KenLM                     -- ^ model
+  -> KenLMState                -- ^ 'State' to start with
   -> T.Text                    -- ^ phrase to score
   -> Float                     -- ^ score
 evaluate m s t
@@ -86,9 +116,22 @@ evaluate m s t
       (T.unpack t)
       (fmap realToFrac . cLookup m s)
 
+evaluateInt
+  :: KenLM                     -- ^ model
+  -> KenLMState                -- ^ 'State' to start with
+  -> [Int]                     -- ^ phrase to score
+  -> Float                     -- ^ score
+evaluateInt m s is
+  = unsafePerformIO
+  $ do a <- newListArray
+              (1, L.length is)
+              (L.map fromIntegral is)
+       withStorableArray a
+         (\p -> fmap realToFrac . cLookupInt m s p . fromIntegral . L.length $ is)
+
 -- | Scores a whole sentence.
 evaluateLine
-  :: Ptr KenTrieModel          -- ^ model
+  :: KenLM                     -- ^ model
   -> T.Text                    -- ^ sentence to score
   -> Float                     -- ^ score
 evaluateLine m s
@@ -96,3 +139,6 @@ evaluateLine m s
   $ withCString
       (T.unpack s)
       (fmap realToFrac . cEvaluateLine m)
+
+order :: KenLM -> Int
+order = fromIntegral . cOrder
