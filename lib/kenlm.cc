@@ -15,7 +15,7 @@ extern "C" {
 		return model->Order();
 	}
 	
-	extern int index(const TrieModel* model, const char* word) {
+	extern int indexWord(const TrieModel* model, const char* word) {
 		const std::string s(word);
 		const SortedVocabulary &vocab = model->GetVocabulary();
 		return vocab.Index(s);

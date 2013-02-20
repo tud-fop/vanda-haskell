@@ -27,4 +27,3 @@ data XRS
     { irtg :: IRTG Int
     , weights :: VU.Vector Double
     }
-

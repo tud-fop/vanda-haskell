@@ -27,17 +27,21 @@ module Vanda.Grammar.NGrams.KenLM
     -- * Constants
   , beginSentenceState
   , nullContextState
-    -- * Scoring
+  , order
+    -- * Querying
+  , dictIndex
   , evaluate
+  , evaluateInt
   , evaluateLine
   ) where
 
 import qualified Data.Text.Lazy as T
 import qualified Data.List as L
+import qualified Data.Array.Storable as A
+
 import Foreign.C
 import Foreign.Ptr
 import System.IO.Unsafe
-import Data.Array.Storable
 
 data KenTrieModel = KenTrieModel
 data State = State
@@ -51,7 +55,7 @@ foreign import ccall "loadModel" cLoadNGrams
 foreign import ccall "order" cOrder
                  :: KenLM -> CInt
 
-foreign import ccall "index" cIndex
+foreign import ccall "indexWord" cIndex
                  :: KenLM -> CString -> IO CInt
 
 foreign import ccall "beginSentenceState" cBeginSentenceState
@@ -76,9 +80,9 @@ foreign import ccall "scoreInt" cEvaluateLineInt
 -- a textual ARPA file.
 loadNGrams
   :: FilePath                  -- ^ file name
-  -> KenLM                     -- ^ model
+  -> IO KenLM                  -- ^ model
 loadNGrams s
-  = unsafePerformIO $ withCString s cLoadNGrams
+  = withCString s cLoadNGrams
 
 dictIndex
   :: KenLM
@@ -109,7 +113,7 @@ evaluate
   :: KenLM                     -- ^ model
   -> KenLMState                -- ^ 'State' to start with
   -> T.Text                    -- ^ phrase to score
-  -> Float                     -- ^ score
+  -> Double                    -- ^ score
 evaluate m s t
   = unsafePerformIO
   $ withCString
@@ -120,20 +124,20 @@ evaluateInt
   :: KenLM                     -- ^ model
   -> KenLMState                -- ^ 'State' to start with
   -> [Int]                     -- ^ phrase to score
-  -> Float                     -- ^ score
+  -> Double                    -- ^ score
 evaluateInt m s is
   = unsafePerformIO
-  $ do a <- newListArray
+  $ do a <- A.newListArray
               (1, L.length is)
               (L.map fromIntegral is)
-       withStorableArray a
+       A.withStorableArray a
          (\p -> fmap realToFrac . cLookupInt m s p . fromIntegral . L.length $ is)
 
 -- | Scores a whole sentence.
 evaluateLine
   :: KenLM                     -- ^ model
   -> T.Text                    -- ^ sentence to score
-  -> Float                     -- ^ score
+  -> Double                    -- ^ score
 evaluateLine m s
   = unsafePerformIO
   $ withCString
