@@ -74,6 +74,7 @@ library
     , Vanda.Hypergraph.NFData
     , Vanda.Hypergraph.Text
     , Vanda.Hypergraph.Tree
+    , Data.IntTokenMap
     , Data.NTT
     , Data.NTTBinary
     , Data.Queue

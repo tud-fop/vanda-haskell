@@ -10,6 +10,7 @@ import qualified Vanda.Grammar.XRS.Functions as IF
 import qualified Vanda.Grammar.XRS.IRTG as I
 import qualified Vanda.Grammar.NGrams.KenLM as LM
 import qualified Vanda.Algorithms.IntersectWithNGram as IS
+import qualified Vanda.Hypergraph.IntHypergraph as HI
 
 main
   :: IO ()
@@ -23,7 +24,7 @@ main = do
       lm    <- LM.loadNGrams lmFile
       let xrs  = I.XRS irtg1 (VU.generate (V.length ws) (ws V.!))
       let xrs' = IS.intersect lm . IS.relabel lm fm $ xrs
-      TIO.putStr . T.pack . show . I.h2 . I.irtg $ xrs
+      TIO.putStr . T.pack . show $ xrs
       TIO.putStr . T.pack $ "\n"
-      TIO.putStr . T.pack . show . I.h2 . I.irtg $ xrs'
+      TIO.putStr . T.pack . show $ xrs'
       TIO.putStr . T.pack $ "\n"
