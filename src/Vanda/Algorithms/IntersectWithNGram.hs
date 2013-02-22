@@ -90,7 +90,7 @@ intersect lm I.XRS{ .. }
               $ h2
         its'  = makeSingleEndState
                   (initial ==)
-                  (0, ([], []))
+                  (0, emptyNState)
                   lbl'
                   its
         wt_es = groupByWeight its'
@@ -102,7 +102,7 @@ intersect lm I.XRS{ .. }
               . snd
               $ wt_es
         (es'', vtx)                                   -- integerize Hypergraph
-              = integerize (0, ([], [])) es
+              = integerize (0, emptyNState) es
         irtg' = I.IRTG                                -- build IRTG
                  (HI.mkHypergraph es'') vtx h1' h2'
         xrs'  = I.XRS irtg' mu'                       -- build XRS
@@ -135,8 +135,14 @@ initRule
   -> KenLM                          -- ^ language model
   -> HI.Hyperedge l i1              -- ^ rule
   -> Item Int l Double              -- ^ resulting 'Item'
-initRule w h2 lm he
-  = ((HI.to he, initState (order lm) . h2 $ he), w he, [], HI.label he)
+initRule mu h2 lm he
+  = let f (T x) = x
+        (st, w) = mkNState lm . map f . h2 $ he
+    in  ( (HI.to he, st)
+        , w * (mu he)
+        , []
+        , HI.label he
+        )
 
 -- | Combines 'Item's by a rule. The 'Item's and the rule must
 --   match (not checked).

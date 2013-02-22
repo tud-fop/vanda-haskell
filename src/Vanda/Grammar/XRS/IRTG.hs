@@ -39,7 +39,7 @@ instance Show XRS where
                 ++ " || "
                 ++ (cut 30 . show . (V.!) h1 . _fst . label $ he)
                 ++ " | "
-                ++ (cut 25 . show . (V.!) h2 . _snd . label $ he)
+                ++ (show . (V.!) h2 . _snd . label $ he)
           )
     . edges
     $ hg
