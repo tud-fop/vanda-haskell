@@ -39,7 +39,17 @@ import qualified Vanda.Grammar.XRS.IRTG as I
 
 import Debug.Trace
 
-type Item i l w = ((i, NState i), w, [(i, NState i)], l)
+data CState i
+  = CState { _fst :: i
+           , _snd :: NState i
+  } deriving (Eq, Show, Ord)
+
+data Item i l w
+  = Item { _to    :: CState i
+         , _wt    :: w
+         , _from  :: [CState i]
+         , _lbl   :: l
+  } deriving (Show)
 
 -- | Relabels the terminals in 'h2' according to the String-to-Int mapping
 --   in the language model.
@@ -94,7 +104,7 @@ intersect lm I.XRS{ .. }
               $ h2
         its'  = makeSingleEndState
                   (initial ==)
-                  (0, emptyNState)
+                  (CState 0 emptyNState)
                   lbl'
                   its
         wt_es = groupByWeight its'
@@ -106,7 +116,7 @@ intersect lm I.XRS{ .. }
               . snd
               $ wt_es
         (es'', vtx)                                   -- integerize Hypergraph
-              = integerize (0, emptyNState) es
+              = integerize (CState 0 emptyNState) es
         irtg' = I.IRTG                                -- build IRTG
                  (HI.mkHypergraph es'') vtx h1' h2'
         xrs'  = I.XRS irtg' mu'                       -- build XRS
@@ -126,9 +136,9 @@ intersect' lm w h2 hg
 
 -- | Converts an 'Item' to a Hyperedge.
 itemToHyperedge
-  :: ((i, NState i), [(i, NState i)], l)
+  :: (CState i, [CState i], l)
   -> i1
-  -> HB.Hyperedge (i, NState i) l i1
+  -> HB.Hyperedge (CState i) l i1
 itemToHyperedge (h, t, lbl) idx
   = HB.mkHyperedge h t lbl idx
 
@@ -142,41 +152,39 @@ initRule
 initRule mu h2 lm he
   = let f (T x) = x
         (st, w) = mkNState lm . map f . h2 $ he
-    in  ( (HI.to he, st)
-        , w * (mu he)
-        , []
-        , HI.label he
-        )
+    in  Item 
+          (CState (HI.to he) st)
+          (w * (mu he))
+          []
+          (HI.label he)
 
 -- | Combines 'Item's by a rule. The 'Item's and the rule must
 --   match (not checked).
--- blowRule
---   :: (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
---   -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
---   -> KenLM                          -- ^ language model
---   -> HI.Hyperedge l i1              -- ^ rule
---   -> [Item i l w]                   -- ^ 'Item's
---   -> Item i l w                     -- ^ resulting 'Item'
--- blowRule w h2 lm he is
---   = let ss  = blowHelper (h2 he) is
---         mu' = (w he) * (getWeight lm ss)
---         s'  = collapseStates (order lm) ss
---     in  ((to he, s'), mu', he)-}
+blowRule
+  :: (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
+  -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
+  -> KenLM                          -- ^ language model
+  -> HI.Hyperedge l i1              -- ^ rule
+  -> [Item Int l Double]              -- ^ 'Item's
+  -> Item Int l Double                -- ^ resulting 'Item'
+blowRule mu h2 lm he is
+  = let xs     = map _to is
+        (x, w) = toNState lm (M.fromList . map (\ (CState a b) -> (a, b)) $ xs) (h2 he)
+    in  Item (CState (HI.to he) x) (mu he * w) xs (HI.label he)
 
--- | Combines a String of terminals and non-terminals with a String of 'Item's
---   to a String of terminals and states
--- blowHelper
---   :: [NTT]
---   -> [Item i l w]
---   -> [NStateString Int]
--- blowHelper [] _
---   = []
--- blowHelper ((T x):xs) ys
---   = [x]:(blowHelper xs ys)
--- blowHelper ((NT _):xs) (((_, y), _, _, _):ys)
---   = y:(blowHelper xs ys)
--- blowHelper _ _
---   = []
+toNState
+  :: KenLM
+  -> M.Map Int (NState Int)
+  -> [NTT]
+  -> (NState Int, Double)
+toNState lm m xs
+  = let f (T i)  = mkNState lm [i]
+        f (NT i) = (m M.! i, 0)
+    in  (\ ((x, w1), w2) -> (x, w1 + w2))
+      . (\ (xs', w) -> (mergeNStates lm xs', sum w))
+      . unzip
+      . map f
+      $ xs
 
 -- | Takes 'Hyperedge's with arbitrary vertex type and returns 'Hyperedges'
 --   with vertex type 'Int'.
@@ -200,25 +208,25 @@ integerize vtx es
 makeSingleEndState
   :: (Eq i, Fractional w)
   => (i -> Bool)                       -- ^ is a end state
-  -> (i, NState i)                     -- ^ new end state
+  -> CState i                          -- ^ new end state
   -> l                                 -- ^ label of new rules
   -> [Item i l w]                      -- ^ old 'Item's
   -> [Item i l w]                      -- ^ new 'Item's
 makeSingleEndState p vInit lbl es
   = (++) es
-  . map (\x -> (vInit, 1.0, [x], lbl))
+  . map (\x -> Item vInit 1.0 [x] lbl)
   . L.nub
-  . filter (p . fst)
-  . map (\(x, _, _, _) -> x)
+  . filter (p . _fst)
+  . map _to
   $ es
 
 -- | Groups a 'List' of 'Item's by the weight. Unzips it.
 groupByWeight
   :: Ord w
   => [Item i l w]
-  -> ([w], [[((i, NState i),[(i, NState i)], l)]])
+  -> ([w], [[(CState i,[CState i], l)]])
 groupByWeight
   = unzip
   . M.toList
   . M.fromListWith (++)
-  . map (\(a, b, c, d) -> (b, [(a, c, d)]))
+  . map (\(Item a b c d) -> (b, [(a, c, d)]))
