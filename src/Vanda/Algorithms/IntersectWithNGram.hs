@@ -75,11 +75,15 @@ intersect lm I.XRS{ .. }
         its   = intersect' lm mu hom rtg              -- generate items
         lbl'  = I.SIP                                 -- generate homomorphism
                   ((+) 1 . L.maximumBy compare        --  pointers
-                         . map (\ (I.SIP x _) -> x) 
-                         . map HI.label . HI.edges $ rtg)
+                         . map (I._fst . HI.label)
+                         . HI.edges
+                         $ rtg
+                  )
                   ((+) 1 . L.maximumBy compare 
-                         . map (\ (I.SIP _ y) -> y) 
-                         . map HI.label . HI.edges $ rtg)
+                         . map (I._snd . HI.label)
+                         . HI.edges
+                         $ rtg
+                  )
         h1'   = V.fromList                            -- update h1
               . flip (++) [T.Unary (T 0) (T.Nullary (NT 0))]
               . V.toList
