@@ -11,7 +11,15 @@
 
 {-# LANGUAGE FlexibleContexts #-}  -- for 'Stream'
 
-module Vanda.Grammar.XRS.Text ( XRSRule, mkIRTG, parseXRSRule ) where
+module Vanda.Grammar.XRS.Text
+  ( XRSRule
+  , mkIRTG
+  , parseXRSRule
+  , prettyPrint'
+  , prettyPrint
+  , prettyPrintJoshua'
+  , prettyPrintJoshua
+  ) where
 
 import Control.Applicative ( many )
 import Control.Monad ( forM_, forM )
@@ -19,13 +27,12 @@ import Control.Monad.ST
 import Control.Seq
 import qualified Data.Array as A
 import qualified Data.IntMap as IM
-import Data.List ( foldl' )
-import qualified Data.Map as M
+import Data.List ( foldl', elemIndex )
 import Data.NTT
 import qualified Data.Text as TS
 import qualified Data.Text.Lazy as T
 import qualified Data.Vector as V
-import Text.Parsec hiding ( many )
+import Text.Parsec hiding ( many, label )
 import Text.Parsec.Text.Lazy
 
 import Vanda.Grammar.XRS.IRTG
@@ -186,6 +193,141 @@ mkIRTG (em_, fm_, nm_) rs_ = runST $ do
 
 
 
+  
+
+att :: T.Text
+att = T.singleton '@'
+
+lrb :: T.Text
+lrb = T.singleton '('
+
+rrb :: T.Text
+rrb = T.singleton ')'
+
+spa :: T.Text
+spa = T.singleton ' '
+
+col :: T.Text
+col = T.singleton ':'
+
+dqu :: T.Text
+dqu = T.singleton '"'
+
+
+toString' :: TokenArray -> TokenArray -> Hyperedge l i -> T.Tree NTT -> T.Text
+toString' ta na e = go
+  where
+    gs i = if i < 0 then att else T.pack $ TS.unpack $ getString ta i
+    go (T.Nullary (T (-1))) = att
+    go (T.Nullary (T i)) = T.concat [dqu, gs i, dqu]
+    go (T.Nullary (NT i)) = T.concat
+                            [ T.pack ("x" ++ show i)
+                            , col
+                            , T.pack $ TS.unpack $ getString na (e `deref` i)
+                            ]
+    go (T.Unary (T i) t) = T.concat [gs i, lrb, go t, rrb]
+    go (T.Binary (T i) t1 t2)
+      = T.concat [gs i, lrb, go t1, spa, go t2, rrb]
+    go (T.Node (T i) sF)
+      = T.concat [gs i, lrb, T.unwords (map go sF), rrb]
+
+
+prettyPrintNTT :: TokenArray -> NTT -> T.Text
+prettyPrintNTT ta (T i)
+  = T.concat [dqu, T.pack (TS.unpack (getString ta i)), dqu]
+prettyPrintNTT _ (NT i)
+  = T.pack ("x" ++ show i)
+
+
+prettyPrint'
+  :: TokenArray
+  -> TokenArray
+  -> TokenArray
+  -> (l -> T.Tree NTT)
+  -> (l -> [NTT])
+  -> (i -> Double)
+  -> Hyperedge l i
+  -> T.Text
+prettyPrint' ea fa na h1 h2 w e
+  = let l = label e
+    in T.concat
+    [ T.pack $ TS.unpack $ getString na (to e)
+    , T.pack ": "
+    , toString' ea na e $ h1 l
+    , T.pack " -> "
+    , T.unwords $ map (prettyPrintNTT fa) $ h2 l
+    , T.pack " ||| "
+    , T.pack $ show $ w (ident e)
+    ]
+
+
+prettyPrint
+  :: TokenArray
+  -> TokenArray
+  -> TokenArray
+  -> IRTG Int
+  -> V.Vector Double
+  -> Hyperedge StrictIntPair Int
+  -> T.Text
+prettyPrint ea fa na IRTG{ .. } w e
+  = prettyPrint' ea fa na ((h1 V.!) . _fst) (V.toList . (h2 V.!) . _snd)
+      (\ i -> if i < 0 then 1.0 else w V.! i) e
+
+
+prettyPrintJoshua'
+  :: TokenArray
+  -> TokenArray
+  -> TokenArray
+  -> (l -> [NTT])
+  -> (l -> [NTT])
+  -> (i -> Double)
+  -> Hyperedge l i
+  -> T.Text
+prettyPrintJoshua' ea fa na h1 h2 w e
+  = let l = label e
+        lhs = h2 l
+        -- lhs /= [NT 0]
+        xs = [ i | NT i <- lhs ]
+    in T.pack $
+        "[" ++ show (to e) ++ "] ||| "
+        ++ unwords
+           [ case x of
+               NT i -> let Just j = i `elemIndex` xs
+                       in "[" ++ show (e `deref` j) ++ "," ++ show (j + 1) ++ "]"
+               T i -> TS.unpack $ getString fa i
+           | x <- lhs
+           ]
+        ++ " ||| "
+        ++ unwords
+           [ case x of
+               NT i -> let j = xs !! i
+                       in "[" ++ show (e `deref` j) ++ "," ++ show (j + 1) ++ "]"
+               T i -> if i < 0 then "" else TS.unpack $ getString ea i
+           | x <- h1 l
+           ]
+        ++ " ||| "
+        ++ show (w (ident e))
+
+
+front :: T.Tree NTT -> [NTT]
+front T.Nullary{ .. } = [rootLabel]
+front T.Unary{ sub1 = T.Nullary{ rootLabel = T (-1) }, .. } = [rootLabel]
+front t = concatMap front $ T.subForest t
+
+
+prettyPrintJoshua
+  :: TokenArray
+  -> TokenArray
+  -> TokenArray
+  -> IRTG Int
+  -> V.Vector Double
+  -> Hyperedge StrictIntPair Int
+  -> T.Text
+prettyPrintJoshua ea fa na IRTG{ .. } w e
+  = prettyPrintJoshua' ea fa na
+      (front . (h1 V.!) . _fst)
+      (V.toList . (h2 V.!) . _snd)
+      (\ i -> if i < 0 then 1.0 else w V.! i) e
 
 {-
 makeIRTG

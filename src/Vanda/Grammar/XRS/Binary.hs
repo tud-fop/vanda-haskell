@@ -17,8 +17,7 @@ instance B.Binary StrictIntPair where
   get = SIP <$> B.get <*> B.get 
   put (SIP a b) = B.put a >> B.put b
 
-instance (B.Binary i, NFData i, NFData StrictIntPair)
-  => B.Binary (IRTG i) where
+instance (B.Binary i, NFData i) => B.Binary (IRTG i) where
   get = do
           !rtg <- B.get
           !initial <- B.get
