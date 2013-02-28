@@ -56,7 +56,7 @@ foreign import ccall "order" cOrder
                  :: KenLM -> CInt
 
 foreign import ccall "indexWord" cIndex
-                 :: KenLM -> CString -> IO CInt
+                 :: KenLM -> CString -> IO CUInt
 
 foreign import ccall "beginSentenceState" cBeginSentenceState
                  :: KenLM -> KenLMState
@@ -68,13 +68,13 @@ foreign import ccall "lookup" cLookup
                  :: KenLM -> KenLMState -> CString -> IO CFloat
 
 foreign import ccall "lookupInt" cLookupInt
-                 :: KenLM -> KenLMState -> Ptr CInt -> CInt -> IO CFloat
+                 :: KenLM -> KenLMState -> Ptr CUInt -> CInt -> IO CFloat
 
 foreign import ccall "score" cEvaluateLine
                  :: KenLM -> CString -> IO CFloat
 
 foreign import ccall "scoreInt" cEvaluateLineInt
-                 :: KenLM -> Ptr CInt -> CInt -> IO CFloat
+                 :: KenLM -> Ptr CUInt -> CInt -> IO CFloat
 
 -- | Loads a KenTrieModel from a binary ARPA file containing a TrieModel OR
 -- a textual ARPA file.
@@ -126,12 +126,13 @@ evaluateInt
   -> [Int]                     -- ^ phrase to score
   -> Double                    -- ^ score
 evaluateInt m s is
-  = unsafePerformIO
-  $ do a <- A.newListArray
-              (1, L.length is)
-              (L.map fromIntegral is)
-       A.withStorableArray a
-         (\p -> fmap realToFrac . cLookupInt m s p . fromIntegral . L.length $ is)
+  = 1
+--   unsafePerformIO
+--   $ do a <- A.newListArray
+--               (1, L.length is)
+--               (map fromIntegral is)
+--        A.withStorableArray a
+--          (\p -> fmap realToFrac . cLookupInt m s p . fromIntegral . L.length $ is)
 
 -- | Scores a whole sentence.
 evaluateLine

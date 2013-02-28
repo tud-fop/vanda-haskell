@@ -1,4 +1,5 @@
 #include "lm/model.hh"
+#include "lm/word_index.hh"
 #include "lm/virtual_interface.hh"
 #include <iostream>
 #include <string>
@@ -15,7 +16,7 @@ extern "C" {
 		return model->Order();
 	}
 	
-	extern int indexWord(const TrieModel* model, const char* word) {
+	extern lm::WordIndex indexWord(const TrieModel* model, const char* word) {
 		const std::string s(word);
 		const SortedVocabulary &vocab = model->GetVocabulary();
 		return vocab.Index(s);
@@ -42,12 +43,13 @@ extern "C" {
 		return sum;
 	}
 	
-	extern float lookupInt(const TrieModel* model, const int* sentence, const int lSentence, const State* startState) {
+	extern float lookupInt(const TrieModel* model, const State* startState, const lm::WordIndex* sentence, const int lSentence) {
+		return 0.0;
 		State oldState(*startState);
 		State newState;
 		float sum = 0;
 		int i;
-		for (i = 0; i < lSentence; i++) {
+		for (i = 0; i < lSentence; ++i) {
 			sum = sum + model->Score(oldState, sentence[i], newState);
 			oldState = newState;
 		}
@@ -59,9 +61,9 @@ extern "C" {
 		return lookup(model, sentence, &startState);
 	}
 	
-	extern float scoreInt(const TrieModel* model, const int* sentence, const int lSentence) {
+	extern float scoreInt(const TrieModel* model, const lm::WordIndex* sentence, const int lSentence) {
 		State startState(model->BeginSentenceState());
-		return lookupInt(model, sentence, lSentence, &startState);
+		return lookupInt(model, &startState, sentence, lSentence);
 	}
 
 }

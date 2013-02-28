@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 module Main where
 
 import System.Environment ( getArgs )
@@ -22,9 +23,9 @@ main = do
       ws    <- IF.loadWeights (zhgFile ++ ".weights.gz")
       fm    <- IF.loadTokenArray fMapFile
       lm    <- LM.loadNGrams lmFile
-      let xrs  = I.XRS irtg1 (VU.generate (V.length ws) (ws V.!))
-      let xrs' = IS.intersect lm . IS.relabel lm fm $ xrs
-      TIO.putStr . T.pack . show $ xrs
+      let irtg  = I.XRS irtg1 (VU.generate (V.length ws) (ws V.!))
+      let irtg' = IS.intersect lm . IS.relabel lm fm $ irtg
+      TIO.putStr . T.pack . show $ irtg
       TIO.putStr . T.pack $ "\n"
-      TIO.putStr . T.pack . show $ xrs'
+      TIO.putStr . T.pack . show $ irtg'
       TIO.putStr . T.pack $ "\n"
