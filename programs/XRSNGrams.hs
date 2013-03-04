@@ -9,7 +9,7 @@ import qualified Data.Vector.Unboxed as VU
 
 import qualified Vanda.Grammar.XRS.Functions as IF
 import qualified Vanda.Grammar.XRS.IRTG as I
-import qualified Vanda.Grammar.NGrams.KenLM as LM
+import qualified Vanda.Grammar.NGrams.Functions as LM
 import qualified Vanda.Algorithms.IntersectWithNGram as IS
 import qualified Vanda.Hypergraph.IntHypergraph as HI
 

@@ -30,43 +30,34 @@ import qualified Data.Vector.Unboxed as VU
 import Data.NTT
 import qualified Data.IntTokenMap as IM
 import Vanda.Token
-import Vanda.Grammar.NGrams.KenLM
+import Vanda.Grammar.LM
 import Vanda.Grammar.NGrams.WTA
 import qualified Vanda.Hypergraph.IntHypergraph as HI
 import qualified Vanda.Hypergraph.Tree as T
 import qualified Vanda.Grammar.XRS.IRTG as I
 
-import Debug.Trace
-
 data CState i
   = CState { _fst :: i
            , _snd :: NState i
-  } deriving (Eq, Ord)
-
-instance Show i => Show (CState i) where
-  show (CState f s)
-    = "{" ++ (show f) ++ "," ++ (show s) ++ "}"
+  } deriving (Eq, Ord, Show)
 
 data Item s l w
   = Item { _to    :: s
          , _wt    :: w
          , _from  :: [s]
          , _lbl   :: l
-  } deriving (Eq, Ord)
-
-instance (Show i, Show w) => Show (Item i l w) where
-  show (Item to wt from _)
-    = (show to) ++ " <-- " ++ (show from) ++ " # " ++ (show wt) 
+  } deriving (Eq, Ord, Show)
 
 -- | Relabels the terminals in 'h2' according to the String-to-Int mapping
 --   in the language model.
 relabel
-  :: KenLM
+  :: LM a
+  => a
   -> TokenArray
   -> I.XRS
   -> I.XRS
 relabel lm ta xrs@I.XRS{ .. }
-  = let r = dictIndex lm . getString ta
+  = let r = indexOf lm . getString ta
     in  xrs{ I.irtg = irtg{ I.h2 = relabel' r . I.h2 $ irtg } }
 
 relabel'
@@ -81,14 +72,15 @@ relabel' r h2
 
 -- | Intersects IRTG and n-gram model.
 intersect
-  :: KenLM                          -- ^ language model
+  :: LM a
+  => a                              -- ^ language model
   -> I.XRS                          -- ^ translation model
   -> I.XRS                          -- ^ product translation model
 intersect lm I.XRS{ .. }
   = let I.IRTG{ .. }
               = irtg
         hom   = (V.!) h2 . I._snd . HI.label          -- prepare h2
-        mu x  = (VU.!) weights . HI.ident $ x         -- prepare weights
+        mu    = log . (VU.!) weights . HI.ident       -- prepare weights
         its   = intersect' lm mu hom rtg              -- generate items
         (h1', l1)
               = addToHomomorphism h1 (T.Nullary (NT 0))
@@ -116,8 +108,8 @@ addToHomomorphism h e
 
 -- | Intersects IRTG and n-gram model, emits 'Item's.
 intersect'
-  :: (Ord l, Show l, Show i1)
-  => KenLM                          -- ^ language model
+  :: (Ord l, Show l, Show i1, LM a)
+  => a                              -- ^ language model
   -> (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
   -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
   -> HI.Hypergraph l i1             -- ^ RTG hypergraph
@@ -127,20 +119,19 @@ intersect' lm mu h2 hg
         is0 = M.fromListWith (++)
             . map (\x -> (HI.to x, [initRule mu h2 lm x]))
             $ es0
-        es  = trace (unlines . map show . concat . map snd . M.toList $ is0) $
-              filter ((/=) 0 . HI.arity) . HI.edges $ hg
+        es  = filter ((/=) 0 . HI.arity) . HI.edges $ hg
         go !its
           = let l = [ ( HI.to e, lst )
                     | e  <- es
-                    , let lst = [ trace (show r) $
-                                  r
+                    , let lst = L.nub
+                              $ [ r
                                 | let ss = sequence
                                          $ [ M.findWithDefault [] t1 its
                                            | t1 <- HI.from e
                                            ]
                                 , not . L.null $ ss
                                 , s <- ss
-                                , let r = blowRule lm mu h2 e s
+                                , let r = blowRule mu h2 lm e s
                                 , not . elem r 
                                       . flip (M.findWithDefault []) its
                                       . HI.to
@@ -165,7 +156,7 @@ itemsToHypergraph
 itemsToHypergraph xs
   = let (wts, xs')
               = groupByWeight xs
-        mu    = VU.fromList wts
+        mu    = VU.fromList . map exp $ wts
         es    = map (uncurry (\ (a, b, c) d -> HI.mkHyperedge a b c d))
               . concat
               . map (\(ix, arr) -> zip arr (repeat ix))
@@ -175,9 +166,10 @@ itemsToHypergraph xs
 
 -- | Emits an initial 'Item'.
 initRule
-  :: (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
+  :: LM a
+  => (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
   -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
-  -> KenLM                          -- ^ language model
+  -> a                              -- ^ language model
   -> HI.Hyperedge l i1              -- ^ rule
   -> Item (CState Int) l Double     -- ^ resulting 'Item'
 initRule mu h2 lm he
@@ -186,34 +178,36 @@ initRule mu h2 lm he
         (st, w1) = mkNState lm . map f . h2 $ he
     in  Item 
           (CState (HI.to he) st)
-          (w1 * (mu he))
+          (w1 + (mu he))
           []
           (HI.label he)
 
 -- | Combines 'Item's by a rule. The 'Item's and the rule must
 --   match (not checked).
 blowRule
-  :: KenLM                          -- ^ language model
-  -> (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
+  :: LM a
+  => (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
   -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
+  -> a                              -- ^ language model
   -> HI.Hyperedge l i1              -- ^ rule
   -> [Item (CState Int) l Double]   -- ^ 'Item's
   -> Item (CState Int) l Double     -- ^ resulting 'Item'
-blowRule lm mu h2 he is
+blowRule mu h2 lm he is
   = let xs      = map _to is
         (x, w1) = toNState lm (map _snd xs) (h2 he)
-    in  Item (CState (HI.to he) x) (mu he * w1) xs (HI.label he)
+    in  Item (CState (HI.to he) x) (mu he + w1) xs (HI.label he)
 
 toNState
-  :: KenLM
+  :: LM a
+  => a
   -> [NState Int]
   -> [NTT]
   -> (NState Int, Double)
 toNState lm m xs
   = let f (T i)  = mkNState lm [i]
-        f (NT i) = (m !! i, 1)
-    in  (\ ((x, w1), w2) -> (x, w1 * w2))
-      . (\ (xs', w) -> (mergeNStates lm xs', product w))
+        f (NT i) = (m !! i, 0)
+    in  (\ ((x, w1), w2) -> (x, w1 + w2))
+      . (\ (xs', w) -> (mergeNStates lm xs', sum w))
       . unzip
       . map f
       $ xs
@@ -246,7 +240,7 @@ makeSingleEndState
   -> [Item i l w]                      -- ^ new 'Item's
 makeSingleEndState p vInit lbl es
   = (++) es
-  . map (\x -> Item vInit 1.0 [x] lbl)
+  . map (\x -> Item vInit 0 [x] lbl)
   . L.nub
   . filter p
   . map _to

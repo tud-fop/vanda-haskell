@@ -12,19 +12,22 @@ main
 main = do
   args <- getArgs
   case args of
-    ["-g", grammar, "-n", n, text] -> do
+    ["-g", grammar, "-l", text] -> do
       nGrams <- loadNGrams grammar
       input  <- TIO.readFile text
-      let i = read n :: Int
-          wts   = L.map (evaluateLine nGrams i) . T.lines $ input
+      let wts = L.map (evaluateLine nGrams) . T.lines $ input
       TIO.putStr . T.unlines . map (T.pack . show) $ wts
-    ["-n", n, "-g", grammar, text] -> do
+    ["-l", "-g", grammar, text] -> do
       nGrams <- loadNGrams grammar
       input  <- TIO.readFile text
-      let i = read n :: Int
-          wts   = L.map (evaluateLine nGrams i) . T.lines $ input
+      let wts = L.map (evaluateLine nGrams) . T.lines $ input
       TIO.putStr . T.unlines . map (T.pack . show) $ wts
+    ["-g", grammar, text] -> do
+      nGrams <- loadNGrams grammar
+      input  <- TIO.readFile text
+      let wts = L.map (evaluateLine nGrams) . T.lines $ input
+      TIO.putStr . T.unlines . map (T.pack . show . exp) $ wts
     _ -> do
       TIO.putStr
       . T.pack
-      $ "usage: NGrams -g <grammar> -n <n> <inputFile> > <outputFile>\n"
+      $ "usage: NGrams [-l] -g <grammar> <inputFile> > <outputFile>\n"

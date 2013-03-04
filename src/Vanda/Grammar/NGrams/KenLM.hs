@@ -50,7 +50,7 @@ type KenLM = Ptr KenTrieModel
 type KenLMState = Ptr State
 
 foreign import ccall "loadModel" cLoadNGrams
-                 :: CString -> IO (Ptr KenTrieModel)
+                 :: CString -> IO KenLM
 
 foreign import ccall "order" cOrder
                  :: KenLM -> CInt
@@ -126,13 +126,12 @@ evaluateInt
   -> [Int]                     -- ^ phrase to score
   -> Double                    -- ^ score
 evaluateInt m s is
-  = 1
---   unsafePerformIO
---   $ do a <- A.newListArray
---               (1, L.length is)
---               (map fromIntegral is)
---        A.withStorableArray a
---          (\p -> fmap realToFrac . cLookupInt m s p . fromIntegral . L.length $ is)
+  = unsafePerformIO
+  $ do a <- A.newListArray
+              (1, L.length is)
+              (map fromIntegral is)
+       A.withStorableArray a
+         (\p -> fmap realToFrac . cLookupInt m s p . fromIntegral . L.length $ is)
 
 -- | Scores a whole sentence.
 evaluateLine

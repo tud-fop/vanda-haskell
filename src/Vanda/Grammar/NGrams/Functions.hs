@@ -22,7 +22,7 @@ import qualified Data.List as L
 import qualified Data.Text.Lazy as T
 import qualified Data.Text.Lazy.IO as TIO
 
-import Vanda.Grammar.NGrams
+import Vanda.Grammar.NGrams.VandaNGrams
 import Vanda.Grammar.NGrams.Text
 
 -- | Loads an NGram language model from a file.
@@ -36,12 +36,11 @@ loadNGrams
 -- | Evaluates a sentence given a NGrams model.
 evaluateLine
   :: NGrams T.Text           -- ^ NGrams model
-  -> Int                     -- ^ length of an n-gram
   -> T.Text                  -- ^ sentence to score
   -> Double                  -- ^ score
-evaluateLine g i l
-  = evaluate g i
-  . (\ x -> ( L.replicate (i - 1)
+evaluateLine lm l
+  = evaluate lm
+  . (\ x -> ( L.replicate ((order lm) - 1)
             . T.pack
             $ "<s>"
             )

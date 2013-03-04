@@ -1,6 +1,6 @@
 -----------------------------------------------------------------------------
 -- |
--- Module      :  Vanda.Grammar.NGrams
+-- Module      :  Vanda.Grammar.NGrams.VandaNGrams
 -- Copyright   :  (c) Technische Universität Dresden 2013
 -- License     :  Redistribution and use in source and binary forms, with
 --                or without modification, is ONLY permitted for teaching
@@ -15,12 +15,14 @@
 --
 -----------------------------------------------------------------------------
 
-module Vanda.Grammar.NGrams
+module Vanda.Grammar.NGrams.VandaNGrams
   ( NGrams
   , empty
+  , order
+  , indexOf
   , addNGram
-  , find
   , evaluate
+  , evaluateInt
   ) where
 
 import qualified Data.Map as M
@@ -31,6 +33,7 @@ data NGrams v
   = NGrams
     { dict    :: M.Map v Int
     , dLength :: Int
+    , order   :: Int
     , weights :: M.Map [Int] (Double, Maybe Double)
     }
 {-- /snippet NGrams --}
@@ -40,43 +43,67 @@ hasWeight
   => NGrams v
   -> [v]
   -> Bool
-hasWeight _ []
-  = True
-hasWeight (NGrams { dict = d, weights = wt }) vs
-  = let vi = L.map (\x -> M.findWithDefault (-1) x d) vs
-    in  M.member vi wt
+hasWeight lm vs
+  = flip M.member (weights lm)
+  . L.map (indexOf lm)
+  $ vs
 
+hasWeightInt
+  :: NGrams v
+  -> [Int]
+  -> Bool
+hasWeightInt _ []
+  = True
+hasWeightInt lm is
+  = M.member is . weights $ lm
 
 getWeight
-  :: (Show v, Ord v)
+  :: (Ord v)
   => NGrams v
   -> [v]
   -> (Double, Double)
-getWeight _ []
+getWeight lm vs
+  = getWeightInt lm
+  . L.map (indexOf lm)
+  $ vs
+
+getWeightInt
+  :: NGrams v
+  -> [Int]
+  -> (Double, Double)
+getWeightInt _ []
   = (0, 0)
-getWeight (NGrams { dict = d, weights = wt }) vs
-  = let vi = L.map (\x -> M.findWithDefault (-1) x d) vs
-    in  case (M.lookup vi $ wt) of
+getWeightInt lm is
+  = case (M.lookup is . weights $ lm) of
           Nothing            -> (0, 0)
           Just (a, Nothing)  -> (a, 0)
           Just (a, Just b)   -> (a, b)
 
 -- | Returns an empty NGrams language model.
 empty
-  :: NGrams v              -- ^ empty NGrams model
-empty
-  = NGrams M.empty 0 M.empty
+  :: Int                   -- ^ order
+  -> NGrams v              -- ^ empty NGrams model
+empty n
+  = NGrams M.empty 0 n M.empty
+
+indexOf
+  :: Ord v
+  => NGrams v
+  -> v
+  -> Int
+indexOf lm x
+  = M.findWithDefault (-1) x . dict $ lm
 
 addWord
   :: (Show v, Ord v)
   => NGrams v              -- ^ original NGrams
   -> v                     -- ^ word
   -> NGrams v              -- ^ new NGrams
-addWord n ve
-  = let (m, c) = (dict n, dLength n)
+addWord lm ve
+  = let (m, c) = (dict lm, dLength lm)
     in  if   M.notMember ve m
-        then n { dict = M.insert ve c m, dLength = c + 1 }
-        else n
+        then lm{ dict = M.insert ve c m, dLength = c + 1 }
+        else lm
 
 -- | Adds an n-gram to the model.
 addNGram
@@ -109,14 +136,35 @@ find n vs
          in  b + find n vs2
 {-- /snippet KatzBackoff --}
 
+findInt
+  :: NGrams v              -- ^ NGrams on which to base the evaluation
+  -> [Int]                 -- ^ sequence to evaluate
+  -> Double                -- ^ single NGram probability
+findInt n is
+  = if   hasWeightInt n is                          -- if C(w0...wn) > 0
+    then fst . getWeightInt n $ is
+    else let is1    = L.take (L.length is - 1) is   -- w0...wn-1
+             is2    = L.drop 1 is                   -- w1...wn
+             (_, b) = getWeightInt n is1
+         in  b + findInt n is2
+
 -- | Scores a sentence.
 evaluate
   :: (Show v, Ord v)
   => NGrams v              -- ^ NGrams on which to base the evaluation
-  -> Int                   -- ^ maximum length of the n-grams
   -> [v]                   -- ^ sentence to evaluate
   -> Double                -- ^ score
-evaluate n i vs
-  = if   i >= L.length vs
-    then find n vs
-    else find n (L.take i vs) + evaluate n i (L.drop 1 vs)
+evaluate lm vs
+  = if   (order lm) >= L.length vs
+    then find lm vs
+    else find lm (L.take (order lm) vs) + evaluate lm (L.drop 1 vs)
+
+evaluateInt
+  :: (Show v, Ord v)
+  => NGrams v
+  -> [Int]
+  -> Double
+evaluateInt lm is
+  = if   (order lm) >= L.length is
+    then findInt lm is
+    else findInt lm (L.take (order lm) is) + evaluateInt lm (L.drop 1 is)

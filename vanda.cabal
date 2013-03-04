@@ -20,7 +20,7 @@ Build-Type:     Simple
 library
   build-depends:
       base
-    , containers >= 0.5.1
+    , containers >= 0.5.0
     , array
     , vector
     , heap
@@ -59,11 +59,12 @@ library
     , Vanda.Grammar.XRS.GHKM
     , Vanda.Grammar.XRS.IRTG
     , Vanda.Grammar.XRS.Text
-    , Vanda.Grammar.NGrams
+    , Vanda.Grammar.LM
+    , Vanda.Grammar.NGrams.VandaNGrams
     , Vanda.Grammar.NGrams.WTA
     , Vanda.Grammar.NGrams.Text
     , Vanda.Grammar.NGrams.Functions
-    , Vanda.Grammar.NGrams.KenLM
+--    , Vanda.Grammar.NGrams.KenLM
     , Vanda.Hypergraph.Binary
     , Vanda.Hypergraph.BackwardStar
     , Vanda.Hypergraph.Basic
@@ -79,9 +80,9 @@ library
     , Data.NTTBinary
     , Data.Queue
   hs-source-dirs:  src
-  extra-libraries:  kenlm
+--  extra-libraries:  kenlm
 --  extra-lib-dirs:  lib
-  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+  GHC-Options:  -O1 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
   --  -ddump-rule-rewrites
   --  -ddump-rule-firings

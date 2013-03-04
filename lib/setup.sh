@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -xe
 
 CXXFLAGS="-I. -fPIC -O3 -DNDEBUG -DHAVE_ZLIB -DKENLM_MAX_ORDER=6 -g -lz $CXXFLAGS"
 
@@ -48,6 +48,7 @@ build () {
 	g++ $CXXFLAGS -Wall -c kenlm.cc -o kenlm.o
 	objects="$objects kenlm.o"
 	echo -n "."
+	g++ $CXXFLAGS -Wall demo.cc $objects -o demo 
 	g++ $CXXFLAGS -Wall -shared -o libkenlm.so $objects
 	echo "."
 	

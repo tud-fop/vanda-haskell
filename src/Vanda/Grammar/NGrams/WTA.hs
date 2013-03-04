@@ -24,7 +24,7 @@ module Vanda.Grammar.NGrams.WTA
   , NState
   ) where
 
-import Vanda.Grammar.NGrams.KenLM
+import Vanda.Grammar.LM
 
 data NState v
   = Unary  [v]
@@ -40,47 +40,53 @@ instance Show v => Show (NState v) where
 emptyNState :: NState i
 emptyNState = Unary []
 
-mkNState :: KenLM -> [Int] -> (NState Int, Double)
+mkNState
+  :: LM a
+  => a
+  -> [Int]
+  -> (NState Int, Double)
 mkNState lm s
   = let n = order lm
     in  if   n <= (length s)
         then ( Binary (take (n - 1) s) (last' (n - 1) s)
-             , evaluateInt lm (nullContextState lm) s
+             , score lm s
              )
-        else (Unary s, 1)
+        else (Unary s, 0)
 
 mergeNState
-  :: KenLM
+  :: LM a
+  => a
   -> (NState Int, Double)
   -> NState Int
   -> (NState Int, Double)
 mergeNState lm (Unary s1, w1) (Unary s2)
-  = (\ (x, w2) -> (x, w1 * w2))
+  = (\ (x, w2) -> (x, w1 + w2))
   . mkNState lm
   $ (s1 ++ s2)
 mergeNState lm (Unary s1, w1) (Binary s2 s3)
   = ( Binary (take ((order lm) - 1) (s1 ++ s2)) s3
-    , w1 * (evaluateInt lm (nullContextState lm) (s1 ++ s2))
+    , w1 + (score lm  (s1 ++ s2))
     )
 mergeNState lm (Binary s1 s2, w1) (Unary s3)
   = ( Binary s1 (last' ((order lm) - 1) (s2 ++ s3))
-    , w1 * (evaluateInt lm (nullContextState lm) (s2 ++ s3))
+    , w1 + (score lm  (s2 ++ s3))
     )
 mergeNState lm (Binary s1 s2, w1) (Binary s3 s4)
   = ( Binary (take ((order lm) - 1) (s1 ++ s2))
              (last' ((order lm) - 1) (s3 ++ s4))
-    , w1 * (evaluateInt lm (nullContextState lm) (s1 ++ s2))
-         * (evaluateInt lm (nullContextState lm) (s3 ++ s4))
+    , w1 + (score lm (s1 ++ s2))
+         + (score lm (s3 ++ s4))
     )
 
 mergeNStates
-  :: KenLM
+  :: LM a
+  => a
   -> [NState Int]
   -> (NState Int, Double)
 mergeNStates lm (x:xs)
-  = foldl (mergeNState lm) (x, 1) xs
+  = foldl (mergeNState lm) (x, 0) xs
 mergeNStates _ []
-  = (Unary [], 1)
+  = (Unary [], 0)
 
 last' :: Int -> [v] -> [v]
 last' n xs = drop ((length xs) - n) xs

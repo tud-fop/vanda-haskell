@@ -22,15 +22,15 @@ module Vanda.Grammar.NGrams.Text
 import qualified Data.List as L
 import qualified Data.Text.Lazy as T
 
-import qualified Vanda.Grammar.NGrams as N
+import qualified Vanda.Grammar.NGrams.VandaNGrams as N
 
 -- | Parses textual ARPA format to provide a NGrams language model.
 parseNGrams
   :: T.Text                  -- ^ Text to parse
   -> N.NGrams T.Text         -- ^ generated NGrams
 parseNGrams
-  = L.foldl' parseLine N.empty
-  . L.filter isAWantedLine
+  = (\(n, ts) -> L.foldl' parseLine (N.empty n) ts)
+  . L.foldl' filterLines (0, [])
   . T.lines
 
 isAWantedLine
@@ -41,6 +41,17 @@ isAWantedLine l
   . or
   . map (\ f -> f l)
   $ [ T.isPrefixOf (T.pack "\\") , T.isPrefixOf (T.pack "ngram "), T.null ]
+
+filterLines
+  :: (Int, [T.Text])
+  -> T.Text
+  -> (Int, [T.Text])
+filterLines (nOld, xs) t
+  = if   T.isPrefixOf (T.pack "ngram ") t
+    then (maximum [read . T.unpack . head . T.split (== '=') . T.drop 7 $ t, nOld], xs)
+    else if   isAWantedLine t
+         then (nOld, t:xs)
+         else (nOld, xs)
 
 parseLine
   :: N.NGrams T.Text         -- ^ old NGrams

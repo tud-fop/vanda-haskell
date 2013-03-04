@@ -9,17 +9,18 @@ using namespace lm::ngram;
 extern "C" {
 	
 	extern TrieModel* loadModel(const char* path) {
-		return new TrieModel(path);
+		TrieModel* mod = new TrieModel(path);
+		return mod;
 	}
 	
 	extern int order(const TrieModel* model) {
 		return model->Order();
 	}
 	
-	extern lm::WordIndex indexWord(const TrieModel* model, const char* word) {
-		const std::string s(word);
+	extern lm::WordIndex indexWord(const TrieModel* model, const char word[]) {
 		const SortedVocabulary &vocab = model->GetVocabulary();
-		return vocab.Index(s);
+		lm::WordIndex idx = vocab.Index(word);
+		return vocab.Index(word);
 	}
 	extern State beginSentenceState(const TrieModel* model) {
 		return model->BeginSentenceState();
