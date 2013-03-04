@@ -36,6 +36,7 @@ module Vanda.Hypergraph.IntHypergraph
   , mapLabels
   , He (..)
   , computeForwardA
+  , traverseForward
   , updateHe
   , dropNonproducing
   , dropNonproducing'
@@ -301,10 +302,34 @@ updateHe f he = do
   if i == 1 then f e else writeSTRef he $! He (i - 1) e
 
 
+traverseForward
+  :: Hypergraph l i
+  -> (ST s IS.IntSet -> ST s c)
+  -> (Hyperedge l i -> ST s ())
+  -> ST s c
+traverseForward hg g f = do
+  forwA <- computeForwardA hg
+  q <- newSTRef $ Q.fromList [ e | e@Nullary{} <- edges hg ]
+  s <- newSTRef IS.empty
+  let go = viewSTRef' q Q.deqMaybe (g $ readSTRef s)
+           $ \ e -> let v = to e in do
+             f e
+             b <- readSTRefWith (v `IS.member`) s
+             unless b $ do
+               modifySTRef' s $ IS.insert v
+               hes <- AB.unsafeRead forwA (to e)
+               forM_ hes $ updateHe $ \ e1 -> modifySTRef' q (Q.enq e1)
+               AB.unsafeWrite forwA (to e) []
+             go
+  go
+
+
 dropNonproducing :: Hypergraph l i -> Hypergraph l i
 dropNonproducing hg@(Hypergraph vs es) = Hypergraph vs es'
   where
     es' = filter (foldpv (`IS.member` vsS0)) es
+    vsS0 = runST $ traverseForward hg id (const $ return ())
+    {-
     vsS0 = runST $ do
       forwA <- computeForwardA hg
       q <- newSTRef $ [ e | e@Nullary{} <- es ]
@@ -319,6 +344,7 @@ dropNonproducing hg@(Hypergraph vs es) = Hypergraph vs es'
                 AB.unsafeWrite forwA v []
               go'
       go'
+    -}
 
 
 -- | A phantom type to specify our kind of heap.

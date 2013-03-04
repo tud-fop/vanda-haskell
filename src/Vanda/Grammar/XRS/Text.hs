@@ -11,19 +11,28 @@
 
 {-# LANGUAGE FlexibleContexts #-}  -- for 'Stream'
 
-module Vanda.Grammar.XRS.Text where
+module Vanda.Grammar.XRS.Text
+  ( XRSRule
+  , mkIRTG
+  , parseXRSRule
+  , prettyPrint'
+  , prettyPrint
+  , prettyPrintJoshua'
+  , prettyPrintJoshua
+  ) where
 
 import Control.Applicative ( many )
-import Control.DeepSeq ( NFData )
-import Control.Monad ( liftM2 )
+import Control.Monad ( forM_, forM )
+import Control.Monad.ST
+import Control.Seq
 import qualified Data.Array as A
 import qualified Data.IntMap as IM
-import qualified Data.Map as M
+import Data.List ( foldl', elemIndex )
 import Data.NTT
-import qualified Data.Set as S
+import qualified Data.Text as TS
 import qualified Data.Text.Lazy as T
 import qualified Data.Vector as V
-import Text.Parsec hiding ( many )
+import Text.Parsec hiding ( many, label )
 import Text.Parsec.Text.Lazy
 
 import Vanda.Grammar.XRS.IRTG
@@ -32,70 +41,296 @@ import Vanda.Hypergraph.NFData ()
 import qualified Vanda.Hypergraph.Tree as T
 import Vanda.Token
 import Vanda.Util
+import Data.Interner
 
--- import Debug.Trace ( trace, traceShow )
 
-type GenMapper u s = u -> s -> (u, Int)
+data XRSRule
+  = XRSRule
+    { lhs :: !(T.Tree (Var TS.Text))
+    , rhs :: ![Var TS.Text]
+    , qs :: !(IM.IntMap TS.Text)
+    , weight :: !Double
+    }
 
-type Mapper u = GenMapper u T.Text
 
-{- instance Ord l => Ord (T.Tree l) where
-  T.Node l1 ts1 `compare` T.Node l2 ts2
-    = case (l1 `compare` l2, ts1 `compare` ts2) of
-        (LT, _) -> LT
-        (EQ, LT) -> LT
-        (EQ, EQ) -> EQ
-        _ -> GT
--}
+parseXRSRule :: T.Text -> XRSRule
+parseXRSRule t
+  = case parse p_rule (T.unpack t) t of
+      Left e -> error (show e)
+      Right r -> r
 
-parseXRSMap
-  :: (NFData ue, NFData uf, NFData un)
-  => Mapper ue   -- ^ English symbol mapping function, e.g. 'updateToken'
-  -> ue          -- ^ initial token structure
-  -> Mapper uf   -- ^ French symbol mapping function, e.g. 'updateToken'             
-  -> uf          -- ^ initial structure
-  -> Mapper un   -- ^ node mapping function, e.g. 'updateToken'
-  -> un          -- ^ initial token structure
-  -> T.Text      -- ^ grammar file
-  -> ( (ue, uf, un, (M.Map (T.Tree NTT) Int, Int), (M.Map [NTT] Int, Int))
-     , [(Hyperedge StrictIntPair Int, Double)]
-     )           -- ^ resulting token structure and hyperedges
-parseXRSMap me ue0 mf uf0 mn un0 gr
-  = lazyMany (p_grammar me' mf' mn' mt' ms') "xrs" u0 ({-tail $-} T.lines gr)
+
+p_rule :: Parser XRSRule
+p_rule = do
+  (lhs, qs) <- p_tree
+  _ <- string "-> "
+  rhs <- p_string
+  _ <- string "||| "
+  weight <- p_weight
+  return $! XRSRule{ .. }
+
+
+p_tree :: Parser (T.Tree (Var TS.Text), IM.IntMap TS.Text)
+p_tree = choice [ p_tterm, p_tvar, p_tnonterm ]
+
+p_tterm :: Parser (T.Tree (Var TS.Text), IM.IntMap TS.Text)
+p_tterm = do
+  _ <- char '"'
+  !si <- fmap TS.pack $ many (noneOf "\"")
+  _ <- char '"'
+  spaces
+  return (T.node (NV si) [], IM.empty)
+
+p_tvar :: Parser (T.Tree (Var TS.Text), IM.IntMap TS.Text)
+p_tvar = do
+  _ <- char 'x'
+  i <- fmap read $ many1 $ oneOf "0123456789"
+  _ <- char ':'
+  !si <- fmap TS.pack $ many (noneOf " )")
+  spaces
+  return (T.node (Var i) [], IM.singleton i si)
+
+p_tnonterm :: Parser (T.Tree (Var TS.Text), IM.IntMap TS.Text)
+p_tnonterm = do
+  !si <- fmap TS.pack $ many (noneOf " ()")
+  _ <- char '('
+  (ts, qss) <- fmap unzip $ many p_tree
+  _ <- char ')'
+  spaces
+  return (T.node (NV si) ts, foldl' IM.union IM.empty qss)
+
+
+p_string :: Parser [Var TS.Text]
+p_string = many $ choice [ p_sterm, p_svar ]
+
+p_sterm :: Parser (Var TS.Text)
+p_sterm = do
+  _ <- char '"'
+  !si <- fmap TS.pack $ many (noneOf "\"")
+  _ <- char '"'
+  spaces
+  return $ NV si
+
+p_svar :: Parser (Var TS.Text)
+p_svar = do
+  _ <- char 'x'
+  !i <- fmap read $ many1 $ oneOf "0123456789"
+  spaces
+  return $ Var i
+
+
+p_weight :: Parser Double
+p_weight = do
+  c <- oneOf "0123456789"
+  cs <- many (oneOf "0123456789.E-")
+  return $! read (c : cs)
+
+
+mkLst :: Interner t -> [t]
+mkLst = A.elems . internerToArray
+
+
+mkHom :: Interner t -> V.Vector t
+mkHom = V.fromList . mkLst
+
+
+registerToken :: STRef s TokenMap -> TS.Text -> ST s Int
+registerToken m s = do -- i <- register m s
+  (m', i) <- fmap (flip updateToken s) $ readSTRef m
+  writeSTRef m m'
+  return i
+
+
+registerTree :: STRef s TokenMap -> T.Tree (Var TS.Text) -> ST s (T.Tree NTT)
+registerTree m t = do
+  t' <- forM (T.subForest t) (registerTree m)
+  case T.rootLabel t of
+    Var i -> let i' = nt i in i' `seq` return $! T.node i' t'
+    NV s -> do
+      i <- registerToken m s
+      let i' = tt i in i' `seq` return $! T.node i' t'
+
+
+registerString :: STRef s TokenMap -> [Var TS.Text] -> ST s (V.Vector NTT)
+registerString m xs
+  = fmap V.fromList $ forM xs $ \ x ->
+      case x of
+        Var i -> let i' = nt i in i' `seq` return i' -- return $! nt i
+        NV s -> do
+          i <- registerToken m s
+          let i' = tt i in i' `seq` return i' -- return $! tt i
+
+
+mkIRTG
+  :: (TokenMap, TokenMap, TokenMap)
+  -> [XRSRule]
+  -> (IRTG Int, [Double], TokenMap, TokenMap, TokenMap)
+mkIRTG (em_, fm_, nm_) rs_ = runST $ do
+  em <- newSTRef em_
+  fm <- newSTRef fm_
+  nm <- newSTRef nm_
+  tm <- newSTRef (emptyInterner :: Interner (T.Tree NTT))
+  sm <- newSTRef (emptyInterner :: Interner (V.Vector NTT))
+  ws <- newSTRef (emptyInterner :: Interner Double)
+  rs <- newSTRef ([] :: [Hyperedge StrictIntPair Int])
+  forM_ rs_ $ \ XRSRule{ .. } -> let NV q = T.rootLabel lhs in do
+    !q_ <- registerToken nm q
+    !qs_ <- forM (IM.elems qs) $ registerToken nm
+    !lhs_ <- registerTree em lhs
+    !rhs_ <- registerString fm rhs
+    !ti <- internST tm lhs_
+    !si <- internST sm rhs_
+    !i <- internST ws weight
+    let e = mkHyperedge q_ (qs_ `using` seqList rseq) (SIP ti si) i
+      in e `seq` modifySTRef' rs (e :)
+  rtg <- fmap mkHypergraph $ readSTRef rs
+  h1 <- fmap mkHom $ readSTRef tm
+  h2 <- fmap mkHom $ readSTRef sm
+  initial <- fmap (flip getToken (TS.pack "ROOT")) $ readSTRef nm
+  let irtg = return $! IRTG{ .. }
+  let ws_ = fmap mkLst $ readSTRef ws
+  quintM (irtg, ws_, readSTRef em, readSTRef fm, readSTRef nm)
+
+
+
+
+  
+
+att :: T.Text
+att = T.singleton '@'
+
+lrb :: T.Text
+lrb = T.singleton '('
+
+rrb :: T.Text
+rrb = T.singleton ')'
+
+spa :: T.Text
+spa = T.singleton ' '
+
+col :: T.Text
+col = T.singleton ':'
+
+dqu :: T.Text
+dqu = T.singleton '"'
+
+
+toString' :: TokenArray -> TokenArray -> Hyperedge l i -> T.Tree NTT -> T.Text
+toString' ta na e = go
   where
-    me' = (p_map $ liftMapper me in_15 out_15) . T.pack
-    mf' = (p_map $ liftMapper mf in_25 out_25) . T.pack
-    mn' = (p_map $ liftMapper mn in_35 out_35) . T.pack
-    mt' = p_map $ liftMapper mapit in_45 out_45
-    ms' = p_map $ liftMapper mapit in_55 out_55
-    u0 = (ue0, uf0, un0, (M.empty, 0), (M.empty, 0))
-    in_15 (x, _, _, _, _) = x
-    in_25 (_, y, _, _, _) = y
-    in_35 (_, _, z, _, _) = z
-    in_45 (_, _, _, a, _) = a
-    in_55 (_, _, _, _, b) = b
-    out_15 (_, y, z, a, b) x = (x, y, z, a, b)
-    out_25 (x, _, z, a, b) y = (x, y, z, a, b)
-    out_35 (x, y, _, a, b) z = (x, y, z, a, b)
-    out_45 (x, y, z, _, b) a = (x, y, z, a, b)
-    out_55 (x, y, z, a, _) b = (x, y, z, a, b)
-
-lazyMany :: GenParser u a -> SourceName -> u -> [T.Text] -> (u, [a])
-lazyMany parser _ ustate contents
-  = go ustate $ zip [(0 :: Int) ..] contents
-  where
-    go !u [] = (u, [])
-    go !u ((i, x) : xs) =
-      case runParser (liftM2 (,) parser getState) u ("line " ++ show i) x of
-        Right (x', u') -> let (u'', xs') = go u' xs
-                          in (u'', x' : xs')
-        Left ed -> error $ show ed
+    gs i = if i < 0 then att else T.pack $ TS.unpack $ getString ta i
+    go (T.Nullary (T (-1))) = att
+    go (T.Nullary (T i)) = T.concat [dqu, gs i, dqu]
+    go (T.Nullary (NT i)) = T.concat
+                            [ T.pack ("x" ++ show i)
+                            , col
+                            , T.pack $ TS.unpack $ getString na (e `deref` i)
+                            ]
+    go (T.Unary (T i) t) = T.concat [gs i, lrb, go t, rrb]
+    go (T.Binary (T i) t1 t2)
+      = T.concat [gs i, lrb, go t1, spa, go t2, rrb]
+    go (T.Node (T i) sF)
+      = T.concat [gs i, lrb, T.unwords (map go sF), rrb]
 
 
-swap :: (a, b) -> (b, a)
-swap (a, b) = (b, a)
+prettyPrintNTT :: TokenArray -> NTT -> T.Text
+prettyPrintNTT ta (T i)
+  = T.concat [dqu, T.pack (TS.unpack (getString ta i)), dqu]
+prettyPrintNTT _ (NT i)
+  = T.pack ("x" ++ show i)
 
 
+prettyPrint'
+  :: TokenArray
+  -> TokenArray
+  -> TokenArray
+  -> (l -> T.Tree NTT)
+  -> (l -> [NTT])
+  -> (i -> Double)
+  -> Hyperedge l i
+  -> T.Text
+prettyPrint' ea fa na h1 h2 w e
+  = let l = label e
+    in T.concat
+    [ T.pack $ TS.unpack $ getString na (to e)
+    , T.pack ": "
+    , toString' ea na e $ h1 l
+    , T.pack " -> "
+    , T.unwords $ map (prettyPrintNTT fa) $ h2 l
+    , T.pack " ||| "
+    , T.pack $ show $ w (ident e)
+    ]
+
+
+prettyPrint
+  :: TokenArray
+  -> TokenArray
+  -> TokenArray
+  -> IRTG Int
+  -> V.Vector Double
+  -> Hyperedge StrictIntPair Int
+  -> T.Text
+prettyPrint ea fa na IRTG{ .. } w e
+  = prettyPrint' ea fa na ((h1 V.!) . _fst) (V.toList . (h2 V.!) . _snd)
+      (\ i -> if i < 0 then 1.0 else w V.! i) e
+
+
+prettyPrintJoshua'
+  :: TokenArray
+  -> TokenArray
+  -> TokenArray
+  -> (l -> [NTT])
+  -> (l -> [NTT])
+  -> (i -> Double)
+  -> Hyperedge l i
+  -> T.Text
+prettyPrintJoshua' ea fa na h1 h2 w e
+  = let l = label e
+        lhs = h2 l
+        -- lhs /= [NT 0]
+        xs = [ i | NT i <- lhs ]
+    in T.pack $
+        "[" ++ show (to e) ++ "] ||| "
+        ++ unwords
+           [ case x of
+               NT i -> let Just j = i `elemIndex` xs
+                       in "[" ++ show (e `deref` j) ++ "," ++ show (j + 1) ++ "]"
+               T i -> TS.unpack $ getString fa i
+           | x <- lhs
+           ]
+        ++ " ||| "
+        ++ unwords
+           [ case x of
+               NT i -> let j = xs !! i
+                       in "[" ++ show (e `deref` j) ++ "," ++ show (j + 1) ++ "]"
+               T i -> if i < 0 then "" else TS.unpack $ getString ea i
+           | x <- h1 l
+           ]
+        ++ " ||| "
+        ++ show (w (ident e))
+
+
+front :: T.Tree NTT -> [NTT]
+front T.Nullary{ .. } = [rootLabel]
+front T.Unary{ sub1 = T.Nullary{ rootLabel = T (-1) }, .. } = [rootLabel]
+front t = concatMap front $ T.subForest t
+
+
+prettyPrintJoshua
+  :: TokenArray
+  -> TokenArray
+  -> TokenArray
+  -> IRTG Int
+  -> V.Vector Double
+  -> Hyperedge StrictIntPair Int
+  -> T.Text
+prettyPrintJoshua ea fa na IRTG{ .. } w e
+  = prettyPrintJoshua' ea fa na
+      (front . (h1 V.!) . _fst)
+      (V.toList . (h2 V.!) . _snd)
+      (\ i -> if i < 0 then 1.0 else w V.! i) e
+
+{-
 makeIRTG
   :: ( ( TokenMap
        , TokenMap
@@ -118,126 +353,5 @@ makeIRTG ((em, fm, nm, (tm, tmc), (sm, smc)), ews)
         h2 = V.fromList $ A.elems $ A.array (0, smc - 1)
            $ map swap $ M.toList sm
         initial = getToken em (T.pack "ROOT")
-    in (IRTG { .. }, ws, em, fm, nm) 
-
-{-
-lazyMany :: GenParser u a -> SourceName -> u -> [T.Text] -> (u, [a])
-lazyMany p file ustate contents
-  = case contents of
-      [] -> ustate either (error . show) id $ runParser mp ustate file contents
-  where
-    mp = do
-      xs <- many p
-      u <- getState
-      return $! (u, xs)
+    in (IRTG { .. }, ws, em, fm, nm)
 -}
-
-liftMapper :: GenMapper u s -> (u' -> u) -> (u' -> u -> u') -> GenMapper u' s
-liftMapper m in_ out_ u' s = first' (out_ u') $ m (in_ u') s
-
-type TheType t = (M.Map t Int, Int)
-
-mapit :: Ord t => TheType t -> t -> (TheType t, Int)
-mapit u@(m, imax) t
-  = case M.lookup t m of
-      Nothing -> let imax' = imax + 1
-                 in imax' `seq` ((M.insert t imax m, imax'), imax)
-      Just i -> (u, i)
-
-
-p_map :: GenMapper u s -> s -> GenParser u Int
-p_map mapper !s = do
-  (u', l) <- fmap (flip mapper s) getState
-  setState u'
-  return l
-
--- trace' x = traceShow x x
-
--- XXX I am using pme throughout because it would be too complicated to
--- also register root labels with pmn  ---  see {- ! -}
-p_tree
-  :: (String -> GenParser u Int)
-  -> (String -> GenParser u Int)
-  -> GenParser u (T.Tree NTT, IM.IntMap Int)
-p_tree pme pmn = choice [ p_tterm pme, p_tvar pme{- ! -}, p_tnonterm pme pmn ]
-
-p_tterm
-  :: (String -> GenParser u Int)
-  -> GenParser u (T.Tree NTT, IM.IntMap Int)
-p_tterm pme = do
-  _ <- char '"'
-  si <- pme =<< many (noneOf "\"")
-  _ <- char '"'
-  spaces
-  return (T.node (tt si) [], IM.empty)
-
-p_tvar
-  :: (String -> GenParser u Int)
-  -> GenParser u (T.Tree NTT, IM.IntMap Int)
-p_tvar pmn = do
-  _ <- char 'x'
-  i <- fmap (read . (: "")) $ oneOf "0123456789"
-  _ <- char ':'
-  si <- pmn =<< many (noneOf " )")
-  spaces
-  return (T.node (nt i) [], IM.singleton i si)
-
-p_tnonterm
-  :: (String -> GenParser u Int)
-  -> (String -> GenParser u Int)
-  -> GenParser u (T.Tree NTT, IM.IntMap Int)
-p_tnonterm pme pmn = do
-  si <- pme =<< many (noneOf " ()")
-  _ <- char '('
-  (ts, ms) <- fmap unzip $ many $ p_tree pme pmn
-  _ <- char ')'
-  spaces
-  return (T.node (tt si) ts, Prelude.foldr IM.union IM.empty ms)
-
-
-p_string
-  :: (String -> GenParser u Int)
-  -> GenParser u [NTT]
-p_string pmf = many $ choice [ p_sterm pmf, p_svar ]
-
-p_sterm :: (String -> GenParser u Int) -> GenParser u NTT
-p_sterm pmf = do
-  _ <- char '"'
-  si <- pmf =<< many (noneOf "\"")
-  _ <- char '"'
-  spaces
-  return (tt si)
-
-p_svar :: GenParser u NTT
-p_svar = do
-  _ <- char 'x'
-  i <- fmap (read . (: "")) $ oneOf "0123456789"
-  spaces
-  return (nt i)
-
-p_grammar
-  :: (String -> GenParser u Int)
-  -> (String -> GenParser u Int)
-  -> (String -> GenParser u Int)
-  -> (T.Tree NTT -> GenParser u Int)
-  -> ([NTT] -> GenParser u Int)
-  -> GenParser u (Hyperedge StrictIntPair Int, Double)
-p_grammar pme pmf _ {- ! -} pmt pms = do
-  (t, m) <- p_tree pme pme {- ! -}
-  case T.rootLabel t of
-    T i -> do
-      _ <- string "-> "
-      si <- pms =<< p_string pmf
-      _ <- string "||| "
-      w <- p_weight
-      ti <- pmt t
-      return (mkHyperedge i{- ! -} (IM.elems m) (SIP ti si) 0, w)
-    _ -> unexpected "terminal or variable at root"
-
-p_weight :: GenParser u Double
-p_weight
-  = do
-    { c <- oneOf "0123456789"
-    ; cs <- many (oneOf "0123456789.E-")
-    ; return $! read (c : cs)
-    }

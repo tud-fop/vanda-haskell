@@ -27,7 +27,7 @@ main = do
       fm <- loadTokenMap fMapFile
       input <- TIO.getContents
       let wsa = toWSAmap fm input
-          comp = ((h2 V.!) . _snd)
+          comp = V.toList . (h2 V.!) . _snd
           rrtg = dropNonproducing $ prune comp (getTerminals wsa) rtg
           (mm, ip, _) = earley (toBackwardStar rrtg comp) comp wsa fst initial
           initial' = mm M.! (0, initial, fst . head . WSA.finalWeights $ wsa)
@@ -46,7 +46,7 @@ main = do
       let translate input = output
             where
             wsa = toWSAmap fm input
-            comp = ((h2 V.!) . _snd)
+            comp = V.toList . (h2 V.!) . _snd
             -- rrtg = dropNonproducing $ prune comp (getTerminals wsa) rtg
             (mm, ip, _) = earley (toBackwardStar rtg comp) comp wsa fst initial
             initial' = mm M.! (0, initial, fst . head . WSA.finalWeights $ wsa)
@@ -57,12 +57,12 @@ main = do
             output = toString em otree
       TIO.putStr (T.unlines (map translate (T.lines inp)))
     ["-e", eMapFile, "-f", fMapFile, "-z", zhgFile] -> do
-      irtg@IRTG{ .. } <- loadIRTG (zhgFile ++ ".bhg.gz")
+      x@(irtg, _) <- fmap prepareInputProduct $ loadIRTG (zhgFile ++ ".bhg.gz")
       ws <- loadWeights (zhgFile ++ ".weights.gz")
       em <- loadTokenArray eMapFile
       fm <- loadTokenMap fMapFile
       let piE = toString em . getOutputTree irtg
           toWSA = toWSAmap fm
-          h f = piE (bestDeriv (toWSA f `inputProduct` irtg) ws)
+          h f = piE (bestDeriv (toWSA f `doInputProduct` x) ws)
       TIO.interact (T.unlines . map h . T.lines)
 

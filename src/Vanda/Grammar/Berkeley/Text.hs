@@ -20,7 +20,6 @@ import qualified Data.Text.Lazy as T
 import Text.Parsec hiding ( many, (<|>) )
 import Text.Parsec.Text.Lazy
 
-import Vanda.Grammar.Berkeley.IRTG
 import Vanda.Hypergraph.Basic ( Hyperedge, mkHyperedge )
 import Vanda.Hypergraph.NFData ()
 

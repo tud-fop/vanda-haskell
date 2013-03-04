@@ -25,11 +25,16 @@ module Vanda.Grammar.NGrams.WTA
   ) where
 
 import Vanda.Grammar.LM
+import Data.Hashable
 
 data NState v
   = Unary  [v]
   | Binary [v] [v]
   deriving (Eq, Ord)
+
+instance Hashable i => Hashable (NState i) where
+  hashWithSalt s (Unary a) = s `hashWithSalt` a
+  hashWithSalt s (Binary a b) = s `hashWithSalt` a `hashWithSalt` b
 
 instance Show v => Show (NState v) where
   show (Unary x)

@@ -26,9 +26,12 @@ import qualified Data.Vector as V
 import qualified Data.Map as M
 import qualified Data.List as L
 import qualified Data.Vector.Unboxed as VU
+import qualified Data.Text as Txt
+import qualified Data.Text.Lazy as TLazy
 
 import Data.NTT
-import qualified Data.IntTokenMap as IM
+import Data.Hashable
+import qualified Data.Interner as In
 import Vanda.Token
 import Vanda.Grammar.LM
 import Vanda.Grammar.NGrams.WTA
@@ -40,6 +43,9 @@ data CState i
   = CState { _fst :: i
            , _snd :: NState i
   } deriving (Eq, Ord, Show)
+
+instance Hashable i => Hashable (CState i) where
+  hashWithSalt s (CState a b) = s `hashWithSalt` a `hashWithSalt` b
 
 data Item s l w
   = Item { _to    :: s
@@ -57,18 +63,18 @@ relabel
   -> I.XRS
   -> I.XRS
 relabel lm ta xrs@I.XRS{ .. }
-  = let r = indexOf lm . getString ta
+  = let r = indexOf lm . TLazy.pack . Txt.unpack . getString ta
     in  xrs{ I.irtg = irtg{ I.h2 = relabel' r . I.h2 $ irtg } }
 
 relabel'
   :: (Int -> Int)                 -- ^ relabeling
-  -> V.Vector [NTT]               -- ^ original homomorphism
-  -> V.Vector [NTT]               -- ^ new homomorphism
+  -> V.Vector (V.Vector NTT)      -- ^ original homomorphism
+  -> V.Vector (V.Vector NTT)      -- ^ new homomorphism
 relabel' r h2
   = let f []          = []
         f ((T x):xs)  = (T (r x)):(f xs)
         f ((NT x):xs) = (NT x):(f xs)
-    in  V.map f h2
+    in  V.map (V.fromList . f . V.toList) h2
 
 -- | Intersects IRTG and n-gram model.
 intersect
@@ -79,13 +85,14 @@ intersect
 intersect lm I.XRS{ .. }
   = let I.IRTG{ .. }
               = irtg
-        hom   = (V.!) h2 . I._snd . HI.label          -- prepare h2
+        hom   = V.toList . (V.!) h2 . I._snd . HI.label
+                                                      -- prepare h2
         mu    = log . (VU.!) weights . HI.ident       -- prepare weights
         its   = intersect' lm mu hom rtg              -- generate items
         (h1', l1)
               = addToHomomorphism h1 (T.Nullary (NT 0))
         (h2', l2)
-              = addToHomomorphism h2 [NT 0]
+              = addToHomomorphism h2 (V.fromList [NT 0])
         its'  = makeSingleEndState
                   ((==) initial . _fst)
                   (CState 0 emptyNState)
@@ -215,19 +222,19 @@ toNState lm m xs
 -- | Takes 'Hyperedge's with arbitrary vertex type and returns 'Hyperedges'
 --   with vertex type 'Int'.
 integerize'
-  :: Ord v
+  :: (Hashable v, Eq v)
   => v
   -> [Item v l d]
   -> ([Item Int l d], Int)
 integerize' vtx is
-  = let mi = IM.empty
+  = let mi = In.emptyInterner
         f (m, xs) e
-           = let (m1, t') = IM.getInt m (_to e)
-                 (m2, f') = IM.getInts m1 (_from e)
+           = let (m1, t') = In.intern m (_to e)
+                 (m2, f') = In.internList m1 (_from e)
              in  (m2, (Item t' (_wt e) f' (_lbl e)):xs)
         (mi', is')
            = foldl f (mi, []) is
-    in  (is', snd . IM.getInt mi' $ vtx)
+    in  (is', snd . In.intern mi' $ vtx)
 
 -- | Adds some 'Item's such that 'Item's produced from the former final state
 --   are connected to the new final state.

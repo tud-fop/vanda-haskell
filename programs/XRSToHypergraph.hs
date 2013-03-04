@@ -22,14 +22,16 @@ import qualified Data.ByteString.Lazy as B
 import Data.List ( foldl', intersperse, elemIndex )
 import qualified Data.Map as M
 import qualified Data.Set as S
+import qualified Data.Text as TS
 import qualified Data.Text.Lazy as T
 import qualified Data.Text.Lazy.IO as TIO
 import qualified Data.Vector as V
+import System.Directory ( doesFileExist, renameFile )
 import System.Environment ( getArgs )
 
 import Vanda.Algorithms.IntEarley
 import qualified Vanda.Algorithms.Earley.WSA as WSA
-import Vanda.Grammar.XRS.Functions
+-- import Vanda.Grammar.XRS.Functions
 import Vanda.Grammar.XRS.Binary ()
 import Vanda.Grammar.XRS.IRTG
 import Vanda.Grammar.XRS.Text
@@ -53,9 +55,62 @@ compute _es =
   in IA.elems $ STA.runSTUArray $ a _es
 
 
+loadTokenMap :: FilePath -> IO TokenMap
+loadTokenMap fp = do
+  b <- doesFileExist fp
+  if b then fmap fromText $ TIO.readFile fp
+       else return $ emptyTS
+
+
+saveTokenMap :: FilePath -> TokenMap -> IO ()
+saveTokenMap fp tm = let fpnew = fp ++ ".new" in do
+  TIO.writeFile fpnew (toText tm)
+  renameFile fpnew fp
+
 --nttToString :: TokenArray -> TokenArray -> NTT -> String
 --nttToString ta _ (T i) = if i < 0 then "@" else getString ta i
 --nttToString _ na (NT i) = getString na i 
+
+
+type Pretty
+  = TokenArray
+  -> TokenArray
+  -> TokenArray
+  -> IRTG Int
+  -> V.Vector Double
+  -> Hyperedge StrictIntPair Int
+  -> T.Text
+
+type PrettyPredicate = IRTG Int -> Hyperedge StrictIntPair Int -> Bool
+
+type PrettyExtra = IRTG Int -> TokenArray -> [T.Text] -> [T.Text]
+
+
+predJoshua IRTG{ .. } e
+  = arity e <= 2 && V.toList (h2 V.! _snd (label e)) /= [NT 0]
+
+peJoshua IRTG{ .. } nm
+  = let si = show initial
+    in (T.pack ("[S] ||| [" ++ si ++ ",1] ||| [" ++ si ++ ",1] ||| 1.0") :)
+
+
+bin2text
+  :: FilePath -> FilePath -> FilePath
+  -> Pretty -> PrettyExtra -> PrettyPredicate -> IO ()
+bin2text eMapFile fMapFile zhgFile pretty pe pp = do
+  irtg :: IRTG Int
+    <- fmap (B.decode . decompress) $ B.readFile (zhgFile ++ ".bhg.gz")
+  ws :: V.Vector Double
+    <- fmap (V.fromList . B.decode . decompress)
+       $ B.readFile (zhgFile ++ ".weights.gz")
+  em :: TokenArray <- fmap fromText $ TIO.readFile eMapFile
+  fm :: TokenArray <- fmap fromText $ TIO.readFile fMapFile
+  nm :: TokenArray <- fmap fromText $ TIO.readFile (zhgFile ++ ".nodes")
+  TIO.putStr
+    $ T.unlines
+    $ pe irtg nm
+    $ map (pretty em fm nm irtg ws)
+    $ filter (pp irtg) $ edges $ rtg irtg
 
 
 main :: IO ()
@@ -83,63 +138,24 @@ main = do
           , map (T.pack . show) (V.toList h1)
           , map (T.pack . show) (V.toList h2)
           ]
-    ["-e", eMapFile, "-f", fMapFile, "-z", zhgFile, "--convert"] -> do
-      IRTG{ .. } :: IRTG Int
-        <- fmap (B.decode . decompress) $ B.readFile (zhgFile ++ ".bhg.gz")
-      ws :: V.Vector Double
-        <- fmap (V.fromList . B.decode . decompress)
-           $ B.readFile (zhgFile ++ ".weights.gz")
-      em :: TokenArray <- fmap fromText $ TIO.readFile eMapFile
-      fm :: TokenArray <- fmap fromText $ TIO.readFile fMapFile
-      let rules
-            = ("[S] ||| [" ++ show initial ++ ",1] ||| [" ++ show initial ++ ",1] ||| 1.0")
-            : [ "[" ++ show (to e) ++ "] ||| "
-                ++ concat (intersperse " "
-                   [ case x of
-                       NT i -> let Just j = elemIndex i l
-                               in "[" ++ show (from e !! j) ++ "," ++ show (j + 1) ++ "]"
-                       T i -> T.unpack $ getString fm i
-                   | x <- lhs
-                   ])
-                ++ " ||| "
-                ++ concat (intersperse " "
-                   [ case x of
-                       NT i -> let j = l !! i
-                               in "[" ++ show (from e !! j) ++ "," ++ show (j + 1) ++ "]"
-                       T i -> if i < 0 then "" else T.unpack $ getString em i
-                   | x <- rhs
-                   ])
-                ++ " ||| "
-                ++ show w
-              | e <- edges rtg
-              , arity e <= 2
-              , let lhs = h2 V.! _snd (label e)
-              , lhs /= [NT 0]
-              , let rhs = T.front $ h1 V.! _fst (label e)
-              , let l = [ i | NT i <- lhs ]
-              , let idente = ident e
-              , let w = if idente < 0 then 1.0 else ws V.! idente
-              , w `seq` True
-              ]
-      TIO.writeFile (zhgFile ++ ".joshua") $ T.unlines $ map T.pack rules
-    ["-e", eMapFile, "-f", fMapFile, "-g", grammarFile, "-z", zhgFile] -> do
-      emf <- TIO.readFile eMapFile
-      fmf <- TIO.readFile fMapFile
-      gf <- TIO.readFile grammarFile
+    ["b2j", "-e", eMapFile, "-f", fMapFile, "-z", zhgFile] ->
+      bin2text eMapFile fMapFile zhgFile prettyPrintJoshua peJoshua predJoshua
+    ["b2t", "-e", eMapFile, "-f", fMapFile, "-z", zhgFile] ->
+      bin2text eMapFile fMapFile zhgFile prettyPrint (\ _ _ -> id) (\ _ _ -> True)
+    ["t2b", "-e", eMapFile, "-f", fMapFile, "-z", zhgFile] -> do
+      em <- loadTokenMap eMapFile
+      fm <- loadTokenMap fMapFile
+      gf <- TIO.getContents
       -- TODO mit ghc deutlich schneller als mit runghc, untersuchen!
-      case makeIRTG $ parseXRSMap
-             updateToken
-             (fromText emf)
-             updateToken
-             (fromText fmf)
-             updateToken
-             (emptyTS :: TokenMap)
-             gf of
-        (irtg, ws, em, fm, nm) -> do
+      case mkIRTG (em, fm, emptyTS) (map parseXRSRule $ T.lines gf) of
+        (irtg, ws, em', fm', nm) -> do
           B.writeFile (zhgFile ++ ".bhg.gz") $ compress $ B.encode irtg 
           B.writeFile (zhgFile ++ ".weights.gz") $ compress $ B.encode ws
-          TIO.writeFile (eMapFile ++ ".new") (toText em)
-          TIO.writeFile (fMapFile ++ ".new") (toText fm)
+          saveTokenMap eMapFile em'
+          saveTokenMap fMapFile fm'
           TIO.writeFile (zhgFile ++ ".nodes") (toText nm)
-    _ -> error $ "Usage: XRSToHypergraph -e eMapFile -f fMapFile "
-                 ++ "-g grammarFile -z zhgFile"
+    _ -> putStr $ "Usage:\n\n"
+                 ++ "  text to binary: XRSToHypergraph t2b "
+                 ++ "-e eMapFile -f fMapFile -z zhgFile < grammarFile\n"
+                 ++ "  binary to text: XRSToHypergraph b2t "
+                 ++ "-e eMapFile -f fMapFile -z zhgFile > grammarFile\n"
