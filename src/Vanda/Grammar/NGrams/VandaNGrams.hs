@@ -18,6 +18,7 @@
 module Vanda.Grammar.NGrams.VandaNGrams
   ( NGrams
   , empty
+  , dict
   , order
   , indexOf
   , addNGram

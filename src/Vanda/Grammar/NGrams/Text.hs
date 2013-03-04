@@ -20,7 +20,7 @@ module Vanda.Grammar.NGrams.Text
   ) where
 
 import qualified Data.List as L
-import qualified Data.Text.Lazy as T
+import qualified Data.Text as T
 
 import qualified Vanda.Grammar.NGrams.VandaNGrams as N
 

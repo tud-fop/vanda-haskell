@@ -26,13 +26,10 @@ import qualified Data.Vector as V
 import qualified Data.Map as M
 import qualified Data.List as L
 import qualified Data.Vector.Unboxed as VU
-import qualified Data.Text as Txt
-import qualified Data.Text.Lazy as TLazy
 
 import Data.NTT
 import Data.Hashable
 import qualified Data.Interner as In
-import Vanda.Token
 import Vanda.Grammar.LM
 import Vanda.Grammar.NGrams.WTA
 import qualified Vanda.Hypergraph.IntHypergraph as HI
@@ -57,14 +54,11 @@ data Item s l w
 -- | Relabels the terminals in 'h2' according to the String-to-Int mapping
 --   in the language model.
 relabel
-  :: LM a
-  => a
-  -> TokenArray
+  :: (Int -> Int)
   -> I.XRS
   -> I.XRS
-relabel lm ta xrs@I.XRS{ .. }
-  = let r = indexOf lm . TLazy.pack . Txt.unpack . getString ta
-    in  xrs{ I.irtg = irtg{ I.h2 = relabel' r . I.h2 $ irtg } }
+relabel f xrs@I.XRS{ .. }
+  = xrs{ I.irtg = irtg{ I.h2 = relabel' f . I.h2 $ irtg } }
 
 relabel'
   :: (Int -> Int)                 -- ^ relabeling
