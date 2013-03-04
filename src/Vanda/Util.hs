@@ -21,6 +21,7 @@ module Vanda.Util
   , emptyInterner
   , internerToArray
   , intern
+  , internList
   , internST
   , first'
   , second'
@@ -74,6 +75,12 @@ intern orig@Interner{ .. } v
       Just i -> (orig, i)
 
 
+internList :: (Hashable t, Eq t) => Interner t -> [t] -> (Interner t, [Int])
+internList im ks
+  = let f (m, xs) k = (m', x:xs) where (m', x) = intern m k
+    in  foldl f (im, []) ks
+
+ 
 internST :: (Hashable t, Eq t) => STRef s (Interner t) -> t -> ST s Int
 internST _in v = flip (lookupSTRef' _in (HM.lookup v . inMap)) return $ do
   i <- fmap inSize $ readSTRef _in

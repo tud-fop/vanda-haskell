@@ -2,14 +2,15 @@
 module Vanda.Hypergraph.Tree where
 
 import Data.Hashable ( Hashable (..) )
+import Data.List
 
 data Tree l
   = Nullary { rootLabel :: l }
   | Unary { rootLabel :: l, sub1 :: Tree l }
   | Binary { rootLabel :: l, sub1 :: Tree l, sub2 :: Tree l }
   | Node { rootLabel :: l, _subForest :: [Tree l] }
-  deriving (Eq, Ord, Show)
-  
+  deriving (Eq, Ord)
+
 
 instance Hashable l => Hashable (Tree l) where
   hashWithSalt salt Nullary{ .. } = hashWithSalt salt rootLabel
@@ -27,7 +28,6 @@ arity t = case t of
             Unary{} -> 1
             Binary{} -> 2
             Node{ .. } -> length _subForest
-
 
 node :: l -> [Tree l] -> Tree l
 node l cs = case cs of
@@ -60,3 +60,13 @@ mapChildren f t = case t of
 front :: Tree l -> [l]
 front Nullary{ .. } = [rootLabel]
 front t = concatMap front $ subForest t
+
+instance Show i => Show (Tree i) where
+  show (Nullary l)
+    = show l
+  show (Unary l t)
+    = (show l) ++ "(" ++ (show t) ++ ")"
+  show (Binary l t1 t2)
+    = (show l) ++ "(" ++ (show t1) ++ "," ++ (show t2) ++ ")"
+  show (Node l ts)
+    = (show l) ++ "(" ++ (intercalate "," . map show $ ts) ++ ")"

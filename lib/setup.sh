@@ -2,9 +2,9 @@
 
 set -e
 
-CXXFLAGS="-I. -fPIC -O3 -DNDEBUG -DHAVE_ZLIB -DKENLM_MAX_ORDER=6 -lz $CXXFLAGS"
+CXXFLAGS="-I. -fPIC -O3 -DNDEBUG -DHAVE_ZLIB -DKENLM_MAX_ORDER=6 -g -lz $CXXFLAGS"
 
-build () {
+build_lib () {
 	if [ ! -d "kenlm" ]
 	then
 		if [ ! -f "kenlm.tar.gz" ]
@@ -32,6 +32,19 @@ build () {
 		fi
 	done
 	
+	build
+}
+
+build () {
+	echo -n "Building"
+	cp kenlm.cc kenlm/.
+	cd kenlm/
+	objects=""
+	for i in util/double-conversion/*.cc util/*.cc lm/*.cc; do
+		if [ "${i%test.cc}" == "$i" ] && [ "${i%main.cc}" == "$i" ]; then
+			objects="$objects ${i%.cc}.o"
+		fi
+	done
 	g++ $CXXFLAGS -Wall -c kenlm.cc -o kenlm.o
 	objects="$objects kenlm.o"
 	echo -n "."
@@ -49,9 +62,9 @@ install () {
 	else
 		mkdir -p ~/.local/lib/
 		cp libkenlm.so ~/.local/lib/.
-		echo "Installed library to '$HOME/local/lib/libkenlm.so',"
-		echo "add '$HOME/local/lib' to 'LD_LIBRARY_PATH':"
-		echo "  export LD_LIBRARY_PATH=\"$HOME/local/lib:\$LD_LIBRARY_PATH\""
+		echo "Installed library to '$HOME/.local/lib/libkenlm.so',"
+		echo "add '$HOME/.local/lib' to 'LD_LIBRARY_PATH':"
+		echo "  export LD_LIBRARY_PATH=\"$HOME/.local/lib:\$LD_LIBRARY_PATH\""
 		echo "or move the library to the global library path."
 	fi
 }

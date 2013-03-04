@@ -46,6 +46,7 @@ library
     , Vanda.Algorithms.ExpectationMaximization
     , Vanda.Algorithms.InsideOutsideWeights
     , Vanda.Algorithms.IntEarley
+    , Vanda.Algorithms.IntersectWithNGram
     , Vanda.Corpus.Negra
     , Vanda.Corpus.Negra.Binary
     , Vanda.Corpus.Negra.NFData
@@ -61,6 +62,7 @@ library
     , Vanda.Grammar.XRS.IRTG
     , Vanda.Grammar.XRS.Text
     , Vanda.Grammar.NGrams
+    , Vanda.Grammar.NGrams.WTA
     , Vanda.Grammar.NGrams.Text
     , Vanda.Grammar.NGrams.Functions
     , Vanda.Grammar.NGrams.KenLM
@@ -74,11 +76,13 @@ library
     , Vanda.Hypergraph.NFData
     , Vanda.Hypergraph.Text
     , Vanda.Hypergraph.Tree
+    , Data.IntTokenMap
     , Data.NTT
     , Data.NTTBinary
     , Data.Queue
   hs-source-dirs:  src
   extra-libraries:  kenlm
+--  extra-lib-dirs:  lib
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
   --  -ddump-rule-rewrites
