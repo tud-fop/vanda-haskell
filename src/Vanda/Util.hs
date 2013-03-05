@@ -35,9 +35,6 @@ module Vanda.Util
 
 import Control.Monad.ST
 import Control.Seq
-import qualified Data.Array as A
-import Data.Hashable ( Hashable )
-import qualified Data.HashMap.Strict as HM
 import qualified Data.Map as M
 import Data.STRef ( STRef, newSTRef, readSTRef, writeSTRef, modifySTRef )
 
