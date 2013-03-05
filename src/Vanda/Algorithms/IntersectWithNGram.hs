@@ -23,6 +23,7 @@ module Vanda.Algorithms.IntersectWithNGram
   ) where
 
 import qualified Data.Vector as V
+import qualified Data.Array as A
 import qualified Data.Map as M
 import qualified Data.List as L
 import qualified Data.Vector.Unboxed as VU
@@ -75,7 +76,7 @@ intersect
   :: LM a
   => a                              -- ^ language model
   -> I.XRS                          -- ^ translation model
-  -> I.XRS                          -- ^ product translation model
+  -> (I.XRS, V.Vector (CState Int)) -- ^ product translation model, new states
 intersect lm I.XRS{ .. }
   = let I.IRTG{ .. }
               = irtg
@@ -92,13 +93,13 @@ intersect lm I.XRS{ .. }
                   (CState 0 emptyNState)
                   (I.SIP l1 l2)
                   its
-        (its'', vtx)                                   -- integerize Hypergraph
+        (its'', vtx, states)                          -- integerize Hypergraph
               = integerize' (CState 0 emptyNState) its'
         (hg, mu')
               = itemsToHypergraph its''
         irtg' = I.IRTG hg vtx h1' h2'
         xrs'  = I.XRS irtg' mu'                       -- build XRS
-    in  xrs'
+    in  (xrs', states)
 
 addToHomomorphism
   :: V.Vector t
@@ -219,7 +220,7 @@ integerize'
   :: (Hashable v, Eq v)
   => v
   -> [Item v l d]
-  -> ([Item Int l d], Int)
+  -> ([Item Int l d], Int, V.Vector v)
 integerize' vtx is
   = let mi = In.emptyInterner
         f (m, xs) e
@@ -228,7 +229,7 @@ integerize' vtx is
              in  (m2, (Item t' (_wt e) f' (_lbl e)):xs)
         (mi', is')
            = foldl f (mi, []) is
-    in  (is', snd . In.intern mi' $ vtx)
+    in  (is', snd . In.intern mi' $ vtx, V.fromList . A.elems . In.internerToArray $ mi' )
 
 -- | Adds some 'Item's such that 'Item's produced from the former final state
 --   are connected to the new final state.

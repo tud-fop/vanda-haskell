@@ -20,7 +20,7 @@
 module Vanda.Token
   ( Token
   , TokenMap
-  , TokenArray
+  , TokenArray (TokenArray)
   , TokenStructure
     ( emptyTS
     , fromText
