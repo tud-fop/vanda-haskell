@@ -36,16 +36,16 @@ main = do
                 . IS.relabel (LM.indexOf lm . TK.getString fa)
                 $ xrs
       let xrs' = IS.relabel (TK.getToken fm . LM.getText lm) xrs1
-      B.writeFile (zhgFile ++ ".bhg.gz.new") . compress 
+      B.writeFile (zhgFile ++ ".new.bhg.gz") . compress 
                                              . B.encode
                                              . I.irtg
                                              $ xrs' 
-      B.writeFile (zhgFile ++ ".weights.gz.new") . compress
+      B.writeFile (zhgFile ++ ".new.weights.gz") . compress
                                                  . B.encode
                                                  . VU.toList
                                                  . I.weights
                                                  $ xrs'
-      TIO.writeFile (zhgFile ++ ".nodes.new") . TK.toText
+      TIO.writeFile (zhgFile ++ ".new.nodes") . TK.toText
                                               . TK.TokenArray
                                               . (\x -> A.listArray (0, length x - 1) x)
                                               . map (T.pack . show)
