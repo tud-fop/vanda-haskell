@@ -21,7 +21,7 @@ module Vanda.Grammar.NGrams.WTA
   , mkNState
   , mergeNState
   , mergeNStates
-  , NState
+  , NState (Unary, Binary)
   ) where
 
 import Vanda.Grammar.LM

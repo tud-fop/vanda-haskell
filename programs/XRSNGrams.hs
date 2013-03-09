@@ -18,6 +18,10 @@ import qualified Vanda.Algorithms.IntersectWithNGram as IS
 import qualified Vanda.Hypergraph.IntHypergraph as HI
 import qualified Vanda.Grammar.LM as LM
 import qualified Vanda.Token as TK
+import qualified Vanda.Algorithms.IntersectWithNGram as IN
+import qualified Vanda.Grammar.NGrams.WTA as WTA
+
+import Debug.Trace
 
 main
   :: IO ()
@@ -27,6 +31,8 @@ main = do
     ["-f", fMapFile, "-z", zhgFile, "-l", lmFile] -> do
       irtg1 <- IF.loadIRTG (zhgFile ++ ".bhg.gz")
       ws    <- IF.loadWeights (zhgFile ++ ".weights.gz")
+      na    <- IF.loadTokenArray (zhgFile ++ ".nodes")
+      nm    <- IF.loadTokenMap (zhgFile ++ ".nodes")
       fa    <- IF.loadTokenArray fMapFile
       fm    <- IF.loadTokenMap fMapFile
       lm    <- LM.loadNGrams lmFile
@@ -35,7 +41,9 @@ main = do
                 = IS.intersect lm
                 . IS.relabel (LM.indexOf lm . TK.getString fa)
                 $ xrs
-      let xrs' = IS.relabel (TK.getToken fm . LM.getText lm) xrs1
+      let xrs'  = IS.relabel (TK.getToken fm . LM.getText lm) xrs1
+      let states'
+                = V.map (IN.mapCState id (TK.getToken fm . LM.getText lm)) states
       B.writeFile (zhgFile ++ ".new.bhg.gz") . compress 
                                              . B.encode
                                              . I.irtg
@@ -50,4 +58,5 @@ main = do
                                               . (\x -> A.listArray (0, length x - 1) x)
                                               . map (T.pack . show)
                                               . V.toList
-                                              $ states
+                                              . V.map (IN.mapCState (TK.getString na) (TK.getString fa))
+                                              $ states'

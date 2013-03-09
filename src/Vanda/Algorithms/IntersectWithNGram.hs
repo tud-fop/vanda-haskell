@@ -19,6 +19,8 @@
 
 module Vanda.Algorithms.IntersectWithNGram
   ( relabel
+  , mapCState
+  , CState (CState)
   , intersect
   ) where
 
@@ -40,7 +42,11 @@ import qualified Vanda.Grammar.XRS.IRTG as I
 data CState i
   = CState { _fst :: i
            , _snd :: NState i
-  } deriving (Eq, Ord, Show)
+  } deriving (Eq, Ord)
+
+instance Show i => Show (CState i) where
+  show (CState a b)
+    = "(" ++ (show a) ++ "," ++ (show b) ++ ")"
 
 instance Hashable i => Hashable (CState i) where
   hashWithSalt s (CState a b) = s `hashWithSalt` a `hashWithSalt` b
@@ -60,6 +66,16 @@ relabel
   -> I.XRS
 relabel f xrs@I.XRS{ .. }
   = xrs{ I.irtg = irtg{ I.h2 = relabel' f . I.h2 $ irtg } }
+  
+mapCState
+  :: (i -> j)
+  -> (i -> j)
+  -> CState i
+  -> CState j
+mapCState f1 f2 (CState a (Unary b))
+  = CState (f1 a) (Unary (map f2 b))
+mapCState f1 f2 (CState a (Binary b1 b2))
+  = CState (f1 a) (Binary (map f2 b1) (map f2 b2))
 
 relabel'
   :: (Int -> Int)                 -- ^ relabeling
