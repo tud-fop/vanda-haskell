@@ -52,7 +52,7 @@ mkNState
   -> (NState Int, Double)
 mkNState lm s
   = let n = order lm
-    in  if   n <= (length s)
+    in  if   n - 1 <= (length s)
         then ( Binary (take (n - 1) s) (last' (n - 1) s)
              , score lm s
              )
