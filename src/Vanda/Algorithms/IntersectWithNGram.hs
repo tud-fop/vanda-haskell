@@ -46,7 +46,7 @@ data CState i
 
 instance Show i => Show (CState i) where
   show (CState a b)
-    = "(" ++ (show a) ++ "," ++ (show b) ++ ")"
+    = (drop 1 . reverse . drop 1 . reverse . show $ a) ++ "@" ++ (show $ b)
 
 instance Hashable i => Hashable (CState i) where
   hashWithSalt s (CState a b) = s `hashWithSalt` a `hashWithSalt` b

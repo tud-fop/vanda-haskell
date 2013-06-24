@@ -26,6 +26,7 @@ module Vanda.Grammar.NGrams.WTA
 
 import Vanda.Grammar.LM
 import Data.Hashable
+import Data.List (intercalate)
 
 data NState v
   = Unary  [v]
@@ -38,9 +39,14 @@ instance Hashable i => Hashable (NState i) where
 
 instance Show v => Show (NState v) where
   show (Unary x)
-    = show x
+    = intercalate "_" . map (dropFirstLast . show) $ x
   show (Binary x y)
-    = (show x) ++ "*" ++ (show y) 
+    = (intercalate "_" . map (dropFirstLast . show) $ x) ++ "*" ++ (intercalate "_" . map (dropFirstLast . show) $ y) 
+
+dropFirstLast
+  :: [x]
+  -> [x]
+dropFirstLast = drop 1 . reverse . drop 1 . reverse
 
 emptyNState :: NState i
 emptyNState = Unary []
