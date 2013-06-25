@@ -63,7 +63,7 @@ parseXRSRule t
 
 p_rule :: Parser XRSRule
 p_rule = do
-  (q0, lhs, qs) <- choice [ try p_lhs_full{-, try p_ttree-}, fail "malformed left-hand side" ]
+  (q0, lhs, qs) <- choice [ try p_lhs_full, try p_ttree, fail "malformed left-hand side" ]
   _ <- string "-> "
   rhs <- p_string
   _ <- string "||| "
@@ -71,7 +71,6 @@ p_rule = do
   return $! case q0 of
                  Nothing -> XRSRule (T.rootLabel lhs) lhs rhs qs weight
                  Just q  -> XRSRule q lhs rhs qs weight
-                 
 
 p_lhs_full :: Parser (Maybe (Var TS.Text), T.Tree (Var TS.Text), IM.IntMap TS.Text)
 p_lhs_full = do
