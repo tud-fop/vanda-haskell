@@ -26,7 +26,8 @@ import Control.Monad ( forM_, forM )
 import Control.Monad.ST
 import Control.Seq
 import qualified Data.Array as A
-import Data.List ( elemIndex )
+import qualified Data.IntMap as IM
+import Data.List ( foldl', elemIndex )
 import Data.NTT
 import qualified Data.Text as TS
 import qualified Data.Text.Lazy as T
@@ -42,12 +43,13 @@ import Vanda.Token
 import Vanda.Util
 import Data.Interner
 
-    
+
 data XRSRule
   = XRSRule
-    { t      :: !(T.Tree (Var TS.Text))
-    , tHom   :: !(T.Tree (Var TS.Text))
-    , sHom   :: ![Var TS.Text]
+    { q0 :: !(Var TS.Text)
+    , lhs :: !(T.Tree (Var TS.Text))
+    , rhs :: ![Var TS.Text]
+    , qs :: !(IM.IntMap TS.Text)
     , weight :: !Double
     }
 
@@ -55,92 +57,85 @@ data XRSRule
 parseXRSRule :: T.Text -> XRSRule
 parseXRSRule t
   = case parse p_rule (T.unpack t) t of
-      Left  e -> error (show e)
+      Left e -> error (show e)
       Right r -> r
 
 
 p_rule :: Parser XRSRule
 p_rule = do
-  (t, tHom) <- p_lhs
-  _         <- string "-> "
-  sHom      <- p_rhs
-  _         <- string "||| "
-  weight    <- p_weight
-  return $! XRSRule { .. }
+  (q0, lhs, qs) <- choice [ try p_lhs_full{-, try p_ttree-}, fail "malformed left-hand side" ]
+  _ <- string "-> "
+  rhs <- p_string
+  _ <- string "||| "
+  weight <- p_weight
+  return $! case q0 of
+                 Nothing -> XRSRule (T.rootLabel lhs) lhs rhs qs weight
+                 Just q  -> XRSRule q lhs rhs qs weight
+                 
 
-
-p_lhs :: Parser (T.Tree (Var TS.Text), T.Tree (Var TS.Text))
-p_lhs = choice [ try p_lhs_full
-               , try p_tree
-               , fail "malformed left-hand side"
-               ]
-
-
-p_lhs_full :: Parser (T.Tree (Var TS.Text), T.Tree (Var TS.Text))
+p_lhs_full :: Parser (Maybe (Var TS.Text), T.Tree (Var TS.Text), IM.IntMap TS.Text)
 p_lhs_full = do
   q0         <- p_state
-  _          <- string ": "
-  (t, tHom)  <- p_tree
-  return $! (T.node q0 . T.subForest $ t, tHom)
-
+--   _          <- string ": "
+  (lhs, qs)  <- p_tree
+  return $! (Just q0, lhs, qs)
 
 p_state :: Parser (Var TS.Text)
 p_state = do
-  !si <- fmap TS.pack $ many (noneOf ":")
+  !si <- fmap TS.pack $ many (noneOf ": ")
+  _ <- string ":"
+  spaces
   return (NV si)
 
+p_ttree :: Parser (Maybe (Var TS.Text), T.Tree (Var TS.Text), IM.IntMap TS.Text)
+p_ttree = do
+  (lhs, qs) <- p_tree
+  return $! (Nothing, lhs, qs)
 
-p_tree :: Parser (T.Tree (Var TS.Text), T.Tree (Var TS.Text))
+p_tree :: Parser (T.Tree (Var TS.Text), IM.IntMap TS.Text)
 p_tree = choice [ p_tterm, p_tvar, p_tnonterm ]
 
-
-p_tterm :: Parser (T.Tree (Var TS.Text), T.Tree (Var TS.Text))
+p_tterm :: Parser (T.Tree (Var TS.Text), IM.IntMap TS.Text)
 p_tterm = do
   _ <- char '"'
   !si <- fmap TS.pack $ many (noneOf "\"")
   _ <- char '"'
   spaces
-  return (T.node (NV si) [], T.node (NV si) [])
+  return (T.node (NV si) [], IM.empty)
 
-
-p_tvar :: Parser (T.Tree (Var TS.Text), T.Tree (Var TS.Text))
+p_tvar :: Parser (T.Tree (Var TS.Text), IM.IntMap TS.Text)
 p_tvar = do
   _ <- char 'x'
   i <- fmap read $ many1 $ oneOf "0123456789"
   _ <- char ':'
   !si <- fmap TS.pack $ many (noneOf " )")
   spaces
-  return (T.node (NV si) [], T.node (Var i) [])
+  return (T.node (Var i) [], IM.singleton i si)
 
-
-p_tnonterm :: Parser (T.Tree (Var TS.Text), T.Tree (Var TS.Text))
+p_tnonterm :: Parser (T.Tree (Var TS.Text), IM.IntMap TS.Text)
 p_tnonterm = do
   !si <- fmap TS.pack $ many (noneOf " ()")
   _ <- char '('
-  (ts, tHoms) <- fmap unzip $ many p_tree
+  (ts, qss) <- fmap unzip $ many p_tree
   _ <- char ')'
   spaces
-  return (T.node (NV si) ts, T.node (NV si) tHoms)
+  return (T.node (NV si) ts, foldl' IM.union IM.empty qss)
 
 
-p_rhs :: Parser [Var TS.Text]
-p_rhs = many $ choice [ p_sterm
-                      , p_svar
-                      ]
-
+p_string :: Parser [Var TS.Text]
+p_string = many $ choice [ p_sterm, p_svar ]
 
 p_sterm :: Parser (Var TS.Text)
 p_sterm = do
-  _   <- char '"'
+  _ <- char '"'
   !si <- fmap TS.pack $ many (noneOf "\"")
-  _   <- char '"'
+  _ <- char '"'
   spaces
   return $ NV si
 
-
 p_svar :: Parser (Var TS.Text)
 p_svar = do
-  _  <- char 'x'
+  _ <- char 'x'
   !i <- fmap read $ many1 $ oneOf "0123456789"
   spaces
   return $ Var i
@@ -148,40 +143,9 @@ p_svar = do
 
 p_weight :: Parser Double
 p_weight = do
-  c  <- oneOf "0123456789"
-  cs <- many (oneOf "0123456789.Ee-")
+  c <- oneOf "0123456789"
+  cs <- many (oneOf "0123456789.E-")
   return $! read (c : cs)
-
-
-mkIRTG
-  :: (TokenMap, TokenMap, TokenMap)
-  -> [XRSRule]
-  -> (IRTG Int, [Double], TokenMap, TokenMap, TokenMap)
-mkIRTG (em_, fm_, nm_) rs_ = runST $ do
-  em <- newSTRef em_
-  fm <- newSTRef fm_
-  nm <- newSTRef nm_
-  tm <- newSTRef (emptyInterner :: Interner (T.Tree NTT))
-  sm <- newSTRef (emptyInterner :: Interner (V.Vector NTT))
-  ws <- newSTRef (emptyInterner :: Interner Double)
-  rs <- newSTRef ([] :: [Hyperedge StrictIntPair Int])
-  forM_ rs_ $ \ XRSRule{ .. } -> let NV q = T.rootLabel t in do
-    !q_ <- registerToken nm q
-    !qs_ <- forM (T.front t) $ \ (NV x) -> registerToken nm x
-    !lhs_ <- registerTree em tHom
-    !rhs_ <- registerString fm sHom
-    !ti <- internST tm lhs_
-    !si <- internST sm rhs_
-    !i <- internST ws weight
-    let e = mkHyperedge q_ (qs_ `using` seqList rseq) (SIP ti si) i
-      in e `seq` modifySTRef' rs (e :)
-  rtg <- fmap mkHypergraph $ readSTRef rs
-  h1 <- fmap mkHom $ readSTRef tm
-  h2 <- fmap mkHom $ readSTRef sm
-  initial <- fmap (flip getToken (TS.pack "ROOT")) $ readSTRef nm
-  let irtg = return $! IRTG{ .. }
-  let ws_ = fmap mkLst $ readSTRef ws
-  quintM (irtg, ws_, readSTRef em, readSTRef fm, readSTRef nm)
 
 
 mkLst :: Interner t -> [t]
@@ -217,6 +181,80 @@ registerString m xs
         NV s -> do
           i <- registerToken m s
           let i' = tt i in i' `seq` return i' -- return $! tt i
+
+
+mkIRTG
+  :: (TokenMap, TokenMap, TokenMap)
+  -> [XRSRule]
+  -> (IRTG Int, [Double], TokenMap, TokenMap, TokenMap)
+mkIRTG (em_, fm_, nm_) rs_ = runST $ do
+  em <- newSTRef em_
+  fm <- newSTRef fm_
+  nm <- newSTRef nm_
+  tm <- newSTRef (emptyInterner :: Interner (T.Tree NTT))
+  sm <- newSTRef (emptyInterner :: Interner (V.Vector NTT))
+  ws <- newSTRef (emptyInterner :: Interner Double)
+  rs <- newSTRef ([] :: [Hyperedge StrictIntPair Int])
+  forM_ rs_ $ \ XRSRule{ .. } -> let NV q = q0 in do
+    !q_ <- registerToken nm q
+    !qs_ <- forM (IM.elems qs) $ registerToken nm
+    !lhs_ <- registerTree em lhs
+    !rhs_ <- registerString fm rhs
+    !ti <- internST tm lhs_
+    !si <- internST sm rhs_
+    !i <- internST ws weight
+    let e = mkHyperedge q_ (qs_ `using` seqList rseq) (SIP ti si) i
+      in e `seq` modifySTRef' rs (e :)
+  rtg <- fmap mkHypergraph $ readSTRef rs
+  h1 <- fmap mkHom $ readSTRef tm
+  h2 <- fmap mkHom $ readSTRef sm
+  initial <- fmap (flip getToken (TS.pack "ROOT")) $ readSTRef nm
+  let irtg = return $! IRTG{ .. }
+  let ws_ = fmap mkLst $ readSTRef ws
+  quintM (irtg, ws_, readSTRef em, readSTRef fm, readSTRef nm)
+
+
+
+
+  
+
+att :: T.Text
+att = T.singleton '@'
+
+lrb :: T.Text
+lrb = T.singleton '('
+
+rrb :: T.Text
+rrb = T.singleton ')'
+
+spa :: T.Text
+spa = T.singleton ' '
+
+col :: T.Text
+col = T.singleton ':'
+
+dqu :: T.Text
+dqu = T.singleton '"'
+
+
+toString' :: TokenArray -> TokenArray -> Hyperedge l i -> T.Tree NTT -> T.Text
+toString' ta na e = go
+  where
+    gs i = if i < 0 then att else T.pack $ TS.unpack $ getString ta i
+    go (T.Nullary (T (-1))) = att
+    go (T.Nullary (T i)) = T.concat [dqu, gs i, dqu]
+    go (T.Nullary (NT i)) = T.concat
+                            [ T.pack ("x" ++ show i)
+                            , col
+                            , T.pack $ TS.unpack $ getString na (e `deref` i)
+                            ]
+    go (T.Unary (T i) t) = T.concat [gs i, lrb, go t, rrb]
+    go (T.Binary (T i) t1 t2)
+      = T.concat [gs i, lrb, go t1, spa, go t2, rrb]
+    go (T.Node (T i) sF)
+      = T.concat [gs i, lrb, T.unwords (map go sF), rrb]
+
+
 prettyPrintNTT :: TokenArray -> NTT -> T.Text
 prettyPrintNTT ta (T i)
   = T.concat [dqu, T.pack (TS.unpack (getString ta i)), dqu]
@@ -268,7 +306,7 @@ prettyPrintJoshua'
   -> (i -> Double)
   -> Hyperedge l i
   -> T.Text
-prettyPrintJoshua' ea fa _ h1 h2 w e
+prettyPrintJoshua' ea fa na h1 h2 w e
   = let l = label e
         lhs = h2 l
         -- lhs /= [NT 0]
@@ -314,38 +352,28 @@ prettyPrintJoshua ea fa na IRTG{ .. } w e
       (V.toList . (h2 V.!) . _snd)
       (\ i -> if i < 0 then 1.0 else w V.! i) e
 
-att :: T.Text
-att = T.singleton '@'
-
-lrb :: T.Text
-lrb = T.singleton '('
-
-rrb :: T.Text
-rrb = T.singleton ')'
-
-spa :: T.Text
-spa = T.singleton ' '
-
-col :: T.Text
-col = T.singleton ':'
-
-dqu :: T.Text
-dqu = T.singleton '"'
-
-
-toString' :: TokenArray -> TokenArray -> Hyperedge l i -> T.Tree NTT -> T.Text
-toString' ta na e = go
-  where
-    gs i = if i < 0 then att else T.pack $ TS.unpack $ getString ta i
-    go (T.Nullary (T (-1))) = att
-    go (T.Nullary (T i)) = T.concat [dqu, gs i, dqu]
-    go (T.Nullary (NT i)) = T.concat
-                            [ T.pack ("x" ++ show i)
-                            , col
-                            , T.pack $ TS.unpack $ getString na (e `deref` i)
-                            ]
-    go (T.Unary (T i) t) = T.concat [gs i, lrb, go t, rrb]
-    go (T.Binary (T i) t1 t2)
-      = T.concat [gs i, lrb, go t1, spa, go t2, rrb]
-    go (T.Node (T i) sF)
-      = T.concat [gs i, lrb, T.unwords (map go sF), rrb]
+{-
+makeIRTG
+  :: ( ( TokenMap
+       , TokenMap
+       , TokenMap
+       , (M.Map (T.Tree NTT) Int, Int)
+       , (M.Map [NTT] Int, Int)
+       )
+     , [(Hyperedge StrictIntPair Int, Double)]
+     )
+  -> (IRTG Int, [Double], TokenMap, TokenMap, TokenMap)
+makeIRTG ((em, fm, nm, (tm, tmc), (sm, smc)), ews)
+  = let ws = S.toList $ S.fromList $ map snd ews
+        wmap = M.fromList $ zip ws [(0 :: Int) ..]
+        es = [ mapHEi (const (wmap M.! w)) e
+             | (e, w) <- ews
+             ]
+        rtg = mkHypergraph es
+        h1 = V.fromList $ A.elems $ A.array (0, tmc - 1)
+           $ map swap $ M.toList tm
+        h2 = V.fromList $ A.elems $ A.array (0, smc - 1)
+           $ map swap $ M.toList sm
+        initial = getToken em (T.pack "ROOT")
+    in (IRTG { .. }, ws, em, fm, nm)
+-}
