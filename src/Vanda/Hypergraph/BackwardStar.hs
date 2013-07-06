@@ -280,11 +280,16 @@ topCCL feat wV e lists
     -- [l1', ..., ln']
     combine :: [[a]] -> [[[a]]]
     combine [] = [[]]
-    combine (x : xs) = map (x :) c ++ [tail x : map ((: []) . head) xs]
+    combine (x : xs) = map ([head x] :) c ++ [tail x : xs]
       where c = combine xs
 
 -- | Computes the array of best derivations, given an array of one best
 -- derivations (e.g., obtained via Knuth's algorithm).
+-- REQUIRES that the one-best derivations are `recursive'
+-- i.e., when the best derivation for a node v is e(d_1,...,d_k)
+-- with e = (v_1 ... v_k, l, v)
+-- then the best derivations for v_1, ..., v_k are
+-- d_1, ..., d_k, respectively!
 bests
   :: forall v l i x. (Eq v, Eq l, Ord v)
   => BackwardStar v l i
