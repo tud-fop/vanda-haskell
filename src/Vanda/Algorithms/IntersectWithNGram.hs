@@ -28,8 +28,6 @@ import qualified Vanda.Hypergraph.IntHypergraph as HI
 import Vanda.Algorithms.IntersectWithNGramUtil
 import Vanda.Grammar.NGrams.WTA
 
-import Debug.Trace (trace)
-
 -- | Intersects IRTG and n-gram model, emits 'Item's.
 intersect
   :: (Ord l, Show l, Show i1, LM a)
@@ -49,14 +47,14 @@ intersect lm mu h2 hg
                     | e  <- es
                     , let lst = L.nub $
                                 [ r
-                                | let ss = {-# SCC "sequence" #-} sequence
-                                         $ [ {-# SCC "theFind" #-} M.findWithDefault [] t1 its
+                                | let ss = sequence
+                                         $ [ M.findWithDefault [] t1 its
                                            | t1 <- HI.from e
                                            ]
                                 , not . L.null $ ss
                                 , s <- ss
                                 , S.notMember (map _to s) ts
-                                , let r = {-# SCC "theBlow" #-} blowRule mu h2 lm e s
+                                , let r = blowRule mu h2 lm e s
                                 ]
                     , not . L.null
                           $ lst
@@ -65,8 +63,7 @@ intersect lm mu h2 hg
                 then concat . map snd
                             . M.toAscList
                             $ its
-                else trace "iter" $
-                     go (S.union (S.fromList . map _from . concatMap snd $ l) ts)
+                else go (S.union (S.fromList . map _from . concatMap snd $ l) ts)
                    . foldl (\ m (k, v) -> M.insertWith (++) k v m) its
                    $ l
     in  go S.empty is0
