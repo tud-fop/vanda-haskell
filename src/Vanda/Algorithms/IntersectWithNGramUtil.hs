@@ -21,7 +21,7 @@ module Vanda.Algorithms.IntersectWithNGramUtil
   ( relabel
   , mapCState
   , CState (CState, _snd)
-  , Item (Item, _to)
+  , Item (Item, _to, _from)
   , intersect
   , addToHomomorphism
   , doReordering

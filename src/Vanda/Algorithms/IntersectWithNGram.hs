@@ -21,11 +21,14 @@ module Vanda.Algorithms.IntersectWithNGram where
 
 import qualified Data.Map as M
 import qualified Data.List as L
+import qualified Data.Set as S
 import Data.NTT
 import Vanda.Grammar.LM
 import qualified Vanda.Hypergraph.IntHypergraph as HI
 import Vanda.Algorithms.IntersectWithNGramUtil
 import Vanda.Grammar.NGrams.WTA
+
+import Debug.Trace (trace)
 
 -- | Intersects IRTG and n-gram model, emits 'Item's.
 intersect
@@ -41,22 +44,19 @@ intersect lm mu h2 hg
             . map (\x -> (HI.to x, [initRule mu h2 lm x]))
             $ es0
         es  = filter ((/=) 0 . HI.arity) . HI.edges $ hg
-        go !its
+        go !ts !its
           = let l = [ ( HI.to e, lst )
                     | e  <- es
-                    , let lst = L.nub
-                              $ [ r
-                                | let ss = sequence
-                                         $ [ M.findWithDefault [] t1 its
+                    , let lst = L.nub $
+                                [ r
+                                | let ss = {-# SCC "sequence" #-} sequence
+                                         $ [ {-# SCC "theFind" #-} M.findWithDefault [] t1 its
                                            | t1 <- HI.from e
                                            ]
                                 , not . L.null $ ss
                                 , s <- ss
-                                , let r = blowRule mu h2 lm e s
-                                , not . elem r 
-                                      . flip (M.findWithDefault []) its
-                                      . HI.to
-                                      $ e
+                                , S.notMember (map _to s) ts
+                                , let r = {-# SCC "theBlow" #-} blowRule mu h2 lm e s
                                 ]
                     , not . L.null
                           $ lst
@@ -65,10 +65,11 @@ intersect lm mu h2 hg
                 then concat . map snd
                             . M.toAscList
                             $ its
-                else go 
+                else trace "iter" $
+                     go (S.union (S.fromList . map _from . concatMap snd $ l) ts)
                    . foldl (\ m (k, v) -> M.insertWith (++) k v m) its
                    $ l
-    in  go is0
+    in  go S.empty is0
 
 -- | Emits an initial 'Item'.
 initRule
