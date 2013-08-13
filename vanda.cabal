@@ -47,6 +47,7 @@ library
     , Vanda.Algorithms.InsideOutsideWeights
     , Vanda.Algorithms.IntEarley
     , Vanda.Algorithms.IntersectWithNGram
+    , Vanda.Algorithms.IntersectWithNGramUtil
     , Vanda.Corpus.Negra
     , Vanda.Corpus.Negra.Binary
     , Vanda.Corpus.Negra.NFData
