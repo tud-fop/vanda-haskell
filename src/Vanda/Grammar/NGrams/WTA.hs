@@ -17,8 +17,8 @@
 
 
 module Vanda.Grammar.NGrams.WTA 
-  ( f
-  , g
+  ( deltaS
+  , deltaW
   , NState (Unary, Binary)
   ) where
 
@@ -41,9 +41,13 @@ instance Show v => Show (NState v) where
   show (Binary x y)
     = (intercalate "_" . map show $ x) ++ "*" ++ (intercalate "_" . map show $ y) 
 
--- | helper for state behaviour
-f :: LM a => a -> [NState v] -> NState v
-f lm xs
+-- | transition state
+deltaS :: LM a => a -> [NState v] -> [v] -> NState v
+deltaS lm [] yield
+  = if   order lm <= 1
+    then Unary yield
+    else Binary yield yield
+deltaS lm xs _
   = let go (Unary x) = x
         go (Binary x y) = x ++ y
         str = concatMap go xs
@@ -52,16 +56,37 @@ f lm xs
         then Unary str
         else Binary (take (n - 1) str) (last' (n-1) str)
 
--- | helper for transition weights
-g :: LM a => a -> [NState Int] -> Double
-g lm xs
+-- | transition weight without backoff
+--deltaW1 :: LM a => a -> [NState Int] -> [Int] -> Double
+--deltaW1 _ [] _
+--  = 1
+--deltaW1 lm xs _
+--  = sum . map (score lm) . filter (\ x -> length x >= order lm) . extractSubstrings $ xs
+
+-- | helper for transition weights (calculates intermediate
+--   values using backoff and cancels them out later)
+deltaW :: LM a => a -> [NState Int] -> [Int] -> Double
+deltaW lm [] yield
+  = score lm yield
+deltaW lm xs _
+  = (sum . map (score lm)
+         . extractSubstrings
+         $ xs
+    )
+  - (sum . map (score lm)
+         . map (\ (Unary x) -> x )
+         . filter (\ x -> case x of
+                            (Unary _)    -> True
+                            (Binary _ _) -> False
+                  )
+         $ xs
+    )
+
+extractSubstrings :: [NState v] -> [[v]]
+extractSubstrings xs
   = let go (rs, p) (Unary x) = (rs, p ++ x)
         go (rs, p) (Binary x y) = (rs ++ [(p ++ x)], y)
-        n = order lm
-        strs = (\ (rs, p) -> rs ++ [p]) . foldl' go ([], []) $ xs
-        strs2 = filter (\ x -> length x >= n) strs
-    in  sum . map (score lm) $ strs2
-
+    in  (\ (rs, p) -> rs ++ [p]) . foldl' go ([], []) $ xs
 
 last' :: Int -> [v] -> [v]
 last' n xs = drop ((length xs) - n) xs

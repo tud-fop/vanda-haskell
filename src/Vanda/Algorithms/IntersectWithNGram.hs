@@ -79,10 +79,10 @@ initRule
   -> HI.Hyperedge l i1              -- ^ rule
   -> Item (CState Int) l Double     -- ^ resulting 'Item'
 initRule mu h2 lm he
-  = let h (T x)  = [x]
-        h (NT _) = []
-        st = f lm . map (\ x -> Unary x ) . map h . h2 $ he
-        w1 = g lm . map (\ x -> Unary x ) . map h . h2 $ he
+  = let h (T x)  = x
+        h (NT x) = x
+        st = deltaS lm [] . map h . h2 $ he
+        w1 = deltaW lm [] . map h . h2 $ he
     in  Item 
           (CState (HI.to he) st)
           (w1 + (mu he))
@@ -101,6 +101,7 @@ blowRule
   -> Item (CState Int) l Double     -- ^ resulting 'Item'
 blowRule mu h2 lm he is
   = let xs      = map _to is
-        (x, w1) = toNState lm (map _snd xs) (h2 he)
+        xr      = doReordering (h2 he) . map _snd $ xs
+        x       = deltaS lm xr []
+        w1      = deltaW lm xr []
     in  Item (CState (HI.to he) x) (mu he + w1) xs (HI.label he)
-

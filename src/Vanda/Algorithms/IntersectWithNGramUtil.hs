@@ -23,8 +23,8 @@ module Vanda.Algorithms.IntersectWithNGramUtil
   , CState (CState, _snd)
   , Item (Item, _to)
   , intersect
-  , toNState
   , addToHomomorphism
+  , doReordering
   , itemsToHypergraph
   , integerize'
   , makeSingleEndState
@@ -150,15 +150,6 @@ itemsToHypergraph xs
               . zip [0 ..]
               $ xs'
     in  (HI.mkHypergraph es, mu)
-
-toNState
-  :: LM a
-  => a
-  -> [NState Int]
-  -> [NTT]
-  -> (NState Int, Double)
-toNState lm xs m
-  = (\x -> (f lm x, g lm x)) . doReordering m $ xs
 
 -- | reorders/inserts the given 'NState's according to the given reordering/insertion
 --   e.g. [x0,c,b,x2,x1,d] [()] 
