@@ -20,7 +20,7 @@
 module Vanda.Algorithms.IntersectWithNGramUtil
   ( relabel
   , mapCState
-  , CState (CState, _snd)
+  , CState (CState, _fst, _snd)
   , Item (Item, _to, _from)
   , intersect
   , addToHomomorphism
@@ -73,7 +73,7 @@ relabel
   -> I.XRS
 relabel f1 xrs@I.XRS{ .. }
   = xrs{ I.irtg = irtg{ I.h2 = relabel' f1 . I.h2 $ irtg } }
-  
+
 mapCState
   :: (i -> j)
   -> (i -> j)

@@ -1,4 +1,3 @@
-{-# LANGUAGE RecordWildCards, BangPatterns #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Vanda.Algorithms.IntersectWithNGram
@@ -8,7 +7,7 @@
 --                purposes at Technische Universität Dresden AND IN
 --                COORDINATION with the Chair of Foundations of Programming.
 --
--- Maintainer  :  Tobias.Denkinger@mailbox.tu-dresden.de
+-- Maintainer  :  Tobias.Denkinger@tu-dresden.de
 -- Stability   :  unknown
 -- Portability :  portable
 --
@@ -37,36 +36,36 @@ intersect
   -> HI.Hypergraph l i1             -- ^ RTG hypergraph
   -> [Item (CState Int) l Double]   -- ^ resulting list of 'Items'
 intersect lm mu h2 hg
-  = let es0 = filter ((==) 0 . HI.arity) . HI.edges $ hg
+  = let es  = filter ((/=) 0 . HI.arity) . HI.edges $ hg
+        es0 = filter ((==) 0 . HI.arity) . HI.edges $ hg
         is0 = M.fromListWith (++)
             . map (\x -> (HI.to x, [initRule mu h2 lm x]))
             $ es0
-        es  = filter ((/=) 0 . HI.arity) . HI.edges $ hg
-        go !ts !its
-          = let l = [ ( HI.to e, lst )
-                    | e  <- es
-                    , let lst = L.nub $
-                                [ r
-                                | let ss = sequence
-                                         $ [ M.findWithDefault [] t1 its
-                                           | t1 <- HI.from e
-                                           ]
-                                , not . L.null $ ss
-                                , s <- ss
-                                , S.notMember (map _to s) ts
-                                , let r = blowRule mu h2 lm e s
-                                ]
-                    , not . L.null
-                          $ lst
-                    ]
-            in  if   L.null l
+        go ts nits its
+          = let is = [ (HI.to e, lst)
+                     | e  <- es
+                     , let lst = [ blowRule mu h2 lm e s
+                                 | s <- L.nub 
+                                      . fst
+                                      . awesomeSequence
+                                      $ [ (nLst, oLst)
+                                        | q <- HI.from e
+                                        , let nLst = L.nub . map _to $ M.findWithDefault [] q nits
+                                        , let oLst = L.nub . map _to $ M.findWithDefault [] q its
+                                        ]
+                                 , S.notMember s ts
+                                 ]
+                     , not $ null lst
+                     ]
+                mNew = M.fromListWith (++) is
+            in  if   null is
                 then concat . map snd
                             . M.toAscList
-                            $ its
-                else go (S.union (S.fromList . map _from . concatMap snd $ l) ts)
-                   . foldl (\ m (k, v) -> M.insertWith (++) k v m) its
-                   $ l
-    in  go S.empty is0
+                            $ M.unionWith (++) its nits
+                else go (S.union (S.fromList . map _from . concatMap snd $ is) ts)
+                     mNew
+                   $ M.unionWith (++) its nits
+    in  go S.empty is0 M.empty
 
 -- | Emits an initial 'Item'.
 initRule
@@ -95,11 +94,20 @@ blowRule
   -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
   -> a                              -- ^ language model
   -> HI.Hyperedge l i1              -- ^ rule
-  -> [Item (CState Int) l Double]   -- ^ 'Item's
+  -> [CState Int]                   -- ^ base states
   -> Item (CState Int) l Double     -- ^ resulting 'Item'
-blowRule mu h2 lm he is
-  = let xs      = map _to is
-        xr      = doReordering (h2 he) . map _snd $ xs
+blowRule mu h2 lm he xs
+  = let xr      = doReordering (h2 he) . map _snd $ xs
         x       = deltaS lm xr []
         w1      = deltaW lm xr []
     in  Item (CState (HI.to he) x) (mu he + w1) xs (HI.label he)
+
+awesomeSequence :: [([a], [a])] -> ([[a]], [[a]])
+awesomeSequence [] = ([], [[]])
+awesomeSequence ((ns, os) : xs)
+  = ( [ n:as  | n <- ns, as <- nss ++ oss ]
+      ++ [ o:ns' | o <- os, ns' <- nss ]
+    , [ o:os' | o <- os, os' <- oss ]
+    )
+  where
+    (nss, oss) = awesomeSequence xs

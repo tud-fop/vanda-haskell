@@ -39,7 +39,7 @@ instance Show v => Show (NState v) where
   show (Unary x)
     = intercalate "_" . map show $ x
   show (Binary x y)
-    = (intercalate "_" . map show $ x) ++ "*" ++ (intercalate "_" . map show $ y) 
+    = (intercalate "_" . map show $ x) ++ "*" ++ (intercalate "_" . map show $ y)
 
 -- | transition state
 deltaS :: LM a => a -> [NState v] -> [v] -> NState v
