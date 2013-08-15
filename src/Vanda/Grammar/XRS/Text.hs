@@ -43,6 +43,7 @@ import Vanda.Token
 import Vanda.Util
 import Data.Interner
 
+import Debug.Trace ( traceShow )
 
 data XRSRule
   = XRSRule
@@ -54,11 +55,11 @@ data XRSRule
     }
 
 
-parseXRSRule :: T.Text -> XRSRule
+parseXRSRule :: T.Text -> Maybe XRSRule
 parseXRSRule t
   = case parse p_rule (T.unpack t) t of
-      Left e -> error (show e)
-      Right r -> r
+      Left e -> traceShow e Nothing
+      Right r -> Just r
 
 
 p_rule :: Parser XRSRule
