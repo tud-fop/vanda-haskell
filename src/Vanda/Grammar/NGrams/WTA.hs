@@ -16,10 +16,10 @@
 -----------------------------------------------------------------------------
 
 
-module Vanda.Grammar.NGrams.WTA 
+module Vanda.Grammar.NGrams.WTA
   ( deltaS
   , deltaW
-  , NState (Unary, Binary)
+  , NState (Nullary, Unary, Binary)
   ) where
 
 import Vanda.Grammar.LM
@@ -27,22 +27,34 @@ import Data.Hashable
 import Data.List (foldl',intercalate)
 
 data NState v
-  = Unary  [v]
+  = Nullary
+  | Unary  [v]
   | Binary [v] [v]
   deriving (Eq, Ord)
 
 instance Hashable i => Hashable (NState i) where
+  hashWithSalt s Nullary = s
   hashWithSalt s (Unary a) = s `hashWithSalt` a
   hashWithSalt s (Binary a b) = s `hashWithSalt` a `hashWithSalt` b
 
 instance Show v => Show (NState v) where
-  show (Unary x)
-    = intercalate "_" . map show $ x
-  show (Binary x y)
-    = (intercalate "_" . map show $ x) ++ "*" ++ (intercalate "_" . map show $ y)
+  show x
+    = case x of
+      Nullary -> ""
+      Unary x -> intercalate "_" $ map toString x
+      Binary x y -> (intercalate "_" $ map toString x) ++ "*" ++ (intercalate "_" $ map toString y)
+     where
+       toString = reverse . drop 1 . reverse . drop 1 . show
+
+--  show Nullary
+--    = ""
+--  show (Unary x)
+--    = intercalate "_" $ map toString x
+--  show (Binary x y)
+--    = (intercalate "_" $ map toString x) ++ "*" ++ (intercalate "_" $ map toString y)
 
 -- | transition state
-deltaS :: LM a => a -> [NState v] -> [v] -> NState v
+deltaS :: (Show v, LM a) => a -> [NState v] -> [v] -> NState v
 deltaS lm [] yield
   = if   order lm <= 1
     then Unary yield
@@ -55,13 +67,6 @@ deltaS lm xs _
     in  if   length str < order lm
         then Unary str
         else Binary (take (n - 1) str) (last' (n-1) str)
-
--- | transition weight without backoff
---deltaW1 :: LM a => a -> [NState Int] -> [Int] -> Double
---deltaW1 _ [] _
---  = 1
---deltaW1 lm xs _
---  = sum . map (score lm) . filter (\ x -> length x >= order lm) . extractSubstrings $ xs
 
 -- | helper for transition weights (calculates intermediate
 --   values using backoff and cancels them out later)

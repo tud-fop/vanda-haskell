@@ -97,14 +97,13 @@ blowRule
 blowRule mu h2 lm he xs
   = let xr      = doReordering (h2 he) $ map _snd xs
         x       = deltaS lm xr []
-        w1      = deltaW lm xr []
-    in  Item (CState (HI.to he) x)
-             (mu he + w1)
-             xs
-             (HI.label he)
+        w1      = deltaW lm xr [] + mu he
+    in  Item (CState (HI.to he) x) w1 xs $ HI.label he
 
--- | Calculates sequences as shown in the following example
---   awesomeSequence ()
+-- | For a given list l of tuples of lists ai and bi of symbols,
+--   generates all sequences s of length |l| such that the i-th
+--   symbol of s is either in ai or in bi, and there is at least
+--   one j such that the j-th element of s is in aj.
 awesomeSequence :: [([a], [a])] -> ([[a]], [[a]])
 awesomeSequence [] = ([], [[]])
 awesomeSequence ((ns, os) : xs)

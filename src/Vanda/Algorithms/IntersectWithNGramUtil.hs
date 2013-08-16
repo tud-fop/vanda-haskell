@@ -46,6 +46,8 @@ import qualified Vanda.Hypergraph.IntHypergraph as HI
 import qualified Vanda.Hypergraph.Tree as T
 import qualified Vanda.Grammar.XRS.IRTG as I
 
+import Debug.Trace
+
 data CState i
   = CState { _fst :: i
            , _snd :: NState i
@@ -53,7 +55,9 @@ data CState i
 
 instance Show i => Show (CState i) where
   show (CState a b)
-    = (drop 1 . reverse . drop 1 . reverse . show $ a) ++ "@" ++ (show $ b)
+--    = (drop 1 . reverse . drop 1 . reverse . show $ a) ++ "@" ++ (show $ b)
+    = (toString a) ++ "@" ++ (show b) where
+      toString = reverse . drop 1 . reverse . drop 1 . show
 
 instance Hashable i => Hashable (CState i) where
   hashWithSalt s (CState a b) = s `hashWithSalt` a `hashWithSalt` b
@@ -122,7 +126,7 @@ intersect intersect' lm I.XRS{ .. }
                   (I.SIP l1 l2)
                   its
         (its'', vtx, states)                          -- integerize Hypergraph
-              = integerize' (CState 0 (Unary [])) its'
+              = integerize' (CState 0 (Nullary)) its'
         (hg, mu')
               = itemsToHypergraph its''
         irtg' = I.IRTG hg vtx h1' h2'
@@ -152,7 +156,6 @@ itemsToHypergraph xs
     in  (HI.mkHypergraph es, mu)
 
 -- | reorders/inserts the given 'NState's according to the given reordering/insertion
---   e.g. [x0,c,b,x2,x1,d] [()] 
 doReordering
   :: [NTT]                          -- ^ reordering/insertion
   -> [NState Int]                   -- ^ original states
