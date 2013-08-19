@@ -46,28 +46,22 @@ instance Show v => Show (NState v) where
      where
        toString = reverse . drop 1 . reverse . drop 1 . show
 
---  show Nullary
---    = ""
---  show (Unary x)
---    = intercalate "_" $ map toString x
---  show (Binary x y)
---    = (intercalate "_" $ map toString x) ++ "*" ++ (intercalate "_" $ map toString y)
-
 -- | transition state
 deltaS :: (Show v, LM a) => a -> [NState v] -> [v] -> NState v
 deltaS lm [] yield
-  = if   order lm <= 1
-    then Unary yield
-    else Binary yield yield
+  = let n = order lm
+    in  if   length yield < n - 1
+        then Unary yield
+        else Binary (take (n - 1) yield) (last' (n - 1) yield)
 deltaS lm xs _
   = let go Nullary = []
         go (Unary x) = x
         go (Binary x y) = x ++ y
         str = concatMap go xs
         n = order lm
-    in  if   length str < order lm
+    in  if   length str < n
         then Unary str
-        else Binary (take (n - 1) str) (last' (n-1) str)
+        else Binary (take (n - 1) str) (last' (n - 1) str)
 
 -- | helper for transition weights (calculates intermediate
 --   values using backoff and cancels them out later)
