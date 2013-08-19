@@ -46,8 +46,6 @@ import qualified Vanda.Hypergraph.IntHypergraph as HI
 import qualified Vanda.Hypergraph.Tree as T
 import qualified Vanda.Grammar.XRS.IRTG as I
 
-import Debug.Trace
-
 data CState i
   = CState { _fst :: i
            , _snd :: NState i
@@ -55,7 +53,6 @@ data CState i
 
 instance Show i => Show (CState i) where
   show (CState a b)
---    = (drop 1 . reverse . drop 1 . reverse . show $ a) ++ "@" ++ (show $ b)
     = (toString a) ++ "@" ++ (show b) where
       toString = reverse . drop 1 . reverse . drop 1 . show
 
@@ -83,6 +80,8 @@ mapCState
   -> (i -> j)
   -> CState i
   -> CState j
+mapCState f1 _ (CState a Nullary)
+  = CState (f1 a) Nullary
 mapCState f1 f2 (CState a (Unary b))
   = CState (f1 a) (Unary (map f2 b))
 mapCState f1 f2 (CState a (Binary b1 b2))
