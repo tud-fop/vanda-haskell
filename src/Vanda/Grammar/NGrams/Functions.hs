@@ -19,6 +19,8 @@
 module Vanda.Grammar.NGrams.Functions where
 
 import qualified Data.List as L
+import qualified Data.Map as M
+import qualified Data.Vector as V
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 
@@ -49,3 +51,34 @@ evaluateLine lm l
     )
   . T.words
   $ l
+
+writeNGrams
+  :: NGrams T.Text
+  -> T.Text
+writeNGrams lm
+  = let grams = M.fromList
+              $ [ (n, (ngrams, length ngrams))
+                | n <- [1 .. (order lm)]
+                , let ngrams = [ (map (invDict lm V.!) ngram, weights lm M.! ngram)
+                               | ngram <- M.keys $ weights lm
+                               , length ngram == n
+                               ]
+                ]
+        header lst = [ T.pack "", T.pack "\\data\\" ]
+                   ++ [ T.pack $ "ngram  " ++ show n ++ "=\t" ++ show l
+                      | n <- [1 .. (order lm)]
+                      , let l = snd $ lst M.! n
+                      ]
+                   ++ [ T.pack "" ]
+        body lst = concat
+                 $ [ [T.pack "", T.pack $ "\\" ++ show n ++ "-grams:"] ++ lns
+                   | n <- [1 .. (order lm)]
+                   , let lns = [ T.pack (show w1 ++ "\t")
+                               `T.append` (T.intercalate (T.pack " ") gram)
+                               `T.append` (T.pack $ case w2 of
+                                                       Nothing -> ""
+                                                       Just x  -> "\t" ++ show x)
+                               | (gram, (w1, w2)) <- fst $ lst M.! n
+                               ]
+                   ]
+    in  T.unlines $ header grams ++ body grams ++ [T.pack "\\end\\"]
