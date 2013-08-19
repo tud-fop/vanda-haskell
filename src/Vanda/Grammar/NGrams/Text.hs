@@ -62,6 +62,6 @@ parseLine n t
         p  = read . T.unpack . head $ s1 :: Double
         ws = T.words . head . tail $ s1
         b  = if   L.length s1 == 2
-             then Just (0 :: Double)
+             then Nothing
              else Just (read . T.unpack . last $ s1 :: Double)
     in  N.addNGram n ws p b
