@@ -19,20 +19,24 @@ module Vanda.Grammar.NGrams.VandaNGrams
   ( NGrams
   , empty
   , dict
+  , invDict
   , order
   , indexOf
   , addNGram
+  , weights
   , evaluate
   , evaluateInt
   ) where
 
 import qualified Data.Map as M
 import qualified Data.List as L
+import qualified Data.Vector as V
 
 {-- snippet NGrams --}
 data NGrams v
   = NGrams
     { dict    :: M.Map v Int
+    , invDict :: V.Vector v
     , dLength :: Int
     , order   :: Int
     , weights :: M.Map [Int] (Double, Maybe Double)
@@ -85,7 +89,7 @@ empty
   :: Int                   -- ^ order
   -> NGrams v              -- ^ empty NGrams model
 empty n
-  = NGrams M.empty 0 n M.empty
+  = NGrams M.empty V.empty 0 n M.empty
 
 indexOf
   :: Ord v
@@ -101,9 +105,9 @@ addWord
   -> v                     -- ^ word
   -> NGrams v              -- ^ new NGrams
 addWord lm ve
-  = let (m, c) = (dict lm, dLength lm)
+  = let (m, i, c) = (dict lm, invDict lm, dLength lm)
     in  if   M.notMember ve m
-        then lm{ dict = M.insert ve c m, dLength = c + 1 }
+        then lm{ dict = M.insert ve c m, invDict = V.snoc i ve, dLength = c + 1 }
         else lm
 
 -- | Adds an n-gram to the model.

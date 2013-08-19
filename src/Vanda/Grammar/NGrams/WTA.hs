@@ -38,8 +38,8 @@ instance Hashable i => Hashable (NState i) where
   hashWithSalt s (Binary a b) = s `hashWithSalt` a `hashWithSalt` b
 
 instance Show v => Show (NState v) where
-  show x
-    = case x of
+  show s
+    = case s of
       Nullary -> ""
       Unary x -> intercalate "_" $ map toString x
       Binary x y -> (intercalate "_" $ map toString x) ++ "*" ++ (intercalate "_" $ map toString y)
@@ -60,7 +60,8 @@ deltaS lm [] yield
     then Unary yield
     else Binary yield yield
 deltaS lm xs _
-  = let go (Unary x) = x
+  = let go Nullary = []
+        go (Unary x) = x
         go (Binary x y) = x ++ y
         str = concatMap go xs
         n = order lm
@@ -81,6 +82,7 @@ deltaW lm xs _
   - (sum . map (score lm)
          . map (\ (Unary x) -> x )
          . filter (\ x -> case x of
+                            Nullary      -> False
                             (Unary _)    -> True
                             (Binary _ _) -> False
                   )
@@ -89,7 +91,8 @@ deltaW lm xs _
 
 extractSubstrings :: [NState v] -> [[v]]
 extractSubstrings xs
-  = let go (rs, p) (Unary x) = (rs, p ++ x)
+  = let go (rs, p) Nullary = (rs, p)
+        go (rs, p) (Unary x) = (rs, p ++ x)
         go (rs, p) (Binary x y) = (rs ++ [(p ++ x)], y)
     in  (\ (rs, p) -> rs ++ [p]) . foldl' go ([], []) $ xs
 
