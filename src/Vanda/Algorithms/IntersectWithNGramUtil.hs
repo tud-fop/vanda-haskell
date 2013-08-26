@@ -23,7 +23,6 @@ module Vanda.Algorithms.IntersectWithNGramUtil
   , CState (CState, _fst, _snd)
   , Item (Item, _to, _from)
   , intersect
-  , addToHomomorphism
   , doReordering
   , itemsToHypergraph
   , integerize'
@@ -111,33 +110,23 @@ intersect
 intersect intersect' lm I.XRS{ .. }
   = let I.IRTG{ .. }
               = irtg
-        hom   = V.toList . (V.!) h2 . I._snd . HI.label
-                                                      -- prepare h2
-        mu    = log . (VU.!) weights . HI.ident       -- prepare weights
-        its   = intersect' lm mu hom rtg              -- generate items
-        (h1', l1)
-              = addToHomomorphism h1 (T.Nullary (NT 0))
-        (h2', l2)
-              = addToHomomorphism h2 (V.fromList [NT 0])
+        hom   = V.toList . (V.!) h2 . I._snd . HI.label -- prepare h2
+        mu    = log . (VU.!) weights . HI.ident         -- prepare weights
+        its   = intersect' lm mu hom rtg                -- generate items
+        h1'   = flip V.cons h1 . T.Nullary $ NT 0
+        h2'   = flip V.cons h2 $ V.fromList [NT 0]
         its'  = makeSingleEndState
                   ((==) initial . _fst)
                   (CState 0 (Unary []))
-                  (I.SIP l1 l2)
+                  (I.SIP (V.length h1' - 1) (V.length h2' - 1))
                   its
-        (its'', vtx, states)                          -- integerize Hypergraph
+        (its'', vtx, states)                            -- integerize Hypergraph
               = integerize' (CState 0 (Nullary)) its'
         (hg, mu')
               = itemsToHypergraph its''
         irtg' = I.IRTG hg vtx h1' h2'
-        xrs'  = I.XRS irtg' mu'                       -- build XRS
+        xrs'  = I.XRS irtg' mu'                         -- build XRS
     in  (xrs', states)
-
-addToHomomorphism
-  :: V.Vector t
-  -> t
-  -> (V.Vector t, Int)
-addToHomomorphism h e
-  = (V.fromList . flip (++) [e] . V.toList $ h, V.length h)
 
 -- | Converts an 'Item' to a Hyperedge.
 itemsToHypergraph
