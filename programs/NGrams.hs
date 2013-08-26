@@ -12,26 +12,27 @@ main
 main = do
   args <- getArgs
   case args of
-    ["--train", grammar] -> do
-      nGrams <- loadNGrams grammar
+    ["--train"] -> do
+      corpus <- TIO.getContents
+      let nGrams = trainModel 5 3 corpus
       TIO.putStr $ writeNGrams nGrams
-    ["-g", grammar, "-l", text] -> do
+    [grammar, "-l"] -> do
       nGrams <- loadNGrams grammar
-      input  <- TIO.readFile text
+      input  <- TIO.getContents
       let wts = L.map (evaluateLine nGrams) $ T.lines input
       TIO.putStr . T.unlines . flip map wts $ T.pack . show
-    ["-l", "-g", grammar, text] -> do
+    ["-l", grammar] -> do
       nGrams <- loadNGrams grammar
-      input  <- TIO.readFile text
+      input  <- TIO.getContents
       let wts = L.map (evaluateLine nGrams) . T.lines $ input
       TIO.putStr . T.unlines . flip map wts $ T.pack . show
-    ["-g", grammar, text] -> do
+    [grammar] -> do
       nGrams <- loadNGrams grammar
-      input  <- TIO.readFile text
+      input  <- TIO.getContents
       let wts = L.map (evaluateLine nGrams) . T.lines $ input
       TIO.putStr . T.unlines . flip map wts $ T.pack . show . exp
     _ -> do
       TIO.putStr
       . T.pack
-      $  "usage: NGrams [-l] -g <grammar> [<corpus>] > <scores>\n"
-      ++ "  or   NGrams --train <corpus> > <grammar>"
+      $  "usage: NGrams [-l] MODEL < CORPUS > SCORES   # scores each sentence in a corpus\n"
+      ++ "  or   NGrams --train < CORPUS > MODEL       # trains an n-gram model"
