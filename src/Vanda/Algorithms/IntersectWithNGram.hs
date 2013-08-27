@@ -35,17 +35,17 @@ intersect
   -> HI.Hypergraph l i1             -- ^ RTG hypergraph
   -> [Item (CState Int) l Double]   -- ^ resulting list of 'Items'
 intersect lm mu h2 hg
-  = let es  = filter ((/=) 0 . HI.arity) . HI.edges $ hg
-        es0 = filter ((==) 0 . HI.arity) . HI.edges $ hg
+  = let es  = filter ((/=) 0 . HI.arity) $ HI.edges hg
+        es0 = filter ((==) 0 . HI.arity) $ HI.edges hg
         is0 = flip map es0 $ initRule mu h2 lm
-        ns0 = M.map S.fromList . M.fromListWith (++) . map (\x -> (_fst x, [x])) . map _to $ is0
+        ns0 = M.map S.fromList . M.fromListWith (++) . map (\x -> (_fst x, [x])) $ map _to is0
         go cs os ns its
           = let is = [ (HI.to e, lst)
                      | e <- es
                      , let lst = [ blowRule mu h2 lm e s
                                  | s <- fst
-                                      . awesomeSequence
-                                      $ [ (nLst, oLst)
+                                      $ awesomeSequence
+                                        [ (nLst, oLst)
                                         | q <- HI.from e
                                         , let nLst = S.toList $ M.findWithDefault S.empty q ns
                                         , let oLst = S.toList $ M.findWithDefault S.empty q os
@@ -55,7 +55,8 @@ intersect lm mu h2 hg
                      , not $ null lst
                      ]
                 cs' = flip S.union cs
-                    . S.fromList . map _from
+                    . S.fromList
+                    . map _from
                     $ concatMap snd is
                 os' = M.unionWith S.union os ns
                 ns' = M.mapWithKey (\ k x -> S.difference x $ M.findWithDefault S.empty k os')
@@ -77,17 +78,18 @@ initRule
 initRule mu h2 lm he
   = let h (T x)  = x
         h (NT x) = x
-        st = deltaS lm [] . map h . h2 $ he
-        w1 = deltaW lm [] . map h . h2 $ he
+        sts = map h $ h2 he
+        st = deltaS lm [] sts
+        w1 = deltaW lm [] sts
     in  Item (CState (HI.to he) st)
-             (w1 + (mu he))
+             (mu he + w1)
              []
              (HI.label he)
 
 -- | Combines 'Item's by a rule. The 'Item's and the rule must
 --   match (not checked).
 blowRule
-  :: LM a
+  :: (LM a, Show l)
   => (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
   -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
   -> a                              -- ^ language model

@@ -69,7 +69,7 @@ trainModel k n text
         combinedMap      = M.unionWith
                              f
                              (M.map (M.map (\ x -> (x, Nothing))) nGramWeight)
-                             (M.map (M.map (\ y -> (0, Just y))) remainingMass)
+                             (M.map (M.map (\ y -> (0, if y == 0 then Nothing else Just y))) remainingMass)
         weightedNGrams   = M.assocs . M.unions $ M.elems combinedMap
         g lm (w, (x, y)) = addNGram lm w x y
     in  L.foldl' g (empty n) weightedNGrams
@@ -190,5 +190,6 @@ subsequences' i xs
     then (take i xs):(subsequences' i $ drop 1 xs)
     else []
 
-traceShow' x = trace (f x) x
-f m = unlines . map (\ (x, y) -> show (T.unwords x) ++ " -> " ++ show y) . M.toAscList . M.unions $ M.elems m
+traceShow' x
+  = trace (f x) x where
+      f m = unlines . map (\ (a, b) -> show (T.unwords a) ++ " -> " ++ show b) . M.toAscList . M.unions $ M.elems m

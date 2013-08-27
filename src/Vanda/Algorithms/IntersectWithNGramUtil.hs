@@ -21,7 +21,7 @@ module Vanda.Algorithms.IntersectWithNGramUtil
   ( relabel
   , mapCState
   , CState (CState, _fst, _snd)
-  , Item (Item, _to, _from)
+  , Item (Item, _to, _from, _wt)
   , intersect
   , doReordering
   , itemsToHypergraph
@@ -33,7 +33,6 @@ module Vanda.Algorithms.IntersectWithNGramUtil
 import qualified Data.Vector as V
 import qualified Data.Array as A
 import qualified Data.Map as M
-import qualified Data.List as L
 import qualified Data.Vector.Unboxed as VU
 
 import Data.NTT
@@ -52,8 +51,7 @@ data CState i
 
 instance Show i => Show (CState i) where
   show (CState a b)
-    = (toString a) ++ "@" ++ (show b) where
-      toString = reverse . drop 1 . reverse . drop 1 . show
+    = show a ++ "@" ++ show b
 
 instance Hashable i => Hashable (CState i) where
   hashWithSalt s (CState a b) = s `hashWithSalt` a `hashWithSalt` b
@@ -72,7 +70,7 @@ relabel
   -> I.XRS
   -> I.XRS
 relabel f1 xrs@I.XRS{ .. }
-  = xrs{ I.irtg = irtg{ I.h2 = relabel' f1 . I.h2 $ irtg } }
+  = xrs{ I.irtg = irtg{ I.h2 = relabel' f1 $ I.h2 irtg } }
 
 mapCState
   :: (i -> j)
@@ -94,7 +92,7 @@ relabel' r h2
   = let h []          = []
         h ((T x):xs)  = (T (r x)):(h xs)
         h ((NT x):xs) = (NT x):(h xs)
-    in  V.map (V.fromList . h . V.toList) h2
+    in  flip V.map h2 $ V.fromList . h . V.toList
 
 -- | Intersects IRTG and n-gram model.
 intersect
@@ -108,25 +106,23 @@ intersect
   -> I.XRS                          -- ^ translation model
   -> (I.XRS, V.Vector (CState Int)) -- ^ product translation model, new states
 intersect intersect' lm I.XRS{ .. }
-  = let I.IRTG{ .. }
-              = irtg
-        hom   = V.toList . (V.!) h2 . I._snd . HI.label -- prepare h2
-        mu    = log . (VU.!) weights . HI.ident         -- prepare weights
-        its   = intersect' lm mu hom rtg                -- generate items
-        h1'   = flip V.cons h1 . T.Nullary $ NT 0
-        h2'   = flip V.cons h2 $ V.fromList [NT 0]
-        its'  = makeSingleEndState
-                  ((==) initial . _fst)
-                  (CState 0 (Unary []))
-                  (I.SIP (V.length h1' - 1) (V.length h2' - 1))
-                  its
-        (its'', vtx, states)                            -- integerize Hypergraph
-              = integerize' (CState 0 (Nullary)) its'
-        (hg, mu')
-              = itemsToHypergraph its''
-        irtg' = I.IRTG hg vtx h1' h2'
-        xrs'  = I.XRS irtg' mu'                         -- build XRS
-    in  (xrs', states)
+  = (xrs', states) where
+      I.IRTG{ .. } = irtg
+      hom          = V.toList . (V.!) h2 . I._snd . HI.label -- prepare h2
+      mu           = log . (VU.!) weights . HI.ident         -- prepare weights
+      its          = intersect' lm mu hom rtg                -- generate items
+      h1'          = V.snoc h1 . T.Nullary $ NT 0
+      h2'          = V.snoc h2 $ V.fromList [NT 0]
+      its'         = makeSingleEndState
+                       ((==) initial . _fst)
+                       (CState 0 (Unary []))
+                       (I.SIP (V.length h1' - 1) (V.length h2' - 1))
+                       its
+      (its'', vtx, states)                                   -- integerize Hypergraph
+                   = integerize' (CState 0 Nullary) its'
+      (hg, mu')    = itemsToHypergraph its''
+      irtg'        = I.IRTG hg vtx h1' h2'
+      xrs'         = I.XRS irtg' mu'                         -- build XRS
 
 -- | Converts an 'Item' to a Hyperedge.
 itemsToHypergraph
@@ -135,12 +131,10 @@ itemsToHypergraph
 itemsToHypergraph xs
   = let (wts, xs')
               = groupByWeight xs
-        mu    = VU.fromList . map exp $ wts
+        mu    = VU.fromList $ map exp wts
         es    = map (uncurry (\ (a, b, c) d -> HI.mkHyperedge a b c d))
-              . concat
-              . map (\(ix, arr) -> zip arr (repeat ix))
-              . zip [0 ..]
-              $ xs'
+              . concatMap (\(ix, arr) -> zip arr $ repeat ix)
+              $ zip [0 ..] xs'
     in  (HI.mkHypergraph es, mu)
 
 -- | reorders/inserts the given 'NState's according to the given reordering/insertion
@@ -164,11 +158,11 @@ integerize' vtx is
   = let mi = In.emptyInterner
         h (m, xs) e
            = let (m1, t') = In.intern m (_to e)
-                 (m2, f') = In.internList m1 (_from e)
+                 (m2, f') = In.internListPreserveOrder m1 (_from e)
              in  (m2, (Item t' (_wt e) f' (_lbl e)):xs)
         (mi', is')
            = foldl h (mi, []) is
-    in  (is', snd . In.intern mi' $ vtx, V.fromList . A.elems . In.internerToArray $ mi' )
+    in  (is', snd $ In.intern mi' vtx, V.fromList . A.elems $ In.internerToArray mi' )
 
 -- | Adds some 'Item's such that 'Item's produced from the former final state
 --   are connected to the new final state.
@@ -182,16 +176,14 @@ makeSingleEndState
 makeSingleEndState p vInit lbl es
   = (++) es
   . map (\x -> Item vInit 0 [x] lbl)
-  . L.nub
   . filter p
-  . map _to
-  $ es
+  $ map _to es
 
 -- | Groups a 'List' of 'Item's by the weight. Unzips it.
 groupByWeight
   :: Ord w
   => [Item i l w]
-  -> ([w], [[(i,[i], l)]])
+  -> ([w], [[(i, [i], l)]])
 groupByWeight
   = unzip
   . M.toList

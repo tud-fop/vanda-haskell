@@ -24,7 +24,7 @@ module Vanda.Grammar.NGrams.WTA
 
 import Vanda.Grammar.LM
 import Data.Hashable
-import Data.List (foldl',intercalate)
+import Data.List (foldl', intercalate)
 
 data NState v
   = Nullary
@@ -40,28 +40,26 @@ instance Hashable i => Hashable (NState i) where
 instance Show v => Show (NState v) where
   show s
     = case s of
-      Nullary -> ""
-      Unary x -> intercalate "_" $ map toString x
-      Binary x y -> (intercalate "_" $ map toString x) ++ "*" ++ (intercalate "_" $ map toString y)
-     where
-       toString = reverse . drop 1 . reverse . drop 1 . show
+        Nullary -> ""
+        Unary x -> intercalate "_" $ map show x
+        Binary x y -> (intercalate "_" $ map show x) ++ "*" ++ (intercalate "_" $ map show y)
 
 -- | transition state
 deltaS :: (Show v, LM a) => a -> [NState v] -> [v] -> NState v
 deltaS lm [] yield
-  = let n = order lm
-    in  if   length yield < n - 1
+  = let nM = order lm - 1
+    in  if   length yield < nM
         then Unary yield
-        else Binary (take (n - 1) yield) (last' (n - 1) yield)
+        else Binary (take nM yield) (last' nM yield)
 deltaS lm xs _
   = let go Nullary = []
         go (Unary x) = x
         go (Binary x y) = x ++ y
         str = concatMap go xs
-        n = order lm
-    in  if   length str < n
+        nM = order lm - 1
+    in  if   length str < nM + 1
         then Unary str
-        else Binary (take (n - 1) str) (last' (n - 1) str)
+        else Binary (take nM str) (last' nM str)
 
 -- | helper for transition weights (calculates intermediate
 --   values using backoff and cancels them out later)
@@ -76,19 +74,19 @@ deltaW lm xs _
   - (sum . map (score lm)
          . map (\ (Unary x) -> x )
          . filter (\ x -> case x of
-                            Nullary      -> False
-                            (Unary _)    -> True
-                            (Binary _ _) -> False
+                            (Unary _) -> True
+                            _         -> False
                   )
          $ xs
     )
 
+-- | Extracts the currently visible substrings from a 'List' of states.
 extractSubstrings :: [NState v] -> [[v]]
 extractSubstrings xs
   = let go (rs, p) Nullary = (rs, p)
         go (rs, p) (Unary x) = (rs, p ++ x)
-        go (rs, p) (Binary x y) = (rs ++ [(p ++ x)], y)
-    in  (\ (rs, p) -> rs ++ [p]) . foldl' go ([], []) $ xs
+        go (rs, p) (Binary x y) = (rs ++ [p ++ x], y)
+    in  (\ (rs, p) -> rs ++ [p]) $ foldl' go ([], []) xs
 
 last' :: Int -> [v] -> [v]
-last' n xs = drop ((length xs) - n) xs
+last' n xs = drop (length xs - n) xs
