@@ -27,8 +27,6 @@ import qualified Data.Text.IO as TIO
 import Vanda.Grammar.NGrams.VandaNGrams
 import Vanda.Grammar.NGrams.Text
 
-import Debug.Trace
-
 -- | Loads an NGram language model from a file.
 loadNGrams
   :: FilePath                -- ^ file to load the model from
@@ -45,9 +43,9 @@ trainModel
   -> NGrams T.Text           -- ^ /n/-gram model
 trainModel k n text
   = let sentenceCorpus   = M.fromListWith (+) [ (T.words x, 1) | x <- T.lines text ]
-        nGramCorpus      = traceShow' $ M.fromList [ (n', fromSentenceCorpus sentenceCorpus $ fromIntegral n') | n' <- [1 .. n] ]
-        smoothedCorpus   = traceShow' $ M.fromList [ (n', smoothCorpus (fromIntegral k) $ nGramCorpus M.! n') | n' <- [1 .. n] ]
-        nGramWeight      = traceShow' $ M.fromList
+        nGramCorpus      = M.fromList [ (n', fromSentenceCorpus sentenceCorpus $ fromIntegral n') | n' <- [1 .. n] ]
+        smoothedCorpus   = M.fromList [ (n', smoothCorpus (fromIntegral k) $ nGramCorpus M.! n') | n' <- [1 .. n] ]
+        nGramWeight      = M.fromList
                          $ [ (n', applyRFE (smoothedCorpus M.! n') $ nGramCorpus M.! (n' - 1))
                            | n' <- [2 .. n]
                            ]
@@ -189,7 +187,3 @@ subsequences' i xs
   = if   i <= length xs
     then (take i xs):(subsequences' i $ drop 1 xs)
     else []
-
-traceShow' x
-  = trace (f x) x where
-      f m = unlines . map (\ (a, b) -> show (T.unwords a) ++ " -> " ++ show b) . M.toAscList . M.unions $ M.elems m

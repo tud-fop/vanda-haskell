@@ -44,10 +44,10 @@ main = do
       let xrs'  = ISU.relabel (TK.getToken fm . LM.getText lm) xrs1
       let states'
                 = V.map (ISU.mapCState id (TK.getToken fm . LM.getText lm)) states
-      B.writeFile (zhgFile ++ ".new.bhg.gz") . compress 
+      B.writeFile (zhgFile ++ ".new.bhg.gz") . compress
                                              . B.encode
                                              . I.irtg
-                                             $ xrs' 
+                                             $ xrs'
       B.writeFile (zhgFile ++ ".new.weights.gz") . compress
                                                  . B.encode
                                                  . VU.toList
@@ -60,3 +60,5 @@ main = do
                                               . V.toList
                                               . V.map (ISU.mapCState (TK.getString na) (TK.getString fa))
                                               $ states'
+    _ -> do
+           putStr "usage: XRSNGrams -f FMAP -z ZHG -l LM\n"
