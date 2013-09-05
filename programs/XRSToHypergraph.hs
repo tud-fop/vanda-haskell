@@ -20,6 +20,7 @@ import qualified Data.Array.ST as STA
 import qualified Data.Binary as B
 import qualified Data.ByteString.Lazy as B
 import Data.List ( foldl', intersperse, elemIndex )
+import Data.Maybe ( catMaybes )
 import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Text as TS
@@ -147,7 +148,7 @@ main = do
       fm <- loadTokenMap fMapFile
       gf <- TIO.getContents
       -- TODO mit ghc deutlich schneller als mit runghc, untersuchen!
-      case mkIRTG (em, fm, emptyTS) (map parseXRSRule $ T.lines gf) of
+      case mkIRTG (em, fm, emptyTS) (catMaybes . map parseXRSRule . filter (not . T.null) $ T.lines gf) of
         (irtg, ws, em', fm', nm) -> do
           B.writeFile (zhgFile ++ ".bhg.gz") $ compress $ B.encode irtg 
           B.writeFile (zhgFile ++ ".weights.gz") $ compress $ B.encode ws

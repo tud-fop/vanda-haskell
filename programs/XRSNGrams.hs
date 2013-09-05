@@ -15,10 +15,10 @@ import qualified Vanda.Grammar.XRS.Functions as IF
 import qualified Vanda.Grammar.XRS.IRTG as I
 import qualified Vanda.Grammar.NGrams.Functions as LM
 import qualified Vanda.Algorithms.IntersectWithNGram as IS
+import qualified Vanda.Algorithms.IntersectWithNGramUtil as ISU
 import qualified Vanda.Hypergraph.IntHypergraph as HI
 import qualified Vanda.Grammar.LM as LM
 import qualified Vanda.Token as TK
-import qualified Vanda.Algorithms.IntersectWithNGram as IN
 import qualified Vanda.Grammar.NGrams.WTA as WTA
 
 import Debug.Trace
@@ -38,16 +38,16 @@ main = do
       lm    <- LM.loadNGrams lmFile
       let xrs   = I.XRS irtg1 (VU.generate (V.length ws) (ws V.!))
       let (xrs1, states)
-                = IS.intersect lm
-                . IS.relabel (LM.indexOf lm . TK.getString fa)
+                = ISU.intersect IS.intersect lm
+                . ISU.relabel (LM.indexOf lm . TK.getString fa)
                 $ xrs
-      let xrs'  = IS.relabel (TK.getToken fm . LM.getText lm) xrs1
+      let xrs'  = ISU.relabel (TK.getToken fm . LM.getText lm) xrs1
       let states'
-                = V.map (IN.mapCState id (TK.getToken fm . LM.getText lm)) states
-      B.writeFile (zhgFile ++ ".new.bhg.gz") . compress 
+                = V.map (ISU.mapCState id (TK.getToken fm . LM.getText lm)) states
+      B.writeFile (zhgFile ++ ".new.bhg.gz") . compress
                                              . B.encode
                                              . I.irtg
-                                             $ xrs' 
+                                             $ xrs'
       B.writeFile (zhgFile ++ ".new.weights.gz") . compress
                                                  . B.encode
                                                  . VU.toList
@@ -58,5 +58,7 @@ main = do
                                               . (\x -> A.listArray (0, length x - 1) x)
                                               . map (T.pack . show)
                                               . V.toList
-                                              . V.map (IN.mapCState (TK.getString na) (TK.getString fa))
+                                              . V.map (ISU.mapCState (TK.getString na) (TK.getString fa))
                                               $ states'
+    _ -> do
+           putStr "usage: XRSNGrams -f FMAP -z ZHG -l LM\n"

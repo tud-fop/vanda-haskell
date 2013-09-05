@@ -19,20 +19,26 @@ module Vanda.Grammar.NGrams.VandaNGrams
   ( NGrams
   , empty
   , dict
+  , invDict
   , order
   , indexOf
   , addNGram
+  , weights
   , evaluate
   , evaluateInt
   ) where
 
 import qualified Data.Map as M
 import qualified Data.List as L
+import qualified Data.Vector as V
+
+import Debug.Trace
 
 {-- snippet NGrams --}
 data NGrams v
   = NGrams
     { dict    :: M.Map v Int
+    , invDict :: V.Vector v
     , dLength :: Int
     , order   :: Int
     , weights :: M.Map [Int] (Double, Maybe Double)
@@ -46,7 +52,7 @@ hasWeight
   -> Bool
 hasWeight lm vs
   = flip M.member (weights lm)
-  . L.map (indexOf lm)
+  . map (indexOf lm)
   $ vs
 
 hasWeightInt
@@ -85,7 +91,7 @@ empty
   :: Int                   -- ^ order
   -> NGrams v              -- ^ empty NGrams model
 empty n
-  = NGrams M.empty 0 n M.empty
+  = NGrams M.empty V.empty 0 n M.empty
 
 indexOf
   :: Ord v
@@ -101,9 +107,9 @@ addWord
   -> v                     -- ^ word
   -> NGrams v              -- ^ new NGrams
 addWord lm ve
-  = let (m, c) = (dict lm, dLength lm)
+  = let (m, i, c) = (dict lm, invDict lm, dLength lm)
     in  if   M.notMember ve m
-        then lm{ dict = M.insert ve c m, dLength = c + 1 }
+        then lm{ dict = M.insert ve c m, invDict = V.snoc i ve, dLength = c + 1 }
         else lm
 
 -- | Adds an n-gram to the model.
@@ -116,7 +122,7 @@ addNGram
   -> NGrams v              -- ^ new NGrams
 addNGram n@(NGrams { weights = wt }) vs w1 w2
   = let n' = L.foldl' addWord n vs
-        vi = L.map (\ x -> (dict n') M.! x) vs
+        vi = map (\ x -> (dict n') M.! x) vs
     in  n' { weights = M.insert vi (w1, w2) wt }
 
 -- | Determines the weight of a single n-gram using Katz Backoff.
@@ -129,10 +135,10 @@ find
   -> [v]                   -- ^ sequence to evaluate
   -> Double                -- ^ single NGram probability
 find n vs
-  = if   hasWeight n vs                             -- if C(w0...wn) > 0
+  = if   hasWeight n vs                         -- if C(w0...wn) > 0
     then fst . getWeight n $ vs
-    else let vs1    = L.take (L.length vs - 1) vs   -- w0...wn-1
-             vs2    = L.drop 1 vs                   -- w1...wn
+    else let vs1    = take (length vs - 1) vs   -- w0...wn-1
+             vs2    = drop 1 vs                 -- w1...wn
              (_, b) = getWeight n vs1
          in  b + find n vs2
 {-- /snippet KatzBackoff --}
@@ -144,8 +150,8 @@ findInt
 findInt n is
   = if   hasWeightInt n is                          -- if C(w0...wn) > 0
     then fst . getWeightInt n $ is
-    else let is1    = L.take (L.length is - 1) is   -- w0...wn-1
-             is2    = L.drop 1 is                   -- w1...wn
+    else let is1    = take (length is - 1) is   -- w0...wn-1
+             is2    = drop 1 is                   -- w1...wn
              (_, b) = getWeightInt n is1
          in  b + findInt n is2
 
@@ -156,9 +162,9 @@ evaluate
   -> [v]                   -- ^ sentence to evaluate
   -> Double                -- ^ score
 evaluate lm vs
-  = if   (order lm) >= L.length vs
+  = if   order lm >= L.length vs
     then find lm vs
-    else find lm (L.take (order lm) vs) + evaluate lm (L.drop 1 vs)
+    else find lm (take (order lm) vs) + evaluate lm (drop 1 vs)
 
 evaluateInt
   :: (Show v, Ord v)
@@ -166,6 +172,6 @@ evaluateInt
   -> [Int]
   -> Double
 evaluateInt lm is
-  = if   (order lm) >= L.length is
+  = if   order lm >= length is
     then findInt lm is
-    else findInt lm (L.take (order lm) is) + evaluateInt lm (L.drop 1 is)
+    else findInt lm (take (order lm) is) + evaluateInt lm (drop 1 is)

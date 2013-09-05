@@ -43,32 +43,54 @@ import Vanda.Token
 import Vanda.Util
 import Data.Interner
 
+import Debug.Trace ( traceShow )
 
 data XRSRule
   = XRSRule
-    { lhs :: !(T.Tree (Var TS.Text))
+    { q0 :: !(Var TS.Text)
+    , lhs :: !(T.Tree (Var TS.Text))
     , rhs :: ![Var TS.Text]
     , qs :: !(IM.IntMap TS.Text)
     , weight :: !Double
     }
 
 
-parseXRSRule :: T.Text -> XRSRule
+parseXRSRule :: T.Text -> Maybe XRSRule
 parseXRSRule t
   = case parse p_rule (T.unpack t) t of
-      Left e -> error (show e)
-      Right r -> r
+      Left e -> traceShow e Nothing
+      Right r -> Just r
 
 
 p_rule :: Parser XRSRule
 p_rule = do
-  (lhs, qs) <- p_tree
+  (q0, lhs, qs) <- choice [ try p_lhs_full, try p_ttree, fail "malformed left-hand side" ]
   _ <- string "-> "
   rhs <- p_string
   _ <- string "||| "
   weight <- p_weight
-  return $! XRSRule{ .. }
+  return $! case q0 of
+                 Nothing -> XRSRule (T.rootLabel lhs) lhs rhs qs weight
+                 Just q  -> XRSRule q lhs rhs qs weight
 
+p_lhs_full :: Parser (Maybe (Var TS.Text), T.Tree (Var TS.Text), IM.IntMap TS.Text)
+p_lhs_full = do
+  q0         <- p_state
+--   _          <- string ": "
+  (lhs, qs)  <- p_tree
+  return $! (Just q0, lhs, qs)
+
+p_state :: Parser (Var TS.Text)
+p_state = do
+  !si <- fmap TS.pack $ many (noneOf ": ")
+  _ <- string ":"
+  spaces
+  return (NV si)
+
+p_ttree :: Parser (Maybe (Var TS.Text), T.Tree (Var TS.Text), IM.IntMap TS.Text)
+p_ttree = do
+  (lhs, qs) <- p_tree
+  return $! (Nothing, lhs, qs)
 
 p_tree :: Parser (T.Tree (Var TS.Text), IM.IntMap TS.Text)
 p_tree = choice [ p_tterm, p_tvar, p_tnonterm ]
@@ -173,7 +195,7 @@ mkIRTG (em_, fm_, nm_) rs_ = runST $ do
   sm <- newSTRef (emptyInterner :: Interner (V.Vector NTT))
   ws <- newSTRef (emptyInterner :: Interner Double)
   rs <- newSTRef ([] :: [Hyperedge StrictIntPair Int])
-  forM_ rs_ $ \ XRSRule{ .. } -> let NV q = T.rootLabel lhs in do
+  forM_ rs_ $ \ XRSRule{ .. } -> let NV q = q0 in do
     !q_ <- registerToken nm q
     !qs_ <- forM (IM.elems qs) $ registerToken nm
     !lhs_ <- registerTree em lhs

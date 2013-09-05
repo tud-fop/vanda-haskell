@@ -21,6 +21,7 @@ module Data.Interner
   , internerToArray
   , intern
   , internList
+  , internListPreserveOrder
   , internST
   ) where
 
@@ -57,13 +58,17 @@ intern orig@Interner{ .. } v
                     )
       Just i -> (orig, i)
 
-
+-- | Uses interner on a 'List' ignoring (aka reversing) its order.
 internList :: (Hashable t, Eq t) => Interner t -> [t] -> (Interner t, [Int])
 internList im ks
   = let f (m, xs) k = (m', x:xs) where (m', x) = intern m k
     in  foldl f (im, []) ks
 
- 
+-- | Uses interner on a 'List' but preserves the 'List's order.
+internListPreserveOrder :: (Hashable t, Eq t) => Interner t -> [t] -> (Interner t, [Int])
+internListPreserveOrder im ks
+  = (i, reverse lst) where (i, lst) = internList im ks
+
 internST :: (Hashable t, Eq t) => STRef s (Interner t) -> t -> ST s Int
 internST _in v = flip (lookupSTRef' _in (HM.lookup v . inMap)) return $ do
   i <- fmap inSize $ readSTRef _in

@@ -16,82 +16,77 @@
 -----------------------------------------------------------------------------
 
 
-module Vanda.Grammar.NGrams.WTA 
-  ( emptyNState
-  , mkNState
-  , mergeNState
-  , mergeNStates
-  , NState (Unary, Binary)
+module Vanda.Grammar.NGrams.WTA
+  ( deltaS
+  , deltaW
+  , NState (Nullary, Unary, Binary)
   ) where
 
 import Vanda.Grammar.LM
 import Data.Hashable
+import Data.List (foldl', intercalate)
 
 data NState v
-  = Unary  [v]
+  = Nullary
+  | Unary  [v]
   | Binary [v] [v]
   deriving (Eq, Ord)
 
 instance Hashable i => Hashable (NState i) where
+  hashWithSalt s Nullary = s
   hashWithSalt s (Unary a) = s `hashWithSalt` a
   hashWithSalt s (Binary a b) = s `hashWithSalt` a `hashWithSalt` b
 
 instance Show v => Show (NState v) where
-  show (Unary x)
-    = show x
-  show (Binary x y)
-    = (show x) ++ "*" ++ (show y) 
+  show s
+    = case s of
+        Nullary -> ""
+        Unary x -> intercalate "_" $ map show x
+        Binary x y -> (intercalate "_" $ map show x) ++ "*" ++ (intercalate "_" $ map show y)
 
-emptyNState :: NState i
-emptyNState = Unary []
+-- | transition state
+deltaS :: (Show v, LM a) => a -> [NState v] -> [v] -> NState v
+deltaS lm [] yield
+  = let nM = order lm - 1
+    in  if   length yield < nM
+        then Unary yield
+        else Binary (take nM yield) (last' nM yield)
+deltaS lm xs _
+  = let go Nullary = []
+        go (Unary x) = x
+        go (Binary x y) = x ++ y
+        str = concatMap go xs
+        nM = order lm - 1
+    in  if   length str < nM + 1
+        then Unary str
+        else Binary (take nM str) (last' nM str)
 
-mkNState
-  :: LM a
-  => a
-  -> [Int]
-  -> (NState Int, Double)
-mkNState lm s
-  = let n = order lm
-    in  if   n <= (length s)
-        then ( Binary (take (n - 1) s) (last' (n - 1) s)
-             , score lm s
-             )
-        else (Unary s, 0)
-
-mergeNState
-  :: LM a
-  => a
-  -> (NState Int, Double)
-  -> NState Int
-  -> (NState Int, Double)
-mergeNState lm (Unary s1, w1) (Unary s2)
-  = (\ (x, w2) -> (x, w1 + w2))
-  . mkNState lm
-  $ (s1 ++ s2)
-mergeNState lm (Unary s1, w1) (Binary s2 s3)
-  = ( Binary (take ((order lm) - 1) (s1 ++ s2)) s3
-    , w1 + (score lm  (s1 ++ s2))
+-- | helper for transition weights (calculates intermediate
+--   values using backoff and cancels them out later)
+deltaW :: LM a => a -> [NState Int] -> [Int] -> Double
+deltaW lm [] yield
+  = score lm yield
+deltaW lm xs _
+  = (sum . map (score lm)
+         . extractSubstrings
+         $ xs
     )
-mergeNState lm (Binary s1 s2, w1) (Unary s3)
-  = ( Binary s1 (last' ((order lm) - 1) (s2 ++ s3))
-    , w1 + (score lm  (s2 ++ s3))
-    )
-mergeNState lm (Binary s1 s2, w1) (Binary s3 s4)
-  = ( Binary (take ((order lm) - 1) (s1 ++ s2))
-             (last' ((order lm) - 1) (s3 ++ s4))
-    , w1 + (score lm (s1 ++ s2))
-         + (score lm (s3 ++ s4))
+  - (sum . map (score lm)
+         . map (\ (Unary x) -> x )
+         . filter (\ x -> case x of
+                            (Unary _) -> True
+                            _         -> False
+                  )
+         $ xs
     )
 
-mergeNStates
-  :: LM a
-  => a
-  -> [NState Int]
-  -> (NState Int, Double)
-mergeNStates lm (x:xs)
-  = foldl (mergeNState lm) (x, 0) xs
-mergeNStates _ []
-  = (Unary [], 0)
+-- | Extracts the currently visible substrings from a 'List' of states.
+extractSubstrings :: [NState v] -> [[v]]
+extractSubstrings xs
+  = let go (rs, p) Nullary = (rs, p)
+        go (rs, p) (Unary x) = (rs, p ++ x)
+        go (rs, p) (Binary x y) = (rs ++ [p ++ x], y)
+    in  (\ (rs, p) -> rs ++ [p]) $ foldl' go ([], []) xs
 
 last' :: Int -> [v] -> [v]
-last' n xs = drop ((length xs) - n) xs
+last' n xs = drop (length xs - n) xs
