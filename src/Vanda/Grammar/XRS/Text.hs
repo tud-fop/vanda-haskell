@@ -76,7 +76,6 @@ p_rule = do
 p_lhs_full :: Parser (Maybe (Var TS.Text), T.Tree (Var TS.Text), IM.IntMap TS.Text)
 p_lhs_full = do
   q0         <- p_state
---   _          <- string ": "
   (lhs, qs)  <- p_tree
   return $! (Just q0, lhs, qs)
 
@@ -93,7 +92,7 @@ p_ttree = do
   return $! (Nothing, lhs, qs)
 
 p_tree :: Parser (T.Tree (Var TS.Text), IM.IntMap TS.Text)
-p_tree = choice [ p_tterm, p_tvar, p_tnonterm ]
+p_tree = choice [ try p_tterm, try p_tvar, try p_tnonterm, try p_tatt, fail "malformed tree" ]
 
 p_tterm :: Parser (T.Tree (Var TS.Text), IM.IntMap TS.Text)
 p_tterm = do
@@ -121,6 +120,11 @@ p_tnonterm = do
   spaces
   return (T.node (NV si) ts, foldl' IM.union IM.empty qss)
 
+p_tatt :: Parser (T.Tree (Var TS.Text), IM.IntMap TS.Text)
+p_tatt = do
+  _ <- char '@'
+  spaces
+  return (T.node (NV $ TS.pack "@") [], IM.empty)
 
 p_string :: Parser [Var TS.Text]
 p_string = many $ choice [ p_sterm, p_svar ]
@@ -215,8 +219,6 @@ mkIRTG (em_, fm_, nm_) rs_ = runST $ do
 
 
 
-
-  
 
 att :: T.Text
 att = T.singleton '@'
