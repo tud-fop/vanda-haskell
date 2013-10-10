@@ -17,12 +17,13 @@
 -----------------------------------------------------------------------------
 
 module Vanda.Corpus.Penn.Text
-  ( PennFamily ( parsePenn, unparsePenn )
+  ( PennFamily ( parsePenn, unparsePenn, yield )
   , parsePennMap
   ) where
 
 import Control.Applicative ( (<*), (*>), (<|>), (<$>), many )
 import Control.Arrow ( (***) )
+import qualified Data.List as L
 import qualified Data.Text.Lazy as T
 import qualified Data.Tree as T
 import Data.Int ( Int32 )
@@ -40,6 +41,8 @@ class PennFamily t where
   parsePenn = snd . parsePennMap (curry $ id *** fromString) ()
   unparsePenn :: [T.Tree t] -> T.Text
   unparsePenn = T.unlines . map (T.pack . treeToPenn toString)
+  yield :: [T.Tree t] -> T.Text
+  yield = T.unlines . map (T.pack . treeToYield toString)
 
 instance PennFamily String where
   fromString = id
@@ -76,6 +79,10 @@ treeToPenn :: (t -> String) -> T.Tree t -> String
 treeToPenn f (T.Node t1 [T.Node t2 []]) = "(" ++ f t1 ++ " " ++ f t2 ++ ")"
 treeToPenn f (T.Node t1 ts)
   = "(" ++ f t1 ++ " " ++ unwords (map (treeToPenn f) ts) ++ ")"
+
+treeToYield :: (t -> String) -> T.Tree t -> String
+treeToYield f (T.Node t1 []) = f t1
+treeToYield f (T.Node _ ts) = L.intercalate " " $ map (treeToYield f) ts
 
 -- every p_-function should scan trailing spaces
 
