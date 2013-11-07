@@ -82,8 +82,8 @@ library
     , Data.NTTBinary
     , Data.Queue
   hs-source-dirs:  src
-  GHC-Options: -O2 -funbox-strict-fields -optc-O3 -fexcess-precision -optc-ffast-math -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-  ghc-prof-options: -O2 -funbox-strict-fields -optc-O3 -fexcess-precision -optc-ffast-math -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind -fprof-auto -fprof-cafs -fprof-auto-calls
+  GHC-Options: -O1 -funbox-strict-fields -optc-O3 -fexcess-precision -optc-ffast-math -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+  ghc-prof-options: -O1 -funbox-strict-fields -optc-O3 -fexcess-precision -optc-ffast-math -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind -fprof-auto -fprof-cafs -fprof-auto-calls
   Extensions:
       ScopedTypeVariables
     , TypeSynonymInstances
