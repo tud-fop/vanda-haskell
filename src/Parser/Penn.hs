@@ -1,4 +1,4 @@
--- (c) 2010-2011 Toni Dietze <Toni.Dietze@tu-dresden.de>
+-- (c) 2010-2013 Toni Dietze <Toni.Dietze@tu-dresden.de>
 --
 -- Technische Universität Dresden / Faculty of Computer Science / Institute
 -- of Theoretical Computer Science / Chair of Foundations of Programming
@@ -14,6 +14,7 @@
 module Parser.Penn where
 
 import Control.Applicative
+import qualified Data.Tree as T
 import Text.Parsec hiding (many, (<|>))
 
 data Sentence = Node String [Sentence] | Leaf String String deriving Show
@@ -47,3 +48,8 @@ p_comment =
 
 p_word :: (Stream s m Char) => ParsecT s u m String
 p_word = many (noneOf " ()\t\n\r\f\v") <* spaces
+
+
+toTree :: Sentence -> T.Tree String
+toTree (Node x ts) = T.Node x $ map toTree ts
+toTree (Leaf x y ) = T.Node x [T.Node y []]
