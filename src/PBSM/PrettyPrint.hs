@@ -9,10 +9,10 @@ import qualified Data.Set as S
 
 
 drawRTG :: RTG NT T -> String
-drawRTG (RTG inis rs)
+drawRTG g
   = unlines
-  $ ("initials: " ++ intercalate ", " (map drawNT (S.toList inis)))
-  : map drawRule (S.toList rs)
+  $ ("initials: " ++ intercalate ", " (map drawNT (initials g)))
+  : map drawRule (rules g)
 
 
 drawRule :: Rule NT T -> String

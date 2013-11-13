@@ -19,14 +19,14 @@ import Text.Parsec.String (parseFromFile)
 import Debug.Trace
 
 test
-  = putStrLn $ drawRTG $ generalize g d
+  = putStrLn $ drawRTG $ generalize S.unions g d
   where
     g = forestToGrammar [parseTree "g(g(a))"]
     d = [parseTree "g(g(g(g(g(g(a))))))"{-, parseTree "g(g(g(g(a))))"-}]
 
 
 g'
-  = generalize g d
+  = generalize S.unions g d
   where
     g = forestToGrammar [parseTree "g(g(a))"]
     d = [{-parseTree "g(g(g(g(g(g(a))))))",-} parseTree "g(g(g(g(a))))"]
@@ -40,7 +40,7 @@ test2
     t = parseTree "g(g(g(g(g(g(a))))))"
 
     nts = initials g
-    nts' = S.toList (nonterminals g)
+    nts' = S.toList (nonterminalS g)
     holeDerivs
       = [ ( nt
           , t'
@@ -58,17 +58,19 @@ test2
 
 
 train prepareTree corpusFilter corpusFile1 corpusFile2
-  = uncurry generalize
-  . second (map (uncurry trace) . zip (map (("Tree " ++) . show) [1 :: Int ..]))
+  = uncurry (generalize head)
+  . first intifyNonterminals
+  . second (zipWith (\ i t -> trace ("Tree " ++ show i ++ "\n" ++ T.drawTree t) t) [1 :: Int ..])
   <$> prepareData prepareTree corpusFilter corpusFile1 corpusFile2
+  where
 
-
+{-
 train2dot prepareTree corpusFilter f1 f2
   = ( render
     . fullHypergraph2dot drawNT eLabel ""
     . toHypergraph
     ) <$> train prepareTree corpusFilter f1 f2
-
+-}
 
 unknownTerminals' prepareTree corpusFilter corpusFile1 corpusFile2 = do
   (g, ts) <- prepareData prepareTree corpusFilter corpusFile1 corpusFile2
@@ -97,5 +99,6 @@ hasCrossings = any ("*" `isPrefixOf`) . T.flatten
 
 
 main
+--   = train defoliate ((S.null .) . unknownTerminals) "PBSM/TestData/1a-penn-trees.txt" "PBSM/TestData/1b-penn-trees.txt"
   = train defoliate ((S.null .) . unknownTerminals) "PBSM/TestData/wsj1.combined" "PBSM/TestData/wsj2.combined"
   >>= print

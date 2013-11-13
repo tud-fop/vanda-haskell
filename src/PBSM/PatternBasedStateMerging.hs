@@ -13,8 +13,7 @@ import Data.Tree
 
 forestToGrammar :: Ord t => Forest t -> RTG (SForest t) t
 forestToGrammar corpus
-  = RTG (S.fromList (map S.singleton corpus))
-  $ S.fromList
+  = rtg (map S.singleton corpus)
   $ concatMap go corpus
   where
     go :: Tree t -> [Rule (S.Set (Tree t)) t]
@@ -23,44 +22,58 @@ forestToGrammar corpus
       : concatMap go ts
 
 
-unknownTerminals :: Ord t => RTG n t -> Tree t -> S.Set t
+unknownTerminals :: Ord t => RTG n t -> Tree t -> S.Set (t, Int)
 unknownTerminals g tree
   = terminalsTrees S.\\ terminalsG
   where
-    terminalsG     = S.fromList $ map lab $ rules g
-    terminalsTrees = S.fromList $ flatten tree
+    terminalsG
+      = S.fromList $ map (\ (_, t, i) -> (t, i)) $ M.keys $ ruleM g
+    terminalsTrees
+      = S.fromList $ flattenWithRank tree
+    flattenWithRank (Node x ts)
+      = (x, length ts) : concatMap flattenWithRank ts
 
 
-generalize :: (Ord a, Ord t) => RTG (S.Set a) t -> [Tree t] -> RTG (S.Set a) t
-generalize g = foldl generalize' g
+generalize :: (Ord n, Ord t) => ([n] -> n) -> RTG n t -> [Tree t] -> RTG n t
+generalize merger = foldl (generalize' 1 merger)
 
 
-generalize' :: (Ord a, Ord t) => RTG (S.Set a) t -> Tree t -> RTG (S.Set a) t
-generalize' g t
-  = if any ((`S.member` initialS g) . fst . rootLabel) ds
-    then g
-    else if null ds
-      then generalize' (descent g t (initials g)) t
-      else g{initialS = S.insert (fst $ rootLabel $ head ds) (initialS g)}
+generalize' :: (Ord n, Ord t) => Int -> ([n] -> n) -> RTG n t -> Tree t -> RTG n t
+generalize' i merger g t
+  | any ((`S.member` initialS g) . rootLabel) ds = g
+  | null ds   = generalize' (i + 1) merger (descent merger g t (initials g)) t
+  | otherwise = g{initialS = S.insert (rootLabel $ head ds) (initialS g)}
   where
-    ds = filter completeDerivation $ concatMap (deriveTree g t) (initials g)
+    ds = deriveTreeComplete' g t $ initials g
+
+
+deriveTree'
+  :: (Ord n, Ord t)
+  => RTG n t -> Tree t -> [n] -> [Tree (n, Either (Tree t) t)]
+deriveTree' g t = concatMap (deriveTree g t)
 
 
 deriveTree
-  :: (Eq n, Eq t)
+  :: (Ord n, Ord t)
   => RTG n t -> Tree t -> n -> [Tree (n, Either (Tree t) t)]
 deriveTree g t@(Node x ts) nt
   = if null parses then return (Node (nt, Left t) []) else parses
   where
     parses
-      = filterRules nt
-      >>= sequence . zipWith (deriveTree g) ts . succs
+      = S.toList (M.findWithDefault S.empty (nt, x, length ts) (ruleM g))
+      >>= sequence . zipWith (deriveTree g) ts
       >>= return . Node (nt, Right x)
-    filterRules q
-      = filter ((q ==) . lhs)
-      . filter ((length ts ==) . length . succs)
-      . filter ((x ==) . lab)
-      $ rules g
+
+
+deriveTreeComplete' :: (Ord n, Ord t) => RTG n t -> Tree t -> [n] -> [Tree n]
+deriveTreeComplete' g t = concatMap (deriveTreeComplete g t)
+
+
+deriveTreeComplete :: (Ord n, Ord t) => RTG n t -> Tree t -> n -> [Tree n]
+deriveTreeComplete g (Node x ts) nt
+  = S.toList (M.findWithDefault S.empty (nt, x, length ts) (ruleM g))
+  >>= sequence . zipWith (deriveTreeComplete g) ts
+  >>= return . Node nt
 
 
 completeDerivation :: Tree (n, Either a t) -> Bool
@@ -93,40 +106,40 @@ maxSententialForm
 
 
 descent
-  :: (Ord a, Ord t)
-  => RTG (S.Set a) t -> Tree t -> [S.Set a] -> RTG (S.Set a) t
-descent g t nts
+  :: (Ord n, Ord t)
+  => ([n] -> n) -> RTG n t -> Tree t -> [n] -> RTG n t
+descent merger g t nts
   = if null underivableTrees
-    then merge g merges
-    else descent g (head underivableTrees) nts'
+    then merge merger g merges
+    else descent merger g (head underivableTrees) nts'
   where
-    nts' = S.toList (nonterminals g)
+    nts' = S.toList (nonterminalS g)
     holeDerivs
       = [ ( nt
           , t'
-          , filter completeDerivation
-          $ concatMap (deriveTree g t') nts'
+          , deriveTreeComplete' g t' nts'
           )
-        | (nt, Left t')
-            <- flatten $ maxSententialForm $ concatMap (deriveTree g t) nts
+        | let d = maxSententialForm $ deriveTree' g t nts
+        , isRight (snd (rootLabel d))
+          || error "PBSM.PatternBasedStateMerging.descent: \
+                   \Unknown terminal/rank combination."
+        , (nt, Left t') <- flatten d
         ]
     underivableTrees = [t' | (_, t', ds) <- holeDerivs, null ds]
     merges
-      = [ nt : map (fst . rootLabel) ds
+      = [ nt : map rootLabel ds
         | (nt, _, ds) <- holeDerivs
         ]
 
 
-merge :: (Ord a, Ord t) => RTG (S.Set a) t -> [[S.Set a]] -> RTG (S.Set a) t
-merge g ntss
-  = RTG (S.map mapState $ initialS g)
-        (S.map mapRule  $ ruleS    g)
+merge :: (Ord n, Ord t) => ([n] -> n) -> RTG n t -> [[n]] -> RTG n t
+merge merger g ntss
+  = mapNonterminals mapState g
   where
-    mapRule (Rule n t ns) = Rule (mapState n) t (map mapState ns)
     mapState q = M.findWithDefault q q mapping
     mapping
       = M.fromList
-          [ (x, S.unions xs)
+          [ (x, merger xs)
           | xs <- map S.toList $ unionOverlaps $ map S.fromList ntss
           , x <- xs
           ]
