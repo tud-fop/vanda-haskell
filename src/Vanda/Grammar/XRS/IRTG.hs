@@ -1,4 +1,8 @@
-module Vanda.Grammar.XRS.IRTG where
+module Vanda.Grammar.XRS.IRTG
+ ( StrictIntPair (..)
+ , IRTG (..)
+ , XRS (..)
+ ) where
 
 import Data.Hashable ( Hashable (..) )
 import Data.NTT
@@ -49,4 +53,4 @@ instance Show XRS where
     $ hg
 
 cut :: Int -> [Char] -> [Char]
-cut n s = take n . flip (++) (repeat ' ') $ s
+cut n = take n . (++ repeat ' ')

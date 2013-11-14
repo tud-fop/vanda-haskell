@@ -2,7 +2,7 @@
 module Vanda.Hypergraph.Tree where
 
 import Data.Hashable ( Hashable (..) )
-import Data.List
+import Data.List ( intercalate )
 
 data Tree l
   = Nullary { rootLabel :: l }
@@ -62,11 +62,9 @@ front Nullary{ .. } = [rootLabel]
 front t = concatMap front $ subForest t
 
 instance Show i => Show (Tree i) where
-  show (Nullary l)
-    = show l
-  show (Unary l t)
-    = (show l) ++ "(" ++ (show t) ++ ")"
-  show (Binary l t1 t2)
-    = (show l) ++ "(" ++ (show t1) ++ "," ++ (show t2) ++ ")"
-  show (Node l ts)
-    = (show l) ++ "(" ++ (intercalate "," . map show $ ts) ++ ")"
+  show t = case subForest t of
+             [] -> show (rootLabel t)
+             xs -> concat [ show $ rootLabel t
+                          , "(", intercalate "," $ map show xs, ")"
+                          ]
+
