@@ -19,8 +19,8 @@
 
 module Vanda.Algorithms.IntersectWithNGramUtil
   ( relabel
-  , mapCState
-  , CState (CState, _fst, _snd)
+  , mapState
+  , State (State, _fst, _snd)
   , Item (Item, _to, _from, _wt)
   , intersect
   , doReordering
@@ -39,22 +39,22 @@ import Data.NTT
 import Data.Hashable
 import qualified Data.Interner as In
 import Vanda.Grammar.LM
-import Vanda.Grammar.NGrams.WTA
+import qualified Vanda.Grammar.NGrams.WTA_Smoothed as WTA
 import qualified Vanda.Hypergraph.IntHypergraph as HI
 import qualified Vanda.Hypergraph.Tree as T
 import qualified Vanda.Grammar.XRS.IRTG as I
 
-data CState i
-  = CState { _fst :: i
-           , _snd :: NState i
+data State i
+  = State { _fst :: i
+          , _snd :: WTA.State i
   } deriving (Eq, Ord)
 
-instance Show i => Show (CState i) where
-  show (CState a b)
+instance Show i => Show (State i) where
+  show (State a b)
     = show a ++ "@" ++ show b
 
-instance Hashable i => Hashable (CState i) where
-  hashWithSalt s (CState a b) = s `hashWithSalt` a `hashWithSalt` b
+instance Hashable i => Hashable (State i) where
+  hashWithSalt s (State a b) = s `hashWithSalt` a `hashWithSalt` b
 
 data Item s l w
   = Item { _to    :: s
@@ -72,17 +72,13 @@ relabel
 relabel f1 xrs@I.XRS{ .. }
   = xrs{ I.irtg = irtg{ I.h2 = relabel' f1 $ I.h2 irtg } }
 
-mapCState
+mapState
   :: (i -> j)
   -> (i -> j)
-  -> CState i
-  -> CState j
-mapCState f1 _ (CState a Nullary)
-  = CState (f1 a) Nullary
-mapCState f1 f2 (CState a (Unary b))
-  = CState (f1 a) (Unary (map f2 b))
-mapCState f1 f2 (CState a (Binary b1 b2))
-  = CState (f1 a) (Binary (map f2 b1) (map f2 b2))
+  -> State i
+  -> State j
+mapState f1 f2 (State a b)
+  = State (f1 a) (WTA.mapState f2 b)
 
 relabel'
   :: (Int -> Int)                 -- ^ relabeling
@@ -100,11 +96,11 @@ intersect
   => (a -> (HI.Hyperedge I.StrictIntPair Int -> Double)
         -> (HI.Hyperedge I.StrictIntPair Int -> [NTT])
         -> HI.Hypergraph I.StrictIntPair Int
-        -> [Item (CState Int) I.StrictIntPair Double]
+        -> [Item (State Int) I.StrictIntPair Double]
      )                              -- ^ intersection function
   -> a                              -- ^ language model
   -> I.XRS                          -- ^ translation model
-  -> (I.XRS, V.Vector (CState Int)) -- ^ product translation model, new states
+  -> (I.XRS, V.Vector (State Int)) -- ^ product translation model, new states
 intersect intersect' lm I.XRS{ .. }
   = (xrs', states) where
       I.IRTG{ .. } = irtg
@@ -115,11 +111,11 @@ intersect intersect' lm I.XRS{ .. }
       h2'          = V.snoc h2 $ V.fromList [NT 0]
       its'         = makeSingleEndState
                        ((==) initial . _fst)
-                       (CState 0 (Unary []))
+                       (State 0 (WTA.emptyState))
                        (I.SIP (V.length h1' - 1) (V.length h2' - 1))
                        its
       (its'', vtx, states)                                   -- integerize Hypergraph
-                   = integerize' (CState 0 Nullary) its'
+                   = integerize' (State 0 WTA.emptyState) its'
       (hg, mu')    = itemsToHypergraph its''
       irtg'        = I.IRTG hg vtx h1' h2'
       xrs'         = I.XRS irtg' mu'                         -- build XRS
@@ -140,10 +136,10 @@ itemsToHypergraph xs
 -- | reorders/inserts the given 'NState's according to the given reordering/insertion
 doReordering
   :: [NTT]                          -- ^ reordering/insertion
-  -> [NState Int]                   -- ^ original states
-  -> [NState Int]                   -- ^ processed states
+  -> [WTA.State Int]                -- ^ original states
+  -> [WTA.State Int]                -- ^ processed states
 doReordering ntts xs
-  = let h (T i)  = Unary [i]
+  = let h (T i)  = WTA.state i
         h (NT i) = xs !! i
     in  map h ntts
 

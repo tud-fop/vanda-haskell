@@ -70,7 +70,7 @@ trainModel k n text
                              (M.map (M.map (\ y -> (0, if y == 0 then Nothing else Just y))) remainingMass)
         weightedNGrams   = M.assocs . M.unions $ M.elems combinedMap
         g lm (w, (x, y)) = addNGram lm w x y
-    in  L.foldl' g (empty n) weightedNGrams
+    in  L.foldl' g (empty (T.pack "<unk>") n) weightedNGrams
 
 
 

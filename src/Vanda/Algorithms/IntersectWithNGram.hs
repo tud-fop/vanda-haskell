@@ -24,7 +24,7 @@ import Data.NTT
 import Vanda.Grammar.LM
 import qualified Vanda.Hypergraph.IntHypergraph as HI
 import Vanda.Algorithms.IntersectWithNGramUtil
-import Vanda.Grammar.NGrams.WTA
+import qualified Vanda.Grammar.NGrams.WTA_Smoothed as WTA
 
 -- | Intersects IRTG and n-gram model, emits 'Item's.
 intersect
@@ -33,14 +33,14 @@ intersect
   -> (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
   -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
   -> HI.Hypergraph l i1             -- ^ RTG hypergraph
-  -> [Item (CState Int) l Double]   -- ^ resulting list of 'Items'
+  -> [Item (State Int) l Double]    -- ^ resulting list of 'Items'
 intersect lm mu h2 hg
   = let es  = filter ((/=) 0 . HI.arity) $ HI.edges hg
         es0 = filter ((==) 0 . HI.arity) $ HI.edges hg
-        is0 = flip map es0 $ initRule mu h2 lm
+        is0 = flip concatMap es0 $ initRule mu h2 lm
         ns0 = M.map S.fromList . M.fromListWith (++) . map (\x -> (_fst x, [x])) $ map _to is0
         go cs os ns its
-          = let is = [ (HI.to e, lst)
+          = let is = [ (HI.to e, concat lst)
                      | e <- es
                      , let lst = [ blowRule mu h2 lm e s
                                  | s <- fst
@@ -74,17 +74,18 @@ initRule
   -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
   -> a                              -- ^ language model
   -> HI.Hyperedge l i1              -- ^ rule
-  -> Item (CState Int) l Double     -- ^ resulting 'Item'
+  -> [Item (State Int) l Double]    -- ^ resulting 'Item'
 initRule mu h2 lm he
   = let h (T x)  = x
         h (NT x) = x
-        sts = map h $ h2 he
-        st = deltaS lm [] sts
-        w1 = deltaW lm [] sts
-    in  Item (CState (HI.to he) st)
-             (mu he + w1)
-             []
-             (HI.label he)
+        sts      = map h $ h2 he
+        xs       = WTA.delta lm [] sts
+    in  map (\ (st, w1)
+            -> Item (State (HI.to he) st)
+                (mu he + w1)
+                []
+                (HI.label he))
+            xs
 
 -- | Combines 'Item's by a rule. The 'Item's and the rule must
 --   match (not checked).
@@ -94,18 +95,18 @@ blowRule
   -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
   -> a                              -- ^ language model
   -> HI.Hyperedge l i1              -- ^ rule
-  -> [CState Int]                   -- ^ base states
-  -> Item (CState Int) l Double     -- ^ resulting 'Item'
+  -> [State Int]                    -- ^ base states
+  -> [Item (State Int) l Double]    -- ^ resulting 'Item'
 blowRule mu h2 lm he xs
-  = let xr      = doReordering (h2 he) $ map _snd xs
-        x       = deltaS lm xr []
-        w1      = deltaW lm xr [] + mu he
-    in  Item (CState (HI.to he) x) w1 xs $ HI.label he
+  = let xr = doReordering (h2 he) $ map _snd xs
+        qs = WTA.delta lm xr []
+    in  map (\ (q, w) -> Item (State (HI.to he) q) (w + mu he) xs $ HI.label he) qs
 
 -- | For a given list l of tuples of lists ai and bi of symbols,
---   generates all sequences s of length |l| such that the i-th
---   symbol of s is either in ai or in bi, and there is at least
---   one j such that the j-th element of s is in aj.
+--   generates all sequences s of length |l| such that for every in
+--   in {1, ..., |l|} the i-th symbol of s is either in ai or in bi,
+--   and there is at least one j in {1, ..., |l|} such that the j-th
+--   element of s is in aj.
 awesomeSequence :: [([a], [a])] -> ([[a]], [[a]])
 awesomeSequence [] = ([], [[]])
 awesomeSequence ((ns, os) : xs)

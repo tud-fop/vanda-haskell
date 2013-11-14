@@ -1,6 +1,6 @@
 -----------------------------------------------------------------------------
 -- |
--- Module      :  Vanda.Grammar.NGrams.WTA
+-- Module      :  Vanda.Grammar.NGrams.WTA_Smoothed
 -- Copyright   :  (c) Technische Universität Dresden 2013
 -- License     :  Redistribution and use in source and binary forms, with
 --                or without modification, is ONLY permitted for teaching
@@ -16,36 +16,50 @@
 -----------------------------------------------------------------------------
 
 
-module Vanda.Grammar.NGrams.WTA
-  ( deltaS
-  , deltaW
-  , NState (Nullary, Unary, Binary)
-  ) where
+module Vanda.Grammar.NGrams.WTA where
 
 import Vanda.Grammar.LM
 import Data.Hashable
 import Data.List (foldl', intercalate)
 
-data NState v
+data State v
   = Nullary
   | Unary  [v]
   | Binary [v] [v]
   deriving (Eq, Ord)
 
-instance Hashable i => Hashable (NState i) where
+instance Hashable i => Hashable (State i) where
   hashWithSalt s Nullary = s
   hashWithSalt s (Unary a) = s `hashWithSalt` a
   hashWithSalt s (Binary a b) = s `hashWithSalt` a `hashWithSalt` b
 
-instance Show v => Show (NState v) where
+
+mapState :: (v -> v') -> State v -> State v'
+mapState _ Nullary
+  = Nullary
+mapState f (Unary b)
+  = Unary (map f b)
+mapState f (Binary b1 b2)
+  = Binary (map f b1) (map f b2)
+
+emptyState :: State v
+emptyState = Nullary
+
+state :: v -> State v
+state v = Unary [v]
+
+instance Show v => Show (State v) where
   show s
     = case s of
         Nullary -> ""
         Unary x -> intercalate "_" $ map show x
         Binary x y -> (intercalate "_" $ map show x) ++ "*" ++ (intercalate "_" $ map show y)
 
+delta' :: LM a => (a -> [State Int] -> [Int] -> Double) -> a -> [State Int] -> [Int] -> [(State Int, Double)]
+delta' f lm qs w = [(deltaS lm qs w, f lm qs w)]
+
 -- | transition state
-deltaS :: (Show v, LM a) => a -> [NState v] -> [v] -> NState v
+deltaS :: (Show v, LM a) => a -> [State v] -> [v] -> State v
 deltaS lm [] yield
   = let nM = order lm - 1
     in  if   length yield < nM
@@ -61,27 +75,8 @@ deltaS lm xs _
         then Unary str
         else Binary (take nM str) (last' nM str)
 
--- | helper for transition weights (calculates intermediate
---   values using backoff and cancels them out later)
-deltaW :: LM a => a -> [NState Int] -> [Int] -> Double
-deltaW lm [] yield
-  = score lm yield
-deltaW lm xs _
-  = (sum . map (score lm)
-         . extractSubstrings
-         $ xs
-    )
-  - (sum . map (score lm)
-         . map (\ (Unary x) -> x )
-         . filter (\ x -> case x of
-                            (Unary _) -> True
-                            _         -> False
-                  )
-         $ xs
-    )
-
 -- | Extracts the currently visible substrings from a 'List' of states.
-extractSubstrings :: [NState v] -> [[v]]
+extractSubstrings :: [State v] -> [[v]]
 extractSubstrings xs
   = let go (rs, p) Nullary = (rs, p)
         go (rs, p) (Unary x) = (rs, p ++ x)

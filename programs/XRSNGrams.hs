@@ -19,7 +19,6 @@ import qualified Vanda.Algorithms.IntersectWithNGramUtil as ISU
 import qualified Vanda.Hypergraph.IntHypergraph as HI
 import qualified Vanda.Grammar.LM as LM
 import qualified Vanda.Token as TK
-import qualified Vanda.Grammar.NGrams.WTA as WTA
 
 import Debug.Trace
 
@@ -43,7 +42,7 @@ main = do
                 $ xrs
       let xrs'  = ISU.relabel (TK.getToken fm . LM.getText lm) xrs1
       let states'
-                = V.map (ISU.mapCState id (TK.getToken fm . LM.getText lm)) states
+                = V.map (ISU.mapState id (TK.getToken fm . LM.getText lm)) states
       B.writeFile (zhgFile ++ ".new.bhg.gz") . compress
                                              . B.encode
                                              . I.irtg
@@ -58,7 +57,7 @@ main = do
                                               . (\x -> A.listArray (0, length x - 1) x)
                                               . map (T.pack . show)
                                               . V.toList
-                                              . V.map (ISU.mapCState (TK.getString na) (TK.getString fa))
+                                              . V.map (ISU.mapState (TK.getString na) (TK.getString fa))
                                               $ states'
     _ -> do
            putStr "usage: XRSNGrams -f FMAP -z ZHG -l LM\n"

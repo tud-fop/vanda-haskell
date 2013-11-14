@@ -1,3 +1,5 @@
 dist
 *~
 report.html
+*.o
+*.hi

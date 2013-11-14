@@ -37,7 +37,8 @@ import Debug.Trace
 {-- snippet NGrams --}
 data NGrams v
   = NGrams
-    { dict    :: M.Map v Int
+    { unk     :: v
+    , dict    :: M.Map v Int
     , invDict :: V.Vector v
     , dLength :: Int
     , order   :: Int
@@ -88,10 +89,11 @@ getWeightInt lm is
 
 -- | Returns an empty NGrams language model.
 empty
-  :: Int                   -- ^ order
+  :: v                     -- ^ symbol for unknown words
+  -> Int                   -- ^ order
   -> NGrams v              -- ^ empty NGrams model
-empty n
-  = NGrams M.empty V.empty 0 n M.empty
+empty v n
+  = NGrams v M.empty V.empty 0 n M.empty
 
 indexOf
   :: Ord v
@@ -99,7 +101,7 @@ indexOf
   -> v
   -> Int
 indexOf lm x
-  = M.findWithDefault (-1) x . dict $ lm
+  = M.findWithDefault ((M.!) (dict lm) $ unk lm) x . dict $ lm
 
 addWord
   :: (Show v, Ord v)

@@ -29,7 +29,7 @@ parseNGrams
   :: T.Text                  -- ^ Text to parse
   -> N.NGrams T.Text         -- ^ generated NGrams
 parseNGrams
-  = (\(n, ts) -> L.foldl' parseLine (N.empty n) ts)
+  = (\(n, ts) -> L.foldl' parseLine (N.empty (T.pack "<unk>") n) ts)
   . L.foldl' filterLines (0, [])
   . T.lines
 
