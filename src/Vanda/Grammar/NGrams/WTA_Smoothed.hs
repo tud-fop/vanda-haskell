@@ -18,17 +18,15 @@
 
 
 module Vanda.Grammar.NGrams.WTA_Smoothed
-  ( delta
-  , State ()
-  , emptyState
+  ( State ()
+  , delta
   , mapState
-  , state
   ) where
 
 import Vanda.Grammar.LM
 import Vanda.Grammar.NGrams.WTA
 
-delta :: (LM a) => a -> [State Int] -> [Int] -> [(State Int, Double)]
+delta :: LM a => a -> [State Int] -> [Int] -> [(State Int, Double)]
 delta = delta' deltaW
 
 -- | helper for transition weights (calculates intermediate

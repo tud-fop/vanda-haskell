@@ -20,7 +20,7 @@
 module Vanda.Algorithms.IntersectWithNGramUtil
   ( relabel
   , mapState
-  , State (State, _fst, _snd)
+  , State (Unary, Binary, _fst, _snd)
   , Item (Item, _to, _from, _wt)
   , intersect
   , doReordering
@@ -45,16 +45,20 @@ import qualified Vanda.Hypergraph.Tree as T
 import qualified Vanda.Grammar.XRS.IRTG as I
 
 data State i
-  = State { _fst :: i
-          , _snd :: WTA.State i
-  } deriving (Eq, Ord)
+  = Unary i
+  | Binary { _fst :: i
+           , _snd :: WTA.State i
+           } deriving (Eq, Ord)
 
 instance Show i => Show (State i) where
-  show (State a b)
+  show (Unary a)
+    = show a
+  show (Binary a b)
     = show a ++ "@" ++ show b
 
 instance Hashable i => Hashable (State i) where
-  hashWithSalt s (State a b) = s `hashWithSalt` a `hashWithSalt` b
+  hashWithSalt s (Unary a) = s `hashWithSalt` a
+  hashWithSalt s (Binary a b) = s `hashWithSalt` a `hashWithSalt` b
 
 data Item s l w
   = Item { _to    :: s
@@ -77,8 +81,10 @@ mapState
   -> (i -> j)
   -> State i
   -> State j
-mapState f1 f2 (State a b)
-  = State (f1 a) (WTA.mapState f2 b)
+mapState f1 _ (Unary a)
+  = Unary $ f1 a
+mapState f1 f2 (Binary a b)
+  = Binary (f1 a) (WTA.mapState f2 b)
 
 relabel'
   :: (Int -> Int)                 -- ^ relabeling
@@ -111,11 +117,11 @@ intersect intersect' lm I.XRS{ .. }
       h2'          = V.snoc h2 $ V.fromList [NT 0]
       its'         = makeSingleEndState
                        ((==) initial . _fst)
-                       (State 0 (WTA.emptyState))
+                       (Unary 0)
                        (I.SIP (V.length h1' - 1) (V.length h2' - 1))
                        its
       (its'', vtx, states)                                   -- integerize Hypergraph
-                   = integerize' (State 0 WTA.emptyState) its'
+                   = integerize' (Unary 0) its'
       (hg, mu')    = itemsToHypergraph its''
       irtg'        = I.IRTG hg vtx h1' h2'
       xrs'         = I.XRS irtg' mu'                         -- build XRS

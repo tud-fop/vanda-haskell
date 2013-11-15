@@ -20,11 +20,9 @@
 
 
 module Vanda.Grammar.NGrams.WTA_Unsmoothed
-  ( delta
-  , State ()
-  , emptyState
+  ( State ()
+  , delta
   , mapState
-  , state
   ) where
 
 import Vanda.Grammar.LM

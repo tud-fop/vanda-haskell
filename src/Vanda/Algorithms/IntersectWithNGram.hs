@@ -81,7 +81,7 @@ initRule mu h2 lm he
         sts      = map h $ h2 he
         xs       = WTA.delta lm [] sts
     in  map (\ (st, w1)
-            -> Item (State (HI.to he) st)
+            -> Item (Binary (HI.to he) st)
                 (mu he + w1)
                 []
                 (HI.label he))
@@ -90,7 +90,7 @@ initRule mu h2 lm he
 -- | Combines 'Item's by a rule. The 'Item's and the rule must
 --   match (not checked).
 blowRule
-  :: (LM a, Show l)
+  :: LM a
   => (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
   -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
   -> a                              -- ^ language model
@@ -100,7 +100,7 @@ blowRule
 blowRule mu h2 lm he xs
   = let xr  = doReordering lm (h2 he) $ map _snd xs
         qss = concatMap (\ (qs, d) -> map (\ (x, y) -> (x, y + d)) $ WTA.delta lm qs []) xr
-    in  map (\ (q, w) -> Item (State (HI.to he) q) (w + mu he) xs $ HI.label he) qss
+    in  map (\ (q, w) -> Item (Binary (HI.to he) q) (w + mu he) xs $ HI.label he) qss
 
 -- | For a given list l of tuples of lists ai and bi of symbols,
 --   generates all sequences s of length |l| such that for every in
