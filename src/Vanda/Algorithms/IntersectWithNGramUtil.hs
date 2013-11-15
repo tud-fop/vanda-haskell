@@ -30,9 +30,10 @@ module Vanda.Algorithms.IntersectWithNGramUtil
   , groupByWeight
   ) where
 
-import qualified Data.Vector as V
-import qualified Data.Array as A
+import qualified Data.List as L
 import qualified Data.Map as M
+import qualified Data.Array as A
+import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
 
 import Data.NTT
@@ -149,7 +150,7 @@ doReordering
 doReordering lm ntts xs
   = let h (T i)  = WTA.delta lm [] [i]
         h (NT i) = [(xs !! i, 0)]
-    in  map (foldl (\(qs, ys) (q, y) -> (qs ++ [q], ys + y)) ([], 0)) . sequence $ map h ntts
+    in  map (L.foldl' (\(qs, ys) (q, y) -> (qs ++ [q], ys + y)) ([], 0)) . sequence $ map h ntts
 
 -- | Takes 'Hyperedge's with arbitrary vertex type and returns 'Hyperedges'
 --   with vertex type 'Int'.

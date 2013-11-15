@@ -23,35 +23,24 @@ import Data.Hashable
 import Data.List (foldl', intercalate)
 
 data State v
-  = Nullary
-  | Unary  [v]
+  = Unary  [v]
   | Binary [v] [v]
   deriving (Eq, Ord)
 
 instance Hashable i => Hashable (State i) where
-  hashWithSalt s Nullary = s
   hashWithSalt s (Unary a) = s `hashWithSalt` a
   hashWithSalt s (Binary a b) = s `hashWithSalt` a `hashWithSalt` b
 
 
 mapState :: (v -> v') -> State v -> State v'
-mapState _ Nullary
-  = Nullary
 mapState f (Unary b)
   = Unary (map f b)
 mapState f (Binary b1 b2)
   = Binary (map f b1) (map f b2)
 
-emptyState :: State v
-emptyState = Nullary
-
-state :: v -> State v
-state v = Unary [v]
-
 instance Show v => Show (State v) where
   show s
     = case s of
-        Nullary -> ""
         Unary x -> intercalate "_" $ map show x
         Binary x y -> (intercalate "_" $ map show x) ++ "*" ++ (intercalate "_" $ map show y)
 
@@ -66,8 +55,7 @@ deltaS lm [] yield
         then Unary yield
         else Binary (take nM yield) (last' nM yield)
 deltaS lm xs _
-  = let go Nullary = []
-        go (Unary x) = x
+  = let go (Unary x) = x
         go (Binary x y) = x ++ y
         str = concatMap go xs
         nM = order lm - 1
@@ -78,8 +66,7 @@ deltaS lm xs _
 -- | Extracts the currently visible substrings from a 'List' of states.
 extractSubstrings :: [State v] -> [[v]]
 extractSubstrings xs
-  = let go (rs, p) Nullary = (rs, p)
-        go (rs, p) (Unary x) = (rs, p ++ x)
+  = let go (rs, p) (Unary x) = (rs, p ++ x)
         go (rs, p) (Binary x y) = (rs ++ [p ++ x], y)
     in  (\ (rs, p) -> rs ++ [p]) $ foldl' go ([], []) xs
 
