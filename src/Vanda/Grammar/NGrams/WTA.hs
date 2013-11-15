@@ -1,6 +1,6 @@
 -----------------------------------------------------------------------------
 -- |
--- Module      :  Vanda.Grammar.NGrams.WTA_Smoothed
+-- Module      :  Vanda.Grammar.NGrams.WTA
 -- Copyright   :  (c) Technische Universität Dresden 2013
 -- License     :  Redistribution and use in source and binary forms, with
 --                or without modification, is ONLY permitted for teaching

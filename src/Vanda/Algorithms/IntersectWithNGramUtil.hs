@@ -135,13 +135,15 @@ itemsToHypergraph xs
 
 -- | reorders/inserts the given 'NState's according to the given reordering/insertion
 doReordering
-  :: [NTT]                          -- ^ reordering/insertion
+  :: LM a
+  => a                              -- ^ language model
+  -> [NTT]                          -- ^ reordering/insertion
   -> [WTA.State Int]                -- ^ original states
-  -> [WTA.State Int]                -- ^ processed states
-doReordering ntts xs
-  = let h (T i)  = WTA.state i
-        h (NT i) = xs !! i
-    in  map h ntts
+  -> [([WTA.State Int], Double)]    -- ^ processed states
+doReordering lm ntts xs
+  = let h (T i)  = WTA.delta lm [] [i]
+        h (NT i) = [(xs !! i, 0)]
+    in  map (foldl (\(qs, ys) (q, y) -> (qs ++ [q], ys + y)) ([], 0)) . sequence $ map h ntts
 
 -- | Takes 'Hyperedge's with arbitrary vertex type and returns 'Hyperedges'
 --   with vertex type 'Int'.

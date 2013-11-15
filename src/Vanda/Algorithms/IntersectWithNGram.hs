@@ -98,9 +98,9 @@ blowRule
   -> [State Int]                    -- ^ base states
   -> [Item (State Int) l Double]    -- ^ resulting 'Item'
 blowRule mu h2 lm he xs
-  = let xr = doReordering (h2 he) $ map _snd xs
-        qs = WTA.delta lm xr []
-    in  map (\ (q, w) -> Item (State (HI.to he) q) (w + mu he) xs $ HI.label he) qs
+  = let xr  = doReordering lm (h2 he) $ map _snd xs
+        qss = concatMap (\ (qs, d) -> map (\ (x, y) -> (x, y + d)) $ WTA.delta lm qs []) xr
+    in  map (\ (q, w) -> Item (State (HI.to he) q) (w + mu he) xs $ HI.label he) qss
 
 -- | For a given list l of tuples of lists ai and bi of symbols,
 --   generates all sequences s of length |l| such that for every in
