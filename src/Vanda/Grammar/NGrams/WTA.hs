@@ -15,22 +15,44 @@
 --
 -----------------------------------------------------------------------------
 
-
-module Vanda.Grammar.NGrams.WTA where
+module Vanda.Grammar.NGrams.WTA
+  ( State
+  , WTA
+  , delta
+  , mapState
+  , smoothedWTA
+  , unsmoothedWTA
+  ) where
 
 import Vanda.Grammar.LM
 import Data.Hashable
 import Data.List (foldl', intercalate)
+
 
 data State v
   = Unary  [v]
   | Binary [v] [v]
   deriving (Eq, Ord)
 
+data WTA w v
+  = WTA { delta :: [State v] -> [w] -> [(State v, Double)] }
+
 instance Hashable i => Hashable (State i) where
   hashWithSalt s (Unary a) = s `hashWithSalt` a
   hashWithSalt s (Binary a b) = s `hashWithSalt` a `hashWithSalt` b
 
+instance Show v => Show (State v) where
+  show s
+    = case s of
+        Unary x -> intercalate "_" $ map show x
+        Binary x y -> (intercalate "_" $ map show x) ++ "*" ++ (intercalate "_" $ map show y)
+
+
+smoothedWTA :: LM a => a -> WTA Int Int
+smoothedWTA lm = WTA $ delta' deltaW' lm
+
+unsmoothedWTA :: LM a => a -> WTA Int Int
+unsmoothedWTA lm = WTA $ delta' deltaW lm
 
 mapState :: (v -> v') -> State v -> State v'
 mapState f (Unary b)
@@ -38,11 +60,33 @@ mapState f (Unary b)
 mapState f (Binary b1 b2)
   = Binary (map f b1) (map f b2)
 
-instance Show v => Show (State v) where
-  show s
-    = case s of
-        Unary x -> intercalate "_" $ map show x
-        Binary x y -> (intercalate "_" $ map show x) ++ "*" ++ (intercalate "_" $ map show y)
+
+-- | helper for transition weights (calculates intermediate
+--   values using backoff and cancels them out later)
+deltaW :: LM a => a -> [State Int] -> [Int] -> Double
+deltaW lm [] yield
+  = score lm yield
+deltaW lm xs _
+  = sum . map (score lm) . filter (\x -> length x >= order lm) . extractSubstrings $ xs
+
+-- | helper for transition weights (calculates intermediate
+--   values using backoff and cancels them out later)
+deltaW' :: LM a => a -> [State Int] -> [Int] -> Double
+deltaW' lm [] yield
+  = score lm yield
+deltaW' lm xs _
+  = (sum . map (score lm)
+         . extractSubstrings
+         $ xs
+    )
+  - (sum . map (score lm)
+         . map (\ (Unary x) -> x )
+         . filter (\ x -> case x of
+                            (Unary _) -> True
+                            _         -> False
+                  )
+         $ xs
+    )
 
 delta' :: LM a => (a -> [State Int] -> [Int] -> Double) -> a -> [State Int] -> [Int] -> [(State Int, Double)]
 delta' f lm qs w = [(deltaS lm qs w, f lm qs w)]

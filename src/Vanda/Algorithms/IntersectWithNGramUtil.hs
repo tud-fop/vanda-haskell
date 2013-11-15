@@ -40,7 +40,7 @@ import Data.NTT
 import Data.Hashable
 import qualified Data.Interner as In
 import Vanda.Grammar.LM
-import qualified Vanda.Grammar.NGrams.WTA_Smoothed as WTA
+import qualified Vanda.Grammar.NGrams.WTA as WTA
 import qualified Vanda.Hypergraph.IntHypergraph as HI
 import qualified Vanda.Hypergraph.Tree as T
 import qualified Vanda.Grammar.XRS.IRTG as I
@@ -142,13 +142,12 @@ itemsToHypergraph xs
 
 -- | reorders/inserts the given 'NState's according to the given reordering/insertion
 doReordering
-  :: LM a
-  => a                              -- ^ language model
+  :: WTA.WTA Int Int                -- ^ language model
   -> [NTT]                          -- ^ reordering/insertion
   -> [WTA.State Int]                -- ^ original states
   -> [([WTA.State Int], Double)]    -- ^ processed states
-doReordering lm ntts xs
-  = let h (T i)  = WTA.delta lm [] [i]
+doReordering wta ntts xs
+  = let h (T i)  = WTA.delta wta [] [i]
         h (NT i) = [(xs !! i, 0)]
     in  map (L.foldl' (\(qs, ys) (q, y) -> (qs ++ [q], ys + y)) ([], 0)) . sequence $ map h ntts
 

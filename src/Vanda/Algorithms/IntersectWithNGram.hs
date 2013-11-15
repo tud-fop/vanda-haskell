@@ -24,7 +24,7 @@ import Data.NTT
 import Vanda.Grammar.LM
 import qualified Vanda.Hypergraph.IntHypergraph as HI
 import Vanda.Algorithms.IntersectWithNGramUtil
-import qualified Vanda.Grammar.NGrams.WTA_Smoothed as WTA
+import qualified Vanda.Grammar.NGrams.WTA as WTA
 
 -- | Intersects IRTG and n-gram model, emits 'Item's.
 intersect
@@ -37,12 +37,13 @@ intersect
 intersect lm mu h2 hg
   = let es  = filter ((/=) 0 . HI.arity) $ HI.edges hg
         es0 = filter ((==) 0 . HI.arity) $ HI.edges hg
-        is0 = flip concatMap es0 $ initRule mu h2 lm
+        wta = WTA.smoothedWTA lm
+        is0 = flip concatMap es0 $ initRule mu h2 wta
         ns0 = M.map S.fromList . M.fromListWith (++) . map (\x -> (_fst x, [x])) $ map _to is0
         go cs os ns its
           = let is = [ (HI.to e, concat lst)
                      | e <- es
-                     , let lst = [ blowRule mu h2 lm e s
+                     , let lst = [ blowRule mu h2 wta e s
                                  | s <- fst
                                       $ awesomeSequence
                                         [ (nLst, oLst)
@@ -69,10 +70,9 @@ intersect lm mu h2 hg
 
 -- | Emits an initial 'Item'.
 initRule
-  :: LM a
-  => (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
+  :: (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
   -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
-  -> a                              -- ^ language model
+  -> WTA.WTA Int Int                -- ^ language model
   -> HI.Hyperedge l i1              -- ^ rule
   -> [Item (State Int) l Double]    -- ^ resulting 'Item'
 initRule mu h2 lm he
@@ -90,16 +90,15 @@ initRule mu h2 lm he
 -- | Combines 'Item's by a rule. The 'Item's and the rule must
 --   match (not checked).
 blowRule
-  :: LM a
-  => (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
+  :: (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
   -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
-  -> a                              -- ^ language model
+  -> WTA.WTA Int Int                -- ^ language model
   -> HI.Hyperedge l i1              -- ^ rule
   -> [State Int]                    -- ^ base states
   -> [Item (State Int) l Double]    -- ^ resulting 'Item'
-blowRule mu h2 lm he xs
-  = let xr  = doReordering lm (h2 he) $ map _snd xs
-        qss = concatMap (\ (qs, d) -> map (\ (x, y) -> (x, y + d)) $ WTA.delta lm qs []) xr
+blowRule mu h2 wta he xs
+  = let xr  = doReordering wta (h2 he) $ map _snd xs
+        qss = concatMap (\ (qs, d) -> map (\ (x, y) -> (x, y + d)) $ WTA.delta wta qs []) xr
     in  map (\ (q, w) -> Item (Binary (HI.to he) q) (w + mu he) xs $ HI.label he) qss
 
 -- | For a given list l of tuples of lists ai and bi of symbols,

@@ -65,8 +65,6 @@ library
     , Vanda.Grammar.LM
     , Vanda.Grammar.NGrams.VandaNGrams
     , Vanda.Grammar.NGrams.WTA
-    , Vanda.Grammar.NGrams.WTA_Smoothed
-    , Vanda.Grammar.NGrams.WTA_Unsmoothed
     , Vanda.Grammar.NGrams.Text
     , Vanda.Grammar.NGrams.Functions
     , Vanda.Hypergraph.Binary
