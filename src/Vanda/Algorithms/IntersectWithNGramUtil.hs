@@ -78,9 +78,9 @@ relabel f1 xrs@I.XRS{ .. }
   = xrs{ I.irtg = irtg{ I.h2 = relabel' f1 $ I.h2 irtg } }
 
 mapState
-  :: (i -> j)
-  -> (i -> j)
-  -> State i
+ :: (i -> j)
+ -> (i -> j)
+ -> State i
   -> State j
 mapState f1 _ (Unary a)
   = Unary $ f1 a
@@ -142,7 +142,7 @@ itemsToHypergraph xs
 
 -- | reorders/inserts the given 'NState's according to the given reordering/insertion
 doReordering
-  :: WTA.WTA Int Int                -- ^ language model
+  :: WTA.WTA Int (WTA.State Int)    -- ^ language model
   -> [NTT]                          -- ^ reordering/insertion
   -> [WTA.State Int]                -- ^ original states
   -> [([WTA.State Int], Double)]    -- ^ processed states

@@ -72,7 +72,7 @@ intersect lm mu h2 hg
 initRule
   :: (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
   -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
-  -> WTA.WTA Int Int                -- ^ language model
+  -> WTA.WTA Int (WTA.State Int)    -- ^ language model
   -> HI.Hyperedge l i1              -- ^ rule
   -> [Item (State Int) l Double]    -- ^ resulting 'Item'
 initRule mu h2 lm he
@@ -92,7 +92,7 @@ initRule mu h2 lm he
 blowRule
   :: (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
   -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
-  -> WTA.WTA Int Int                -- ^ language model
+  -> WTA.WTA Int (WTA.State Int)    -- ^ language model
   -> HI.Hyperedge l i1              -- ^ rule
   -> [State Int]                    -- ^ base states
   -> [Item (State Int) l Double]    -- ^ resulting 'Item'

@@ -35,7 +35,7 @@ data State v
   deriving (Eq, Ord)
 
 data WTA w v
-  = WTA { delta :: [State v] -> [w] -> [(State v, Double)] }
+  = WTA { delta :: [v] -> [w] -> [(v, Double)] }
 
 instance Hashable i => Hashable (State i) where
   hashWithSalt s (Unary a) = s `hashWithSalt` a
@@ -48,10 +48,10 @@ instance Show v => Show (State v) where
         Binary x y -> (intercalate "_" $ map show x) ++ "*" ++ (intercalate "_" $ map show y)
 
 
-smoothedWTA :: LM a => a -> WTA Int Int
+smoothedWTA :: LM a => a -> WTA Int (State Int)
 smoothedWTA lm = WTA $ delta' deltaW' lm
 
-unsmoothedWTA :: LM a => a -> WTA Int Int
+unsmoothedWTA :: LM a => a -> WTA Int (State Int)
 unsmoothedWTA lm = WTA $ delta' deltaW lm
 
 mapState :: (v -> v') -> State v -> State v'
@@ -64,16 +64,16 @@ mapState f (Binary b1 b2)
 -- | helper for transition weights (calculates intermediate
 --   values using backoff and cancels them out later)
 deltaW :: LM a => a -> [State Int] -> [Int] -> Double
-deltaW lm [] yield
-  = score lm yield
+deltaW lm [] w
+  = score lm w
 deltaW lm xs _
   = sum . map (score lm) . filter (\x -> length x >= order lm) . extractSubstrings $ xs
 
 -- | helper for transition weights (calculates intermediate
 --   values using backoff and cancels them out later)
 deltaW' :: LM a => a -> [State Int] -> [Int] -> Double
-deltaW' lm [] yield
-  = score lm yield
+deltaW' lm [] w
+  = score lm w
 deltaW' lm xs _
   = (sum . map (score lm)
          . extractSubstrings
@@ -88,16 +88,22 @@ deltaW' lm xs _
          $ xs
     )
 
-delta' :: LM a => (a -> [State Int] -> [Int] -> Double) -> a -> [State Int] -> [Int] -> [(State Int, Double)]
+delta'
+  :: LM a
+  => (a -> [State Int] -> [Int] -> Double)
+  -> a
+  -> [State Int]
+  -> [Int]
+  -> [(State Int, Double)]
 delta' f lm qs w = [(deltaS lm qs w, f lm qs w)]
 
 -- | transition state
-deltaS :: (Show v, LM a) => a -> [State v] -> [v] -> State v
-deltaS lm [] yield
-  = let nM = order lm - 1
-    in  if   length yield < nM
-        then Unary yield
-        else Binary (take nM yield) (last' nM yield)
+deltaS :: LM a => a -> [State v] -> [v] -> State v
+deltaS lm [] w
+  = let n = order lm - 1
+    in  if   length w < n
+        then Unary w
+        else Binary (take n w) (last' n w)
 deltaS lm xs _
   = let go (Unary x) = x
         go (Binary x y) = x ++ y
