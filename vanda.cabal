@@ -63,11 +63,11 @@ library
     , Vanda.Grammar.XRS.IRTG
     , Vanda.Grammar.XRS.Text
     , Vanda.Grammar.LM
+    , Vanda.Grammar.NGrams.Functions
+    , Vanda.Grammar.NGrams.Text
     , Vanda.Grammar.NGrams.VandaNGrams
     , Vanda.Grammar.NGrams.WTA
     , Vanda.Grammar.NGrams.WTA_BHPS
-    , Vanda.Grammar.NGrams.Text
-    , Vanda.Grammar.NGrams.Functions
     , Vanda.Hypergraph.Binary
     , Vanda.Hypergraph.BackwardStar
     , Vanda.Hypergraph.Basic
