@@ -1,4 +1,5 @@
-{-# LANGUAGE RecordWildCards, BangPatterns #-}
+{-# LANGUAGE RecordWildCards #-}
+
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Vanda.Algorithms.IntersectWithNGramUtil

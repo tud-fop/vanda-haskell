@@ -1,4 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
 -- (c) 2012 Matthias Büchse <Matthias.Buechse@mailbox.tu-dresden.de>
 --
 -- Technische Universität Dresden / Faculty of Computer Science / Institute
@@ -9,6 +8,8 @@
 -- Universität Dresden AND IN COORDINATION with the Chair of Foundations
 -- of Programming.
 -- ---------------------------------------------------------------------------
+
+{-# LANGUAGE BangPatterns, RecordWildCards #-}
 
 -- |
 -- Maintainer  :  Matthias Büchse
@@ -128,7 +129,7 @@ earley hg comp wsa mki' v0
 
 
 iter
-  :: forall l i i'. (Ord i, Show i, Show l)
+  :: (Ord i, Show i, Show l)
   => (Int -> Trie l i) 
   -> (Hyperedge l i -> [NTT])
   -> WSA.WSA Int Int Double

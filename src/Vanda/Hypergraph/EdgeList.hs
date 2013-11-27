@@ -1,4 +1,3 @@
-{-# LANGUAGE EmptyDataDecls #-}
 -- (c) 2012 Matthias Büchse <Matthias.Buechse@tu-dresden.de>
 --
 -- Technische Universität Dresden / Faculty of Computer Science / Institute
@@ -9,6 +8,13 @@
 -- Universität Dresden AND IN COORDINATION with the Chair of Foundations
 -- of Programming.
 -- ---------------------------------------------------------------------------
+
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- |
 -- Maintainer  :  Matthias Buechse

@@ -9,6 +9,8 @@
 -- of Programming.
 -- ---------------------------------------------------------------------------
 
+{-# LANGUAGE BangPatterns #-}
+
 -- |
 -- Maintainer  :  Linda Leuschner
 -- Stability   :  unbekannt

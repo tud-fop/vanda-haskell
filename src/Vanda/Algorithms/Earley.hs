@@ -151,7 +151,7 @@ extract _ _ = Nothing
 
 
 iter
-  :: forall l i t p a. (Ord p, Ord t, Ord i, Show p, Show t, Show i)
+  :: (Ord p, Ord t, Ord i, Show p, Show t, Show i)
   => (Int -> [Hyperedge Int l i]) 
   -> (Hyperedge Int l i -> [Either Int t])
   -> WSA.WSA p t Double

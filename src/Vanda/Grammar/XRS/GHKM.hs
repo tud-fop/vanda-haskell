@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns, GeneralizedNewtypeDeriving #-}
 module Vanda.Grammar.XRS.GHKM
   ( Alignment (..)
   , Rule (..)

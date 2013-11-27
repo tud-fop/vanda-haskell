@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+
 module Vanda.Functions
   ( SCFG (..)
   , GHKM
