@@ -38,26 +38,26 @@ import qualified Data.Vector.Unboxed as VU
 
 import Data.NTT
 import Data.Hashable
+import qualified Data.WTA as WTA
 import qualified Data.Interner as In
 import Vanda.Grammar.LM
-import qualified Vanda.Grammar.NGrams.WTA as WTA
 import qualified Vanda.Hypergraph.IntHypergraph as HI
 import qualified Vanda.Hypergraph.Tree as T
 import qualified Vanda.Grammar.XRS.IRTG as I
 
-data State i
+data State s i
   = Unary i
   | Binary { _fst :: i
-           , _snd :: WTA.State i
+           , _snd :: s
            } deriving (Eq, Ord)
 
-instance Show i => Show (State i) where
+instance (Show i, Show s) => Show (State s i) where
   show (Unary a)
     = show a
   show (Binary a b)
     = show a ++ "@" ++ show b
 
-instance Hashable i => Hashable (State i) where
+instance (Hashable i, Hashable s) => Hashable (State s i) where
   hashWithSalt s (Unary a) = s `hashWithSalt` a
   hashWithSalt s (Binary a b) = s `hashWithSalt` a `hashWithSalt` b
 
@@ -78,10 +78,11 @@ relabel f1 xrs@I.XRS{ .. }
   = xrs{ I.irtg = irtg{ I.h2 = relabel' f1 $ I.h2 irtg } }
 
 mapState
- :: (i -> j)
- -> (i -> j)
- -> State i
-  -> State j
+  :: WTA.State s
+  => (i -> j)
+  -> (i' -> j')
+  -> State (s i') i
+  -> State (s j') j
 mapState f1 _ (Unary a)
   = Unary $ f1 a
 mapState f1 f2 (Binary a b)
@@ -99,15 +100,15 @@ relabel' r h2
 
 -- | Intersects IRTG and n-gram model.
 intersect
-  :: LM a
+  :: (LM a, WTA.State s, Eq (s Int), Hashable (s Int))
   => (a -> (HI.Hyperedge I.StrictIntPair Int -> Double)
         -> (HI.Hyperedge I.StrictIntPair Int -> [NTT])
         -> HI.Hypergraph I.StrictIntPair Int
-        -> [Item (State Int) I.StrictIntPair Double]
+        -> [Item (State (s Int) Int) I.StrictIntPair Double]
      )                              -- ^ intersection function
   -> a                              -- ^ language model
   -> I.XRS                          -- ^ translation model
-  -> (I.XRS, V.Vector (State Int)) -- ^ product translation model, new states
+  -> (I.XRS, V.Vector (State (s Int) Int)) -- ^ product translation model, new states
 intersect intersect' lm I.XRS{ .. }
   = (xrs', states) where
       I.IRTG{ .. } = irtg
@@ -142,10 +143,11 @@ itemsToHypergraph xs
 
 -- | reorders/inserts the given 'NState's according to the given reordering/insertion
 doReordering
-  :: WTA.WTA Int (WTA.State Int)    -- ^ language model
+  :: WTA.State s
+  => WTA.WTA Int (s Int)            -- ^ language model
   -> [NTT]                          -- ^ reordering/insertion
-  -> [WTA.State Int]                -- ^ original states
-  -> [([WTA.State Int], Double)]    -- ^ processed states
+  -> [s Int]                        -- ^ original states
+  -> [([s Int], Double)]            -- ^ processed states
 doReordering wta ntts xs
   = let h (T i)  = WTA.delta wta [] [i]
         h (NT i) = [(xs !! i, 0)]

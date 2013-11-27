@@ -19,6 +19,7 @@ module Vanda.Grammar.NGrams.VandaNGrams
   ( NGrams
   , empty
   , dict
+  , dLength
   , invDict
   , order
   , indexOf
@@ -31,8 +32,6 @@ module Vanda.Grammar.NGrams.VandaNGrams
 import qualified Data.Map as M
 import qualified Data.List as L
 import qualified Data.Vector as V
-
-import Debug.Trace
 
 {-- snippet NGrams --}
 data NGrams v

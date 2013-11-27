@@ -16,54 +16,46 @@
 -----------------------------------------------------------------------------
 
 module Vanda.Grammar.NGrams.WTA
-  ( State
-  , WTA
+  ( State'
   , delta
   , mapState
   , smoothedWTA
   , unsmoothedWTA
   ) where
 
+import Data.WTA
 import Vanda.Grammar.LM
 import Data.Hashable
 import Data.List (foldl', intercalate)
 
-
-data State v
+data State' v
   = Unary  [v]
   | Binary [v] [v]
   deriving (Eq, Ord)
 
-data WTA w v
-  = WTA { delta :: [v] -> [w] -> [(v, Double)] }
-
-instance Hashable i => Hashable (State i) where
+instance Hashable i => Hashable (State' i) where
   hashWithSalt s (Unary a) = s `hashWithSalt` a
   hashWithSalt s (Binary a b) = s `hashWithSalt` a `hashWithSalt` b
 
-instance Show v => Show (State v) where
+instance Show v => Show (State' v) where
   show s
     = case s of
         Unary x -> intercalate "_" $ map show x
         Binary x y -> (intercalate "_" $ map show x) ++ "*" ++ (intercalate "_" $ map show y)
 
+instance State State' where
+  mapState f (Unary b)      = Unary (map f b)
+  mapState f (Binary b1 b2) = Binary (map f b1) (map f b2)
 
-smoothedWTA :: LM a => a -> WTA Int (State Int)
+smoothedWTA :: LM a => a -> WTA Int (State' Int)
 smoothedWTA lm = WTA $ delta' deltaW' lm
 
-unsmoothedWTA :: LM a => a -> WTA Int (State Int)
+unsmoothedWTA :: LM a => a -> WTA Int (State' Int)
 unsmoothedWTA lm = WTA $ delta' deltaW lm
-
-mapState :: (v -> v') -> State v -> State v'
-mapState f (Unary b)
-  = Unary (map f b)
-mapState f (Binary b1 b2)
-  = Binary (map f b1) (map f b2)
-
 
 -- | helper for transition weights (calculates intermediate
 --   values using backoff and cancels them out later)
-deltaW :: LM a => a -> [State Int] -> [Int] -> Double
+deltaW :: LM a => a -> [State' Int] -> [Int] -> Double
 deltaW lm [] w
   = score lm w
 deltaW lm xs _
@@ -71,7 +63,7 @@ deltaW lm xs _
 
 -- | helper for transition weights (calculates intermediate
 --   values using backoff and cancels them out later)
-deltaW' :: LM a => a -> [State Int] -> [Int] -> Double
+deltaW' :: LM a => a -> [State' Int] -> [Int] -> Double
 deltaW' lm [] w
   = score lm w
 deltaW' lm xs _
@@ -90,15 +82,15 @@ deltaW' lm xs _
 
 delta'
   :: LM a
-  => (a -> [State Int] -> [Int] -> Double)
+  => (a -> [State' Int] -> [Int] -> Double)
   -> a
-  -> [State Int]
+  -> [State' Int]
   -> [Int]
-  -> [(State Int, Double)]
+  -> [(State' Int, Double)]
 delta' f lm qs w = [(deltaS lm qs w, f lm qs w)]
 
 -- | transition state
-deltaS :: LM a => a -> [State v] -> [v] -> State v
+deltaS :: LM a => a -> [State' v] -> [v] -> State' v
 deltaS lm [] w
   = let n = order lm - 1
     in  if   length w < n
@@ -114,7 +106,7 @@ deltaS lm xs _
         else Binary (take nM str) (last' nM str)
 
 -- | Extracts the currently visible substrings from a 'List' of states.
-extractSubstrings :: [State v] -> [[v]]
+extractSubstrings :: [State' v] -> [[v]]
 extractSubstrings xs
   = let go (rs, p) (Unary x) = (rs, p ++ x)
         go (rs, p) (Binary x y) = (rs ++ [p ++ x], y)

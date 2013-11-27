@@ -20,24 +20,65 @@ module Vanda.Algorithms.IntersectWithNGram where
 
 import qualified Data.Map as M
 import qualified Data.Set as S
+import qualified Data.List as L
 import Data.NTT
 import Vanda.Grammar.LM
 import qualified Vanda.Hypergraph.IntHypergraph as HI
 import Vanda.Algorithms.IntersectWithNGramUtil
 import qualified Vanda.Grammar.NGrams.WTA as WTA
+import qualified Vanda.Grammar.NGrams.WTA_BHPS as WTABHPS
+import qualified Data.WTA as WTA
 
 -- | Intersects IRTG and n-gram model, emits 'Item's.
-intersect
-  :: (Ord l, Show l, Show i1, LM a)
+intersectBHPS
+  :: (Ord l, LM a)
   => a                              -- ^ language model
   -> (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
   -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
   -> HI.Hypergraph l i1             -- ^ RTG hypergraph
-  -> [Item (State Int) l Double]    -- ^ resulting list of 'Items'
-intersect lm mu h2 hg
+  -> [Item (State (WTABHPS.State' Int) Int) l Double]    -- ^ resulting list of 'Items'
+intersectBHPS lm mu h2 hg
+  = let wta = WTABHPS.makeWTA lm
+            . L.nub
+            . concatMap (map (\(T x) -> x))
+            . map h2 $ filter ((==) 0 . HI.arity)
+            $ HI.edges hg
+    in  intersect' wta mu h2 hg
+
+-- | Intersects IRTG and n-gram model, emits 'Item's.
+intersectSmoothed
+  :: (Ord l, LM a)
+  => a                              -- ^ language model
+  -> (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
+  -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
+  -> HI.Hypergraph l i1             -- ^ RTG hypergraph
+  -> [Item (State (WTA.State' Int) Int) l Double]    -- ^ resulting list of 'Items'
+intersectSmoothed lm mu h2 hg
+  = let wta = WTA.smoothedWTA lm
+    in  intersect' wta mu h2 hg
+
+-- | Intersects IRTG and n-gram model, emits 'Item's.
+intersectUnsmoothed
+  :: (Ord l, LM a)
+  => a                              -- ^ language model
+  -> (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
+  -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
+  -> HI.Hypergraph l i1             -- ^ RTG hypergraph
+  -> [Item (State (WTA.State' Int) Int) l Double]    -- ^ resulting list of 'Items'
+intersectUnsmoothed lm mu h2 hg
+  = let wta = WTA.unsmoothedWTA lm
+    in  intersect' wta mu h2 hg
+
+intersect'
+  :: (Ord l, Ord (s Int), WTA.State s)
+  => WTA.WTA Int (s Int)            -- ^ language model
+  -> (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
+  -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
+  -> HI.Hypergraph l i1             -- ^ RTG hypergraph
+  -> [Item (State (s Int) Int) l Double]  -- ^ resulting list of 'Items'
+intersect' wta mu h2 hg
   = let es  = filter ((/=) 0 . HI.arity) $ HI.edges hg
         es0 = filter ((==) 0 . HI.arity) $ HI.edges hg
-        wta = WTA.smoothedWTA lm
         is0 = flip concatMap es0 $ initRule mu h2 wta
         ns0 = M.map S.fromList . M.fromListWith (++) . map (\x -> (_fst x, [x])) $ map _to is0
         go cs os ns its
@@ -68,13 +109,15 @@ intersect lm mu h2 hg
                 else go cs' os' ns' $ concatMap snd is ++ its
     in  go S.empty M.empty ns0 is0
 
+
 -- | Emits an initial 'Item'.
 initRule
-  :: (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
-  -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
-  -> WTA.WTA Int (WTA.State Int)    -- ^ language model
-  -> HI.Hyperedge l i1              -- ^ rule
-  -> [Item (State Int) l Double]    -- ^ resulting 'Item'
+  :: WTA.State s
+  => (HI.Hyperedge l i1 -> Double)        -- ^ rule weights
+  -> (HI.Hyperedge l i1 -> [NTT])         -- ^ tree to string homomorphism
+  -> WTA.WTA Int (s Int)                  -- ^ language model
+  -> HI.Hyperedge l i1                    -- ^ rule
+  -> [Item (State (s Int) Int) l Double]  -- ^ resulting 'Item'
 initRule mu h2 lm he
   = let h (T x)  = x
         h (NT x) = x
@@ -90,12 +133,13 @@ initRule mu h2 lm he
 -- | Combines 'Item's by a rule. The 'Item's and the rule must
 --   match (not checked).
 blowRule
-  :: (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
+  :: WTA.State s
+  => (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
   -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
-  -> WTA.WTA Int (WTA.State Int)    -- ^ language model
+  -> WTA.WTA Int (s Int)            -- ^ language model
   -> HI.Hyperedge l i1              -- ^ rule
-  -> [State Int]                    -- ^ base states
-  -> [Item (State Int) l Double]    -- ^ resulting 'Item'
+  -> [State (s Int) Int]                  -- ^ base states
+  -> [Item (State (s Int) Int) l Double]  -- ^ resulting 'Item'
 blowRule mu h2 wta he xs
   = let xr  = doReordering wta (h2 he) $ map _snd xs
         qss = concatMap (\ (qs, d) -> map (\ (x, y) -> (x, y + d)) $ WTA.delta wta qs []) xr

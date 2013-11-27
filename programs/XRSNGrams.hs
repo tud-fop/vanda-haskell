@@ -10,6 +10,7 @@ import qualified Data.Text as T
 import qualified Data.Vector as V
 import qualified Data.Array as A
 import qualified Data.Vector.Unboxed as VU
+import qualified Data.WTA as WTA
 
 import qualified Vanda.Grammar.XRS.Functions as IF
 import qualified Vanda.Grammar.XRS.IRTG as I
@@ -19,8 +20,6 @@ import qualified Vanda.Algorithms.IntersectWithNGramUtil as ISU
 import qualified Vanda.Hypergraph.IntHypergraph as HI
 import qualified Vanda.Grammar.LM as LM
 import qualified Vanda.Token as TK
-
-import Debug.Trace
 
 main
   :: IO ()
@@ -37,7 +36,73 @@ main = do
       lm    <- LM.loadNGrams lmFile
       let xrs   = I.XRS irtg1 (VU.generate (V.length ws) (ws V.!))
       let (xrs1, states)
-                = ISU.intersect IS.intersect lm
+                = ISU.intersect IS.intersectUnsmoothed lm
+                . ISU.relabel (LM.indexOf lm . TK.getString fa)
+                $ xrs
+      let xrs'  = ISU.relabel (TK.getToken fm . LM.getText lm) xrs1
+      let states'
+                = V.map (ISU.mapState id (TK.getToken fm . LM.getText lm)) states
+      B.writeFile (zhgFile ++ ".new.bhg.gz") . compress
+                                             . B.encode
+                                             . I.irtg
+                                             $ xrs'
+      B.writeFile (zhgFile ++ ".new.weights.gz") . compress
+                                                 . B.encode
+                                                 . VU.toList
+                                                 . I.weights
+                                                 $ xrs'
+      TIO.writeFile (zhgFile ++ ".new.nodes") . TK.toText
+                                              . TK.TokenArray
+                                              . (\x -> A.listArray (0, length x - 1) x)
+                                              . map (T.pack . show)
+                                              . V.toList
+                                              . V.map (ISU.mapState (TK.getString na) (TK.getString fa))
+                                              $ states'
+    ["--BHPS", "-f", fMapFile, "-z", zhgFile, "-l", lmFile] -> do
+      irtg1 <- IF.loadIRTG (zhgFile ++ ".bhg.gz")
+      ws    <- IF.loadWeights (zhgFile ++ ".weights.gz")
+      na    <- IF.loadTokenArray (zhgFile ++ ".nodes")
+      nm    <- IF.loadTokenMap (zhgFile ++ ".nodes")
+      fa    <- IF.loadTokenArray fMapFile
+      fm    <- IF.loadTokenMap fMapFile
+      lm    <- LM.loadNGrams lmFile
+      let xrs   = I.XRS irtg1 (VU.generate (V.length ws) (ws V.!))
+      let (xrs1, states)
+                = ISU.intersect IS.intersectBHPS lm
+                . ISU.relabel (LM.indexOf lm . TK.getString fa)
+                $ xrs
+      let xrs'  = ISU.relabel (TK.getToken fm . LM.getText lm) xrs1
+      let states'
+                = V.map (ISU.mapState id (TK.getToken fm . LM.getText lm)) states
+      B.writeFile (zhgFile ++ ".new.bhg.gz") . compress
+                                             . B.encode
+                                             . I.irtg
+                                             $ xrs'
+      B.writeFile (zhgFile ++ ".new.weights.gz") . compress
+                                                 . B.encode
+                                                 . VU.toList
+                                                 . I.weights
+                                                 $ xrs'
+      TIO.writeFile (zhgFile ++ ".new.nodes") . TK.toText
+                                              . TK.TokenArray
+                                              . (\x -> A.listArray (0, length x - 1) x)
+                                              . map (T.pack . show)
+                                              . V.toList
+                                              . V.map (ISU.mapState (TK.getString na) (TK.getString fa))
+                                              $ states'
+    [wtaStyle, "-f", fMapFile, "-z", zhgFile, "-l", lmFile] -> do
+      irtg1 <- IF.loadIRTG (zhgFile ++ ".bhg.gz")
+      ws    <- IF.loadWeights (zhgFile ++ ".weights.gz")
+      na    <- IF.loadTokenArray (zhgFile ++ ".nodes")
+      nm    <- IF.loadTokenMap (zhgFile ++ ".nodes")
+      fa    <- IF.loadTokenArray fMapFile
+      fm    <- IF.loadTokenMap fMapFile
+      lm    <- LM.loadNGrams lmFile
+      let xrs   = I.XRS irtg1 (VU.generate (V.length ws) (ws V.!))
+      let (xrs1, states)
+                = case wtaStyle of
+                       "--unsmoothed" -> ISU.intersect IS.intersectUnsmoothed lm
+                       "--smoothed"   -> ISU.intersect IS.intersectSmoothed lm
                 . ISU.relabel (LM.indexOf lm . TK.getString fa)
                 $ xrs
       let xrs'  = ISU.relabel (TK.getToken fm . LM.getText lm) xrs1

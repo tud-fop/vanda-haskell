@@ -25,22 +25,21 @@ import Vanda.Grammar.NGrams.VandaNGrams as VN
 --import Vanda.Grammar.NGrams.KenLM as KN
 
 class LM a where
-  indexOf :: a -> T.Text -> Int
-  order   :: a -> Int
-  score   :: a -> [Int] -> Double
-  getText :: a -> Int -> T.Text
+  indexOf  :: a -> T.Text -> Int
+  order    :: a -> Int
+  score    :: a -> [Int] -> Double
+  getText  :: a -> Int -> T.Text
 
 instance LM (VN.NGrams T.Text) where
-  indexOf = VN.indexOf
-  order   = VN.order
-  score   = VN.evaluateInt
-  getText lm i
-          = M.findWithDefault (T.pack "<unk>") i 
-          . M.fromList
-          . map swap
-          . M.toList
-          . VN.dict
-          $ lm
+  indexOf      = VN.indexOf
+  order        = VN.order
+  score        = VN.evaluateInt
+  getText lm i = M.findWithDefault (T.pack "<unk>") i
+               . M.fromList
+               . map swap
+               . M.toList
+               . VN.dict
+               $ lm
 
 --instance LM KenLM where
 --  indexOf = KN.dictIndex
