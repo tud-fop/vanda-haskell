@@ -9,7 +9,7 @@
 -- of Programming.
 -- ---------------------------------------------------------------------------
 
-{-# LANGUAGE ScopedTypeVariables, EmptyDataDecls #-}
+{-# LANGUAGE ScopedTypeVariables, EmptyDataDecls, FlexibleInstances, MultiParamTypeClasses, TypeFamilies, RankNTypes #-}
 
 -- |
 -- Maintainer  :  Matthias Buechse
