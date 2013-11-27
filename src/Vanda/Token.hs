@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances, RecordWildCards #-}
+
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Vanda.Token

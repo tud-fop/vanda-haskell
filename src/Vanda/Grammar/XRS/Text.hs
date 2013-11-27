@@ -9,7 +9,7 @@
 -- of Programming.
 -- ---------------------------------------------------------------------------
 
-{-# LANGUAGE FlexibleContexts #-}  -- for 'Stream'
+{-# LANGUAGE BangPatterns, RecordWildCards #-}
 
 module Vanda.Grammar.XRS.Text
   ( XRSRule

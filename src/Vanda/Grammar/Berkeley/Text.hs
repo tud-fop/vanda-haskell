@@ -9,7 +9,7 @@
 -- of Programming.
 -- ---------------------------------------------------------------------------
 
-{-# LANGUAGE FlexibleContexts #-}  -- for 'Stream'
+{-# LANGUAGE BangPatterns #-}
 
 module Vanda.Grammar.Berkeley.Text ( parseBerkeleyMap ) where
 

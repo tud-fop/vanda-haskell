@@ -1,4 +1,3 @@
-{-# LANGUAGE ImpredicativeTypes #-}
 -- (c) 2012 Matthias Büchse <Matthias.Buechse@tu-dresden.de>
 --
 -- Technische Universität Dresden / Faculty of Computer Science / Institute
@@ -9,6 +8,8 @@
 -- Universität Dresden AND IN COORDINATION with the Chair of Foundations
 -- of Programming.
 -- ---------------------------------------------------------------------------
+
+{-# LANGUAGE BangPatterns, Rank2Types, RecordWildCards #-}
 
 module Vanda.Grammar.XRS.Binarize ( binarizeXRS ) where
 

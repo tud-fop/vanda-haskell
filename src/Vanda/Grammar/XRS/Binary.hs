@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE BangPatterns, RecordWildCards #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Vanda.Grammar.XRS.Binary where
 

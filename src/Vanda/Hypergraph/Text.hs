@@ -9,8 +9,6 @@
 -- of Programming.
 -- ---------------------------------------------------------------------------
 
-{-# LANGUAGE FlexibleContexts, FlexibleInstances #-}  -- for 'Stream'
-
 module Vanda.Hypergraph.Text ( parseHypergraph ) where
 
 import Control.Arrow ( (&&&) )

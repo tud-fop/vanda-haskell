@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances #-}
+
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Vanda.Corpus.Penn.Text

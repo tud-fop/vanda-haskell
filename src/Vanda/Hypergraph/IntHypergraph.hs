@@ -10,6 +10,11 @@
 -- of Programming.
 -- ---------------------------------------------------------------------------
 
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies #-}
+
 -- |
 -- Maintainer  :  Matthias Buechse
 -- Stability   :  unknown

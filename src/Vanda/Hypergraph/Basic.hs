@@ -11,6 +11,8 @@
 -- of Programming.
 -- ---------------------------------------------------------------------------
 
+{-# LANGUAGE BangPatterns #-}
+
 -- |
 -- Maintainer  :  Matthias Buechse
 -- Stability   :  unknown

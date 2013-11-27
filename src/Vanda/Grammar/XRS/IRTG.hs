@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances #-}
+
 module Vanda.Grammar.XRS.IRTG
  ( StrictIntPair (..)
  , IRTG (..)
