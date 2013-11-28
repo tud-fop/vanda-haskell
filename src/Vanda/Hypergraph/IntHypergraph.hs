@@ -1,4 +1,3 @@
-{-# LANGUAGE EmptyDataDecls #-}
 -- (c) 2012 Matthias Büchse <Matthias.Buechse@tu-dresden.de>
 --
 -- Technische Universität Dresden / Faculty of Computer Science / Institute
@@ -11,6 +10,7 @@
 -- ---------------------------------------------------------------------------
 
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
