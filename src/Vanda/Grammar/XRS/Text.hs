@@ -82,7 +82,7 @@ p_lhs_full = do
 p_state :: Parser (Var TS.Text)
 p_state = do
   !si <- fmap TS.pack $ many (noneOf ": ")
-  _ <- string ":"
+  _ <- string ": "
   spaces
   return (NV si)
 

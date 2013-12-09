@@ -21,7 +21,7 @@
 module Vanda.Algorithms.IntersectWithNGramUtil
   ( relabel
   , mapState
-  , State (Unary, Binary, _fst, _snd)
+  , State (Nullary, Binary, _fst, _snd)
   , Item (Item, _to, _from, _wt)
   , intersect
   , doReordering
@@ -31,35 +31,35 @@ module Vanda.Algorithms.IntersectWithNGramUtil
   , groupByWeight
   ) where
 
+import qualified Data.Array as A
 import qualified Data.List as L
 import qualified Data.Map as M
-import qualified Data.Array as A
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
-
-import Data.NTT
-import Data.Hashable
 import qualified Data.WTA as WTA
 import qualified Data.Interner as In
-import Vanda.Grammar.LM
+import qualified Vanda.Grammar.XRS.IRTG as I
 import qualified Vanda.Hypergraph.IntHypergraph as HI
 import qualified Vanda.Hypergraph.Tree as T
-import qualified Vanda.Grammar.XRS.IRTG as I
+
+import Data.Hashable
+import Vanda.Grammar.LM
+import Data.NTT
 
 data State s i
-  = Unary i
+  = Nullary
   | Binary { _fst :: i
            , _snd :: s
            } deriving (Eq, Ord)
 
 instance (Show i, Show s) => Show (State s i) where
-  show (Unary a)
-    = show a
+  show Nullary
+    = show "*"
   show (Binary a b)
     = show a ++ "@" ++ show b
 
 instance (Hashable i, Hashable s) => Hashable (State s i) where
-  hashWithSalt s (Unary a) = s `hashWithSalt` a
+  hashWithSalt s Nullary = s
   hashWithSalt s (Binary a b) = s `hashWithSalt` a `hashWithSalt` b
 
 data Item s l w
@@ -84,8 +84,8 @@ mapState
   -> (i' -> j')
   -> State (s i') i
   -> State (s j') j
-mapState f1 _ (Unary a)
-  = Unary $ f1 a
+mapState _ _ Nullary
+  = Nullary
 mapState f1 f2 (Binary a b)
   = Binary (f1 a) (WTA.mapState f2 b)
 
@@ -102,7 +102,8 @@ relabel' r h2
 -- | Intersects IRTG and n-gram model.
 intersect
   :: (LM a, WTA.State s, Eq (s Int), Hashable (s Int))
-  => (a -> (HI.Hyperedge I.StrictIntPair Int -> Double)
+  => (a -> (Int, I.StrictIntPair)
+        -> (HI.Hyperedge I.StrictIntPair Int -> Double)
         -> (HI.Hyperedge I.StrictIntPair Int -> [NTT])
         -> HI.Hypergraph I.StrictIntPair Int
         -> [Item (State (s Int) Int) I.StrictIntPair Double]
@@ -115,17 +116,17 @@ intersect intersect' lm I.XRS{ .. }
       I.IRTG{ .. } = irtg
       hom          = V.toList . (V.!) h2 . I._snd . HI.label -- prepare h2
       mu           = log . (VU.!) weights . HI.ident         -- prepare weights
-      its          = intersect' lm mu hom rtg                -- generate items
       h1'          = V.snoc h1 . T.Nullary $ NT 0
       h2'          = V.snoc h2 $ V.fromList [NT 0]
-      its'         = makeSingleEndState
-                       ((==) initial . _fst)
-                       (Unary 0)
-                       (I.SIP (V.length h1' - 1) (V.length h2' - 1))
-                       its
-      (its'', vtx, states)                                   -- integerize Hypergraph
-                   = integerize' (Unary 0) its'
-      (hg, mu')    = itemsToHypergraph its''
+      its          = intersect'
+                       lm
+                       (initial, I.SIP (V.length h1' - 1) (V.length h2' - 1))
+                       mu
+                       hom
+                       rtg                                  -- generate items
+      (its', vtx, states)                                   -- integerize Hypergraph
+                   = integerize' Nullary its
+      (hg, mu')    = itemsToHypergraph its'
       irtg'        = I.IRTG hg vtx h1' h2'
       xrs'         = I.XRS irtg' mu'                         -- build XRS
 
@@ -169,20 +170,21 @@ integerize' vtx is
              in  (m2, (Item t' (_wt e) f' (_lbl e)):xs)
         (mi', is')
            = foldl h (mi, []) is
-    in  (is', snd $ In.intern mi' vtx, V.fromList . A.elems $ In.internerToArray mi' )
+             in  (is', snd $ In.intern mi' vtx, V.fromList . reverse . A.elems $ In.internerToArray mi' )
 
 -- | Adds some 'Item's such that 'Item's produced from the former final state
 --   are connected to the new final state.
 makeSingleEndState
-  :: (Eq i, Fractional w)
-  => (i -> Bool)                       -- ^ is a end state
-  -> i                                 -- ^ new end state
+  :: WTA.State s
+  => WTA.WTA i (s i)                   -- ^ language model
+  -> (State (s i) i -> Bool)           -- ^ is a end state
+  -> State (s i) i                     -- ^ new end state
   -> l                                 -- ^ label of new rules
-  -> [Item i l w]                      -- ^ old 'Item's
-  -> [Item i l w]                      -- ^ new 'Item's
-makeSingleEndState p vInit lbl es
+  -> [Item (State (s i) i) l Double]   -- ^ old 'Item's
+  -> [Item (State (s i) i) l Double]   -- ^ new 'Item's
+makeSingleEndState lm p vInit lbl es
   = (++) es
-  . map (\x -> Item vInit 0 [x] lbl)
+  . map (\x -> Item vInit (WTA.nu lm $ _snd x) [x] lbl)
   . filter p
   $ map _to es
 

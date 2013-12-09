@@ -24,20 +24,26 @@ module Vanda.Grammar.NGrams.WTA_BHPS
   , makeWTA
   ) where
 
+import Data.Hashable
 import Data.WTA
 import Vanda.Grammar.LM
-import Data.Hashable
 
 data State' v = Binary [v] [v] deriving (Eq, Ord, Show)
 
 instance Hashable i => Hashable (State' i) where
   hashWithSalt s (Binary a b) = s `hashWithSalt` a `hashWithSalt` b
 
+mapState' :: (v -> v') -> State' v -> State' v'
+mapState' f (Binary b1 b2) = Binary (map f b1) (map f b2)
+
 instance State State' where
-  mapState f (Binary b1 b2) = Binary (map f b1) (map f b2)
+  mapState = mapState'
+
+instance Functor State' where
+  fmap = mapState'
 
 makeWTA :: LM a => a -> [Int] -> WTA Int (State' Int)
-makeWTA lm gamma = WTA $ delta' lm gamma
+makeWTA lm gamma = WTA (delta' lm gamma) (\ _ -> 1)
 
 delta'
   :: LM a

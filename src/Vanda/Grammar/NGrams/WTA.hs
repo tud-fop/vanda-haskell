@@ -18,15 +18,16 @@
 module Vanda.Grammar.NGrams.WTA
   ( State'
   , delta
+  , nu
   , mapState
   , smoothedWTA
   , unsmoothedWTA
   ) where
 
+import Data.List (foldl', intercalate)
+import Data.Hashable
 import Data.WTA
 import Vanda.Grammar.LM
-import Data.Hashable
-import Data.List (foldl', intercalate)
 
 data State' v
   = Unary  [v]
@@ -41,17 +42,35 @@ instance Show v => Show (State' v) where
   show s
     = case s of
         Unary x -> intercalate "_" $ map show x
-        Binary x y -> (intercalate "_" $ map show x) ++ "*" ++ (intercalate "_" $ map show y)
+        Binary x y -> (intercalate "_" $ map show x)
+                   ++ "*"
+                   ++ (intercalate "_" $ map show y)
+
+mapState' :: (v -> v') -> State' v -> State' v'
+mapState' f (Unary b)      = Unary (map f b)
+mapState' f (Binary b1 b2) = Binary (map f b1) (map f b2)
 
 instance State State' where
-  mapState f (Unary b)      = Unary (map f b)
-  mapState f (Binary b1 b2) = Binary (map f b1) (map f b2)
+  mapState = mapState'
+
+instance Functor State' where
+  fmap = mapState'
 
 smoothedWTA :: LM a => a -> WTA Int (State' Int)
-smoothedWTA lm = WTA $ delta' deltaW' lm
+smoothedWTA lm = WTA (delta' deltaW' lm) (nuW' lm)
 
 unsmoothedWTA :: LM a => a -> WTA Int (State' Int)
-unsmoothedWTA lm = WTA $ delta' deltaW lm
+unsmoothedWTA lm = WTA (delta' deltaW lm) (nuW lm)
+
+nuW :: LM a => a -> State' Int -> Double
+nuW lm (Binary a b)
+  = score lm (flip (++) a . take (order lm - 1) . repeat $ startSymbol lm)
+  + score lm (b ++ [endSymbol lm])
+nuW lm (Unary a)
+  = score lm ( (take (order lm - 1) . repeat $ startSymbol lm)
+               ++ a
+               ++ [endSymbol lm]
+             )
 
 -- | helper for transition weights (calculates intermediate
 --   values using backoff and cancels them out later)
@@ -59,13 +78,21 @@ deltaW :: LM a => a -> [State' Int] -> [Int] -> Double
 deltaW lm [] w
   = score lm w
 deltaW lm xs _
-  = sum . map (score lm) . filter (\x -> length x >= order lm) . extractSubstrings $ xs
+  = sum . map (score lm)
+        . filter (\x -> length x >= order lm)
+        $ extractSubstrings xs
+
+nuW' :: LM a => a -> State' Int -> Double
+nuW' lm (Binary a b)
+  = nuW lm (Binary a b)
+nuW' lm (Unary a)
+  = (nuW lm (Unary a)) - (score lm a)
 
 -- | helper for transition weights (calculates intermediate
 --   values using backoff and cancels them out later)
 deltaW' :: LM a => a -> [State' Int] -> [Int] -> Double
 deltaW' lm [] w
-  = score lm w
+  = deltaW lm [] w
 deltaW' lm xs _
   = (sum . map (score lm)
          . extractSubstrings

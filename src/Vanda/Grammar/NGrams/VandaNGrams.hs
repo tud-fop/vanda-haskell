@@ -88,11 +88,14 @@ getWeightInt lm is
 
 -- | Returns an empty NGrams language model.
 empty
-  :: v                     -- ^ symbol for unknown words
+  :: Ord v
+  => v                     -- ^ symbol for unknown words
+  -> v                     -- ^ sentence start symbol
+  -> v                     -- ^ sentence end symbol
   -> Int                   -- ^ order
   -> NGrams v              -- ^ empty NGrams model
-empty v n
-  = NGrams v M.empty V.empty 0 n M.empty
+empty u s e n
+  = NGrams u (M.fromList [(s, 0), (e, 1)]) (V.fromList [s, e]) 2 n M.empty
 
 indexOf
   :: Ord v
@@ -110,7 +113,10 @@ addWord
 addWord lm ve
   = let (m, i, c) = (dict lm, invDict lm, dLength lm)
     in  if   M.notMember ve m
-        then lm{ dict = M.insert ve c m, invDict = V.snoc i ve, dLength = c + 1 }
+        then lm{ dict = M.insert ve c m
+               , invDict = V.snoc i ve
+               , dLength = c + 1
+               }
         else lm
 
 -- | Adds an n-gram to the model.

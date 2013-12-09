@@ -15,72 +15,82 @@
 --
 -----------------------------------------------------------------------------
 
-
 module Vanda.Algorithms.IntersectWithNGram where
 
+import qualified Data.List as L
 import qualified Data.Map as M
 import qualified Data.Set as S
-import qualified Data.List as L
-import Data.NTT
-import Vanda.Grammar.LM
-import qualified Vanda.Hypergraph.IntHypergraph as HI
-import Vanda.Algorithms.IntersectWithNGramUtil
+import qualified Data.WTA as WTA
 import qualified Vanda.Grammar.NGrams.WTA as WTA
 import qualified Vanda.Grammar.NGrams.WTA_BHPS as WTABHPS
-import qualified Data.WTA as WTA
+import qualified Vanda.Hypergraph.IntHypergraph as HI
+
+import Vanda.Algorithms.IntersectWithNGramUtil
+import Vanda.Grammar.LM
+import Data.NTT
 
 -- | Intersects IRTG and n-gram model, emits 'Item's.
 intersectBHPS
-  :: (Ord l, LM a)
-  => a                              -- ^ language model
-  -> (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
-  -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
-  -> HI.Hypergraph l i1             -- ^ RTG hypergraph
-  -> [Item (State (WTABHPS.State' Int) Int) l Double]    -- ^ resulting list of 'Items'
-intersectBHPS lm mu h2 hg
+  :: LM a
+  => a                            -- ^ language model
+  -> (Int, l)                     -- ^ initial state
+  -> (HI.Hyperedge l i -> Double) -- ^ rule weights
+  -> (HI.Hyperedge l i -> [NTT])  -- ^ tree to string homomorphism
+  -> HI.Hypergraph l i            -- ^ RTG hypergraph
+  -> [Item (State (WTABHPS.State' Int) Int) l Double]
+                                  -- ^ resulting list of 'Items'
+intersectBHPS lm lbl mu h2 hg
   = let wta = WTABHPS.makeWTA lm
             . L.nub
             . concatMap (map (\(T x) -> x))
             . map h2 $ filter ((==) 0 . HI.arity)
             $ HI.edges hg
-    in  intersect' wta mu h2 hg
+    in  intersect' wta lbl mu h2 hg
 
 -- | Intersects IRTG and n-gram model, emits 'Item's.
 intersectSmoothed
-  :: (Ord l, LM a)
-  => a                              -- ^ language model
-  -> (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
-  -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
-  -> HI.Hypergraph l i1             -- ^ RTG hypergraph
-  -> [Item (State (WTA.State' Int) Int) l Double]    -- ^ resulting list of 'Items'
+  :: LM a
+  => a                             -- ^ language model
+  -> (Int, l)                      -- ^ initial state
+  -> (HI.Hyperedge l i1 -> Double) -- ^ rule weights
+  -> (HI.Hyperedge l i1 -> [NTT])  -- ^ tree to string homomorphism
+  -> HI.Hypergraph l i1            -- ^ RTG hypergraph
+  -> [Item (State (WTA.State' Int) Int) l Double]
+                                   -- ^ resulting list of 'Items'
 intersectSmoothed lm mu h2 hg
   = let wta = WTA.smoothedWTA lm
     in  intersect' wta mu h2 hg
 
 -- | Intersects IRTG and n-gram model, emits 'Item's.
 intersectUnsmoothed
-  :: (Ord l, LM a)
-  => a                              -- ^ language model
-  -> (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
-  -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
-  -> HI.Hypergraph l i1             -- ^ RTG hypergraph
-  -> [Item (State (WTA.State' Int) Int) l Double]    -- ^ resulting list of 'Items'
+  :: LM a
+  => a                             -- ^ language model
+  -> (Int, l)                      -- ^ initial state
+  -> (HI.Hyperedge l i1 -> Double) -- ^ rule weights
+  -> (HI.Hyperedge l i1 -> [NTT])  -- ^ tree to string homomorphism
+  -> HI.Hypergraph l i1            -- ^ RTG hypergraph
+  -> [Item (State (WTA.State' Int) Int) l Double]
+                                   -- ^ resulting list of 'Items'
 intersectUnsmoothed lm mu h2 hg
   = let wta = WTA.unsmoothedWTA lm
     in  intersect' wta mu h2 hg
 
 intersect'
-  :: (Ord l, Ord (s Int), WTA.State s)
-  => WTA.WTA Int (s Int)            -- ^ language model
-  -> (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
-  -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
-  -> HI.Hypergraph l i1             -- ^ RTG hypergraph
-  -> [Item (State (s Int) Int) l Double]  -- ^ resulting list of 'Items'
-intersect' wta mu h2 hg
+  :: (Ord (s Int), WTA.State s)
+  => WTA.WTA Int (s Int)           -- ^ language model
+  -> (Int, l)                      -- ^ initial state
+  -> (HI.Hyperedge l i1 -> Double) -- ^ rule weights
+  -> (HI.Hyperedge l i1 -> [NTT])  -- ^ tree to string homomorphism
+  -> HI.Hypergraph l i1            -- ^ RTG hypergraph
+  -> [Item (State (s Int) Int) l Double]
+                                   -- ^ resulting list of 'Items'
+intersect' wta (oi, lbl) mu h2 hg
   = let es  = filter ((/=) 0 . HI.arity) $ HI.edges hg
         es0 = filter ((==) 0 . HI.arity) $ HI.edges hg
         is0 = flip concatMap es0 $ initRule mu h2 wta
-        ns0 = M.map S.fromList . M.fromListWith (++) . map (\x -> (_fst x, [x])) $ map _to is0
+        ns0 = M.map S.fromList . M.fromListWith (++)
+                               . map (\x -> (_fst x, [x]))
+                               $ map _to is0
         go cs os ns its
           = let is = [ (HI.to e, concat lst)
                      | e <- es
@@ -89,8 +99,14 @@ intersect' wta mu h2 hg
                                       $ awesomeSequence
                                         [ (nLst, oLst)
                                         | q <- HI.from e
-                                        , let nLst = S.toList $ M.findWithDefault S.empty q ns
-                                        , let oLst = S.toList $ M.findWithDefault S.empty q os
+                                        , let
+                                            nLst
+                                              = S.toList
+                                              $ M.findWithDefault S.empty q ns
+                                        , let
+                                            oLst
+                                              = S.toList
+                                              $ M.findWithDefault S.empty q os
                                         ]
                                  , S.notMember s cs
                                  ]
@@ -101,13 +117,16 @@ intersect' wta mu h2 hg
                     . map _from
                     $ concatMap snd is
                 os' = M.unionWith S.union os ns
-                ns' = M.mapWithKey (\ k x -> S.difference x $ M.findWithDefault S.empty k os')
+                ns' = M.mapWithKey (\ k x -> S.difference x
+                                           $ M.findWithDefault S.empty k os'
+                                   )
                     . M.map (S.fromList . map _to)
                     $ M.fromListWith (++) is
             in  if   null is
                 then its
                 else go cs' os' ns' $ concatMap snd is ++ its
-    in  go S.empty M.empty ns0 is0
+    in  makeSingleEndState wta ((==) oi . _fst) Nullary lbl
+      $ go S.empty M.empty ns0 is0
 
 
 -- | Emits an initial 'Item'.
@@ -142,8 +161,13 @@ blowRule
   -> [Item (State (s Int) Int) l Double]  -- ^ resulting 'Item'
 blowRule mu h2 wta he xs
   = let xr  = doReordering wta (h2 he) $ map _snd xs
-        qss = concatMap (\ (qs, d) -> map (\ (x, y) -> (x, y + d)) $ WTA.delta wta qs []) xr
-    in  map (\ (q, w) -> Item (Binary (HI.to he) q) (w + mu he) xs $ HI.label he) qss
+        qss = concatMap (\(qs, d) -> map (\(x, y) -> (x, y + d))
+                                   $ WTA.delta wta qs []) xr
+    in  map (\(q, w) -> Item (Binary (HI.to he) q)
+                             (w + mu he)
+                             xs
+                             (HI.label he)
+            ) qss
 
 -- | For a given list l of tuples of lists ai and bi of symbols,
 --   generates all sequences s of length |l| such that for every in

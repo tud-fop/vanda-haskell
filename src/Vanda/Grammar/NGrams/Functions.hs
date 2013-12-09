@@ -20,12 +20,12 @@ module Vanda.Grammar.NGrams.Functions where
 
 import qualified Data.List as L
 import qualified Data.Map as M
+import qualified Data.Text.Lazy as T
+import qualified Data.Text.Lazy.IO as TIO
 import qualified Data.Vector as V
-import qualified Data.Text as T
-import qualified Data.Text.IO as TIO
 
-import Vanda.Grammar.NGrams.VandaNGrams
 import Vanda.Grammar.NGrams.Text
+import Vanda.Grammar.NGrams.VandaNGrams
 
 -- | Loads an NGram language model from a file.
 loadNGrams
@@ -42,35 +42,63 @@ trainModel
   -> T.Text                  -- ^ text
   -> NGrams T.Text           -- ^ /n/-gram model
 trainModel k n text
-  = let sentenceCorpus   = M.fromListWith (+) [ (T.words x, 1) | x <- T.lines text ]
-        nGramCorpus      = M.fromList [ (n', fromSentenceCorpus sentenceCorpus $ fromIntegral n') | n' <- [1 .. n] ]
-        smoothedCorpus   = M.fromList [ (n', smoothCorpus (fromIntegral k) $ nGramCorpus M.! n') | n' <- [1 .. n] ]
-        nGramWeight      = M.fromList
-                         $ [ (n', applyRFE (smoothedCorpus M.! n') $ nGramCorpus M.! (n' - 1))
-                           | n' <- [2 .. n]
-                           ]
-                           ++
-                           [ (1, flip M.map (smoothedCorpus M.! 1)
-                               $ (\x -> (x + 1) / (fromIntegral $ M.foldl (+) 0 (nGramCorpus M.! 1)))
-                             )
-                           ]
-        remainingMass    = M.fromList
-                         $ [ (n', calculateRemainingMass (nGramWeight M.! (n' + 1)) (nGramWeight M.! n'))
-                           | n' <- [1 .. (n - 1)]
-                           ]
-                           ++
-                           [ (n, M.empty) ]
-        f m1 m2          = M.unionWith
-                             (\ (x, _) (_, y) -> (x, y))
-                             m1
-                             m2
-        combinedMap      = M.unionWith
-                             f
-                             (M.map (M.map (\ x -> (x, Nothing))) nGramWeight)
-                             (M.map (M.map (\ y -> (0, if y == 0 then Nothing else Just y))) remainingMass)
-        weightedNGrams   = M.assocs . M.unions $ M.elems combinedMap
-        g lm (w, (x, y)) = addNGram lm w x y
-    in  L.foldl' g (empty (T.pack "<unk>") n) weightedNGrams
+  = let
+      sentenceCorpus
+        = M.fromListWith (+) [ (T.words x, 1) | x <- T.lines text ]
+      nGramCorpus
+        = M.fromList [ (n'
+                       , fromSentenceCorpus sentenceCorpus $ fromIntegral n'
+                       )
+                     | n' <- [1 .. n]
+                     ]
+      smoothedCorpus
+        = M.fromList [ (n'
+                       , smoothCorpus (fromIntegral k) $ nGramCorpus M.! n'
+                       )
+                     | n' <- [1 .. n]
+                     ]
+      nGramWeight
+        = M.fromList
+        $ [ (n', applyRFE (smoothedCorpus M.! n') $ nGramCorpus M.! (n' - 1))
+          | n' <- [2 .. n]
+          ]
+          ++
+          [ (1, flip M.map (smoothedCorpus M.! 1)
+              $ (\x -> (x + 1)
+              / (fromIntegral $ M.foldl (+) 0 (nGramCorpus M.! 1)))
+            )
+          ]
+      remainingMass
+        = M.fromList
+        $ [ (n', calculateRemainingMass
+                  (nGramWeight M.! (n' + 1))
+                  (nGramWeight M.! n'))
+          | n' <- [1 .. (n - 1)]
+          ]
+          ++
+          [ (n, M.empty) ]
+      f m1 m2
+        = M.unionWith
+            (\ (x, _) (_, y) -> (x, y))
+            m1
+            m2
+      combinedMap
+        = M.unionWith
+            f
+            (M.map 
+               (M.map (\ x -> (x, Nothing)))
+               nGramWeight
+            )
+            (M.map
+              (M.map (\ y -> (0, if y == 0 then Nothing else Just y)))
+              remainingMass
+            )
+      weightedNGrams
+        = M.assocs . M.unions $ M.elems combinedMap
+      g lm (w, (x, y))
+        = addNGram lm w x y
+    in
+      L.foldl' g (empty (T.pack "<unk>") (T.pack "<s>") (T.pack "</s>") n) weightedNGrams
 
 
 

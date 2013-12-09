@@ -20,8 +20,7 @@ module Vanda.Grammar.NGrams.Text
   ) where
 
 import qualified Data.List as L
-import qualified Data.Text as T
-
+import qualified Data.Text.Lazy as T
 import qualified Vanda.Grammar.NGrams.VandaNGrams as N
 
 -- | Parses textual ARPA format to provide a NGrams language model.
@@ -29,7 +28,7 @@ parseNGrams
   :: T.Text                  -- ^ Text to parse
   -> N.NGrams T.Text         -- ^ generated NGrams
 parseNGrams
-  = (\(n, ts) -> L.foldl' parseLine (N.empty (T.pack "<unk>") n) ts)
+  = (\(n, ts) -> L.foldl' parseLine (N.empty (T.pack "<unk>") (T.pack "<s>") (T.pack "</s>") n) ts)
   . L.foldl' filterLines (0, [])
   . T.lines
 
