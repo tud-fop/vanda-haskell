@@ -1,14 +1,23 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module PBSM.PatternBasedStateMerging where
 
 
 import PBSM.Types
 
-import Data.Either (lefts, rights)
+import Prelude hiding (any)
+
+import Control.Arrow
+import Data.Foldable (any)
 import Data.Function (on)
-import Data.List (maximumBy, partition)
+import Data.List (foldl', maximumBy, partition)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Data.Tree
+
+import Test.QuickCheck
+
+-- import Debug.Trace
 
 
 forestToGrammar :: Ord t => Forest t -> RTG (SForest t) t
@@ -34,113 +43,120 @@ unknownTerminals g tree
       = (x, length ts) : concatMap flattenWithRank ts
 
 
-generalize :: (Ord n, Ord t) => ([n] -> n) -> RTG n t -> [Tree t] -> RTG n t
-generalize merger = foldl (generalize' 1 merger)
-
-
-generalize' :: (Ord n, Ord t) => Int -> ([n] -> n) -> RTG n t -> Tree t -> RTG n t
-generalize' i merger g t
-  | any ((`S.member` initialS g) . rootLabel) ds = g
-  | null ds   = generalize' (i + 1) merger (descent merger g t (initials g)) t
-  | otherwise = g{initialS = S.insert (rootLabel $ head ds) (initialS g)}
+generalize
+  :: forall n t. (Ord n, Ord t)
+  => ([n] -> n) -> RTG n t -> [Tree t] -> RTG n t
+generalize merger = foldl' step
   where
-    ds = deriveTreeComplete' g t $ initials g
+    step :: RTG n t -> Tree t -> RTG n t
+    step g t
+      | not $ S.null nS' = g
+      | S.null nS = step (descend merger g t (initialS g)) t
+      | otherwise = g{initialS = S.insert (head $ S.toList nS) (initialS g)}
+      where
+        nS = derivable g t
+        nS' = S.intersection nS $ initialS g
 
 
-deriveTree'
-  :: (Ord n, Ord t)
-  => RTG n t -> Tree t -> [n] -> [Tree (n, Either (Tree t) t)]
-deriveTree' g t = concatMap (deriveTree g t)
-
-
-deriveTree
-  :: (Ord n, Ord t)
-  => RTG n t -> Tree t -> n -> [Tree (n, Either (Tree t) t)]
-deriveTree g t@(Node x ts) nt
-  = if null parses then return (Node (nt, Left t) []) else parses
+derivable :: forall n t. (Ord n, Ord t) => RTG n t -> Tree t -> S.Set n
+derivable g = foldTree step
   where
-    parses
-      = S.toList (M.findWithDefault S.empty (nt, x, length ts) (ruleM g))
-      >>= sequence . zipWith (deriveTree g) ts
-      >>= return . Node (nt, Right x)
+    foldTree :: (a -> [b] -> b) -> Tree a -> b
+    foldTree f = go where go (Node x ts) = f x (map go ts)
+
+    step :: t -> [S.Set n] -> S.Set n
+    step t nSs
+      = M.keysSet
+      $ M.filter (any $ and . zipWith (flip S.member) nSs)
+      $ M.findWithDefault M.empty (t, length nSs) rM
+
+    -- | memoization
+    rM :: M.Map (t, Int) (M.Map n (S.Set [n]))
+    rM = ruleM' g
 
 
-deriveTreeComplete' :: (Ord n, Ord t) => RTG n t -> Tree t -> [n] -> [Tree n]
-deriveTreeComplete' g t = concatMap (deriveTreeComplete g t)
+derivableIncomplete
+  :: forall e n t. (Evaluation e, Ord n, Ord t)
+  => RTG n t -> Tree t -> TotalMap n (Tree (n, Either (Tree t) t), e)
+derivableIncomplete g = go
+  where
+    go :: Tree t -> TotalMap n (Tree (n, Either (Tree t) t), e)
+    go t@(Node terminal ts)
+      = TotalMap
+          (\ n -> (Node (n, Left t) [], evalFail))
+          ( M.mapWithKey (\ n
+            -> maximumBy (compare `on` snd)
+              . map
+                ( first (Node (n, Right terminal))
+                . second evalStep
+                . unzip
+                . zipWith (flip lookupTM) (map go ts)
+                )
+              . S.toList
+              )
+            $ M.findWithDefault M.empty (terminal, length ts) rM
+          )
+
+    -- | memoization
+    rM :: M.Map (t, Int) (M.Map n (S.Set [n]))
+    rM = ruleM' g
 
 
-deriveTreeComplete :: (Ord n, Ord t) => RTG n t -> Tree t -> n -> [Tree n]
-deriveTreeComplete g (Node x ts) nt
-  = S.toList (M.findWithDefault S.empty (nt, x, length ts) (ruleM g))
-  >>= sequence . zipWith (deriveTreeComplete g) ts
-  >>= return . Node nt
+data TotalMap k a = TotalMap (k -> a) (M.Map k a)
+
+lookupTM :: Ord k => k -> TotalMap k a -> a
+lookupTM k (TotalMap d m) = M.findWithDefault (d k) k m
 
 
-completeDerivation :: Tree (n, Either a t) -> Bool
-completeDerivation = all (isRight . snd) . flatten
+class Ord e => Evaluation e where
+  evalFail :: e
+  evalStep :: [e] -> e
 
 
-incompleteDerivation :: Tree (n, Either a t) -> Bool
-incompleteDerivation = any (isLeft . snd) . flatten
+data Eval = Eval !Int !Int deriving (Eq, Ord, Read, Show)
+
+instance Evaluation Eval where
+  evalFail = Eval 0 (-1)
+  evalStep = foldl' plus (Eval 1 0)
+    where
+      (Eval x1 y1) `plus` (Eval x2 y2) = Eval (x1 + x2) (y1 + y2)
 
 
-isLeft :: Either a b -> Bool
-isLeft (Left _) = True
-isLeft (Right _) = False
-
-
-isRight :: Either a b -> Bool
-isRight (Left _) = False
-isRight (Right _) = True
-
-
-maxSententialForm :: [Tree (a, Either b c)] -> Tree (a, Either b c)
-maxSententialForm
-  = maximumBy $ \ t1 t2 ->
-      case (compare `on` length . rights . map snd . flatten) t1 t2 of
-        EQ -> case (compare `on` length . lefts . map snd . flatten) t1 t2 of
-          LT -> GT
-          GT -> LT
-          EQ -> EQ  -- TODO: refine further
-        o -> o
-
-
-descent
-  :: (Ord n, Ord t)
-  => ([n] -> n) -> RTG n t -> Tree t -> [n] -> RTG n t
-descent merger g t nts
+descend
+  :: forall n t. (Ord n, Ord t)
+  => ([n] -> n) -> RTG n t -> Tree t -> S.Set n -> RTG n t
+descend merger g t nS
   = if null underivableTrees
     then merge merger g merges
-    else descent merger g (head underivableTrees) nts'
+    else descend merger g (head underivableTrees) (nonterminalS g)
   where
-    nts' = S.toList (nonterminalS g)
-    holeDerivs
-      = [ ( nt
-          , t'
-          , deriveTreeComplete' g t' nts'
-          )
-        | let d = maxSententialForm $ deriveTree' g t nts
-        , isRight (snd (rootLabel d))
-          || error "PBSM.PatternBasedStateMerging.descent: \
-                   \Unknown terminal/rank combination."
-        , (nt, Left t') <- flatten d
+    holes :: [(n, Tree t, S.Set n)]
+    holes
+      = [ (n, t', derivable g t')
+        | let d = fst
+                $ maximumBy ((compare :: Eval -> Eval -> Ordering) `on` snd)
+                $ map (`lookupTM` derivableIncomplete g t)
+                $ S.toList nS
+        , (n, Left t') <- flatten d
         ]
-    underivableTrees = [t' | (_, t', ds) <- holeDerivs, null ds]
-    merges
-      = [ nt : map rootLabel ds
-        | (nt, _, ds) <- holeDerivs
-        ]
+
+    underivableTrees :: [Tree t]
+    underivableTrees = [t' | (_, t', nS') <- holes, S.null nS']
+
+    merges :: [[n]]
+    merges = [n : S.toList nS' | (n, _, nS') <- holes]
 
 
 merge :: (Ord n, Ord t) => ([n] -> n) -> RTG n t -> [[n]] -> RTG n t
-merge merger g ntss
+merge merger g nss
   = mapNonterminals mapState g
   where
     mapState q = M.findWithDefault q q mapping
     mapping
       = M.fromList
-          [ (x, merger xs)
-          | xs <- map S.toList $ unionOverlaps $ map S.fromList ntss
+          [ (x, merged)
+          | xs <- map S.toList $ unionOverlaps $ map S.fromList nss
+          , let merged = merger xs
           , x <- xs
           ]
 
@@ -153,7 +169,27 @@ unionOverlaps (x : xs)
       (ys, zs) -> unionOverlaps (S.unions (x : zs) : ys)
 
 
--- combinations :: [[a]] -> [[a]]
--- combinations = foldr (\ xs yss -> [x : ys | ys <- yss, x <- xs]) [[]]
--- oder:
--- combinations = sequence
+-- QuickCheck Tests ----------------------------------------------------------
+
+prop_generalizeCounting :: Property
+prop_generalizeCounting
+  = forAll (fmap abs arbitrarySizedIntegral) $ \ inc ->
+      let grammar1 = forestToGrammar [linearTrees !! inc]
+          grammar2 = generalize S.unions grammar1 [linearTrees !! (2 * inc)]
+      in not $ S.null
+      $ S.intersection (initialS grammar2)
+      $ derivable grammar2
+      $ linearTrees !! (3 * inc)
+  where
+    linearTrees = Node "a" [] : map (\ t -> Node "g" [t]) linearTrees
+
+
+instance Arbitrary Eval where
+  arbitrary = uncurry Eval `fmap` arbitrary
+  shrink (Eval x y) = map (uncurry Eval) $ shrink (x, y)
+
+
+prop_Evaluation :: Evaluation e => [[e]] -> Property
+prop_Evaluation ess
+  = not (any null ess)
+  ==> evalStep (map maximum ess) == maximum (map evalStep $ sequence ess)

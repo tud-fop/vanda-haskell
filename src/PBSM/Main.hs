@@ -31,7 +31,7 @@ g'
     g = forestToGrammar [parseTree "g(g(a))"]
     d = [{-parseTree "g(g(g(g(g(g(a))))))",-} parseTree "g(g(g(g(a))))"]
 
-
+{-
 test2
   = putStrLn $ unlines $ map drawDerivation $ deriveTree g t (head $ initials g)
 --   = {-putStrLn $ unlines $ map drawDerivation $ -}holeDerivs
@@ -55,12 +55,13 @@ test2
       = [ nt : map (fst . T.rootLabel) ds
         | (nt, _, ds) <- holeDerivs
         ]
-
+-}
 
 train prepareTree corpusFilter corpusFile1 corpusFile2
   = uncurry (generalize head)
   . first intifyNonterminals
   . second (zipWith (\ i t -> trace ("Tree " ++ show i ++ "\n" ++ T.drawTree t) t) [1 :: Int ..])
+  . (\ x@(_, c) -> trace ("Corpus size: " ++ show (length c)) x)
   <$> prepareData prepareTree corpusFilter corpusFile1 corpusFile2
   where
 

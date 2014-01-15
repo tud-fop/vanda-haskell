@@ -49,6 +49,15 @@ ruleS
   . ruleM
 
 
+ruleM' :: (Ord n, Ord t) => RTG n t -> M.Map (t, Int) (M.Map n (S.Set [n]))
+ruleM'
+  = M.map M.fromList
+  . M.fromListWith (++)
+  . map (\ ((n, t, l), nsS) -> ((t, l), [(n, nsS)]))
+  . M.toList
+  . ruleM
+
+
 data Rule n t
   = Rule { lhs :: n, lab :: t, succs :: [n] }
   deriving (Eq, Ord, Show)
