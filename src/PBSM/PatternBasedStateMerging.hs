@@ -11,7 +11,8 @@ import Control.Arrow
 import Data.Foldable (any)
 import Data.Function (on)
 import Data.List (foldl', maximumBy, partition)
-import qualified Data.Map as M
+import qualified Data.Map.Lazy as M
+import qualified Data.Map.Strict as MS
 import qualified Data.Set as S
 import Data.Tree
 
@@ -52,7 +53,7 @@ generalize merger = foldl' step
     step g t
       | not $ S.null nS' = g
       | not $ S.null nS  = g{initialS = S.insert (S.findMin nS) (initialS g)}
-      | otherwise        = step (descend merger g t (initialS g)) t
+      | otherwise        = step (descend merger g t) t
       where
         nS = derivable g t
         nS' = S.intersection nS $ initialS g
@@ -73,8 +74,8 @@ derivable g = foldTree step
 
 derivableIncomplete
   :: forall e n t. (Evaluation e, Ord n, Ord t)
-  => RTG n t -> Tree t -> TotalMap n (Tree (n, Either (Tree t) t), e)
-derivableIncomplete g = go
+  => RTG n t -> Tree t -> M.Map n (Tree (n, Either (Tree t) t), e)
+derivableIncomplete g = (\ (TotalMap _ m) -> m) . go
   where
     go :: Tree t -> TotalMap n (Tree (n, Either (Tree t) t), e)
     go t@(Node terminal ts)
@@ -116,38 +117,46 @@ instance Evaluation Eval where
 
 descend
   :: forall n t. (Ord n, Ord t)
-  => ([n] -> n) -> RTG n t -> Tree t -> S.Set n -> RTG n t
-descend merger g t nS
-  = if null underivableTrees
-    then merge merger g merges
-    else descend merger g (head underivableTrees) (nonterminalS g)
+  => ([n] -> n) -> RTG n t -> Tree t -> RTG n t
+descend merger g = go True
   where
-    holes :: [(n, Tree t, S.Set n)]
-    holes
-      = [ (n, t', derivable g t')
-        | let d = fst
-                $ maximumBy ((compare :: Eval -> Eval -> Ordering) `on` snd)
-                $ map (`lookupTM` derivableIncomplete g t)
-                $ S.toList nS
-        , (n, Left t') <- flatten d
-        ]
+    go isRoot t
+      = if null underivableTrees
+        then merge merger g merges
+        else go False (head underivableTrees)
+      where
+        derivationM :: M.Map n (Tree (n, Either (Tree t) t), Eval)
+        derivationM = if isRoot && not (M.null dM') then dM' else dM
+          where
+            dM  = derivableIncomplete g t
+            dM' = dM `M.intersection` M.fromSet undefined (initialS g)
 
-    underivableTrees :: [Tree t]
-    underivableTrees = [t' | (_, t', nS') <- holes, S.null nS']
+        holes :: [(n, Tree t, S.Set n)]
+        holes
+          = [ (n, t', derivable g t')  -- TODO: compute derivable g t' in derivableIncomplete
+            | (n, Left t') <- flatten
+                            $ fst
+                            $ maximumBy (compare `on` snd)
+                            $ M.elems
+                            $ derivationM
+            ]
 
-    merges :: [[n]]
-    merges = [n : S.toList nS' | (n, _, nS') <- holes]
+        underivableTrees :: [Tree t]
+        underivableTrees = [t' | (_, t', nS) <- holes, S.null nS]
+
+        merges :: [S.Set n]
+        merges = [S.insert n nS | (n, _, nS) <- holes]
 
 
-merge :: (Ord n, Ord t) => ([n] -> n) -> RTG n t -> [[n]] -> RTG n t
-merge merger g nss
-  = mapNonterminals mapState g
+merge :: (Ord n, Ord t) => ([n] -> n) -> RTG n t -> [S.Set n] -> RTG n t
+merge merger g nsS
+  = mapNonterminals' mapState g
   where
     mapState q = M.findWithDefault q q mapping
     mapping
-      = M.fromList
+      = MS.fromList
           [ (x, merged)
-          | xs <- map S.toList $ unionOverlaps $ map S.fromList nss
+          | xs <- map S.toList $ unionOverlaps nsS
           , let merged = merger xs
           , x <- xs
           ]

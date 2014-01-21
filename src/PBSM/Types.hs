@@ -4,7 +4,9 @@ module PBSM.Types where
 import Data.Hypergraph
 import qualified Data.Queue as Q
 
+import Control.DeepSeq (NFData (), rnf)
 import Control.Monad.State
+import Control.Seq
 import Data.Function (on)
 import Data.List
 import qualified Data.Map as M
@@ -20,6 +22,16 @@ data RTG n t = RTG
   { initialS :: S.Set n
   , ruleM    :: M.Map (t, Int) (M.Map n (S.Set [n]))
   } deriving Show
+
+
+instance (NFData n, NFData t) => NFData (RTG n t) where
+  rnf (RTG nS rM) = rnf nS `seq` rnf rM
+
+seqRTG
+  :: Strategy (S.Set n)
+  -> Strategy (M.Map (t, Int) (M.Map n (S.Set [n])))
+  -> Strategy (RTG n t)
+seqRTG strat1 strat2 (RTG iniS rM) = strat1 iniS `seq` strat2 rM
 
 
 rtg :: (Ord n, Ord t) => [n] -> [Rule n t] -> RTG n t
@@ -56,6 +68,10 @@ data Rule n t
   deriving (Eq, Ord, Show)
 
 
+instance (NFData n, NFData t) => NFData (Rule n t) where
+  rnf (Rule n t ns) = rnf n `seq` rnf t `seq` rnf ns
+
+
 instance Ord a => Ord (Tree a) where
   compare (Node x1 ts1) (Node x2 ts2)
     = case compare x1 x2 of
@@ -75,6 +91,15 @@ mapNonterminals :: (Ord m, Ord n, Ord t) => (m -> n) -> RTG m t -> RTG n t
 mapNonterminals f (RTG inS rM)
   = RTG (S.map f inS)
   $ M.map (M.mapKeysWith S.union f . M.map (S.map (map f))) rM
+
+
+mapNonterminals' :: (Ord m, Ord n, Ord t) => (m -> n) -> RTG m t -> RTG n t
+mapNonterminals' f g
+  = mapNonterminals f g
+  `using`
+    seqRTG
+      (seqFoldable rseq)
+      (seqMap r0 (seqMap rseq (seqFoldable (seqList rseq))))
 
 
 intifyNonterminals :: (Ord n, Ord t) => RTG n t -> RTG Int t
