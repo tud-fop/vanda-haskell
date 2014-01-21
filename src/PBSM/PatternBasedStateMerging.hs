@@ -51,8 +51,8 @@ generalize merger = foldl' step
     step :: RTG n t -> Tree t -> RTG n t
     step g t
       | not $ S.null nS' = g
-      | S.null nS = step (descend merger g t (initialS g)) t
-      | otherwise = g{initialS = S.insert (head $ S.toList nS) (initialS g)}
+      | not $ S.null nS  = g{initialS = S.insert (S.findMin nS) (initialS g)}
+      | otherwise        = step (descend merger g t (initialS g)) t
       where
         nS = derivable g t
         nS' = S.intersection nS $ initialS g
