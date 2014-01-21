@@ -36,7 +36,7 @@ unknownTerminals g tree
   = terminalsTrees S.\\ terminalsG
   where
     terminalsG
-      = S.fromList $ map (\ (_, t, i) -> (t, i)) $ M.keys $ ruleM g
+      = M.keysSet $ ruleM g
     terminalsTrees
       = S.fromList $ flattenWithRank tree
     flattenWithRank (Node x ts)
@@ -68,11 +68,7 @@ derivable g = foldTree step
     step t nSs
       = M.keysSet
       $ M.filter (any $ and . zipWith (flip S.member) nSs)
-      $ M.findWithDefault M.empty (t, length nSs) rM
-
-    -- | memoization
-    rM :: M.Map (t, Int) (M.Map n (S.Set [n]))
-    rM = ruleM' g
+      $ M.findWithDefault M.empty (t, length nSs) (ruleM g)
 
 
 derivableIncomplete
@@ -94,12 +90,8 @@ derivableIncomplete g = go
                 )
               . S.toList
               )
-            $ M.findWithDefault M.empty (terminal, length ts) rM
+            $ M.findWithDefault M.empty (terminal, length ts) (ruleM g)
           )
-
-    -- | memoization
-    rM :: M.Map (t, Int) (M.Map n (S.Set [n]))
-    rM = ruleM' g
 
 
 data TotalMap k a = TotalMap (k -> a) (M.Map k a)

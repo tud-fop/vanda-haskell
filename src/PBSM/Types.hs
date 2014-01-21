@@ -18,15 +18,15 @@ type T = String
 
 data RTG n t = RTG
   { initialS :: S.Set n
-  , ruleM    :: M.Map (n, t, Int) (S.Set [n])
+  , ruleM    :: M.Map (t, Int) (M.Map n (S.Set [n]))
   } deriving Show
 
 
 rtg :: (Ord n, Ord t) => [n] -> [Rule n t] -> RTG n t
 rtg inis
   = RTG (S.fromList inis)
-  . M.fromListWith (flip S.union)  -- flip for efficient union
-  . map (\ (Rule n t ns) -> ((n, t, length ns), S.singleton ns))
+  . M.fromListWith (M.unionWith S.union)
+  . map (\ (Rule n t ns) -> ((t, length ns), M.singleton n (S.singleton ns)))
 
 
 initials :: RTG n t -> [n]
@@ -34,28 +34,21 @@ initials = S.toList . initialS
 
 
 rules :: RTG n t -> [Rule n t]
-rules
-  = concat
-  . M.elems
-  . M.mapWithKey (\ (n, t, _) -> map (Rule n t) . S.toList)
-  . ruleM
+rules g
+  = [ Rule n t ns
+    | ((t, _), m) <- M.toList (ruleM g)
+    , (n, nsS) <- M.toList m
+    , ns <- S.toList nsS
+    ]
 
 
 ruleS :: (Ord n, Ord t) => RTG n t -> S.Set (Rule n t)
-ruleS
+ruleS g
   = S.unions
-  . M.elems
-  . M.mapWithKey (\ (n, t, _) -> S.map (Rule n t))
-  . ruleM
-
-
-ruleM' :: (Ord n, Ord t) => RTG n t -> M.Map (t, Int) (M.Map n (S.Set [n]))
-ruleM'
-  = M.map M.fromList
-  . M.fromListWith (++)
-  . map (\ ((n, t, l), nsS) -> ((t, l), [(n, nsS)]))
-  . M.toList
-  . ruleM
+      [ S.mapMonotonic (Rule n t) nsS
+      | ((t, _), m) <- M.toList (ruleM g)
+      , (n, nsS) <- M.toList m
+      ]
 
 
 data Rule n t
@@ -71,18 +64,17 @@ instance Ord a => Ord (Tree a) where
 
 
 nonterminalS :: Ord n => RTG n t -> S.Set n
-nonterminalS
-  = S.fromList
-  . concatMap (\ ((n, _, _), nsS) -> n : concat (S.toList nsS))
-  . M.toList
-  . ruleM
+nonterminalS g
+  = S.fromList $ do
+      M.elems (ruleM g)
+      >>= M.toList
+      >>= (\ (n, nsS) -> n : concat (S.toList nsS))
 
 
 mapNonterminals :: (Ord m, Ord n, Ord t) => (m -> n) -> RTG m t -> RTG n t
 mapNonterminals f (RTG inS rM)
   = RTG (S.map f inS)
-  $ M.mapKeysWith S.union (\ (n, t, l) -> (f n, t, l))
-  $ M.map (S.map (map f)) rM
+  $ M.map (M.mapKeysWith S.union f . M.map (S.map (map f))) rM
 
 
 intifyNonterminals :: (Ord n, Ord t) => RTG n t -> RTG Int t
