@@ -45,7 +45,7 @@ intersectBHPS lm lbl mu h2 hg
             . concatMap (map (\(T x) -> x))
             . map h2 $ filter ((==) 0 . HI.arity)
             $ HI.edges hg
-    in  intersect' wta lbl mu h2 hg
+    in  intersect' id wta lbl mu h2 hg
 
 -- | Intersects IRTG and n-gram model, emits 'Item's.
 intersectSmoothed
@@ -59,7 +59,21 @@ intersectSmoothed
                                    -- ^ resulting list of 'Items'
 intersectSmoothed lm mu h2 hg
   = let wta = WTA.smoothedWTA lm
-    in  intersect' wta mu h2 hg
+    in  intersect' id wta mu h2 hg
+
+intersectPruning
+  :: LM a
+  => Int                            -- ^ pruning length
+  -> a                              -- ^ language model
+  -> (Int, l)                       -- ^ initial state
+  -> (HI.Hyperedge l i1 -> Double)  -- ^ rule weights
+  -> (HI.Hyperedge l i1 -> [NTT])   -- ^ tree to string homomorphism
+  -> HI.Hypergraph l i1             -- ^ RTG hypergraph
+  -> [Item (State (WTA.State' Int) Int) l Double]
+                                    -- ^ resulting list of 'Items'
+intersectPruning c lm mu h2 hg
+  = let wta = WTA.smoothedWTA lm
+    in  intersect' (take c . L.sortBy (\x y -> compare (_wt x) (_wt y))) wta mu h2 hg
 
 -- | Intersects IRTG and n-gram model, emits 'Item's.
 intersectUnsmoothed
@@ -73,26 +87,28 @@ intersectUnsmoothed
                                    -- ^ resulting list of 'Items'
 intersectUnsmoothed lm mu h2 hg
   = let wta = WTA.unsmoothedWTA lm
-    in  intersect' wta mu h2 hg
+    in  intersect' id wta mu h2 hg
 
 intersect'
   :: (Ord (s Int), WTA.State s)
-  => WTA.WTA Int (s Int)           -- ^ language model
+  => ([Item (State (s Int) Int) l Double] -> [Item (State (s Int) Int) l Double])
+  -> WTA.WTA Int (s Int)           -- ^ language model
   -> (Int, l)                      -- ^ initial state
   -> (HI.Hyperedge l i1 -> Double) -- ^ rule weights
   -> (HI.Hyperedge l i1 -> [NTT])  -- ^ tree to string homomorphism
   -> HI.Hypergraph l i1            -- ^ RTG hypergraph
   -> [Item (State (s Int) Int) l Double]
                                    -- ^ resulting list of 'Items'
-intersect' wta (oi, lbl) mu h2 hg
+intersect' sel wta (oi, lbl) mu h2 hg
   = let es  = filter ((/=) 0 . HI.arity) $ HI.edges hg
         es0 = filter ((==) 0 . HI.arity) $ HI.edges hg
-        is0 = flip concatMap es0 $ initRule mu h2 wta
-        ns0 = M.map S.fromList . M.fromListWith (++)
-                               . map (\x -> (_fst x, [x]))
-                               $ map _to is0
+        is0 = M.map (concatMap (initRule mu h2 wta))
+            . M.fromListWith (++)
+            $ map (\ e -> (HI.to e, [e])) es0
+        ns0 = M.map (S.fromList . map _to) is0
         go cs os ns its
-          = let is = [ (HI.to e, concat lst)
+          = let is = M.fromListWith (++)
+                   $ [ (HI.to e, concat lst)
                      | e <- es
                      , let lst = [ blowRule mu h2 wta e s
                                  | s <- fst
@@ -115,16 +131,17 @@ intersect' wta (oi, lbl) mu h2 hg
                 cs' = flip S.union cs
                     . S.fromList
                     . map _from
-                    $ concatMap snd is
-                os' = M.unionWith S.union os ns
+                    . concat
+                    $ M.elems is
+                os' = M.map sel
+                    . M.unionWith S.union os ns
                 ns' = M.mapWithKey (\ k x -> S.difference x
                                            $ M.findWithDefault S.empty k os'
                                    )
-                    . M.map (S.fromList . map _to)
-                    $ M.fromListWith (++) is
-            in  if   null is
-                then its
-                else go cs' os' ns' $ concatMap snd is ++ its
+                    $ M.map (S.fromList . map _to) is
+            in  if   M.null is
+                then concat $ M.elems its
+                else go cs' os' ns' $ M.unionWith (++) is its
     in  makeSingleEndState wta ((==) oi . _fst) Nullary lbl
       $ go S.empty M.empty ns0 is0
 

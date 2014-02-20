@@ -53,7 +53,9 @@ getToken :: TokenMap -> TS.Text -> Token
 getToken = flip (M.lookupDefault (-1)) . inMap
 
 getString :: TokenArray -> Token -> TS.Text
-getString = (A.!) . unTokenArray
+getString a x = if   elem x (A.indices $ unTokenArray a)
+                then (unTokenArray a) A.! x
+                else error ("not found " ++ (show x) ++ " in " ++ (show (A.bounds (unTokenArray a))))
 
 updateToken :: TokenMap -> TS.Text -> (TokenMap, Token)
 updateToken = intern
