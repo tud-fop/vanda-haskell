@@ -133,15 +133,17 @@ intersect' sel wta (oi, lbl) mu h2 hg
                     . map _from
                     . concat
                     $ M.elems is
-                os' = M.map sel
-                    . M.unionWith S.union os ns
-                ns' = M.mapWithKey (\ k x -> S.difference x
-                                           $ M.findWithDefault S.empty k os'
-                                   )
-                    $ M.map (S.fromList . map _to) is
+                os' = M.unionWith S.union os ns
+                is' = M.map sel $ M.unionWith (++) is its
+                ss' = M.map (S.fromList . map _to) is'
+                ns' = M.unionWith S.difference ss' os'
+--                 ns' = M.mapWithKey (\ k x -> S.difference x
+--                                            $ M.findWithDefault S.empty k os'
+--                                    )
+--                     $ M.map (S.fromList . map _to) is
             in  if   M.null is
                 then concat $ M.elems its
-                else go cs' os' ns' $ M.unionWith (++) is its
+                else go cs' os' ns' is'
     in  makeSingleEndState wta ((==) oi . _fst) Nullary lbl
       $ go S.empty M.empty ns0 is0
 
