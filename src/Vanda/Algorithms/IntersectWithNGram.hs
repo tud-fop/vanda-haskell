@@ -129,12 +129,12 @@ intersect' sel wta (oi, lbl) mu h2 hg
                      , not $ null lst
                      ]
                 os' = M.unionWith S.union os ns
-                is' = M.map sel $ M.unionWith (++) is its
+                is' = M.map sel $ is `deepseq` M.unionWith (++) is its
                 ss' = M.map (S.fromList . map _to) is'
                 ns' = M.unionWith S.difference ss' os'
             in  if   M.null is
                 then concat $ M.elems its
-                else is `deepseq` go os' ns' is'
+                else go os' ns' is'
     in  makeSingleEndState wta ((==) oi . _fst) Nullary lbl
       $ go M.empty ns0 is0
 
