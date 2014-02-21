@@ -9,57 +9,56 @@
 -- of Programming.
 -- ---------------------------------------------------------------------------
 
+module Vanda.Corpus.Negra.Text
+  ( parseNegra
+  ) where
 
-module Parser.NegraLazy (parseNegra, readFileLatin1, module Data.Negra) where
-
-import Data.Negra
-import Tools.Miscellaneous (mapFst)
-
+import Control.Arrow ( first )
 import qualified Data.Char as C
 import qualified Data.List as L
-import System.Environment (getArgs)
-import System.IO
+import qualified Data.Text.Lazy as T
+
+import Vanda.Corpus.Negra
 
 
-data S = S [(Int, String)]
+newtype S = S [(Int, String)]
+
 
 currentLine :: S -> Maybe String
 currentLine (S ((_, x) : _)) = Just x
 currentLine _ = Nothing
 
--- currentLineNumber :: S -> Int
--- currentLineNumber (S ((n, _) : _)) = n
--- currentLineNumber s = errorS s "Unexpected end of file"
 
 nextState :: S -> S
 nextState (S (_ : xs)) = S xs
 nextState s = errorS s "Unexpected end of file"
 
--- hasNext :: S -> Bool
--- hasNext (S (_ : _)) = True
--- hasNext _ = False
 
-
-errorS :: S -> [Char] -> a
+errorS :: S -> String -> a
 errorS (S ((n, _) : _)) cs
   = error $ "Parse error on line " ++ show n ++ ": " ++ cs
 errorS _ cs
   = error $ "Parse error: " ++ cs
 
 
-parseNegra :: String -> Negra
-parseNegra cs
-  = parseLines (Context $ error "Parse error: Negra format version not defined")
+parseNegra :: T.Text -> Negra
+parseNegra
+  = parseLines
+    ( Context
+    $ error "Parse error: Negra format version not defined"
+    )
   . S
   . filter (\ (_, l) -> not (all C.isSpace l || L.isPrefixOf "%%" l))
   . zip [1 ..]
-  . lines
-  $ cs
+  . map T.unpack
+  . T.lines
 
 
-data Context = Context
+newtype Context
+  = Context
     { parseSentence :: S -> ([SentenceData], S)
     }
+
 
 parseLines :: Context -> S -> Negra
 parseLines c s
@@ -76,10 +75,6 @@ parseLines c s
       Just ("#BOT" : _, _) ->
         parseLines c $ parseTable $ nextState s
       Just (["#BOS", num, editorId, date, originId], comment) ->
---         let (sd, s') = parseSentence c $ nextState s
---             Negra a b = parseLines c s'
---         in Negra a (Sentence (read num) (read editorId) date (read originId)
---                            comment sd : b)
         let (sd, s') = parseSentence c $ nextState s
         in alter
             (Sentence (read num) (read editorId) date (read originId) comment sd :)
@@ -100,7 +95,7 @@ parseTableWordtag c s
                       "Y" -> True
                       "N" -> False
                       _   -> errorS s "Expected Y or N"
-        in alter (Wordtag (read tagId) tag bound' descr :)
+        in alter (WordTag (read tagId) tag bound' descr :)
         $ parseTableWordtag c $ nextState s
       _ ->
         errorS s "Expected #EOT WORDTAG or wordtag table data"
@@ -184,29 +179,7 @@ wordsComment s
   = case dropWhile {-partain:Char.-}C.isSpace s of
       "" -> ([], Nothing)
       '%' : '%' : cs -> ([], Just cs)
-      s' -> mapFst (w :) $ wordsComment s''
+      s' -> first (w :) $ wordsComment s''
             where (w, s'') =
                     break {-partain:Char.-}C.isSpace s'
 
-
--- dropWords :: Int -> String -> String
--- dropWords 0 s = dropWhile C.isSpace s
--- dropWords n s
---   = case dropWhile C.isSpace s of
---       "" -> []
---       s' -> dropWords (n - 1) $ dropWhile (not . C.isSpace) s'
-
-
-readFileLatin1 :: FilePath -> IO String
-readFileLatin1 name = do
-  h <- openFile name ReadMode
-  hSetEncoding h latin1
-  hGetContents h
-
-
-main :: IO ()
-main
-  =   getArgs
-  >>= readFileLatin1 . head
-  >>= \ x -> let y = parseNegra x
-      in {-rnf y `seq`-} print (length $ wordtags y)

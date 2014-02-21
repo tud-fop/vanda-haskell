@@ -17,161 +17,72 @@ tested-with:    GHC
 Build-Type:     Simple
 
 
-Flag oldContainers
-  Description: Use 'containers < 0.4.2' (and therefore 'deepseq < 1.2').
-               May be useful for older ghc installations.
-  Default:     False
-
-
 library
   build-depends:
-    array, base >= 4, binary, bytestring, directory, heap, mtl, parsec, random, text, time, transformers, unix
-  if !flag(oldContainers)
-    build-depends: containers >= 0.4.2, deepseq >= 1.2
-  else
-    build-depends: containers < 0.4.2, deepseq < 1.2
+      base
+    , containers >= 0.5.0
+    , hashable
+    , unordered-containers
+    , array
+    , vector
+    , heap
+    , bytestring
+    , text
+    , parsec >= 3.1.2
+    , binary >= 0.6.4
+    , deepseq
+    , zlib
+    , mtl
+    , parallel >= 3.2
   exposed-modules:
-      Algorithms.CYK
-    , Algorithms.CYKExtended
-    , Algorithms.DecoderIBM1
-    , Algorithms.EMDictionary
-    , Algorithms.EMTrees
-    , Algorithms.ExpectationMaximization
-    , Algorithms.InsideOutsideWeights
-    , Algorithms.KAStar
-    , Algorithms.KAStar.Data
-    , Algorithms.KAStar.State
-    , Algorithms.KAStar.Test
-    , Algorithms.NBest
-    , Algorithms.RuleExtraction
-    , Algorithms.StateSplit
-    , Algorithms.WTABarHillelComplete
-    , Algorithms.WTABarHillelTopDown
-    , Algorithms.WTABarHillelTopDownBinarizing
-    , Data.Hypergraph
-    , Data.Hypergraph.Acyclic
-    , Data.Negra
+      Vanda.Features
+    , Vanda.Hypergraph
+    , Vanda.Token
+    , Vanda.Util
+    , Vanda.Algorithms.Earley
+    , Vanda.Algorithms.EarleyMonadic
+    , Vanda.Algorithms.Earley.FastNub
+    , Vanda.Algorithms.Earley.WSA
+    , Vanda.Algorithms.ExpectationMaximization
+    , Vanda.Algorithms.InsideOutsideWeights
+    , Vanda.Algorithms.IntEarley
+    , Vanda.Algorithms.IntersectWithNGram
+    , Vanda.Algorithms.IntersectWithNGramUtil
+    , Vanda.Corpus.Negra
+    , Vanda.Corpus.Negra.Binary
+    , Vanda.Corpus.Negra.NFData
+    , Vanda.Corpus.Negra.Text
+    , Vanda.Corpus.Penn.Text
+    , Vanda.Grammar.Berkeley.Binary
+    , Vanda.Grammar.Berkeley.IRTG
+    , Vanda.Grammar.Berkeley.Text
+    , Vanda.Grammar.XRS.Binarize
+    , Vanda.Grammar.XRS.Binary
+    , Vanda.Grammar.XRS.Functions
+    , Vanda.Grammar.XRS.GHKM
+    , Vanda.Grammar.XRS.IRTG
+    , Vanda.Grammar.XRS.Text
+    , Vanda.Grammar.LM
+    , Vanda.Grammar.NGrams.Functions
+    , Vanda.Grammar.NGrams.Text
+    , Vanda.Grammar.NGrams.VandaNGrams
+    , Vanda.Grammar.NGrams.WTA
+    , Vanda.Grammar.NGrams.WTA_BHPS
+    , Vanda.Hypergraph.Binary
+    , Vanda.Hypergraph.BackwardStar
+    , Vanda.Hypergraph.Basic
+    , Vanda.Hypergraph.EdgeList
+    , Vanda.Hypergraph.ForwardStar
+    , Vanda.Hypergraph.IntBinary
+    , Vanda.Hypergraph.IntHypergraph
+    , Vanda.Hypergraph.NFData
+    , Vanda.Hypergraph.Text
+    , Vanda.Hypergraph.Tree
+    , Data.Interner
+    , Data.NTT
+    , Data.NTTBinary
     , Data.Queue
-    , Data.WCFG
-    , Data.WSA
     , Data.WTA
-    , Parser.HGraphLoader
-    , Parser.Negra
-    , Parser.NegraLazy
-    , Parser.Penn
-    , Parser.StanfordGrammar
-    , TestData.TestHypergraph
-    , TestData.TestWTA
-    , Tools.FastNub
-    , Tools.Miscellaneous
-    , Tools.PrettyPrint
-    , Tools.Timestamps
-  hs-source-dirs:
-    src
-  GHC-Options:
-    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-
-
-Executable vanda-EMDictionary
-  Build-Depends:
-    array, base >= 4, containers, transformers
-  Main-Is:
-    Algorithms/EMDictionary.hs
-  hs-source-dirs:
-    src
-  GHC-Options:
-    -main-is Algorithms.EMDictionary
-    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-
-
-Executable vanda-Main
-  Build-Depends:
-    array, base >= 4, binary, bytestring, heap, mtl, parsec, random, time
-  if !flag(oldContainers)
-    build-depends: containers >= 0.4.2, deepseq >= 1.2
-  else
-    build-depends: containers < 0.4.2, deepseq < 1.2
-  Main-Is:
-    Main.hs
-  hs-source-dirs:
-    src
-  GHC-Options:
-    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-
-
-Executable vanda-BenchmarkCYK
-  Build-Depends:
-    array, base >= 4, binary, bytestring, heap, mtl, parsec, random, time
-  if !flag(oldContainers)
-    build-depends: containers >= 0.4.2, deepseq >= 1.2
-  else
-    build-depends: containers < 0.4.2, deepseq < 1.2
-  Main-Is:
-    BenchmarkCYK.hs
-  hs-source-dirs:
-    src
-  GHC-Options:
-    -main-is BenchmarkCYK
-    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-
-
-Executable vanda-BenchmarkNegra
-  Build-Depends:
-    array, base >= 4, binary, bytestring, heap, mtl, parsec, random, time
-  if !flag(oldContainers)
-    build-depends: containers >= 0.4.2, deepseq >= 1.2
-  else
-    build-depends: containers < 0.4.2, deepseq < 1.2
-  Main-Is:
-    BenchmarkNegra.hs
-  hs-source-dirs:
-    src
-  GHC-Options:
-    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-
-
-Executable vanda-BenchmarkTDBH
-  Build-Depends:
-    array, base >= 4, binary, bytestring, heap, mtl, parsec, random, time
-  if !flag(oldContainers)
-    build-depends: containers >= 0.4.2, deepseq >= 1.2
-  else
-    build-depends: containers < 0.4.2, deepseq < 1.2
-  Main-Is:
-    BenchmarkTDBH.hs
-  hs-source-dirs:
-    src
-  GHC-Options:
-    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-
-
-Executable vanda-EMTest
-  Build-Depends:
-    array, base >= 4, binary, bytestring, heap, mtl, parsec, random, time
-  if !flag(oldContainers)
-    build-depends: containers >= 0.4.2, deepseq >= 1.2
-  else
-    build-depends: containers < 0.4.2, deepseq < 1.2
-  Main-Is:
-    EMTest.hs
-  hs-source-dirs:
-    src
-  GHC-Options:
-    -main-is EMTest
-    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-
-
-Executable vanda-TestStanfordGrammar
-  Build-Depends:
-    array, base >= 4, binary, bytestring, heap, mtl, parsec, random, time
-  if !flag(oldContainers)
-    build-depends: containers >= 0.4.2, deepseq >= 1.2
-  else
-    build-depends: containers < 0.4.2, deepseq < 1.2
-  Main-Is:
-    TestStanfordGrammar.hs
-  hs-source-dirs:
-    src
-  GHC-Options:
-    -main-is TestStanfordGrammar
-    -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+  hs-source-dirs:  src
+  GHC-Options: -O -funbox-strict-fields -optc-O3 -fexcess-precision -optc-ffast-math -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+  ghc-prof-options: -O -funbox-strict-fields -optc-O3 -fexcess-precision -optc-ffast-math -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind -fprof-auto -fprof-cafs -fprof-auto-calls

@@ -2,3 +2,7 @@ dist
 /.kateproject
 /.kateproject.d/
 /.project
+*~
+report.html
+*.o
+*.hi

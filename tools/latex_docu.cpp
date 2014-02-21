@@ -11,6 +11,7 @@ using namespace std;
 
 int file_handle(string path,string filename)
 {
+cout <<path;
 // cout << filename << "\n";
  int pos = filename.find(".");
  if(pos!= -1){
@@ -20,9 +21,18 @@ int file_handle(string path,string filename)
 // cout << length;
  string filetype = filename.substr( pos+1, length) ;
 // cout <<"\n--------"<< filetype << "-------\n";
+string outputName = path.substr(7,path.size());
+for (int i = 1; i<outputName.length(); i++){
+        if (outputName[i] == '/') 
+                {
+                outputName.replace(i,1,"-");
+                }
+}
+outputName.resize(outputName.length()-4);
+cout << outputName;
  if (filetype == "lhs" || filetype == "tex")
  {
-   string command = "pdflatex -output-directory ./LaTeX_Documentation " + path;
+   string command = "pdflatex -output-directory ../dist/doc/latex -jobname " + outputName + " " + path;
    system(command.c_str());
  }
 

@@ -1,3 +1,4 @@
+-- (c) 2012 Matthias Büchse <Matthias.Buechse@tu-dresden.de>
 -- (c) 2011 Toni Dietze <Toni.Dietze@tu-dresden.de>
 --
 -- Technische Universität Dresden / Faculty of Computer Science / Institute
@@ -16,12 +17,13 @@
 --   1998.
 --   <http://www.cs.cmu.edu/~rwh/theses/okasaki.pdf>
 module Data.Queue (
-  Queue()
+  Queue(..)
 , null
 , empty
 , singleton
 , enq
 , deq
+, deqMaybe
 , enqList
 , enqListWith
 , fromList
@@ -31,7 +33,9 @@ module Data.Queue (
 
 import Prelude hiding (null)
 
+import Data.List ( foldl' )
 
+-- | Queue data type.
 data Queue a = Queue [a] [a]
 
 
@@ -73,11 +77,18 @@ deq (Queue (x:xs) ys      ) = (x, Queue xs ys)
 deq (Queue []     ys@(_:_)) = deq (Queue (reverse ys) [])
 deq (Queue []     []      ) = error "Cannot dequeue from empty queue."
 
+-- | Remove the oldest element from the 'Queue' and return the element and
+-- the 'Queue' without the element.
+deqMaybe :: Queue a -> Maybe (a, Queue a)
+deqMaybe (Queue (x:xs) ys      ) = Just (x, Queue xs ys)
+deqMaybe (Queue []     ys@(_:_)) = deqMaybe (Queue ({-reverse-} ys) [])
+deqMaybe (Queue []     []      ) = Nothing
 
 -- | Add all elements of the given list to the 'Queue'.
 -- /The order in which the list elements are added is not defined./
 enqList :: [a] -> Queue a -> Queue a
-enqList zs (Queue xs ys) = Queue xs (zs ++ ys)
+enqList zs q -- @(Queue xs ys) = Queue xs (zs ++ ys)
+  = foldl' (flip enq) q zs 
 
 
 -- | Add all elements of the given list to the 'Queue' after applying a
