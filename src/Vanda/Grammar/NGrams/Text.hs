@@ -36,9 +36,7 @@ isAWantedLine
   :: T.Text                  -- ^ line to check
   -> Bool                    -- ^ true iff the line contains an NGram
 isAWantedLine l
-  = not
-  . or
-  . map (\ f -> f l)
+  = not . any (\ f -> f l)
   $ [ T.isPrefixOf (T.pack "\\") , T.isPrefixOf (T.pack "ngram "), T.null ]
 
 filterLines
@@ -46,11 +44,10 @@ filterLines
   -> T.Text
   -> (Int, [T.Text])
 filterLines (nOld, xs) t
-  = if   T.isPrefixOf (T.pack "ngram ") t
-    then (maximum [read . T.unpack . head . T.split (== '=') . T.drop 7 $ t, nOld], xs)
-    else if   isAWantedLine t
-         then (nOld, t:xs)
-         else (nOld, xs)
+  | T.pack "ngram " `T.isPrefixOf` t
+     = (maximum [read . T.unpack . head . T.split (== '=') . T.drop 7 $ t, nOld], xs)
+  | isAWantedLine t = (nOld, t:xs)
+  | otherwise = (nOld, xs)
 
 parseLine
   :: N.NGrams T.Text         -- ^ old NGrams

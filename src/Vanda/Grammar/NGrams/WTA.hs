@@ -42,9 +42,9 @@ instance Show v => Show (State' v) where
   show s
     = case s of
         Unary x -> intercalate "_" $ map show x
-        Binary x y -> (intercalate "_" $ map show x)
+        Binary x y -> intercalate "_" (map show x)
                    ++ "*"
-                   ++ (intercalate "_" $ map show y)
+                   ++ intercalate "_" (map show y)
 
 mapState' :: (v -> v') -> State' v -> State' v'
 mapState' f (Unary b)      = Unary (map f b)
@@ -64,10 +64,10 @@ unsmoothedWTA lm = WTA (delta' deltaW lm) (nuW lm)
 
 nuW :: LM a => a -> State' Int -> Double
 nuW lm (Binary a b)
-  = score lm (flip (++) a . take (order lm - 1) . repeat $ startSymbol lm)
+  = score lm (flip (++) a . replicate (order lm - 1) $ startSymbol lm)
   + score lm (b ++ [endSymbol lm])
 nuW lm (Unary a)
-  = score lm ( (take (order lm - 1) . repeat $ startSymbol lm)
+  = score lm ( replicate (order lm - 1) (startSymbol lm)
                ++ a
                ++ [endSymbol lm]
              )
@@ -86,7 +86,7 @@ nuW' :: LM a => a -> State' Int -> Double
 nuW' lm (Binary a b)
   = nuW lm (Binary a b)
 nuW' lm (Unary a)
-  = (nuW lm (Unary a)) - (score lm a)
+  = nuW lm (Unary a) - score lm a
 
 -- | helper for transition weights (calculates intermediate
 --   values using backoff and cancels them out later)
@@ -98,8 +98,7 @@ deltaW' lm xs _
          . extractSubstrings
          $ xs
     )
-  - (sum . map (score lm)
-         . map (\ (Unary x) -> x )
+  - (sum . map (score lm . (\ (Unary x) -> x ))
          . filter (\ x -> case x of
                             (Unary _) -> True
                             _         -> False

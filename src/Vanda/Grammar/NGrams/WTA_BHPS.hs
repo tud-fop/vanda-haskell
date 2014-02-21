@@ -43,7 +43,7 @@ instance Functor State' where
   fmap = mapState'
 
 makeWTA :: LM a => a -> [Int] -> WTA Int (State' Int)
-makeWTA lm gamma = WTA (delta' lm gamma) (\ _ -> 1)
+makeWTA lm gamma = WTA (delta' lm gamma) (const 1)
 
 delta'
   :: LM a
@@ -60,13 +60,13 @@ delta' lm gamma [] w
         ]
 delta' _ _ xs _
   = let check _ [] = True
-        check (Binary _ lr) (r@(Binary rl _):qs) = if lr /= rl then False else check r qs
+        check (Binary _ lr) (r@(Binary rl _):qs) = (lr == rl) && check r qs
         check' (q:qs) = check q qs
         check' _ = True
         lft = (\(Binary a _) -> a) $ head xs
         rgt = (\(Binary _ b) -> b) $ last xs
         q' = Binary lft rgt
-    in  if check' xs then [ (q', 1) ] else []
+    in  [ (q', 1) | check' xs ]
 
 last' :: Int -> [v] -> [v]
 last' n xs = drop (length xs - n) xs

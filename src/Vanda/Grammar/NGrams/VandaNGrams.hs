@@ -81,7 +81,7 @@ getWeightInt
 getWeightInt _ []
   = (0, 0)
 getWeightInt lm is
-  = case (M.lookup is . weights $ lm) of
+  = case M.lookup is . weights $ lm of
           Nothing            -> (0, 0)
           Just (a, Nothing)  -> (a, 0)
           Just (a, Just b)   -> (a, b)
@@ -129,7 +129,7 @@ addNGram
   -> NGrams v              -- ^ new NGrams
 addNGram n@(NGrams { weights = wt }) vs w1 w2
   = let n' = L.foldl' addWord n vs
-        vi = map (\ x -> (dict n') M.! x) vs
+        vi = map (\ x -> dict n' M.! x) vs
     in  n' { weights = M.insert vi (w1, w2) wt }
 
 -- | Determines the weight of a single n-gram using Katz Backoff.

@@ -95,8 +95,8 @@ relabel'
   -> V.Vector (V.Vector NTT)      -- ^ new homomorphism
 relabel' r h2
   = let h []          = []
-        h ((T x):xs)  = (T (r x)):(h xs)
-        h ((NT x):xs) = (NT x):(h xs)
+        h (T x : xs)  = T (r x) : h xs
+        h (NT x : xs) = NT x : h xs
     in  flip V.map h2 $ V.fromList . h . V.toList
 
 -- | Intersects IRTG and n-gram model.
@@ -167,7 +167,7 @@ integerize' vtx is
         h (m, xs) e
            = let (m1, t') = In.intern m (_to e)
                  (m2, f') = In.internListPreserveOrder m1 (_from e)
-             in  (m2, (Item t' (_wt e) f' (_lbl e)):xs)
+             in  (m2, Item t' (_wt e) f' (_lbl e):xs)
         (mi', is')
            = foldl h (mi, []) is
              in  (is', snd $ In.intern mi' vtx, V.fromList . reverse . A.elems $ In.internerToArray mi' )

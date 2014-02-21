@@ -63,9 +63,10 @@ trainModel k n text
           | n' <- [2 .. n]
           ]
           ++
-          [ (1, flip M.map (smoothedCorpus M.! 1)
-              $ (\x -> (x + 1)
-              / (fromIntegral $ M.foldl (+) 0 (nGramCorpus M.! 1)))
+          [ (1
+            , M.map
+               (\x -> (x + 1) / fromIntegral (M.foldl (+) 0 (nGramCorpus M.! 1)))
+               (smoothedCorpus M.! 1)
             )
           ]
       remainingMass
@@ -77,11 +78,7 @@ trainModel k n text
           ]
           ++
           [ (n, M.empty) ]
-      f m1 m2
-        = M.unionWith
-            (\ (x, _) (_, y) -> (x, y))
-            m1
-            m2
+      f = M.unionWith (\ (x, _) (_, y) -> (x, y))
       combinedMap
         = M.unionWith
             f
@@ -110,12 +107,12 @@ evaluateLine
   -> Double                  -- ^ score
 evaluateLine lm l
   = evaluate lm
-  . (\ x -> ( L.replicate ((order lm) - 1)
+  . (\ x -> ( L.replicate (order lm - 1)
             . T.pack
             $ "<s>"
             )
        L.++ x
-       L.++ [(T.pack "</s>")]
+       L.++ [T.pack "</s>"]
     )
   . T.words
   $ l
@@ -128,7 +125,7 @@ fromSentenceCorpus
   -> M.Map [v] Int -- ^ /n/-gram corpus
 fromSentenceCorpus m n
   = M.fromListWith (+)
-  $ [ (gram, m M.! sent)
+    [ (gram, m M.! sent)
     | sent <- M.keys m
     , gram <- subsequences' n sent
     ]
@@ -148,7 +145,7 @@ smoothCorpus k m
                       / (1 - (kk + 1) * (funcN $ k + 1) / (funcN 1)) where
                       kk = fromIntegral k
                       dd = fromIntegral d -} -- mathematical bullshit
-                 fromIntegral (d + 1) * (funcN $ d + 1) / (funcN d) -- only a workaround
+                 fromIntegral (d + 1) * funcN (d + 1) / funcN d -- only a workaround
       funcN :: Int -> Double -- N_c, but add-one smoothing is probably not so smart here
       funcN d' = fromIntegral $ length [ k' | k' <- M.keys m, m M.! k' == d' ] + 1
 
@@ -173,7 +170,7 @@ calculateRemainingMass
   -> M.Map [v] Double -- ^ remaining mass for /n/-grams
 calculateRemainingMass m1 m2
   = M.fromList
-  $ [ (k, (1 - s1) / (1 - s2))
+    [ (k, (1 - s1) / (1 - s2))
     | k <- M.keys m2
     , let s1 = sum [ m1 M.! k' | k' <- M.keys m1, (reverse . drop 1 $ reverse k') == k ]
     , let s2 = sum [ m2 M.! k' | k' <- M.keys m2, (reverse . drop 1 $ reverse k') == drop 1 k ]
@@ -184,7 +181,7 @@ writeNGrams
   -> T.Text
 writeNGrams lm
   = let grams = M.fromList
-              $ [ (n, (ngrams, length ngrams))
+                [ (n, (ngrams, length ngrams))
                 | n <- [1 .. (order lm)]
                 , let ngrams = [ (map (invDict lm V.!) ngram, weights lm M.! ngram)
                                | ngram <- M.keys $ weights lm
@@ -198,13 +195,13 @@ writeNGrams lm
                       ]
                    ++ [ T.pack "" ]
         body lst = concat
-                 $ [ [T.pack "", T.pack $ "\\" ++ show n ++ "-grams:"] ++ lns
+                   [ [T.pack "", T.pack $ "\\" ++ show n ++ "-grams:"] ++ lns
                    | n <- [1 .. (order lm)]
                    , let lns = [ T.pack (show w1 ++ "\t")
-                               `T.append` (T.intercalate (T.pack " ") gram)
-                               `T.append` (T.pack $ case w2 of
-                                                       Nothing -> ""
-                                                       Just x  -> "\t" ++ show x)
+                               `T.append` T.intercalate (T.pack " ") gram
+                               `T.append` T.pack (case w2 of
+                                                    Nothing -> ""
+                                                    Just x  -> "\t" ++ show x)
                                | (gram, (w1, w2)) <- fst $ lst M.! n
                                ]
                    ]
@@ -213,5 +210,5 @@ writeNGrams lm
 subsequences' :: Int -> [v] -> [[v]]
 subsequences' i xs
   = if   i <= length xs
-    then (take i xs):(subsequences' i $ drop 1 xs)
+    then take i xs : subsequences' i (drop 1 xs)
     else []

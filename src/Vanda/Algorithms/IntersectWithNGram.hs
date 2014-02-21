@@ -28,6 +28,7 @@ import qualified Vanda.Hypergraph.IntHypergraph as HI
 import Vanda.Algorithms.IntersectWithNGramUtil
 import Vanda.Grammar.LM
 import Data.NTT
+import Data.Function
 
 -- | Intersects IRTG and n-gram model, emits 'Item's.
 intersectBHPS
@@ -73,7 +74,7 @@ intersectPruning
                                     -- ^ resulting list of 'Items'
 intersectPruning c lm mu h2 hg
   = let wta = WTA.smoothedWTA lm
-    in  intersect' (take c . L.sortBy (\x y -> compare (_wt x) (_wt y))) wta mu h2 hg
+    in  intersect' (take c . L.sortBy (compare `on` _wt)) wta mu h2 hg
 
 -- | Intersects IRTG and n-gram model, emits 'Item's.
 intersectUnsmoothed
@@ -108,7 +109,7 @@ intersect' sel wta (oi, lbl) mu h2 hg
         ns0 = M.map (S.fromList . map _to) is0
         go os ns its
           = let is = M.fromListWith (++)
-                   $ [ (HI.to e, concat lst)
+                     [ (HI.to e, concat lst)
                      | e <- es
                      , let lst = [ blowRule mu h2 wta e s
                                  | s <- fst
