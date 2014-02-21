@@ -28,11 +28,10 @@ import qualified Vanda.Hypergraph.IntHypergraph as HI
 import Vanda.Algorithms.IntersectWithNGramUtil
 import Vanda.Grammar.LM
 import Data.NTT
-import Control.DeepSeq
 
 -- | Intersects IRTG and n-gram model, emits 'Item's.
 intersectBHPS
-  :: (LM a, NFData l)
+  :: LM a
   => a                            -- ^ language model
   -> (Int, l)                     -- ^ initial state
   -> (HI.Hyperedge l i -> Double) -- ^ rule weights
@@ -50,7 +49,7 @@ intersectBHPS lm lbl mu h2 hg
 
 -- | Intersects IRTG and n-gram model, emits 'Item's.
 intersectSmoothed
-  :: (LM a, NFData l)
+  :: LM a
   => a                             -- ^ language model
   -> (Int, l)                      -- ^ initial state
   -> (HI.Hyperedge l i1 -> Double) -- ^ rule weights
@@ -63,7 +62,7 @@ intersectSmoothed lm mu h2 hg
     in  intersect' id wta mu h2 hg
 
 intersectPruning
-  :: (LM a, NFData l)
+  :: LM a
   => Int                            -- ^ pruning length
   -> a                              -- ^ language model
   -> (Int, l)                       -- ^ initial state
@@ -78,7 +77,7 @@ intersectPruning c lm mu h2 hg
 
 -- | Intersects IRTG and n-gram model, emits 'Item's.
 intersectUnsmoothed
-  :: (LM a, NFData l)
+  :: LM a
   => a                             -- ^ language model
   -> (Int, l)                      -- ^ initial state
   -> (HI.Hyperedge l i1 -> Double) -- ^ rule weights
@@ -91,7 +90,7 @@ intersectUnsmoothed lm mu h2 hg
     in  intersect' id wta mu h2 hg
 
 intersect'
-  :: (Ord (s Int), WTA.State s, NFData l, NFData (s Int))
+  :: (Ord (s Int), WTA.State s)
   => ([Item (State (s Int) Int) l Double] -> [Item (State (s Int) Int) l Double])
   -> WTA.WTA Int (s Int)           -- ^ language model
   -> (Int, l)                      -- ^ initial state
@@ -129,7 +128,7 @@ intersect' sel wta (oi, lbl) mu h2 hg
                      , not $ null lst
                      ]
                 os' = M.unionWith S.union os ns
-                is' = M.map sel $ is `deepseq` M.unionWith (++) is its
+                is' = M.map sel $ M.unionWith (++) is its
                 ss' = M.map (S.fromList . map _to) is'
                 ns' = M.unionWith S.difference ss' os'
             in  if   M.null is

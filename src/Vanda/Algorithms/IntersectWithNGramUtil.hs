@@ -45,7 +45,6 @@ import qualified Vanda.Hypergraph.Tree as T
 import Data.Hashable
 import Vanda.Grammar.LM
 import Data.NTT
-import Control.DeepSeq
 
 data State s i
   = Nullary
@@ -63,19 +62,12 @@ instance (Hashable i, Hashable s) => Hashable (State s i) where
   hashWithSalt s Nullary = s
   hashWithSalt s (Binary a b) = s `hashWithSalt` a `hashWithSalt` b
 
-instance (NFData s, NFData i) => NFData (State s i) where
-  rnf Nullary = ()
-  rnf (Binary x y) = x `seq` y `seq` ()
-
 data Item s l w
   = Item { _to    :: s
          , _wt    :: w
          , _from  :: [s]
          , _lbl   :: l
   } deriving (Eq, Ord, Show)
-
-instance (NFData s, NFData l, NFData w) => NFData (Item s l w) where
-  rnf (Item s wt ss lbl) = s `seq` wt `seq` ss `seq` lbl `seq` ()
 
 -- | Relabels the terminals in 'h2' according to the String-to-Int mapping
 --   in the language model.

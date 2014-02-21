@@ -28,7 +28,6 @@ import Data.List (foldl', intercalate)
 import Data.Hashable
 import Data.WTA
 import Vanda.Grammar.LM
-import Control.DeepSeq
 
 data State' v
   = Unary  [v]
@@ -46,10 +45,6 @@ instance Show v => Show (State' v) where
         Binary x y -> (intercalate "_" $ map show x)
                    ++ "*"
                    ++ (intercalate "_" $ map show y)
-
-instance NFData v => NFData (State' v) where
-  rnf (Unary x) = x `seq` ()
-  rnf (Binary x y) = x `seq` y `seq` ()
 
 mapState' :: (v -> v') -> State' v -> State' v'
 mapState' f (Unary b)      = Unary (map f b)

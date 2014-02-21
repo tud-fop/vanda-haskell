@@ -27,7 +27,6 @@ module Vanda.Grammar.NGrams.WTA_BHPS
 import Data.Hashable
 import Data.WTA
 import Vanda.Grammar.LM
-import Control.DeepSeq
 
 data State' v = Binary [v] [v] deriving (Eq, Ord, Show)
 
@@ -36,10 +35,6 @@ instance Hashable i => Hashable (State' i) where
 
 mapState' :: (v -> v') -> State' v -> State' v'
 mapState' f (Binary b1 b2) = Binary (map f b1) (map f b2)
-
-
-instance NFData v => NFData (State' v) where
-  rnf (Binary x y) = x `seq` y `seq` ()
 
 instance State State' where
   mapState = mapState'
