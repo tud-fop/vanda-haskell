@@ -1,7 +1,21 @@
-module PBSM.PrettyPrint where
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Vanda.PBSM.PrettyPrint
+-- Copyright   :  (c) Technische Universität Dresden 2014
+-- License     :  Redistribution and use in source and binary forms, with
+--                or without modification, is ONLY permitted for teaching
+--                purposes at Technische Universität Dresden AND IN
+--                COORDINATION with the Chair of Foundations of Programming.
+--
+-- Maintainer  :  Toni.Dietze@tu-dresden.de
+-- Stability   :  unknown
+-- Portability :  portable
+-----------------------------------------------------------------------------
+
+module Vanda.PBSM.PrettyPrint where
 
 
-import PBSM.Types
+import Vanda.PBSM.Types
 
 import Data.List (intercalate)
 import Data.Tree

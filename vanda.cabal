@@ -34,6 +34,8 @@ library
     , zlib
     , mtl
     , parallel >= 3.2
+    , pretty
+    , QuickCheck
   exposed-modules:
       Vanda.Features
     , Vanda.Hypergraph
@@ -53,7 +55,9 @@ library
     , Vanda.Corpus.Negra.Binary
     , Vanda.Corpus.Negra.NFData
     , Vanda.Corpus.Negra.Text
+    , Vanda.Corpus.Penn.Simple
     , Vanda.Corpus.Penn.Text
+    , Vanda.Corpus.TreeTerm
     , Vanda.Grammar.Berkeley.Binary
     , Vanda.Grammar.Berkeley.IRTG
     , Vanda.Grammar.Berkeley.Text
@@ -72,6 +76,7 @@ library
     , Vanda.Hypergraph.Binary
     , Vanda.Hypergraph.BackwardStar
     , Vanda.Hypergraph.Basic
+    , Vanda.Hypergraph.DotExport
     , Vanda.Hypergraph.EdgeList
     , Vanda.Hypergraph.ForwardStar
     , Vanda.Hypergraph.IntBinary
@@ -79,6 +84,9 @@ library
     , Vanda.Hypergraph.NFData
     , Vanda.Hypergraph.Text
     , Vanda.Hypergraph.Tree
+    , Vanda.PBSM.PatternBasedStateMerging
+    , Vanda.PBSM.PrettyPrint
+    , Vanda.PBSM.Types
     , Data.Interner
     , Data.NTT
     , Data.NTTBinary

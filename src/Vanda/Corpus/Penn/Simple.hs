@@ -1,17 +1,20 @@
--- (c) 2010-2013 Toni Dietze <Toni.Dietze@tu-dresden.de>
---
--- Technische Universität Dresden / Faculty of Computer Science / Institute
--- of Theoretical Computer Science / Chair of Foundations of Programming
---
--- Redistribution and use in source and binary forms, with or without
--- modification, is ONLY permitted for teaching purposes at Technische
--- Universität Dresden AND IN COORDINATION with the Chair of Foundations
--- of Programming.
--- ---------------------------------------------------------------------------
-
 {-# LANGUAGE FlexibleContexts #-}  -- for 'Stream'
 
-module Parser.Penn where
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Vanda.Corpus.Penn.Simple
+-- Copyright   :  (c) Technische Universität Dresden 2010-2014
+-- License     :  Redistribution and use in source and binary forms, with
+--                or without modification, is ONLY permitted for teaching
+--                purposes at Technische Universität Dresden AND IN
+--                COORDINATION with the Chair of Foundations of Programming.
+--
+-- Maintainer  :  Toni.Dietze@tu-dresden.de
+-- Stability   :  unknown
+-- Portability :  portable
+-----------------------------------------------------------------------------
+
+module Vanda.Corpus.Penn.Simple where
 
 import Control.Applicative
 import qualified Data.Tree as T

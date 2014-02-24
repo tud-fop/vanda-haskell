@@ -1,7 +1,21 @@
-module PBSM.Types where
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Vanda.PBSM.Types
+-- Copyright   :  (c) Technische Universität Dresden 2014
+-- License     :  Redistribution and use in source and binary forms, with
+--                or without modification, is ONLY permitted for teaching
+--                purposes at Technische Universität Dresden AND IN
+--                COORDINATION with the Chair of Foundations of Programming.
+--
+-- Maintainer  :  Toni.Dietze@tu-dresden.de
+-- Stability   :  unknown
+-- Portability :  portable
+-----------------------------------------------------------------------------
+
+module Vanda.PBSM.Types where
 
 
-import Data.Hypergraph
+import Vanda.Hypergraph
 import qualified Data.Queue as Q
 
 import Control.DeepSeq (NFData (), rnf)
@@ -107,17 +121,17 @@ intifyNonterminals g
   = mapNonterminals intify g
   where
     intify n = M.findWithDefault
-      (error "PBSM.Types.intifyNonterminals: This must not happen.")
+      (errorModule "intifyNonterminals: This must not happen.")
       n
       mapping
     mapping = M.fromList $ flip zip [1 ..] $ S.toList $ nonterminalS g
 
 
-toHypergraph :: Ord v => RTG v l -> Hypergraph v l () Int
+toHypergraph :: (Enum i, Num i, Ord v, Hypergraph h) => RTG v l -> h v l i
 toHypergraph g
-  = hypergraph $ zipWith toHyperedge [0 ..] $ rules g
+  = mkHypergraph $ zipWith toHyperedge [0 ..] $ rules g
   where
-    toHyperedge i (Rule v l vs) = hyperedge v vs l () i
+    toHyperedge i (Rule v l vs) = mkHyperedge v vs l i
 
 
 language :: Ord n => RTG n t -> [Tree t]
@@ -153,7 +167,7 @@ combinations yss
     fillQueue prefix ((x : xs) : xss) = do
       unless (null xs) $ modify $ Q.enq (prefix, xs : xss)
       fillQueue (prefix . (x :)) xss
-    fillQueue _ _ = error "PBSM.Types.combinations: This must not happen."
+    fillQueue _ _ = errorModule "combinations: This must not happen."
 
     untilState predicate action = do
       x <- get
@@ -168,3 +182,7 @@ combinations yss
 yield :: Tree a -> [a]
 yield (Node x []) = [x]
 yield (Node _ xs) = concatMap yield xs
+
+
+errorModule :: String -> a
+errorModule = error . ("Vanda.PBSM.Types." ++)

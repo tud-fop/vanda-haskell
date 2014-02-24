@@ -1,9 +1,23 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module PBSM.PatternBasedStateMerging where
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Vanda.PBSM.PatternBasedStateMerging
+-- Copyright   :  (c) Technische Universität Dresden 2014
+-- License     :  Redistribution and use in source and binary forms, with
+--                or without modification, is ONLY permitted for teaching
+--                purposes at Technische Universität Dresden AND IN
+--                COORDINATION with the Chair of Foundations of Programming.
+--
+-- Maintainer  :  Toni.Dietze@tu-dresden.de
+-- Stability   :  unknown
+-- Portability :  portable
+-----------------------------------------------------------------------------
+
+module Vanda.PBSM.PatternBasedStateMerging where
 
 
-import PBSM.Types
+import Vanda.PBSM.Types
 
 import Prelude hiding (any)
 

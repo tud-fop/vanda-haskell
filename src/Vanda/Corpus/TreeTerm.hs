@@ -1,19 +1,24 @@
--- (c) 2013 Toni Dietze <Toni.Dietze@tu-dresden.de>
---
--- Technische Universität Dresden / Faculty of Computer Science / Institute
--- of Theoretical Computer Science / Chair of Foundations of Programming
---
--- Redistribution and use in source and binary forms, with or without
--- modification, is ONLY permitted for teaching purposes at Technische
--- Universität Dresden AND IN COORDINATION with the Chair of Foundations
--- of Programming.
--- ---------------------------------------------------------------------------
-
 {-# LANGUAGE FlexibleContexts #-}
 
--- | A "Text.Parsec" parser for trees which are denoted as terms, e.g.
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Vanda.Corpus.TreeTerm
+-- Copyright   :  (c) Technische Universität Dresden 2013-2014
+-- License     :  Redistribution and use in source and binary forms, with
+--                or without modification, is ONLY permitted for teaching
+--                purposes at Technische Universität Dresden AND IN
+--                COORDINATION with the Chair of Foundations of Programming.
+--
+-- Maintainer  :  Toni.Dietze@tu-dresden.de
+-- Stability   :  unknown
+-- Portability :  portable
+--
+-- A "Text.Parsec" parser for trees which are denoted as terms, e.g.
 -- @S(NP(NNP(John)), VP(VPZ(loves), NP(NNP(Mary))))@.
-module Parser.TreeTerm
+--
+-----------------------------------------------------------------------------
+
+module Vanda.Corpus.TreeTerm
 ( parseTree
 , parseTrees
 , parsecTree

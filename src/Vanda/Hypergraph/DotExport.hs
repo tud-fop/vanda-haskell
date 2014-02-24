@@ -1,43 +1,49 @@
--- (c) 2013 Toni Dietze <Toni.Dietze@tu-dresden.de>
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Vanda.Hypergraph.DotExport
+-- Copyright   :  (c) Technische Universität Dresden 2013-2014
+-- License     :  Redistribution and use in source and binary forms, with
+--                or without modification, is ONLY permitted for teaching
+--                purposes at Technische Universität Dresden AND IN
+--                COORDINATION with the Chair of Foundations of Programming.
 --
--- Technische Universität Dresden / Faculty of Computer Science / Institute
--- of Theoretical Computer Science / Chair of Foundations of Programming
+-- Maintainer  :  Toni.Dietze@tu-dresden.de
+-- Stability   :  unknown
+-- Portability :  portable
 --
--- Redistribution and use in source and binary forms, with or without
--- modification, is ONLY permitted for teaching purposes at Technische
--- Universität Dresden AND IN COORDINATION with the Chair of Foundations
--- of Programming.
--- ---------------------------------------------------------------------------
+-- Export 'Hypergraph's to <http://www.graphviz.org/ Graphviz> DOT language.
+--
+-----------------------------------------------------------------------------
 
--- | Export 'Hypergraph's to <http://www.graphviz.org/ Graphviz> DOT language.
-module Data.HypergraphDot
+module Vanda.Hypergraph.DotExport
 ( hypergraph2dot
 , fullHypergraph2dot
 , render  -- reexport from Text.PrettyPrint
 ) where
 
 
-import Data.Hypergraph
+import Vanda.Hypergraph
 import qualified Data.Map as M
+import qualified Data.Set as S
 import Text.PrettyPrint
 
 
 -- | Generate a 'Doc' which represents the 'Hypergraph' as a DOT digraph.
 -- You can use 'render' to generate a 'String'.
 hypergraph2dot
-  :: (Ord v, Show l, Show v)
-  => Hypergraph v l w i
+  :: (Hypergraph h, Ord v, Show l, Show v)
+  => h v l i
   -> Doc
-hypergraph2dot = fullHypergraph2dot show (show . eLabel) ""
+hypergraph2dot = fullHypergraph2dot show (show . label) ""
 
 
 -- | Extended version of 'hypergraph2dot'.
 fullHypergraph2dot
-  :: Ord v
+  :: (Hypergraph h, Ord v)
   => (v -> String)                  -- ^ vertex label renderer
-  -> (Hyperedge v l w i -> String)  -- ^ hyperedge label renderer
+  -> (Hyperedge v l i -> String)    -- ^ hyperedge label renderer
   -> String                         -- ^ graph label
-  -> Hypergraph v l w i             -- ^ the transformed 'Hypergraph'
+  -> h v l i                        -- ^ the transformed 'Hypergraph'
   -> Doc                            -- ^ resulting DOT digraph
 fullHypergraph2dot drawVertex drawEdge name hg
   = text "digraph"
@@ -55,18 +61,18 @@ fullHypergraph2dot drawVertex drawEdge name hg
       [ (text "shape", text "rectangle")
       , (text "label", escape $ drawEdge e)]
     vertex x = int $ M.findWithDefault 0 x mapping
-    mapping = M.fromList $ flip zip [1 ..] $ vertices hg
+    mapping = M.fromAscList $ flip zip [1 ..] $ S.toAscList $ nodes hg
 
 
 -- | Convert a single 'Hyperedge' to DOT.
-edge2dot :: (v -> Doc) -> (Int, Hyperedge v l w i) -> Doc
+edge2dot :: (v -> Doc) -> (Int, Hyperedge v l i) -> Doc
 edge2dot vertex (i, e)
   = hsep
   $ punctuate semi
   $ map (\ (j, doc) -> doc <+> opts [(text "label", int j)])
   $ zip [0 ..]
-  $ (int i <+> text "->" <+> (vertex $ eHead e))
-    : map (\ x -> vertex x <+> text "->" <+> int i) (eTail e)
+  $ (int i <+> text "->" <+> (vertex $ to e))
+    : map (\ x -> vertex x <+> text "->" <+> int i) (from e)
 
 
 -- | Compose a list of DOT options.

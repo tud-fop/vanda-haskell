@@ -1,13 +1,27 @@
-module PBSM.Main where
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Vanda.PBSM.Main
+-- Copyright   :  (c) Technische Universität Dresden 2014
+-- License     :  Redistribution and use in source and binary forms, with
+--                or without modification, is ONLY permitted for teaching
+--                purposes at Technische Universität Dresden AND IN
+--                COORDINATION with the Chair of Foundations of Programming.
+--
+-- Maintainer  :  Toni.Dietze@tu-dresden.de
+-- Stability   :  unknown
+-- Portability :  portable
+-----------------------------------------------------------------------------
+
+module Vanda.PBSM.Main where
 
 
-import Data.Hypergraph (eLabel)
-import Data.HypergraphDot
-import Parser.Penn
-import Parser.TreeTerm
-import PBSM.PatternBasedStateMerging
-import PBSM.PrettyPrint
-import PBSM.Types
+import Vanda.Hypergraph (label)
+import Vanda.Hypergraph.DotExport
+import Vanda.Corpus.Penn.Simple
+import Vanda.Corpus.TreeTerm
+import Vanda.PBSM.PatternBasedStateMerging
+import Vanda.PBSM.PrettyPrint
+import Vanda.PBSM.Types
 
 import Control.Applicative ((<$>))
 import Control.Arrow
@@ -68,7 +82,7 @@ train prepareTree corpusFilter corpusFile1 corpusFile2
 {-
 train2dot prepareTree corpusFilter f1 f2
   = ( render
-    . fullHypergraph2dot drawNT eLabel ""
+    . fullHypergraph2dot drawNT label ""
     . toHypergraph
     ) <$> train prepareTree corpusFilter f1 f2
 -}
