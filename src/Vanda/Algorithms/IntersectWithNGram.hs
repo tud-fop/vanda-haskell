@@ -109,7 +109,7 @@ intersect' sel wta (oi, lbl) mu h2 hg
         ns0 = M.map (S.fromList . map _to) is0
         go os ns its
           = let is = M.fromListWith (++)
-                     [ (HI.to e, concat lst)
+                   $ [ (HI.to e, concat lst)
                      | e <- es
                      , let lst = [ blowRule mu h2 wta e s
                                  | s <- fst

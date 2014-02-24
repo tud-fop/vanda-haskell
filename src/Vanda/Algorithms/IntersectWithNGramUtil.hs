@@ -95,7 +95,7 @@ relabel'
   -> V.Vector (V.Vector NTT)      -- ^ new homomorphism
 relabel' r h2
   = let h []          = []
-        h (T x : xs)  = T (r x) : h xs
+        h (T x : xs)  = (T (r x)) : (h xs)
         h (NT x : xs) = NT x : h xs
     in  flip V.map h2 $ V.fromList . h . V.toList
 
