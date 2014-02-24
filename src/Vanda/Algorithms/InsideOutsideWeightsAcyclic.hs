@@ -1,25 +1,25 @@
--- (c) 2011 Toni Dietze <Toni.Dietze@tu-dresden.de>
---
--- Technische Universität Dresden / Faculty of Computer Science / Institute
--- of Theoretical Computer Science / Chair of Foundations of Programming
---
--- Redistribution and use in source and binary forms, with or without
--- modification, is ONLY permitted for teaching purposes at Technische
--- Universität Dresden AND IN COORDINATION with the Chair of Foundations
--- of Programming.
--- ---------------------------------------------------------------------------
-
+-----------------------------------------------------------------------------
 -- |
--- Maintainer  :  Toni Dietze <Toni.Dietze@tu-dresden.de>
--- Stability   :  unbekannt
+-- Module      :  Vanda.Algorithms.InsideOutsideWeightsAcyclic
+-- Copyright   :  (c) Technische Universität Dresden 2011-2014
+-- License     :  Redistribution and use in source and binary forms, with
+--                or without modification, is ONLY permitted for teaching
+--                purposes at Technische Universität Dresden AND IN
+--                COORDINATION with the Chair of Foundations of Programming.
+--
+-- Maintainer  :  Toni.Dietze@tu-dresden.de
+-- Stability   :  unknown
 -- Portability :  portable
 --
 -- Functions to produce and process 'AcyclicHypergraph's.
-module Data.Hypergraph.Acyclic where
+--
+-----------------------------------------------------------------------------
 
-import Data.Hypergraph
-import Tools.Miscellaneous (mapSnd)
+module Vanda.Algorithms.InsideOutsideWeightsAcyclic where
 
+import Vanda.Hypergraph
+
+import Control.Arrow (second)
 import qualified Data.Map as IM
 import qualified Data.List as L
 import qualified Data.Map as M
@@ -31,7 +31,7 @@ import Data.Tree
 --
 -- @[hyperedge (q, p) [(q1, p ++ [1]), ..., (qn, p ++ [n])] l w i | @
 -- the 'Tree' contains @(hyperedge q [q1, ..., qn] l w i)@ at position @p]@.
-type AcyclicHypergraph v l w i = Tree [Hyperedge v l w i]
+type AcyclicHypergraph v l i = Tree [Hyperedge v l i]
 
 
 -- | Intersect a 'Hypergraph' with a 'Tree' (over 'Hypergraph' labels).
@@ -46,11 +46,11 @@ type AcyclicHypergraph v l w i = Tree [Hyperedge v l w i]
 -- Moreover, the resulting 'Hypergraph' is represented by an
 -- 'AcyclicHypergraph', which reuses the given 'Hyperedge's.
 parseTree
-  ::  (Ord l, Ord v)
-  => Hypergraph v l w i         -- ^ 'Hypergraph' used for parsing
+  ::  (Hypergraph h, Ord l, Ord v)
+  => h v l i                    -- ^ 'Hypergraph' used for parsing
   -> [v]                        -- ^ target vertices
   -> Tree l                     -- ^ 'Tree' to be parsed
-  -> AcyclicHypergraph v l w i
+  -> AcyclicHypergraph v l i
 parseTree g = parseTree' f
   where
     f len lab
@@ -58,7 +58,7 @@ parseTree g = parseTree' f
       $ IM.findWithDefault M.empty len m
     m = IM.map (M.map (M.fromListWith (++)) . M.fromListWith (++))
       . IM.fromListWith (++)
-      . map (\ e -> (length (eTail e), [(eLabel e, [(eHead e, [e])])]))
+      . map (\ e -> (length (from e), [(label e, [(to e, [e])])]))
       $ edges g
 
 
@@ -68,29 +68,28 @@ parseTree g = parseTree' f
 -- label.
 parseTree'
   :: (Ord v, Eq l)
-  => (Int -> l -> M.Map v [Hyperedge v l w i])
-                                              -- ^ 'Hyperedge' lookup function
+  => (Int -> l -> M.Map v [Hyperedge v l i])  -- ^ 'Hyperedge' lookup function
   -> [v]                                      -- ^ target vertices
   -> Tree l                                   -- ^ 'Tree' to be parsed
-  -> AcyclicHypergraph v l w i
+  -> AcyclicHypergraph v l i
 parseTree' f targets tree = goT tree targets
   where
     goT (Node l ts) qs
       = let eM = f (length ts) l
             (es, ts') = goF ts
-                      $ map (\ e -> (eTail e, e))
+                      $ map (\ e -> (from e, e))
                       $ concatMap (\ q -> M.findWithDefault [] q eM) qs
         in Node es ts'
     goF [] xs = (map snd xs, [])
     goF (t : ts) xs
       = let t' = goT t $ L.nub $ map (head . fst) xs
-            vS = S.fromList $ map eHead $ rootLabel t'
+            vS = S.fromList $ map to $ rootLabel t'
             fltr [] = []
             fltr ((v : vs, e) : ys)
               | S.member v vS = (vs, e) : fltr ys
               | otherwise     = fltr ys
-            fltr _ = error "Data.Hypergraph.Acyclic.parseTree'.goF.fltr"
-        in mapSnd (t' :) $ goF ts $ fltr xs
+            fltr _ = errorModule "parseTree'.goF.fltr"
+        in second (t' :) $ goF ts $ fltr xs
 
 
 -- | Drop unreachable 'Hyperedge's from an 'AcyclicHypergraph', which means
@@ -99,16 +98,16 @@ parseTree' f targets tree = goT tree targets
 dropUnreach
   :: (Ord v)
   => [v]                        -- ^ target vertices
-  -> AcyclicHypergraph v l w i
-  -> AcyclicHypergraph v l w i
+  -> AcyclicHypergraph v l i
+  -> AcyclicHypergraph v l i
 dropUnreach targets (Node es ts)
   = let vS  = S.fromList targets
-        es' = filter (flip S.member vS . eHead) es
+        es' = filter (flip S.member vS . to) es
     in Node es'
     $ map (uncurry dropUnreach)
     $ flip zip ts
     $ L.transpose
-    $ map eTail es'
+    $ map from es'
 
 
 -- | Compute the inside weights of an 'AcyclicHypergraph'. In the result the
@@ -116,23 +115,23 @@ dropUnreach targets (Node es ts)
 -- output 'Tree' (cf. 'AcyclicHypergraph').
 inside
   :: (Num w, Ord v)
-  => (Hyperedge v l w' i -> w)  -- ^ 'Hyperedge' weight access function
-  -> Tree [Hyperedge v l w' i]
+  => (Hyperedge v l i -> w)     -- ^ 'Hyperedge' weight access function
+  -> Tree [Hyperedge v l i]
   -> Tree (M.Map v w)           -- ^ inside weights
 inside eW (Node es ts)
   = Node
       ( M.fromListWith (+)
-      $ map (\ e -> (eHead e, go ts' (eTail e) (eW e))) es
+      $ map (\ e -> (to e, go ts' (from e) (eW e))) es
       )
       ts'
   where
     ts' = map (inside eW) ts
     go (x : xs) (v : vs) p
       = let p' = p * M.findWithDefault err v (rootLabel x)
-              where err = error "Data.Hypergraph.Acyclic.inside.go.p'"
+              where err = errorModule "inside.go.p'"
         in p' `seq` go xs vs p'
     go [] [] p = p
-    go _  _  _ = error "Data.Hypergraph.Acyclic.inside.go"
+    go _  _  _ = errorModule "inside.go"
 
 
 -- | Compute the outside weights of an 'AcyclicHypergraph', based on the given
@@ -140,9 +139,9 @@ inside eW (Node es ts)
 -- represented by the position in the output 'Tree'.
 outside
   :: (Num w, Ord v)
-  => (Hyperedge v l w' i -> w)  -- ^ 'Hyperedge' weight access function
+  => (Hyperedge v l i -> w)     -- ^ 'Hyperedge' weight access function
   -> Tree (M.Map v w)           -- ^ inside weights
-  -> Tree [Hyperedge v l w' i]
+  -> Tree [Hyperedge v l i]
   -> M.Map v w                  -- ^ outside weight(s) of the target node(s)
   -> Tree (M.Map v w)           -- ^ outside weights
 outside eW (Node _ is) (Node es ts) om
@@ -152,10 +151,14 @@ outside eW (Node _ is) (Node es ts) om
   $ L.transpose
   $ flip map es
     (\ e ->
-      let w = M.findWithDefault 0 (eHead e) om * eW e  -- 0 if unreachable
-          ws = zipWith (flip (M.findWithDefault err) . rootLabel) is (eTail e)
-            where err = error "Data.Hypergraph.Acyclic.outside.ws"
+      let w = M.findWithDefault 0 (to e) om * eW e  -- 0 if unreachable
+          ws = zipWith (flip (M.findWithDefault err) . rootLabel) is (from e)
+            where err = errorModule "outside.ws"
           ls = scanl (*) 1 ws
           rs = scanr (*) 1 ws
-      in zipWith3 (\ v l r -> (v, w * l * r)) (eTail e) ls (tail rs)
+      in zipWith3 (\ v l r -> (v, w * l * r)) (from e) ls (tail rs)
     )
+
+
+errorModule :: String -> a
+errorModule = error . ("Vanda.Algorithms.InsideOutsideWeightsAcyclic." ++)

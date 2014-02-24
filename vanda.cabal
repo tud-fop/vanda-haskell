@@ -47,7 +47,9 @@ library
     , Vanda.Algorithms.Earley.FastNub
     , Vanda.Algorithms.Earley.WSA
     , Vanda.Algorithms.ExpectationMaximization
+    , Vanda.Algorithms.ExpectationMaximizationAcyclic
     , Vanda.Algorithms.InsideOutsideWeights
+    , Vanda.Algorithms.InsideOutsideWeightsAcyclic
     , Vanda.Algorithms.IntEarley
     , Vanda.Algorithms.IntersectWithNGram
     , Vanda.Algorithms.IntersectWithNGramUtil
