@@ -32,16 +32,19 @@ import Debug.Trace
 data Modus = Product String
            | Translate String
 
-data Flag1 = Help
+data Flag' = Help
            | Beam String
            | Zhg String
            | EFile String
            | FFile String
            | LM String deriving Eq
 
-type Flag = Either Flag1 Modus
+type Flag = Either Flag' Modus
 
-type Configuration = (Maybe Modus, Maybe Int, Maybe String)
+type Configuration = ( Maybe Modus, -- modus
+                       Maybe Int,   -- beam
+                       Maybe String -- path
+                     )
 
 type DataSet = ( Maybe I.XRS,                        -- grammar
                  Maybe (TK.TokenMap, TK.TokenArray), -- node names
@@ -52,14 +55,14 @@ type DataSet = ( Maybe I.XRS,                        -- grammar
 
 options :: [OptDescr Flag] 
 options
-  = [ Option ['h'] ["help"] (NoArg (Left Help)) "shows help",
-      Option ['p'] ["product"] (ReqArg (Right . Product) "<style>") "product with <style>",
+  = [ Option ['h'] ["help"]      (NoArg  (Left Help))                   "shows help",
+      Option ['p'] ["product"]   (ReqArg (Right . Product) "<style>")   "product with <style>",
       Option ['t'] ["translate"] (ReqArg (Right . Translate) "<style>") "translate with <style>",
-      Option ['b'] ["beam"] (ReqArg (Left . Beam) "<beam>") "beam width",
-      Option ['z'] ["zhg"] (ReqArg (Left . Zhg) "<zhg>") "zhg file prefix to be used",
-      Option ['e'] ["eMapFile"] (ReqArg (Left . EFile) "<map.e>") "english map file to be used",
-      Option ['f'] ["fMapFile"] (ReqArg (Left . FFile) "<map.f>") "french file to be used",
-      Option ['l'] ["lm"] (ReqArg (Left . LM) "<lm>") "language model file to be used"
+      Option ['b'] ["beam"]      (ReqArg (Left  . Beam) "<beam>")       "beam width",
+      Option ['z'] ["zhg"]       (ReqArg (Left  . Zhg) "<zhg>")         "zhg file prefix to be used",
+      Option ['e'] ["eMapFile"]  (ReqArg (Left  . EFile) "<map.e>")     "english map file to be used",
+      Option ['f'] ["fMapFile"]  (ReqArg (Left  . FFile) "<map.f>")     "french file to be used",
+      Option ['l'] ["lm"]        (ReqArg (Left  . LM) "<lm>")           "language model file to be used"
     ]
 
 main :: IO ()
