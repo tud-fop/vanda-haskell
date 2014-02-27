@@ -217,7 +217,7 @@ iter back comp wsa mki' v0
               (readSTRef cn >>= \ cn' -> liftM3 (,,)
                 (readSTRef s2n)
                 (readSTRef ls)
-                (fmap (VU.fromList . A.elems . A.array (0, cn') 
+                (fmap (VU.fromList . A.elems . A.array (0, cn' - 1)
                 . map (\(x,y) -> (y,x)) . M.toList) (readSTRef ws)))
               $ \ i@Item{ trie = t, stateList = p : _ } -> do
                 forM_ (IMS.assocs (nextNT t)) $

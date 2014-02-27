@@ -213,7 +213,7 @@ iter back comp wsa v0 _
           go2 = do
             viewSTRef' iq Q.deqMaybe
               (readSTRef cn >>= \ cn' -> liftM2 (,) (readSTRef ls)
-                (fmap (V.fromList . A.elems . A.array (0, cn') 
+                (fmap (V.fromList . A.elems . A.array (0, cn' - 1)
                 . map (\(x,y) -> (y,x)) . M.toList) (readSTRef ws)))
               $ \ i -> do -- traceShow i $ do
                 predscan i
