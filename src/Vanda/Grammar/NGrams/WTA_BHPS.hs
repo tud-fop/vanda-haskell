@@ -27,6 +27,7 @@ module Vanda.Grammar.NGrams.WTA_BHPS
 import Data.Hashable
 import Data.WTA
 import Vanda.Grammar.LM
+import qualified Data.Vector.Unboxed as VU
 
 data State' v = Binary [v] [v] deriving (Eq, Ord, Show)
 
@@ -54,7 +55,7 @@ delta'
   -> [(State' Int, Double)]  -- ^ out-states with weights
 delta' lm gamma [] w
   = let nM = order lm - 1
-    in  [ (Binary w1 w2, score lm (w1 ++ w))
+    in  [ (Binary w1 w2, score lm $ VU.fromList (w1 ++ w))
         | w1 <- sequence . take nM $ repeat gamma
         , let w2 = last' nM $ w1 ++ w
         ]

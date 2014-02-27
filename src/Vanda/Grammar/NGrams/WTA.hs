@@ -28,6 +28,7 @@ import Data.List (foldl', intercalate)
 import Data.Hashable
 import Data.WTA
 import Vanda.Grammar.LM
+import qualified Data.Vector.Unboxed as VU
 
 data State' v
   = Unary  [v]
@@ -64,21 +65,21 @@ unsmoothedWTA lm = WTA (delta' deltaW lm) (nuW lm)
 
 nuW :: LM a => a -> State' Int -> Double
 nuW lm (Binary a b)
-  = score lm (flip (++) a . replicate (order lm - 1) $ startSymbol lm)
-  + score lm (b ++ [endSymbol lm])
+  = score lm (VU.fromList (flip (++) a . replicate (order lm - 1) $ startSymbol lm))
+  + score lm (VU.fromList (b ++ [endSymbol lm]))
 nuW lm (Unary a)
-  = score lm ( replicate (order lm - 1) (startSymbol lm)
-               ++ a
-               ++ [endSymbol lm]
-             )
+  = score lm (VU.fromList ( replicate (order lm - 1) (startSymbol lm)
+                            ++ a
+                            ++ [endSymbol lm]
+                          ))
 
 -- | helper for transition weights (calculates intermediate
 --   values using backoff and cancels them out later)
 deltaW :: LM a => a -> [State' Int] -> [Int] -> Double
 deltaW lm [] w
-  = score lm w
+  = score lm $ VU.fromList w
 deltaW lm xs _
-  = sum . map (score lm)
+  = sum . map (score lm . VU.fromList)
         . filter (\x -> length x >= order lm)
         $ extractSubstrings xs
 
@@ -86,7 +87,7 @@ nuW' :: LM a => a -> State' Int -> Double
 nuW' lm (Binary a b)
   = nuW lm (Binary a b)
 nuW' lm (Unary a)
-  = nuW lm (Unary a) - score lm a
+  = nuW lm (Unary a) - score lm (VU.fromList a)
 
 -- | helper for transition weights (calculates intermediate
 --   values using backoff and cancels them out later)
@@ -94,11 +95,11 @@ deltaW' :: LM a => a -> [State' Int] -> [Int] -> Double
 deltaW' lm [] w
   = deltaW lm [] w
 deltaW' lm xs _
-  = (sum . map (score lm)
+  = (sum . map (score lm . VU.fromList)
          . extractSubstrings
          $ xs
     )
-  - (sum . map (score lm . (\ (Unary x) -> x ))
+  - (sum . map (score lm . VU.fromList . (\ (Unary x) -> x ))
          . filter (\ x -> case x of
                             (Unary _) -> True
                             _         -> False

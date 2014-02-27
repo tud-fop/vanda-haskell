@@ -23,6 +23,7 @@ import qualified Data.Map as M
 import qualified Data.Text.Lazy as T
 import qualified Data.Text.Lazy.IO as TIO
 import qualified Data.Vector as V
+import qualified Data.Vector.Unboxed as VU
 
 import Vanda.Grammar.NGrams.Text
 import Vanda.Grammar.NGrams.VandaNGrams
@@ -183,9 +184,9 @@ writeNGrams lm
   = let grams = M.fromList
                 [ (n, (ngrams, length ngrams))
                 | n <- [1 .. (order lm)]
-                , let ngrams = [ (map (invDict lm V.!) ngram, weights lm M.! ngram)
+                , let ngrams = [ (map (invDict lm V.!) (VU.toList ngram), weights lm M.! ngram)
                                | ngram <- M.keys $ weights lm
-                               , length ngram == n
+                               , VU.length ngram == n
                                ]
                 ]
         header lst = [ T.pack "", T.pack "\\data\\" ]

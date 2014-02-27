@@ -32,6 +32,7 @@ module Vanda.Grammar.NGrams.VandaNGrams
 import qualified Data.Map as M
 import qualified Data.List as L
 import qualified Data.Vector as V
+import qualified Data.Vector.Unboxed as VU
 
 {-- snippet NGrams --}
 data NGrams v
@@ -41,45 +42,43 @@ data NGrams v
     , invDict :: V.Vector v
     , dLength :: Int
     , order   :: Int
-    , weights :: M.Map [Int] (Double, Maybe Double)
+    , weights :: M.Map (VU.Vector Int) (Double, Maybe Double)
     }
 {-- /snippet NGrams --}
 
 hasWeight
-  :: (Ord v, Show v)
+  :: Ord v
   => NGrams v
   -> [v]
   -> Bool
 hasWeight lm vs
   = flip M.member (weights lm)
+  . VU.fromList
   . map (indexOf lm)
   $ vs
 
 hasWeightInt
   :: NGrams v
-  -> [Int]
+  -> VU.Vector Int
   -> Bool
-hasWeightInt _ []
-  = True
 hasWeightInt lm is
   = M.member is . weights $ lm
 
 getWeight
-  :: (Ord v)
+  :: Ord v
   => NGrams v
   -> [v]
   -> (Double, Double)
 getWeight lm vs
   = getWeightInt lm
+  . VU.fromList
   . L.map (indexOf lm)
   $ vs
 
 getWeightInt
   :: NGrams v
-  -> [Int]
+  -> VU.Vector Int
   -> (Double, Double)
-getWeightInt _ []
-  = (0, 0)
 getWeightInt lm is
   = case M.lookup is . weights $ lm of
           Nothing            -> (0, 0)
@@ -95,7 +94,8 @@ empty
   -> Int                   -- ^ order
   -> NGrams v              -- ^ empty NGrams model
 empty u s e n
-  = NGrams u (M.fromList [(s, 0), (e, 1)]) (V.fromList [s, e]) 2 n M.empty
+  = NGrams u (M.fromList [(s, 0), (e, 1)]) (V.fromList [s, e]) 2 n 
+  $ M.fromList [(VU.empty, (0, Nothing))]
 
 indexOf
   :: Ord v
@@ -106,7 +106,7 @@ indexOf lm x
   = M.findWithDefault ((M.!) (dict lm) $ unk lm) x . dict $ lm
 
 addWord
-  :: (Show v, Ord v)
+  :: Ord v
   => NGrams v              -- ^ original NGrams
   -> v                     -- ^ word
   -> NGrams v              -- ^ new NGrams
@@ -121,7 +121,7 @@ addWord lm ve
 
 -- | Adds an n-gram to the model.
 addNGram
-  :: (Show v, Ord v)
+  :: Ord v
   => NGrams v              -- ^ original NGrams
   -> [v]                   -- ^ new NGram
   -> Double                -- ^ NGram-weight
@@ -129,7 +129,7 @@ addNGram
   -> NGrams v              -- ^ new NGrams
 addNGram n@(NGrams { weights = wt }) vs w1 w2
   = let n' = L.foldl' addWord n vs
-        vi = map (\ x -> dict n' M.! x) vs
+        vi = VU.fromList $ map (\ x -> dict n' M.! x) vs
     in  n' { weights = M.insert vi (w1, w2) wt }
 
 -- | Determines the weight of a single n-gram using Katz Backoff.
@@ -137,7 +137,7 @@ addNGram n@(NGrams { weights = wt }) vs w1 w2
 --                     \ b(w0...wn-1) * P_katz(w1...wn), otherwise.
 {-- snippet KatzBackoff --}
 find
-  :: (Show v, Ord v)
+  :: Ord v
   => NGrams v              -- ^ NGrams on which to base the evaluation
   -> [v]                   -- ^ sequence to evaluate
   -> Double                -- ^ single NGram probability
@@ -152,19 +152,19 @@ find n vs
 
 findInt
   :: NGrams v              -- ^ NGrams on which to base the evaluation
-  -> [Int]                 -- ^ sequence to evaluate
+  -> VU.Vector Int         -- ^ sequence to evaluate
   -> Double                -- ^ single NGram probability
 findInt n is
-  = if   hasWeightInt n is                          -- if C(w0...wn) > 0
-    then fst . getWeightInt n $ is
-    else let is1    = take (length is - 1) is   -- w0...wn-1
-             is2    = drop 1 is                   -- w1...wn
+  = if   hasWeightInt n is                      -- if C(w0...wn) > 0
+    then fst $ getWeightInt n is
+    else let is1    = VU.init is                -- w0...wn-1
+             is2    = VU.tail is                -- w1...wn
              (_, b) = getWeightInt n is1
          in  b + findInt n is2
 
 -- | Scores a sentence.
 evaluate
-  :: (Show v, Ord v)
+  :: Ord v
   => NGrams v              -- ^ NGrams on which to base the evaluation
   -> [v]                   -- ^ sentence to evaluate
   -> Double                -- ^ score
@@ -174,11 +174,10 @@ evaluate lm vs
     else find lm (take (order lm) vs) + evaluate lm (drop 1 vs)
 
 evaluateInt
-  :: (Show v, Ord v)
-  => NGrams v
-  -> [Int]
+  :: NGrams v
+  -> VU.Vector Int
   -> Double
 evaluateInt lm is
-  = if   order lm >= length is
+  = if   order lm >= VU.length is
     then findInt lm is
-    else findInt lm (take (order lm) is) + evaluateInt lm (drop 1 is)
+    else findInt lm (VU.take (order lm) is) + evaluateInt lm (VU.tail is)

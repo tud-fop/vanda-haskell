@@ -21,6 +21,7 @@ module Vanda.Grammar.LM where
 
 import qualified Data.Text.Lazy as T
 import qualified Data.Map as M
+import qualified Data.Vector.Unboxed as VU
 
 import Vanda.Util
 import Vanda.Grammar.NGrams.VandaNGrams as VN
@@ -29,7 +30,7 @@ import Vanda.Grammar.NGrams.VandaNGrams as VN
 class LM a where
   indexOf     :: a -> T.Text -> Int
   order       :: a -> Int
-  score       :: a -> [Int] -> Double
+  score       :: a -> VU.Vector Int -> Double
   getText     :: a -> Int -> T.Text
   startSymbol :: a -> Int
   endSymbol   :: a -> Int
