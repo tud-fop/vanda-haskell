@@ -15,7 +15,14 @@
 --
 -----------------------------------------------------------------------------
 
-module Vanda.Algorithms.InsideOutsideWeightsAcyclic where
+module Vanda.Algorithms.InsideOutsideWeightsAcyclic
+( AcyclicHypergraph
+, parseTree
+, parseTree'
+, dropUnreach
+, inside
+, outside
+) where
 
 import Vanda.Hypergraph
 
