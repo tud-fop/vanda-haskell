@@ -83,8 +83,7 @@ doWork (Just (Product x), b, Just zhgFile) (Just xrs, Just (nm, na), _, Just (fm
     where
       go function = do
        let (xrs1, states)
-                   = ISU.intersect function lm
-                   . ISU.relabel (LM.indexOf lm . T.fromStrict . TK.getString fa)
+                   = ISU.intersect function (LM.indexOf lm . T.fromStrict . TK.getString fa) lm
                    $ xrs
        let xrs'  = ISU.relabel (TK.getToken fm . T.toStrict . LM.getText lm) xrs1
        let states'
@@ -119,9 +118,9 @@ doWork (Just (Translate x), b, _) (Just xrs, Just (nm, na), Just (em, ea), Just 
              initial' = mm M.! (0, I.initial $ I.irtg xrs, fst . head . WSA.finalWeights $ wsa)
              xrs1 = I.XRS (I.IRTG ip initial' (I.h1 $ I.irtg xrs) (I.h2 $ I.irtg xrs)) (VU.generate (VU.length $ I.weights xrs) (I.weights xrs VU.!))
              (xrs', sts)
-               = ISU.intersect function lm
-               . ISU.relabel (LM.indexOf lm . T.fromStrict . TK.getString fa)
+               = ISU.intersect function (LM.indexOf lm . T.fromStrict . TK.getString ea) lm
                $ xrs1
+--              xrs' = xrs1
              feat _ i xs = (if i < 0 then 1 else I.weights xrs' VU.! i) * product xs
              ba = flip HI.knuth feat . I.rtg $ I.irtg xrs'
              best = ba A.! 0 -- target symbol is always 0

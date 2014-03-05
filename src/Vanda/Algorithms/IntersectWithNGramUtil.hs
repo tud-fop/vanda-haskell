@@ -76,7 +76,7 @@ relabel
   -> I.XRS
   -> I.XRS
 relabel f1 xrs@I.XRS{ .. }
-  = xrs{ I.irtg = irtg{ I.h2 = relabel' f1 $ I.h2 irtg } }
+  = xrs{ I.irtg = irtg{ I.h1 = relabel' f1 $ I.h1 irtg } }
 
 mapState
   :: WTA.State s
@@ -91,13 +91,15 @@ mapState f1 f2 (Binary a b)
 
 relabel'
   :: (Int -> Int)                 -- ^ relabeling
-  -> V.Vector (V.Vector NTT)      -- ^ original homomorphism
-  -> V.Vector (V.Vector NTT)      -- ^ new homomorphism
-relabel' r h2
-  = let h []          = []
-        h (T x : xs)  = (T (r x)) : (h xs)
-        h (NT x : xs) = NT x : h xs
-    in  flip V.map h2 $ V.fromList . h . V.toList
+  -> V.Vector (T.Tree NTT)      -- ^ original homomorphism
+  -> V.Vector (T.Tree NTT)      -- ^ new homomorphism
+relabel' r h1
+  = let h (T.Nullary (T x)) = T.Nullary . T $ r x
+        h (T.Nullary (NT x)) = T.Nullary $ NT x
+        h (T.Unary a t) = T.Unary a $ h t
+        h (T.Binary a t1 t2) = T.Binary a (h t1) (h t2)
+        h (T.Node a ts) = T.Node a $ map h ts
+    in  V.map h h1
 
 -- | Intersects IRTG and n-gram model.
 intersect
@@ -108,13 +110,16 @@ intersect
         -> HI.Hypergraph I.StrictIntPair Int
         -> [Item (State (s Int) Int) I.StrictIntPair Double]
      )                              -- ^ intersection function
+  -> (Int -> Int)                   -- ^ relabeling due to lm
   -> a                              -- ^ language model
   -> I.XRS                          -- ^ translation model
   -> (I.XRS, V.Vector (State (s Int) Int)) -- ^ product translation model, new states
-intersect intersect' lm I.XRS{ .. }
+intersect intersect' rel lm I.XRS{ .. }
   = (xrs', states) where
       I.IRTG{ .. } = irtg
-      hom          = V.toList . (V.!) h2 . I._snd . HI.label -- prepare h2
+      relab (T x)  = T $ rel x
+      relab (NT x) = NT x
+      hom          = map relab . yield . (V.!) h1 . I._fst . HI.label -- prepare h1
       mu           = log . (VU.!) weights . HI.ident         -- prepare weights
       h1'          = V.snoc h1 . T.Nullary $ NT 0
       h2'          = V.snoc h2 $ V.fromList [NT 0]
@@ -198,3 +203,9 @@ groupByWeight
   . M.toList
   . M.fromListWith (++)
   . map (\(Item a b c d) -> (b, [(a, c, d)]))
+
+yield :: T.Tree a -> [a]
+yield (T.Nullary x) = [x]
+yield (T.Unary _ t1) = yield t1
+yield (T.Binary _ t1 t2) = yield t1 ++ yield t2
+yield (T.Node _ ts) = concatMap yield ts
