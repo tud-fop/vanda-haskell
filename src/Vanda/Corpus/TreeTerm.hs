@@ -26,6 +26,7 @@ module Vanda.Corpus.TreeTerm
 
 
 import Control.Applicative
+import Control.Monad (void)
 import Data.Tree
 import Text.Parsec hiding ((<|>), many)
 
@@ -71,7 +72,8 @@ parsecTree
 -- backslash.
 parsecSymbol :: Stream s m Char => ParsecT s u m String
 parsecSymbol
-  = manyTill escapedChar (try (spaces *> lookAhead (oneOf "(,)")))
+  = manyTill escapedChar
+  $ try $ spaces *> eof <|> lookAhead (void (oneOf "(,)"))
 
 
 -- | The same as 'char', but removes trailing whitespaces.
