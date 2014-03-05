@@ -61,7 +61,7 @@ fullHypergraph2dot drawVertex drawEdge name hg
       [ (text "shape", text "rectangle")
       , (text "label", escape $ drawEdge e)]
     vertex x = int $ M.findWithDefault 0 x mapping
-    mapping = M.fromAscList $ flip zip [1 ..] $ S.toAscList $ nodes hg
+    mapping = M.fromDistinctAscList $ flip zip [1 ..] $ S.toAscList $ nodes hg
 
 
 -- | Convert a single 'Hyperedge' to DOT.
