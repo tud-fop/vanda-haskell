@@ -35,7 +35,7 @@ main = do
       irtg@IRTG{} :: IRTG Int
         <- fmap (B.decode . decompress) $ B.readFile (zhgFile ++ ".bhg.gz")
       let birtg = binarizeXRS irtg
-      let virt0 = inSize tm
+      let virt0 = snd $ getBounds tm
       let tm' = foldl' (\ tm_ i -> fst $ updateToken tm_ (TS.pack $ "virt" ++ show i)) tm
               $ [ virt0 .. nodes (rtg birtg) - 1 ]
       B.writeFile (zhgFile ++ ".bin.bhg.gz") $ compress $ B.encode birtg
