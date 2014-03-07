@@ -17,6 +17,7 @@
 
 module Vanda.Grammar.NGrams.VandaNGrams
   ( NGrams
+  , unk
   , empty
   , dict
   , dLength

@@ -39,6 +39,7 @@ library
     , Vanda.Hypergraph
     , Vanda.Token
     , Vanda.Util
+    , Vanda.Util.Memorysavers
     , Vanda.Algorithms.Earley
     , Vanda.Algorithms.EarleyMonadic
     , Vanda.Algorithms.Earley.FastNub
