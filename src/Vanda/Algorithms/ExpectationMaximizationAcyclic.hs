@@ -23,9 +23,8 @@ module Vanda.Algorithms.ExpectationMaximizationAcyclic (
 import Vanda.Hypergraph
 import Vanda.Algorithms.InsideOutsideWeightsAcyclic
 
-import Control.Arrow (second)
 import qualified Data.List as L
-import qualified Data.Map as M
+import qualified Data.Map.Strict as M
 import Data.Tree as T
 
 
@@ -48,15 +47,16 @@ iter = iter' 0 where
 forestEM
   :: (RealFloat w, Ord i, Ord v)
   => [[i]]                -- ^ partition of the ids for normalization
-  -> [(M.Map v w, Tree [Hyperedge v l j], w)]
+  -> [(Tree [Hyperedge v l j], w)]
                           -- ^ a list of training example derivation forests
   -> (Hyperedge v l j -> i)
                           -- ^ function extracting the id from a 'Hyperedge'
   -> (w -> Int -> Bool)   -- ^ stopping cond. (delta-likelihood, no. of iter.)
-  -> M.Map i w            -- ^ initial weight vector
-  -> M.Map i w
-forestEM part gs exId p i
-  = snd $ iter (forestEMstep part gs exId) p' (0,i) where
+  -> M.Map v w            -- ^ initial weights
+  -> M.Map i w            -- ^ weight vector
+  -> (M.Map v w, M.Map i w)
+forestEM part gs exId p w0 ws
+  = snd $ iter (forestEMstep part gs exId) p' (0, (w0, ws)) where
     p' (l1,_) (l2,_) it = p (abs (l2-l1)) it
 
 
@@ -65,14 +65,16 @@ forestEM part gs exId p i
 forestEMlist
   :: (RealFloat w, Ord i, Ord v)
   => [[i]]                -- ^ partition of the ids for normalization
-  -> [(M.Map v w, Tree [Hyperedge v l j], w)]
+  -> [(Tree [Hyperedge v l j], w)]
                           -- ^ a list of training example derivation forests
   -> (Hyperedge v l j -> i)
                           -- ^ function extracting the id from a 'Hyperedge'
-  -> M.Map i w            -- ^ initial weight vector
-  -> [(w, M.Map i w)]     -- ^ list of (log-likelihood, estimate) pairs
-forestEMlist part gs exId i
-  = iterate (forestEMstep part gs exId) (0, i)
+  -> M.Map v w            -- ^ initial weights
+  -> M.Map i w            -- ^ weight vector
+  -> [(w, (M.Map v w, M.Map i w))]
+                        -- ^ list of (log-likelihood, initial, estimate) pairs
+forestEMlist part gs exId w0 ws
+  = iterate (forestEMstep part gs exId) (0, (w0, ws))
 
 
 -- | Normalize a map according to a partition. Very similar to
@@ -99,23 +101,26 @@ normalize part m
 forestEMstep
   :: (RealFloat w, Ord i, Ord v)
   => [[i]]                -- ^ partition of the ids for normalization
-  -> [(M.Map v w, Tree [Hyperedge v l j], w)]
+  -> [(Tree [Hyperedge v l j], w)]
                           -- ^ a list of training-example derivation forests
   -> (Hyperedge v l j -> i)
                           -- ^ function extracting the id from a 'Hyperedge'
-  -> (w, M.Map i w)       -- ^ log-likelihood and weight vector before...
-  -> (w, M.Map i w)       -- ^ ... and after the step
+  -> (w, (M.Map v w, M.Map i w))
+              -- ^ log-likelihood, initial weights and weight vector before...
+  -> (w, (M.Map v w, M.Map i w))                   -- ^ ... and after the step
 forestEMstep part gs exId theta
-  = second (normalize part)
-  . foldl'Special
-      (+)
-      (L.foldl' (\ m (k, v) -> M.insertWith' (+) k v m))
-      (0, M.empty)
-  $ forestEMstepList gs exId theta
+  = (l, (normalize [M.keys w0] w0, normalize part ws))
   where
-    foldl'Special f g
-      = L.foldl'
-        (\ (x, y) (x', y') -> x `seq` y `seq` (f x x', g y y'))
+    (l, w0, ws)
+      = foldl'Special
+          (+)
+          (M.unionWith (+))
+          (L.foldl' (\ m (k, v) -> M.insertWith (+) k v m))
+          (0, M.empty, M.empty)
+      $ forestEMstepList gs exId theta
+    foldl'Special f g h
+      = L.foldl' $ \ (x, y, z) (x', y', z')
+          -> x `seq` y `seq` z `seq` (f x x', g y y', h z z')
     -- ( sum . fst . unzip $ list
     -- , normalize part $ M.fromListWith (+) (concat . snd . unzip $ list)
     -- )
@@ -127,22 +132,26 @@ forestEMstep part gs exId theta
 -- pairs for later id-specific summation.
 forestEMstepList
   :: (Floating w, Ord i, Ord v)
-  => [(M.Map v w, Tree [Hyperedge v l j], w)]
+  => [(Tree [Hyperedge v l j], w)]
                           -- ^ a list of training-example derivation forests
   -> (Hyperedge v l j -> i)
                           -- ^ function extracting the id from a 'Hyperedge'
-  -> (w, M.Map i w)       -- ^ log-likelihood and weight vector prior to step
-  -> [(w, [(i, w)])]
-forestEMstepList gs exId (_, theta)
+  -> (w, (M.Map v w, M.Map i w))
+      -- ^ log-likelihood prior to step, initial weights and hyperedge weights
+  -> [(w, M.Map v w, [(i, w)])]
+forestEMstepList gs exId (_, (w0, theta))
   = [
       ( w * log inner0
+      , M.mapWithKey
+          (\ v w' -> factor * w' * M.findWithDefault 0 v (rootLabel inner))
+          w0
       , go g inner outer
       )
     | let exweight e = M.findWithDefault 0 (exId e) theta
-    , (w0, g, w) <- gs
+    , (g, w) <- gs
     , let inner = inside exweight g
     , let outer = outside exweight inner g w0
-    , let inner0  -- inner of target node(s)
+    , let inner0  -- inner of virtual single target node
             = sum
             $ map (\ (v, w') ->  w' * M.findWithDefault 0 v (rootLabel inner))
             $ M.toList w0
