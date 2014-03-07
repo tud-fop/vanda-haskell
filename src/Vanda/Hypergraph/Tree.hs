@@ -2,6 +2,10 @@
 module Vanda.Hypergraph.Tree where
 
 import Data.Hashable ( Hashable (..) )
+import Data.Traversable
+import Data.Foldable ( Foldable, foldMap )
+import Data.Monoid ( mappend )
+import Control.Applicative
 import Data.List ( intercalate )
 
 data Tree l
@@ -21,6 +25,27 @@ instance Hashable l => Hashable (Tree l) where
   hashWithSalt salt Node{ .. }
     = salt `hashWithSalt` rootLabel `hashWithSalt` _subForest
 
+instance Traversable Tree where
+  traverse f (Nullary l) = Nullary <$> f l
+  traverse f (Unary l t) = Unary <$> f l <*> traverse f t
+  traverse f (Binary l t1 t2) = Binary <$> f l <*> traverse f t1 <*> traverse f t2
+  traverse f (Node l ts) = Node <$> f l <*> traverse (traverse f) ts
+
+instance Functor Tree where
+  fmap f (Nullary l) = Nullary $ f l
+  fmap f (Unary l t) = Unary (f l) (fmap f t)
+  fmap f (Binary l t1 t2) = Binary (f l) (fmap f t1) (fmap f t2)
+  fmap f (Node l ts) = Node (f l) (map (fmap f) ts)
+
+instance Foldable Tree where
+  foldMap f (Nullary l)
+    = f l
+  foldMap f (Unary l t)
+    = f l `mappend` foldMap f t
+  foldMap f (Binary l t1 t2)
+    = f l `mappend` foldMap f t1 `mappend` foldMap f t2
+  foldMap f (Node l ts)
+    = f l `mappend` foldMap (foldMap f) ts
 
 arity :: Tree l -> Int
 arity t = case t of
@@ -42,13 +67,6 @@ subForest t = case t of
                 Unary{ .. } -> [sub1]
                 Binary{ .. } -> [sub1, sub2]
                 Node{ .. } -> _subForest
-
-instance Functor Tree where
-  fmap f t = case t of
-               Nullary l -> Nullary (f l)
-               Unary l s1 -> Unary (f l) (fmap f s1)
-               Binary l s1 s2 -> Binary (f l) (fmap f s1) (fmap f s2)
-               Node l sF -> Node (f l) (map (fmap f) sF)
 
 mapChildren :: (Tree l -> Tree l) -> Tree l -> Tree l
 mapChildren f t = case t of
