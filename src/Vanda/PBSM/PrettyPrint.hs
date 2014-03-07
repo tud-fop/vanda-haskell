@@ -22,6 +22,11 @@ import Data.Tree
 import qualified Data.Set as S
 
 
+type SForest a = S.Set (Tree a)
+type NT = SForest String
+type T = String
+
+
 drawRTG :: RTG NT T -> String
 drawRTG g
   = unlines

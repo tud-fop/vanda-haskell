@@ -35,7 +35,7 @@ import Test.QuickCheck
 -- import Debug.Trace
 
 
-forestToGrammar :: Ord t => Forest t -> RTG (SForest t) t
+forestToGrammar :: Ord t => Forest t -> RTG (S.Set (Tree t)) t
 forestToGrammar corpus
   = rtg (map S.singleton corpus)
   $ concatMap go corpus
@@ -48,10 +48,8 @@ forestToGrammar corpus
 
 unknownTerminals :: Ord t => RTG n t -> Tree t -> S.Set (t, Int)
 unknownTerminals g tree
-  = terminalsTrees S.\\ terminalsG
+  = terminalsTrees S.\\ terminalSRanked g
   where
-    terminalsG
-      = M.keysSet $ ruleM g
     terminalsTrees
       = S.fromList $ flattenWithRank tree
     flattenWithRank (Node x ts)

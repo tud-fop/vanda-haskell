@@ -12,30 +12,47 @@
 -- Portability :  portable
 -----------------------------------------------------------------------------
 
-module Vanda.PBSM.Types where
+module Vanda.PBSM.Types
+( RTG ()
+, Rule (..)
+, rtg
+, ruleM, rules, rulesRanked, ruleS, ruleSRanked
+, terminalS, terminalSRanked
+, nonterminalS, nonterminals
+, mapNonterminals, mapNonterminals'
+, initialS, initials
+, intifyNonterminals
+, toHypergraph, toHypergraphRanked
+, toHypergraphStartSeparated, toHypergraphStartSeparatedRanked
+, language, languages
+) where
 
 
 import Vanda.Hypergraph
 import qualified Data.Queue as Q
 
+import Control.Applicative ((<$>), (<*>))
 import Control.DeepSeq (NFData (), rnf)
 import Control.Monad.State
 import Control.Seq
+import qualified Data.Binary as B
 import Data.Function (on)
 import Data.List
-import qualified Data.Map as M
+import qualified Data.Map.Lazy as ML
+import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import Data.Tree
 
-
-type SForest a = S.Set (Tree a)
-type NT = SForest String
-type T = String
 
 data RTG n t = RTG
   { initialS :: S.Set n
   , ruleM    :: M.Map (t, Int) (M.Map n (S.Set [n]))
   } deriving Show
+
+
+instance (B.Binary n, B.Binary t) => B.Binary (RTG n t) where
+  put (RTG inis rM) = B.put inis >> B.put rM
+  get = RTG <$> B.get <*> B.get
 
 
 instance (NFData n, NFData t) => NFData (RTG n t) where
@@ -60,19 +77,32 @@ initials = S.toList . initialS
 
 
 rules :: RTG n t -> [Rule n t]
-rules g
-  = [ Rule n t ns
-    | ((t, _), m) <- M.toList (ruleM g)
+rules = rulesHelper fst
+
+rulesRanked :: RTG n t -> [Rule n (t, Int)]
+rulesRanked = rulesHelper id
+
+rulesHelper :: ((t, Int) -> t') -> RTG n t -> [Rule n t']
+rulesHelper f g
+  = [ Rule n (f t) ns
+    | (t, m) <- M.toList (ruleM g)
     , (n, nsS) <- M.toList m
     , ns <- S.toList nsS
     ]
 
 
 ruleS :: (Ord n, Ord t) => RTG n t -> S.Set (Rule n t)
-ruleS g
+ruleS = ruleSHelper fst
+
+ruleSRanked :: (Ord n, Ord t) => RTG n t -> S.Set (Rule n (t, Int))
+ruleSRanked = ruleSHelper id
+
+ruleSHelper
+  :: (Ord n, Ord t') => ((t, Int) -> t') -> RTG n t -> S.Set (Rule n t')
+ruleSHelper f g
   = S.unions
-      [ S.mapMonotonic (Rule n t) nsS
-      | ((t, _), m) <- M.toList (ruleM g)
+      [ S.mapMonotonic (Rule n (f t)) nsS
+      | (t, m) <- M.toList (ruleM g)
       , (n, nsS) <- M.toList m
       ]
 
@@ -91,6 +121,17 @@ instance Ord a => Ord (Tree a) where
     = case compare x1 x2 of
         EQ -> compare ts1 ts2
         o -> o
+
+
+terminalSRanked :: RTG n t -> S.Set (t, Int)
+terminalSRanked = M.keysSet . ruleM
+
+terminalS :: Eq t => RTG n t -> S.Set t
+terminalS = S.fromAscList . map fst . S.toAscList . terminalSRanked
+
+
+nonterminals :: Ord n => RTG n t -> [n]
+nonterminals = S.toList . nonterminalS
 
 
 nonterminalS :: Ord n => RTG n t -> S.Set n
@@ -120,18 +161,50 @@ intifyNonterminals :: (Ord n, Ord t) => RTG n t -> RTG Int t
 intifyNonterminals g
   = mapNonterminals intify g
   where
-    intify n = M.findWithDefault
+    intify n = ML.findWithDefault
       (errorModule "intifyNonterminals: This must not happen.")
       n
       mapping
     mapping = M.fromList $ flip zip [1 ..] $ S.toList $ nonterminalS g
 
 
-toHypergraph :: (Enum i, Num i, Ord v, Hypergraph h) => RTG v l -> h v l i
-toHypergraph g
-  = mkHypergraph $ zipWith toHyperedge [0 ..] $ rules g
-  where
-    toHyperedge i (Rule v l vs) = mkHyperedge v vs l i
+toHypergraph :: (Enum i, Num i, Ord n, Hypergraph h) => RTG n t -> h n t i
+toHypergraph = toHypergraphHelper fst
+
+toHypergraphRanked
+  :: (Enum i, Num i, Ord n, Hypergraph h) => RTG n t -> h n (t, Int) i
+toHypergraphRanked = toHypergraphHelper id
+
+toHypergraphHelper
+  :: (Enum i, Num i, Ord n, Hypergraph h)
+  => ((t, Int) -> l) -> RTG n t -> h n l i
+toHypergraphHelper f g
+  = mkHypergraph $ zipWith toHyperedge [0 ..] $ rulesHelper f g
+
+
+toHypergraphStartSeparated
+  :: (Enum i, Num i, Ord n, Hypergraph h) => n -> t -> RTG n t -> h n t i
+toHypergraphStartSeparated = toHypergraphStartSeparatedHelper fst
+
+toHypergraphStartSeparatedRanked
+  :: (Enum i, Num i, Ord n, Hypergraph h)
+  => n -> t -> RTG n t -> h n (t, Int) i
+toHypergraphStartSeparatedRanked
+  = toHypergraphStartSeparatedHelper id
+
+toHypergraphStartSeparatedHelper
+  :: (Enum i, Num i, Ord n, Hypergraph h)
+  => ((t, Int) -> l) -> n -> t -> RTG n t -> h n l i
+toHypergraphStartSeparatedHelper f n t g
+  = if n `S.member` nonterminalS g
+    then errorModule "toHypergraphStartSeparated: nonterminal already exists"
+    else mkHypergraph
+       $ zipWith toHyperedge [0 ..]
+       $ [Rule n (f (t, 1)) [ini] | ini <- initials g] ++ rulesHelper f g
+
+
+toHyperedge :: i -> Rule v l -> Hyperedge v l i
+toHyperedge i (Rule v l vs) = mkHyperedge v vs l i
 
 
 language :: Ord n => RTG n t -> [Tree t]
@@ -177,11 +250,6 @@ combinations yss
           y  <- action
           ys <- untilState predicate action
           return (y : ys)
-
-
-yield :: Tree a -> [a]
-yield (Node x []) = [x]
-yield (Node _ xs) = concatMap yield xs
 
 
 errorModule :: String -> a
