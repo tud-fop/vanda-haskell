@@ -27,10 +27,9 @@ import System.Environment ( getArgs )
 
 import System.Console.GetOpt
 
-import Debug.Trace
-
 data Modus = Product String
            | Translate String
+           | TranslateInvolved String
 
 data Flag' = Help
            | Beam String
@@ -55,14 +54,15 @@ type DataSet = ( Maybe I.XRS,                        -- grammar
 
 options :: [OptDescr Flag] 
 options
-  = [ Option ['h'] ["help"]      (NoArg  (Left Help))                   "shows help",
-      Option ['p'] ["product"]   (ReqArg (Right . Product) "<style>")   "product with <style>",
-      Option ['t'] ["translate"] (ReqArg (Right . Translate) "<style>") "translate with <style>",
-      Option ['b'] ["beam"]      (ReqArg (Left  . Beam) "<beam>")       "beam width",
-      Option ['z'] ["zhg"]       (ReqArg (Left  . Zhg) "<zhg>")         "zhg file prefix to be used",
-      Option ['e'] ["eMapFile"]  (ReqArg (Left  . EFile) "<map.e>")     "english map file to be used",
-      Option ['f'] ["fMapFile"]  (ReqArg (Left  . FFile) "<map.f>")     "french file to be used",
-      Option ['l'] ["lm"]        (ReqArg (Left  . LM) "<lm>")           "language model file to be used"
+  = [ Option ['h'] ["help"]              (NoArg  (Left Help))                           "shows help",
+      Option ['p'] ["product"]           (ReqArg (Right . Product) "<style>")           "product with <style>",
+      Option ['t'] ["translate"]         (ReqArg (Right . Translate) "<style>")         "translate with <style>",
+      Option ['T'] ["translateInvolved"] (ReqArg (Right . TranslateInvolved) "<style>") "translate involved with <style>",
+      Option ['b'] ["beam"]              (ReqArg (Left  . Beam) "<beam>")               "beam width",
+      Option ['z'] ["zhg"]               (ReqArg (Left  . Zhg) "<zhg>")                 "zhg file prefix to be used",
+      Option ['e'] ["eMapFile"]          (ReqArg (Left  . EFile) "<map.e>")             "english map file to be used",
+      Option ['f'] ["fMapFile"]          (ReqArg (Left  . FFile) "<map.f>")             "french file to be used",
+      Option ['l'] ["lm"]                (ReqArg (Left  . LM) "<lm>")                   "language model file to be used"
     ]
 
 main :: IO ()
@@ -74,56 +74,89 @@ main = do
                          doWork cfg ds
     _              -> error $ usageInfo "" options
 
+-- Assumes that that Int -> Text mappings of language model and translation model
+-- are consistent. This can be ensured with programs/AdaptToLM.
 doWork :: Configuration -> DataSet -> IO ()
-doWork (Just (Product x), b, Just zhgFile) (Just xrs, Just (nm, na), _, Just (fm, fa), Just lm)
-  = case (x, b) of ("BHPS", _)            -> go IS.intersectBHPS
-                   ("NoBackoff", _)       -> go IS.intersectUnsmoothed
-                   ("Backoff", _)         -> go IS.intersectSmoothed
-                   ("Pruning", Just beam) -> go (IS.intersectPruning beam)
+doWork (Just (Product x), b, Just zhgFile) (Just xrs, _, Just (_, ea), _, Just lm)
+  = case (x, b) of ("BHPS", _)            -> go (IS.intersectBHPS rel)
+                   ("NoBackoff", _)       -> go (IS.intersectUnsmoothed rel)
+                   ("Backoff", _)         -> go (IS.intersectSmoothed rel)
+                   ("Pruning", Just beam) -> go (IS.intersectPruning rel beam)
+                   ("NoBackoffPruning", Just beam)
+                                          -> go (IS.intersectUnsmoothedPruning rel beam)
     where
+--       rel = (LM.indexOf lm . T.fromStrict . TK.getString ea)
+      rel = id
       go function = do
        let (xrs1, states)
-                   = ISU.intersect function (LM.indexOf lm . T.fromStrict . TK.getString fa) lm
-                   $ xrs
-       let xrs'  = ISU.relabel (TK.getToken fm . T.toStrict . LM.getText lm) xrs1
-       let states'
-                 = V.map (ISU.mapState id (TK.getToken fm . T.toStrict . LM.getText lm)) states
+                   = ISU.intersect
+                       function
+                       lm
+                       xrs
        B.writeFile (zhgFile ++ ".new.bhg.gz") . compress
                                               . B.encode
-                                              $ I.irtg xrs'
+                                              $ I.irtg xrs1
        B.writeFile (zhgFile ++ ".new.weights.gz") . compress
                                                   . B.encode
                                                   . VU.toList
-                                                  $ I.weights xrs'
+                                                  $ I.weights xrs1
        TIO.writeFile (zhgFile ++ ".new.nodes") . TK.toText
                                                . TK.TokenArray
                                                . (\x -> A.listArray (0, length x - 1) x)
                                                . map (TS.pack . show)
-                                               . V.toList
-                                               . flip V.map states'
-                                               $ ISU.mapState (TK.getString na) (TK.getString fa)
+                                               $ V.toList states
 doWork (Just (Translate x), b, _) (Just xrs, Just (nm, na), Just (em, ea), Just (fm, fa), Just lm)
-  = do case (x, b) of ("BHPS", _)            -> go IS.intersectBHPS
-                      ("NoBackoff", _)       -> go IS.intersectUnsmoothed
-                      ("Backoff", _)         -> go IS.intersectSmoothed
-                      ("Pruning", Just beam) -> go (IS.intersectPruning beam)
+  = do case (x, b) of ("BHPS", _)             -> go (IS.intersectBHPS rel)
+                      ("NoBackoff", _)        -> go (IS.intersectUnsmoothed rel)
+                      ("Backoff", _)          -> go (IS.intersectSmoothed rel)
+                      ("Pruning", Just beam)  -> go (IS.intersectPruning rel beam)
+                      ("NoBackoffPruning", Just beam)
+                                              -> go (IS.intersectUnsmoothedPruning rel beam)
     where
-      go function = do
+--      rel = (LM.indexOf lm . T.fromStrict . TK.getString ea)
+     rel = id
+     go function = do
        inp <- TIO.getContents
-       let translate input = output
-             where
+       let translate input = output where
              wsa = IF.toWSAmap fm input
              comp = V.toList . (I.h2 (I.irtg xrs) V.!) . I._snd
              (mm, ip, _) = earley (toBackwardStar (I.rtg $ I.irtg xrs) comp) comp wsa fst . I.initial $ I.irtg xrs
              initial' = mm M.! (0, I.initial $ I.irtg xrs, fst . head . WSA.finalWeights $ wsa)
              xrs1 = I.XRS (I.IRTG ip initial' (I.h1 $ I.irtg xrs) (I.h2 $ I.irtg xrs)) (VU.generate (VU.length $ I.weights xrs) (I.weights xrs VU.!))
              (xrs', sts)
-               = ISU.intersect function (LM.indexOf lm . T.fromStrict . TK.getString ea) lm
-               $ xrs1
---              xrs' = xrs1
+               = ISU.intersect
+                   function
+                   lm
+                   xrs1
+             feat _ i xs = (if i < 0 then 1 else I.weights xrs' VU.! i) * product xs
+             ini = I.initial $ I.irtg xrs'
+             ba = flip HI.knuth feat . I.rtg $ I.irtg xrs'
+             best = ba A.! 0
+             otree = map (IF.getTree' ((I.h1 (I.irtg xrs') V.!) . I._fst) . HI.deriv) best
+             output = IF.toString ea otree
+       TIO.putStr . T.unlines . map translate $ T.lines inp
+doWork (Just (TranslateInvolved x), b, _) (Just xrs, Just (nm, na), Just (em, ea), Just (fm, fa), Just lm)
+  = do case (x, b) of {-("BHPS", _)             -> go IS.intersectBHPS
+                      ("NoBackoff", _)        -> go IS.intersectUnsmoothed
+                      ("Backoff", _)          -> go IS.intersectSmoothed-}
+                      ("Pruning", Just beam)  -> go (IS.ioProductPruning rel beam)
+--                       ("NoBackoffPruning", Just beam)
+--                                               -> go (IS.intersectUnsmoothedPruning beam)
+    where
+--      rel = (LM.indexOf lm . T.fromStrict . TK.getString ea)
+     rel = id
+     go function = do
+       inp <- TIO.getContents
+       let translate input = output where
+             (xrs', sts)
+               = ISU.ioProduct
+                   function
+                   lm
+                   (map (TK.getToken fm . T.toStrict) $ T.words input)
+                   xrs
              feat _ i xs = (if i < 0 then 1 else I.weights xrs' VU.! i) * product xs
              ba = flip HI.knuth feat . I.rtg $ I.irtg xrs'
-             best = ba A.! 0 -- target symbol is always 0
+             best = ba A.! 0
              otree = map (IF.getTree' ((I.h1 (I.irtg xrs') V.!) . I._fst) . HI.deriv) best
              output = IF.toString ea otree
        TIO.putStr . T.unlines . map translate $ T.lines inp
@@ -135,6 +168,8 @@ getConfiguration = go (Nothing, Nothing, Nothing) where
   go (a, b, c) (x : xs) = case x of
     Right (Product y)   -> go (Just (Product y), b, c) xs
     Right (Translate y) -> go (Just (Translate y), b, c) xs
+    Right (TranslateInvolved y)
+                        -> go (Just (TranslateInvolved y), b, c) xs
     Left (Beam y)       -> go (a, Just (read y), c) xs
     Left (Zhg y)        -> go (a, b, Just y) xs
     _                   -> go (a, b, c) xs

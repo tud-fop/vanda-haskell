@@ -57,49 +57,49 @@ instance State State' where
 instance Functor State' where
   fmap = mapState'
 
-smoothedWTA :: LM a => a -> WTA Int (State' Int)
-smoothedWTA lm = WTA (delta' deltaW' lm) (nuW' lm)
+smoothedWTA :: LM a => (Int -> Int) -> a -> WTA Int (State' Int)
+smoothedWTA rel lm = WTA (delta' (deltaW' rel) lm) (nuW' rel lm)
 
-unsmoothedWTA :: LM a => a -> WTA Int (State' Int)
-unsmoothedWTA lm = WTA (delta' deltaW lm) (nuW lm)
+unsmoothedWTA :: LM a => (Int -> Int) -> a -> WTA Int (State' Int)
+unsmoothedWTA rel lm = WTA (delta' (deltaW rel) lm) (nuW rel lm)
 
-nuW :: LM a => a -> State' Int -> Double
-nuW lm (Binary a b)
-  = score lm (VU.fromList (flip (++) a . replicate (order lm - 1) $ startSymbol lm))
-  + score lm (VU.fromList (b ++ [endSymbol lm]))
-nuW lm (Unary a)
+nuW :: LM a => (Int -> Int) -> a -> State' Int -> Double
+nuW rel lm (Binary a b)
+  = score lm (VU.fromList (flip (++) (map rel a) . replicate (order lm - 1) $ startSymbol lm))
+  + score lm (VU.fromList (map rel b ++ [endSymbol lm]))
+nuW rel lm (Unary a)
   = score lm (VU.fromList ( replicate (order lm - 1) (startSymbol lm)
-                            ++ a
+                            ++ map rel a
                             ++ [endSymbol lm]
                           ))
 
 -- | helper for transition weights (calculates intermediate
 --   values using backoff and cancels them out later)
-deltaW :: LM a => a -> [State' Int] -> [Int] -> Double
-deltaW lm [] w
-  = score lm $ VU.fromList w
-deltaW lm xs _
-  = sum . map (score lm . VU.fromList)
+deltaW :: LM a => (Int -> Int) -> a -> [State' Int] -> [Int] -> Double
+deltaW rel lm [] w
+  = score lm . VU.fromList $ map rel w
+deltaW rel lm xs _
+  = sum . map (score lm . VU.fromList . map rel)
         . filter (\x -> length x >= order lm)
         $ extractSubstrings xs
 
-nuW' :: LM a => a -> State' Int -> Double
-nuW' lm (Binary a b)
-  = nuW lm (Binary a b)
-nuW' lm (Unary a)
-  = nuW lm (Unary a) - score lm (VU.fromList a)
+nuW' :: LM a => (Int -> Int) -> a -> State' Int -> Double
+nuW' rel lm (Binary a b)
+  = nuW rel lm (Binary a b)
+nuW' rel lm (Unary a)
+  = nuW rel lm (Unary a) - score lm (VU.fromList $ map rel a)
 
 -- | helper for transition weights (calculates intermediate
 --   values using backoff and cancels them out later)
-deltaW' :: LM a => a -> [State' Int] -> [Int] -> Double
-deltaW' lm [] w
-  = deltaW lm [] w
-deltaW' lm xs _
-  = (sum . map (score lm . VU.fromList)
+deltaW' :: LM a => (Int -> Int) -> a -> [State' Int] -> [Int] -> Double
+deltaW' rel lm [] w
+  = deltaW rel lm [] w
+deltaW' rel lm xs _
+  = (sum . map (score lm . VU.fromList . map rel)
          . extractSubstrings
          $ xs
     )
-  - (sum . map (score lm . VU.fromList . (\ (Unary x) -> x ))
+  - (sum . map (score lm . VU.fromList . map rel . (\ (Unary x) -> x ))
          . filter (\ x -> case x of
                             (Unary _) -> True
                             _         -> False

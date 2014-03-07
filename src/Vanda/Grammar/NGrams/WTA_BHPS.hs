@@ -43,23 +43,30 @@ instance State State' where
 instance Functor State' where
   fmap = mapState'
 
-makeWTA :: LM a => a -> [Int] -> WTA Int (State' Int)
-makeWTA lm gamma = WTA (delta' lm gamma) (const 1)
+makeWTA
+  :: LM a
+  => a
+  -> (Int -> Int)
+  -> [Int]
+  -> WTA Int (State' Int)
+makeWTA lm rel gamma
+  = WTA (delta' lm rel gamma) (const 1)
 
 delta'
   :: LM a
   => a                      -- ^ language model
+  -> (Int -> Int)           -- ^ relabelling
   -> [Int]                  -- ^ Gamma
-  -> [State' Int]            -- ^ in-states
+  -> [State' Int]           -- ^ in-states
   -> [Int]                  -- ^ input symbol
-  -> [(State' Int, Double)]  -- ^ out-states with weights
-delta' lm gamma [] w
+  -> [(State' Int, Double)] -- ^ out-states with weights
+delta' lm rel gamma [] w
   = let nM = order lm - 1
-    in  [ (Binary w1 w2, score lm $ VU.fromList (w1 ++ w))
+    in  [ (Binary w1 w2, score lm . VU.fromList $ map rel (w1 ++ w))
         | w1 <- sequence . take nM $ repeat gamma
         , let w2 = last' nM $ w1 ++ w
         ]
-delta' _ _ xs _
+delta' _ _ _ xs _
   = let check _ [] = True
         check (Binary _ lr) (r@(Binary rl _):qs) = (lr == rl) && check r qs
         check' (q:qs) = check q qs
