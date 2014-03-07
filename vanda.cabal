@@ -42,6 +42,7 @@ library
     , Vanda.Token
     , Vanda.Util
     , Vanda.Util.Memorysavers
+    , Vanda.Util.Tree
     , Vanda.Algorithms.Earley
     , Vanda.Algorithms.EarleyMonadic
     , Vanda.Algorithms.Earley.FastNub
