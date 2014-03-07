@@ -31,10 +31,14 @@ import Data.Tree
 import Text.Parsec hiding ((<|>), many)
 
 
+errorModule :: String -> a
+errorModule = error . ("Vanda.Corpus.TreeTerm." ++)
+
+
 -- | Parse exactly one tree. Throws an exception on a parse error.
 parseTree :: String -> Tree String
 parseTree cs
-  = handleParseError
+  = handleParseError "parseTree"
   $ parse (spaces *> parsecTree <* eof) cs cs
 
 
@@ -42,14 +46,14 @@ parseTree cs
 -- parse error.
 parseTrees :: String -> Forest String
 parseTrees cs
-  = handleParseError
+  = handleParseError "parseTrees"
   $ parse (spaces *> parsecTree `sepBy` parsecChar ',' <* eof) cs cs
 
 
 -- | Extract 'Right' value or terminate with 'error' 'show'ing the 'Left'
 -- 'ParseError'.
-handleParseError :: Either ParseError a -> a
-handleParseError = either (error . show) id
+handleParseError :: String -> Either ParseError a -> a
+handleParseError fun = either (errorModule . ((fun ++ ": ") ++) . show) id
 
 
 -- ---------------------------------------------------------------------------
