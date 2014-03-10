@@ -15,6 +15,8 @@
 --
 -----------------------------------------------------------------------------
 
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Vanda.Algorithms.InsideOutsideWeightsAcyclic
 ( AcyclicHypergraph
 , parseTree
@@ -53,16 +55,20 @@ type AcyclicHypergraph v l i = Tree [Hyperedge v l i]
 -- Moreover, the resulting 'Hypergraph' is represented by an
 -- 'AcyclicHypergraph', which reuses the given 'Hyperedge's.
 parseTree
-  ::  (Hypergraph h, Ord l, Ord v)
+  :: forall h v l i
+  .  (Hypergraph h, Ord l, Ord v)
   => h v l i                    -- ^ 'Hypergraph' used for parsing
   -> [v]                        -- ^ target vertices
   -> Tree l                     -- ^ 'Tree' to be parsed
   -> AcyclicHypergraph v l i
 parseTree g = parseTree' f
   where
+    f :: Int -> l -> M.Map v [Hyperedge v l i]
     f len lab
       =  M.findWithDefault M.empty lab
       $ IM.findWithDefault M.empty len m
+
+    m :: M.Map Int (M.Map l (M.Map v [Hyperedge v l i]))
     m = IM.map (M.map (M.fromListWith (++)) . M.fromListWith (++))
       . IM.fromListWith (++)
       . map (\ e -> (length (from e), [(label e, [(to e, [e])])]))
@@ -74,19 +80,23 @@ parseTree g = parseTree' f
 -- a rank and a label, and returns all 'Hyperedge's with the given rank and
 -- label.
 parseTree'
-  :: (Ord v, Eq l)
+  :: forall v l i
+  .  (Ord v, Eq l)
   => (Int -> l -> M.Map v [Hyperedge v l i])  -- ^ 'Hyperedge' lookup function
   -> [v]                                      -- ^ target vertices
   -> Tree l                                   -- ^ 'Tree' to be parsed
   -> AcyclicHypergraph v l i
 parseTree' f targets tree = goT tree targets
   where
+    goT :: Tree l -> [v] -> AcyclicHypergraph v l i
     goT (Node l ts) qs
       = let eM = f (length ts) l
             (es, ts') = goF ts
                       $ map (\ e -> (from e, e))
                       $ concatMap (\ q -> M.findWithDefault [] q eM) qs
         in Node es ts'
+
+    goF :: Forest l -> [([v], a)] -> ([a], [AcyclicHypergraph v l i])
     goF [] xs = (map snd xs, [])
     goF (t : ts) xs
       = let t' = goT t $ L.nub $ map (head . fst) xs
