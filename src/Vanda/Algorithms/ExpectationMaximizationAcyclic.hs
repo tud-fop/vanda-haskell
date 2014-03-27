@@ -47,7 +47,7 @@ iter = iter' 0 where
 forestEM
   :: (RealFloat w, Ord i, Ord v)
   => [[i]]                -- ^ partition of the ids for normalization
-  -> [(Tree [Hyperedge v l j], w)]
+  -> [(AcyclicHypergraph v l j, w)]
                           -- ^ a list of training example derivation forests
   -> (Hyperedge v l j -> i)
                           -- ^ function extracting the id from a 'Hyperedge'
@@ -65,7 +65,7 @@ forestEM part gs exId p w0 ws
 forestEMlist
   :: (RealFloat w, Ord i, Ord v)
   => [[i]]                -- ^ partition of the ids for normalization
-  -> [(Tree [Hyperedge v l j], w)]
+  -> [(AcyclicHypergraph v l j, w)]
                           -- ^ a list of training example derivation forests
   -> (Hyperedge v l j -> i)
                           -- ^ function extracting the id from a 'Hyperedge'
@@ -101,7 +101,7 @@ normalize part m
 forestEMstep
   :: (RealFloat w, Ord i, Ord v)
   => [[i]]                -- ^ partition of the ids for normalization
-  -> [(Tree [Hyperedge v l j], w)]
+  -> [(AcyclicHypergraph v l j, w)]
                           -- ^ a list of training-example derivation forests
   -> (Hyperedge v l j -> i)
                           -- ^ function extracting the id from a 'Hyperedge'
@@ -132,7 +132,7 @@ forestEMstep part gs exId theta
 -- pairs for later id-specific summation.
 forestEMstepList
   :: (Floating w, Ord i, Ord v)
-  => [(Tree [Hyperedge v l j], w)]
+  => [(AcyclicHypergraph v l j, w)]
                           -- ^ a list of training-example derivation forests
   -> (Hyperedge v l j -> i)
                           -- ^ function extracting the id from a 'Hyperedge'
@@ -156,8 +156,8 @@ forestEMstepList gs exId (_, (w0, theta))
             $ map (\ (v, w') ->  w' * M.findWithDefault 0 v (rootLabel inner))
             $ M.toList w0
     , let factor = w / inner0  -- example-specific factor for id significance
-    , let go (Node es ts) (Node _ is) (Node oM os)
-            = map f es ++ concat (zipWith3 go ts is os)
+    , let go (Node eM ts) (Node _ is) (Node oM os)
+            = map f (concat $ M.elems eM) ++ concat (zipWith3 go ts is os)
             where f e = (exId e
                         ,   factor
                           * M.findWithDefault 0 (to e) oM

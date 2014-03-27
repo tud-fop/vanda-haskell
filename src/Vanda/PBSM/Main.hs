@@ -158,7 +158,7 @@ main = do
       let hg :: EdgeList Int String Int
           hg   = toHypergraphStartSeparated initialNT initialT g
           part = M.elems $ M.fromListWith (++) $ map (\ e -> (to e, [ident e])) $ edges hg
-          hgs  = map (parseTree hg [initialNT] . startSepTree) c
+          hgs  = map (dropUnreach [initialNT] . parseTree hg . startSepTree) c
                  where startSepTree tree = T.Node initialT [tree]
           w0   = M.singleton initialNT (1 :: Double)
           ws   = M.fromList $ flip zip (repeat 1) $ map ident $ edges hg
