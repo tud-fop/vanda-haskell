@@ -54,49 +54,31 @@ import Data.Traversable (Traversable, mapM)
 import Data.Tuple (swap)
 
 
-intify1
+intify1, intify1'
   :: (Ord e, Traversable t1)
   =>  t1 e
   -> (t1 Int, (M.Map e Int, A.Array Int e))
-intify1 x = doIntify intifyS1 x
-
-
-intify1'
-  :: (Ord e, Traversable t1)
-  =>  t1 e
-  -> (t1 Int, (M.Map e Int, A.Array Int e))
+intify1 = doIntify intifyS1
 intify1'
   = withStrategy (evalTuple2 (evalTraversable rseq) r0)
   . intify1
 
 
-intify2'
+intify2, intify2'
   :: (Ord e, Traversable t1, Traversable t2)
   =>  t2 (t1 e)
   -> (t2 (t1 Int), (M.Map e Int, A.Array Int e))
+intify2 = doIntify intifyS2
 intify2'
   = withStrategy (evalTuple2 (evalTraversable (evalTraversable rseq)) r0)
   . intify2
 
 
-intify2
-  :: (Ord e, Traversable t1, Traversable t2)
-  =>  t2 (t1 e)
-  -> (t2 (t1 Int), (M.Map e Int, A.Array Int e))
-intify2 x = doIntify intifyS2 x
-
-
-intify3
+intify3, intify3'
   :: (Ord e, Traversable t1, Traversable t2, Traversable t3)
   =>  t3 (t2 (t1 e))
   -> (t3 (t2 (t1 Int)), (M.Map e Int, A.Array Int e))
-intify3 x = doIntify intifyS3 x
-
-
-intify3'
-  :: (Ord e, Traversable t1, Traversable t2, Traversable t3)
-  =>  t3 (t2 (t1 e))
-  -> (t3 (t2 (t1 Int)), (M.Map e Int, A.Array Int e))
+intify3 = doIntify intifyS3
 intify3'
   = withStrategy
     (evalTuple2 (evalTraversable (evalTraversable (evalTraversable rseq))) r0)
