@@ -1,10 +1,11 @@
+#!/usr/bin/env runhaskell
+
 import Distribution.Simple
 
+main :: IO ()
 main = defaultMain
 
 {-
-#! /usr/bin/runghc
- 
  import Distribution.Simple
  import Distribution.Simple.LocalBuildInfo
  import Distribution.PackageDescription
