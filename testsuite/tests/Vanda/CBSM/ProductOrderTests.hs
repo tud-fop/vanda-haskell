@@ -1,6 +1,7 @@
 module Vanda.CBSM.ProductOrderTests where
 import Vanda.CBSM.ProductOrder
 
+import TestUtil
 
 import Test.HUnit
 
@@ -35,10 +36,6 @@ tests = TestList
     , TestCase $ addLub (int 2 :&: int 0) (LubSet [0 :&: 1, 1 :&: 0]) @?= LubSet [0 :&: 1, 2 :&: 0]
     ]
   ]
-
-
-int :: Int -> Int
-int = id
 
 
 -- | 'allProducts l h' shall succeed for every 'l <? h'.

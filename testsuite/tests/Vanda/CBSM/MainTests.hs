@@ -1,38 +1,86 @@
 module Vanda.CBSM.MainTests where
 import Vanda.CBSM.Main
 
+import qualified Data.RevMap as RM
 
-import Control.Monad (liftM2)
-import Data.List (sortBy)
-import Data.Ord (comparing)
-import Test.HUnit
+import           TestUtil (assertRoughly)
+
+import           Data.List (sortBy)
+import qualified Data.Map as M
+import           Data.Ord (comparing)
+import           Numeric.Log (Log(..))
+import           Test.HUnit
 
 
 tests :: Test
 tests = TestList
   [ "sortedCartesianProductWith" ~: TestList
     [ testSortedCartesianProductWith (+) [] ([] :: [Int])
-    , testSortedCartesianProductWith (+) [] [int 0]
-    , testSortedCartesianProductWith (+) [int 0] []
-    , testSortedCartesianProductWith (+) [int 0] [0]
-    , testSortedCartesianProductWith (+) [int 0 .. 2] [0 .. 2]
-    , testSortedCartesianProductWith (+) [int 0, 2, 4] [0 .. 2]
-    , testSortedCartesianProductWith (+) [int 0, 2, 4] [0, 5, 10]
+    , testSortedCartesianProductWith (+) [] [0 :: Int]
+    , testSortedCartesianProductWith (+) [0 :: Int] []
+    , testSortedCartesianProductWith (+) [0] [0 :: Int]
+    , testSortedCartesianProductWith (+) [0 .. 2] [0 .. 2 :: Int]
+    , testSortedCartesianProductWith (+) [0, 2, 4] [0 .. 2 :: Int]
+    , testSortedCartesianProductWith (+) [0, 2, 4] [0, 5, 10 :: Int]
     ]
   , "sortedCartesianProductWith'" ~: TestList
     [ testSortedCartesianProductWith' (+) [] ([] :: [Int])
-    , testSortedCartesianProductWith' (+) [] [int 0]
-    , testSortedCartesianProductWith' (+) [int 0] []
-    , testSortedCartesianProductWith' (+) [int 0] [0]
-    , testSortedCartesianProductWith' (+) [int 0 .. 2] [0 .. 2]
-    , testSortedCartesianProductWith' (+) [int 0, 2, 4] [0 .. 2]
-    , testSortedCartesianProductWith' (+) [int 0, 2, 4] [0, 5, 10]
+    , testSortedCartesianProductWith' (+) [] [0 :: Int]
+    , testSortedCartesianProductWith' (+) [0 :: Int] []
+    , testSortedCartesianProductWith' (+) [0] [0 :: Int]
+    , testSortedCartesianProductWith' (+) [0 .. 2] [0 .. 2 :: Int]
+    , testSortedCartesianProductWith' (+) [0, 2, 4] [0 .. 2 :: Int]
+    , testSortedCartesianProductWith' (+) [0, 2, 4] [0, 5, 10 :: Int]
+    ]
+  , "ruleEquivalenceClasses" ~: TestList
+    [ ruleEquivalenceClasses RM.empty rtg0 ~?= M.empty
+    , ruleEquivalenceClasses (createMerge ["Aa"]) rtg0
+      ~?= M.fromList
+        [ (Rule 'A' "BC" 's' 1, [Rule 'A' "BC" 's' 1])
+        , (Rule 'A' "bc" 's' 4, [Rule 'a' "bc" 's' 4])
+        , (Rule 'B' "AC" 's' 2, [Rule 'B' "AC" 's' 2])
+        , (Rule 'b' "Ac" 's' 5, [Rule 'b' "ac" 's' 5])
+        ]
+    , ruleEquivalenceClasses (createMerge ["Cc"]) rtg0
+      ~?= M.fromList
+        [ (Rule 'A' "BC" 's' 1, [Rule 'A' "BC" 's' 1])
+        , (Rule 'B' "AC" 's' 2, [Rule 'B' "AC" 's' 2])
+        , (Rule 'C' ""   'C' 3, [Rule 'C' ""   'C' 3])
+        , (Rule 'C' ""   'c' 6, [Rule 'c' ""   'c' 6])
+        , (Rule 'a' "bC" 's' 4, [Rule 'a' "bc" 's' 4])
+        , (Rule 'b' "aC" 's' 5, [Rule 'b' "ac" 's' 5])
+        ]
+    , ruleEquivalenceClasses (createMerge ["Aa", "Bb"]) rtg0
+      ~?= M.fromList
+        [ (Rule 'A' "BC" 's' 1, [Rule 'A' "BC" 's' 1])
+        , (Rule 'A' "Bc" 's' 4, [Rule 'a' "bc" 's' 4])
+        , (Rule 'B' "AC" 's' 2, [Rule 'B' "AC" 's' 2])
+        , (Rule 'B' "Ac" 's' 5, [Rule 'b' "ac" 's' 5])
+        ]
+    , ruleEquivalenceClasses (createMerge ["Aa", "Bb", "Cc"]) rtg0
+      ~?= M.fromList
+        [ (Rule 'A' "BC" 's' undefined, [Rule 'a' "bc" 's' 4, Rule 'A' "BC" 's' 1])
+        , (Rule 'B' "AC" 's' undefined, [Rule 'b' "ac" 's' 5, Rule 'B' "AC" 's' 2])
+        , (Rule 'C' ""   'C' 3, [Rule 'C' ""   'C' 3])
+        , (Rule 'C' ""   'c' 6, [Rule 'c' ""   'c' 6])
+        ]
+    ]
+  , "likelihoodDelta" ~: TestList
+    [ ln (likelihoodDelta RM.empty crtg0) ~?= 0
+    , ln (likelihoodDelta (createMerge ["Cc"]) crtg0) ~?= log ((3**3 * 6**6) / 9**9)
+    , TestCase $ assertRoughly "" 1e-10
+        ( ln (likelihoodDelta (createMerge ["Aa", "Bb", "Cc"]) crtg0) )
+        ( log
+          ( 3**3 / (1**1 * 2**2)  -- } merged initial states
+          * 5**5 / (1**1 * 4**4)  -- ⎫ merged
+          * 7**7 / (2**2 * 5**5)  -- ⎭ rules
+          * (1**1 * 4**4) / 5**5  -- ⎫
+          * (2**2 * 5**5) / 7**7  -- ⎬ merged states
+          * (3**3 * 6**6) / 9**9  -- ⎭
+          )
+        )
     ]
   ]
-
-
-int :: Int -> Int
-int = id
 
 
 testSortedCartesianProductWith
@@ -59,3 +107,21 @@ naiveSortedCartesianProductWithInternal (?) (>+<) xs ys
       , (y, j) <- zip ys [0 :: Int ..]
       , i ? j
       ]
+
+
+rtg0 :: RTG Char Char
+rtg0 = fromList
+  [ Rule 'A' "BC" 's' 1
+  , Rule 'B' "AC" 's' 2
+  , Rule 'C' ""   'C' 3
+  , Rule 'a' "bc" 's' 4
+  , Rule 'b' "ac" 's' 5
+  , Rule 'c' ""   'c' 6
+  ]
+
+
+crtg0 :: CRTG Char Char
+crtg0 = CRTG
+  rtg0
+  (M.fromList [('A', 1), ('B', 2), ('C', 3), ('a', 4), ('b', 5), ('c', 6)])
+  (M.fromList [('A', 1), ('a', 2)])

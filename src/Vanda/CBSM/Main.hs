@@ -18,8 +18,8 @@ module Vanda.CBSM.Main where
 
 
 import Control.Arrow ((***))
-import qualified Vanda.CBSM.BiMap as BM
-import           Vanda.CBSM.BiMap (BiMap)
+import qualified Data.RevMap as RM
+import           Data.RevMap (RevMap)
 
 import Control.Monad.State.Lazy
 import Data.List (foldl')
@@ -37,10 +37,21 @@ data Rule s t = Rule
   { to    :: s
   , from  :: [s]
   , label :: t
-  } deriving (Eq, Ord)
+  , count :: Int
+  }
+
+instance (Eq s, Eq t) => Eq (Rule s t) where
+  Rule  x1  y1  z1  _  ==  Rule  x2  y2  z2  _
+    =  (x1, y1, z1)    ==       (x2, y2, z2)
+  Rule  x1  y1  z1  _  /=  Rule  x2  y2  z2  _
+    =  (x1, y1, z1)    /=       (x2, y2, z2)
+
+instance (Ord s, Ord t) => Ord (Rule s t) where
+  Rule  x1  y1  z1  _  `compare`  Rule  x2  y2  z2  _
+    =  (x1, y1, z1)    `compare`       (x2, y2, z2)
 
 instance (Show s, Show t) => Show (Rule s t) where
-  show Rule{..} = "Rule " ++ show to ++ " " ++ show from ++ " " ++ show label
+  show Rule{..} = "Rule " ++ show to ++ " " ++ show from ++ " " ++ show label ++ " " ++ show count
 
 
 -- s … states, t … terminals
@@ -49,18 +60,17 @@ type RTG s t = Map s (Map t (Set (Rule s t), Set (Rule s t)))
 
 
 -- | Count RTG
-data CRTG v l i = CRTG
+data CRTG v l = CRTG
   { getRTG   :: RTG v l
   , cntState :: Map v Int
   , cntInit  :: Map v Int
-  , cntRule  :: Map i Int
   }
 
 
 fromList :: (Ord s, Ord t) => [Rule s t] -> RTG s t
 fromList = unions . concatMap step
   where
-    step r@(Rule s ss t) = singletonFst s t r : map (\ s' -> singletonSnd s' t r) ss
+    step r@(Rule s ss t _) = singletonFst s t r : map (\ s' -> singletonSnd s' t r) ss
     singletonFst k1 k2 v = M.singleton k1 $ M.singleton k2 (S.singleton v, S.empty)
     singletonSnd k1 k2 v = M.singleton k1 $ M.singleton k2 (S.empty, S.singleton v)
     union = M.unionWith (M.unionWith (S.union **** S.union))
@@ -76,17 +86,17 @@ f **** g = \ (xf, xg) (yf, yg) -> (f xf yf, g xg yg)
 saturateMerge
   :: forall s t
   .  (Ord s, Ord t)
-  => BiMap s s  -- ^ merges (must be an equivalence relation)
+  => RevMap s s  -- ^ merges (must be an equivalence relation)
   -> RTG s t
-  -> BiMap s s
+  -> RevMap s s
 -- saturateMerge
---   :: BiMap Char Char  -- ^ merges (must be an equivalence relation)
+--   :: RevMap Char Char  -- ^ merges (must be an equivalence relation)
 --   -> RTG Char Char
---   -> BiMap Char Char
-saturateMerge m0 g = evalState go (M.keysSet (BM.forward m0), m0)
+--   -> RevMap Char Char
+saturateMerge m0 g = evalState go (M.keysSet (RM.forward m0), m0)
   where
-    go :: State (Set s, BiMap s s) (BiMap s s)
-    -- go :: State (Set Char, BiMap Char Char) (BiMap Char Char)
+    go :: State (Set s, RevMap s s) (RevMap s s)
+    -- go :: State (Set Char, RevMap Char Char) (RevMap Char Char)
     go = do
       modify $ \ (todo, mrgs) -> (S.map (mergeState mrgs) todo, mrgs)
       gets (S.minView . fst) >>= \ case
@@ -98,7 +108,7 @@ saturateMerge m0 g = evalState go (M.keysSet (BM.forward m0), m0)
                 $ M.unionsWith S.union
                 $ map (fmap snd)
                 $ mapMaybe (flip M.lookup g)
-                $ maybe [] S.toList (BM.equivalenceClass s mrgs)
+                $ maybe [] S.toList (RM.equivalenceClass s mrgs)
                 )
             $ mapM_ (\ mrg -> modify ((S.insert (head mrg)) *** addMerge (S.fromList mrg)))
             . filter lengthGE2
@@ -124,11 +134,11 @@ lengthGE2 (_ : _ : _) = True
 lengthGE2          _  = False
 
 
-createMerge :: Ord k => [[k]] -> BiMap k k
-createMerge = foldl' (flip addMerge) BM.empty . map S.fromList
+createMerge :: Ord k => [[k]] -> RevMap k k
+createMerge = foldl' (flip addMerge) RM.empty . map S.fromList
 
 
-addMerge :: Ord k => Set k -> BiMap k k -> BiMap k k
+addMerge :: Ord k => Set k -> RevMap k k -> RevMap k k
 addMerge new old
   | S.size new < 2 = old
   | otherwise
@@ -136,14 +146,14 @@ addMerge new old
     $ flip insertList old
     $ S.toList
     $ S.unions
-    $ map ((BM.backward old !) . (BM.forward old !))  -- equivalence class
+    $ map ((RM.backward old !) . (RM.forward old !))  -- equivalence class
     $ S.toList
     $ S.intersection new
     $ M.keysSet
-    $ BM.forward old
+    $ RM.forward old
   where
     representative = S.findMin new
-    insertList = flip $ foldl' (\ m k -> BM.insert k representative m)
+    insertList = flip $ foldl' (\ m k -> RM.insert k representative m)
 
 
 -- | Lazily calculate the Cartesian product of two lists sorted by a score
@@ -215,11 +225,11 @@ sortedCartesianProductWithInternal (?) (>+<) (x0 : xs0) (y0 : ys0)
 sortedCartesianProductWithInternal _ _ _ _ = []
 
 
-likelihoodDelta :: Ord v => BiMap v v -> CRTG v l i -> Log Double
+likelihoodDelta :: (Ord l, Ord v) => RevMap v v -> CRTG v l -> Log Double
 likelihoodDelta mrgs CRTG{..}
   = product  -- initial states
     [ p (sum cs) / product (map p cs)
-    | vS <- M.elems $ BM.backward mrgs
+    | vS <- M.elems $ RM.backward mrgs
     , let cs = M.elems $ M.intersection cntInit (M.fromSet undefined vS)
       -- only consider explicitly given counts from cntInit
       -- these must be > 0
@@ -227,12 +237,11 @@ likelihoodDelta mrgs CRTG{..}
     ]
   * product  -- rules
     [ p (sum cs) / product (map p cs)
-    | vs <- map S.toList $ M.elems $ BM.backward mrgs
-    , let cs = undefined
+    | cs <- map (map count) $ M.elems $ ruleEquivalenceClasses mrgs getRTG
     ]
   * product  -- states
     [ product (map p cs) / p (sum cs)
-    | vS <- M.elems $ BM.backward mrgs
+    | vS <- M.elems $ RM.backward mrgs
     , let cs = map (getCnt cntState) $ S.toList vS
     ]
   where
@@ -245,7 +254,7 @@ likelihoodDelta mrgs CRTG{..}
 
 
 ruleEquivalenceClasses
-  :: (Ord l, Ord v) => BiMap v v -> RTG v l -> Map (Rule v l) [Rule v l]
+  :: (Ord l, Ord v) => RevMap v v -> RTG v l -> Map (Rule v l) [Rule v l]
 ruleEquivalenceClasses mrgs g
   = M.fromListWith (++)
   $ map (\ r -> (mergeRule mrgs r, [r]))
@@ -254,15 +263,15 @@ ruleEquivalenceClasses mrgs g
   $ map (uncurry S.union)
   $ concatMap M.elems
   $ M.elems
-  $ M.intersection g (BM.forward mrgs)
+  $ M.intersection g (RM.forward mrgs)
 
 
-mergeState :: Ord k => BiMap k k -> k -> k
-mergeState m = \ s -> M.findWithDefault s s (BM.forward m)
+mergeState :: Ord k => RevMap k k -> k -> k
+mergeState m = \ s -> M.findWithDefault s s (RM.forward m)
 
 
-mergeRule :: Ord v => BiMap v v -> Rule v l -> Rule v l
-mergeRule mrgs Rule{..} = Rule (mrg to) (map mrg from) label
+mergeRule :: Ord v => RevMap v v -> Rule v l -> Rule v l
+mergeRule mrgs Rule{..} = Rule (mrg to) (map mrg from) label count
   where mrg = mergeState mrgs
 
 
@@ -272,18 +281,3 @@ whileM cond act = do
   case b of
     True  -> act >> whileM cond act
     False -> return ()
-
-
-
-rtg0 :: RTG Char Char
-rtg0 = fromList
-  [ Rule 'A' "BC" 's'
-  , Rule 'a' "bc" 's'
-  , Rule 'B' "AC" 's'
-  , Rule 'b' "ac" 's'
-  , Rule 'C' "" 'C'
-  , Rule 'c' "" 'c'
-  ]
-
-test0 :: BiMap Char Char
-test0 = saturateMerge (createMerge ["Bb", "Cc"]) rtg0
