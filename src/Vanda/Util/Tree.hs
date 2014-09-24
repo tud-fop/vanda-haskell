@@ -26,6 +26,7 @@ module Vanda.Util.Tree
 , drawForest'
 , -- * Extraction
   flattenRanked
+, subTrees
 , yield
 , -- * Manipulation
   defoliate
@@ -127,6 +128,11 @@ draw Drawstyle{ .. } (Node root ts0)
 -- respectively, in pre-order.
 flattenRanked :: Tree a -> [(a, Int)]
 flattenRanked (Node x ts) = (x, length ts) : concatMap flattenRanked ts
+
+
+-- | List of all subtrees in pre-order.
+subTrees :: Tree a -> Forest a
+subTrees t = t : concatMap subTrees (subForest t)
 
 
 -- | List of leaves from left to right.
