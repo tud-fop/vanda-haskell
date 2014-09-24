@@ -202,7 +202,7 @@ instance Ord (Prio MPolicy (Candidate v l i x)) where
   compare (FMP x) (FMP y) = compare y x
 
 knuth
-  :: forall v l i x. (Ord v, Show l, Show v, Show i)
+  :: Ord v
   => EdgeList v l i
   -> Feature l i x
   -> V.Vector Double

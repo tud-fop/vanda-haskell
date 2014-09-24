@@ -5,7 +5,7 @@ import Test.HUnit
 
 import qualified Data.MultiMapTests
 import qualified Data.RevMapTests
-import qualified Vanda.CBSM.MainTests
+import qualified Vanda.CBSM.CountBasedStateMergingTests
 import qualified Vanda.CBSM.ProductOrderTests
 
 
@@ -15,8 +15,12 @@ main = void (runTestTT tests)
 
 tests :: Test
 tests = TestList
-  [ "Data.MultiMapTests"       ~: Data.MultiMapTests.tests
-  , "Data.RevMapTests"         ~: Data.RevMapTests.tests
-  , "Vanda.CBSM.Main"          ~: Vanda.CBSM.MainTests.tests
-  , "Vanda.CBSM.ProductOrder"  ~: Vanda.CBSM.ProductOrderTests.tests
+  [   "Data.MultiMapTests"
+    ~: Data.MultiMapTests.tests
+  ,   "Data.RevMapTests"
+    ~: Data.RevMapTests.tests
+  ,   "Vanda.CBSM.CountBasedStateMerging"
+    ~: Vanda.CBSM.CountBasedStateMergingTests.tests
+  ,   "Vanda.CBSM.ProductOrder"
+    ~: Vanda.CBSM.ProductOrderTests.tests
   ]

@@ -1,13 +1,15 @@
-module Vanda.CBSM.MainTests where
-import Vanda.CBSM.Main
+module Vanda.CBSM.CountBasedStateMergingTests where
+import Vanda.CBSM.CountBasedStateMerging
 
 import qualified Data.RevMap as RM
+import           Vanda.Corpus.TreeTerm
 
 import           TestUtil (assertRoughly)
 
 import           Data.List (sortBy)
 import qualified Data.Map as M
 import           Data.Ord (comparing)
+import           Data.Tree
 import           Numeric.Log (Log(..))
 import           Test.HUnit
 
@@ -125,3 +127,8 @@ crtg0 = CRTG
   rtg0
   (M.fromList [('A', 1), ('B', 2), ('C', 3), ('a', 4), ('b', 5), ('c', 6)])
   (M.fromList [('A', 1), ('a', 2)])
+
+
+t0 = parseTree "A(B(D, E), C(D, E))"
+t1 = parseTree "X(B(Y, E), C(Z, E))"
+

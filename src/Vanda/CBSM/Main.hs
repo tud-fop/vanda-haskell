@@ -17,267 +17,65 @@
 module Vanda.CBSM.Main where
 
 
-import Control.Arrow ((***))
 import qualified Data.RevMap as RM
 import           Data.RevMap (RevMap)
+import           Vanda.CBSM.CountBasedStateMerging
+import qualified Vanda.Hypergraph as H
+import           Vanda.Util.Tree as T
 
-import Control.Monad.State.Lazy
-import Data.List (foldl')
+import           Control.Arrow ((***), first, second)
+import           Data.List (foldl', groupBy, sortBy)
+import           Data.Function (on)
 import qualified Data.Map as M
 import           Data.Map (Map, (!))
-import Data.Maybe
-import Numeric.Log (Log(..))
 import qualified Data.Set as S
 import           Data.Set (Set)
+import           Data.Tree
 
 import Debug.Trace
 
 
-data Rule s t = Rule
-  { to    :: s
-  , from  :: [s]
-  , label :: t
-  , count :: Int
-  }
-
-instance (Eq s, Eq t) => Eq (Rule s t) where
-  Rule  x1  y1  z1  _  ==  Rule  x2  y2  z2  _
-    =  (x1, y1, z1)    ==       (x2, y2, z2)
-  Rule  x1  y1  z1  _  /=  Rule  x2  y2  z2  _
-    =  (x1, y1, z1)    /=       (x2, y2, z2)
-
-instance (Ord s, Ord t) => Ord (Rule s t) where
-  Rule  x1  y1  z1  _  `compare`  Rule  x2  y2  z2  _
-    =  (x1, y1, z1)    `compare`       (x2, y2, z2)
-
-instance (Show s, Show t) => Show (Rule s t) where
-  show Rule{..} = "Rule " ++ show to ++ " " ++ show from ++ " " ++ show label ++ " " ++ show count
+test3 n
+  = putStr
+  . unlines
+  . concatMap (\ (w, d) -> [show w, drawTree' (drawstyleCompact2 0 "") $ fmap (show . H.label) d])
+  . bests
+  . (!! n)
+  . iterate cbsmStep2
+  . forestToGrammar
 
 
--- s … states, t … terminals
-type RTG s t = Map s (Map t (Set (Rule s t), Set (Rule s t)))
-                          -- ↳ forward star  ↳ backward star
+test2 n
+  = putStr
+  . unlines
+  . map (unlines . map show . H.edges . asEdgeList . fst . toHypergraph)
+  . take n
+  . iterate cbsmStep2
+  . forestToGrammar
 
 
--- | Count RTG
-data CRTG v l = CRTG
-  { getRTG   :: RTG v l
-  , cntState :: Map v Int
-  , cntInit  :: Map v Int
-  }
-
-
-fromList :: (Ord s, Ord t) => [Rule s t] -> RTG s t
-fromList = unions . concatMap step
+test1 n
+  = putStr
+  . unlines
+  . map (uncurry (++) . ((unlines . map show . H.edges . asEdgeList . fst . toHypergraph) *** (unlines . map showStep1)))
+  . take n
+  . tail
+  . iterate step . (\ x -> (x, undefined))
+  . forestToGrammar
   where
-    step r@(Rule s ss t _) = singletonFst s t r : map (\ s' -> singletonSnd s' t r) ss
-    singletonFst k1 k2 v = M.singleton k1 $ M.singleton k2 (S.singleton v, S.empty)
-    singletonSnd k1 k2 v = M.singleton k1 $ M.singleton k2 (S.empty, S.singleton v)
-    union = M.unionWith (M.unionWith (S.union **** S.union))
-    unions = foldl' union M.empty
+    step (g, _) = (cbsmStep2 g, refineRanking (mergeRanking g))
+
+    showStep1 ((s, ((v1, n1), (v2, n2))), (mrg, delta))
+      =  show s ++ "=" ++ show n1 ++ "+" ++ show n2 ++ ": "
+      ++ show delta ++ ": "
+      ++ show [v1, v2]
+      ++ if M.size (RM.forward mrg) > 2
+         then " -> " ++ show (map S.toList $ M.elems $ RM.backward mrg)
+         else " (saturated)"
 
 
-(****) :: (a -> b -> c) -> (d -> e -> f) -> (a, d) -> (b, e) -> (c, f)
-f **** g = \ (xf, xg) (yf, yg) -> (f xf yf, g xg yg)
---       = uncurry (***) . (f *** g)
---(****) = ((uncurry (***) .) .) . (***)
+asEdgeList :: H.EdgeList v l i -> H.EdgeList v l i
+asEdgeList = id
 
-
-saturateMerge
-  :: forall s t
-  .  (Ord s, Ord t)
-  => RevMap s s  -- ^ merges (must be an equivalence relation)
-  -> RTG s t
-  -> RevMap s s
--- saturateMerge
---   :: RevMap Char Char  -- ^ merges (must be an equivalence relation)
---   -> RTG Char Char
---   -> RevMap Char Char
-saturateMerge m0 g = evalState go (M.keysSet (RM.forward m0), m0)
-  where
-    go :: State (Set s, RevMap s s) (RevMap s s)
-    -- go :: State (Set Char, RevMap Char Char) (RevMap Char Char)
-    go = do
-      modify $ \ (todo, mrgs) -> (S.map (mergeState mrgs) todo, mrgs)
-      gets (S.minView . fst) >>= \ case
-        Nothing -> gets snd
-        Just (s, sS) -> do
-          putFst sS
-          mrgs <- gets snd
-          forM_ ( M.elems
-                $ M.unionsWith S.union
-                $ map (fmap snd)
-                $ mapMaybe (flip M.lookup g)
-                $ maybe [] S.toList (RM.equivalenceClass s mrgs)
-                )
-            $ mapM_ (\ mrg -> modify ((S.insert (head mrg)) *** addMerge (S.fromList mrg)))
-            . filter lengthGE2
-            . map S.toList
-            . M.elems
-            . M.fromListWith S.union
-            . map (\ Rule{..} -> (map (mergeState mrgs) from, S.singleton (mergeState mrgs to)))
-            . S.toList
-          go
-
-
-traceShow' :: Show a => [Char] -> a -> a
-traceShow' cs x = trace (cs ++ ": " ++ show x) x
-
-
-putFst :: Monad m => s1 -> StateT (s1, s2) m ()
-putFst x = modify (\ (_, y) -> (x, y))
--- putSnd y = modify (\ (x, _) -> (x, y))
-
-
-lengthGE2 :: [a] -> Bool
-lengthGE2 (_ : _ : _) = True
-lengthGE2          _  = False
-
-
-createMerge :: Ord k => [[k]] -> RevMap k k
-createMerge = foldl' (flip addMerge) RM.empty . map S.fromList
-
-
-addMerge :: Ord k => Set k -> RevMap k k -> RevMap k k
-addMerge new old
-  | S.size new < 2 = old
-  | otherwise
-    = insertList (S.toList new)
-    $ flip insertList old
-    $ S.toList
-    $ S.unions
-    $ map ((RM.backward old !) . (RM.forward old !))  -- equivalence class
-    $ S.toList
-    $ S.intersection new
-    $ M.keysSet
-    $ RM.forward old
-  where
-    representative = S.findMin new
-    insertList = flip $ foldl' (\ m k -> RM.insert k representative m)
-
-
--- | Lazily calculate the Cartesian product of two lists sorted by a score
--- calculated from the elements. /The following precondition must hold:/
--- For a call with arguments @f@, @[x1, …, xm]@, and @[y1, …, yn]@ for every
--- @xi@ and for every @yj@, @yk@ with @j <= k@: @f xi yj <= f xi yk@ must
--- hold, and analogously for @xi@, @xj@, and @yk@.
-sortedCartesianProductWith
-  :: Ord c
-  => (a -> b -> c)  -- ^ calculates a score
-  -> [a]
-  -> [b]
-  -> [(c, (a, b))]  -- ^ Cartesian product ('snd') sorted by score ('fst')
-sortedCartesianProductWith
-  = sortedCartesianProductWithInternal (\ _ _ -> True)
-
-
--- | The same as 'sortedCartesianProductWith', but only pairs @(xi, yj)@ with
--- @i <= j@ are returned.
-sortedCartesianProductWith'
-  :: Ord c => (a -> b -> c) -> [a] -> [b] -> [(c, (a, b))]
-sortedCartesianProductWith'
-  = sortedCartesianProductWithInternal (<=)
-
-
-sortedCartesianProductWithInternal
-  :: forall a b c . Ord c
-  => (Int -> Int -> Bool)  -- ^ filter combinations
-  -> (a -> b -> c)  -- ^ calculates a score
-  -> [a]
-  -> [b]
-  -> [(c, (a, b))]  -- ^ Cartesian product ('snd') sorted by score ('fst')
-sortedCartesianProductWithInternal (?) (>+<) (x0 : xs0) (y0 : ys0)
-  = go1 $ M.singleton (x0 >+< y0) (M.singleton (0, 0) ((x0, y0), (xs0, ys0)))
-  where
-    go1 :: Map c (Map (Int, Int) ((a, b), ([a], [b]))) -> [(c, (a, b))]
-    go1 = maybe [] go2 . M.minViewWithKey
-
-    go2
-      :: (    (c, Map (Int, Int) ((a, b), ([a], [b])))
-         , Map c (Map (Int, Int) ((a, b), ([a], [b]))) )
-      -> [(c, (a, b))]
-    go2 ((mini, srcM), m)
-      = map ((,) mini . fst) (M.elems srcM)
-      ++ go1 (M.foldrWithKey' adjust m srcM)
-
-    adjust
-      ::            (Int, Int)
-      ->                       ((a, b), ([a], [b]))
-      -> Map c (Map (Int, Int) ((a, b), ([a], [b])))
-      -> Map c (Map (Int, Int) ((a, b), ([a], [b])))
-    adjust _ (_, ([], [])) = id
-    adjust (i, j) ((x1, _), ([], y2 : ys2))
-      = insert i (j + 1) x1 y2 [] ys2
-    adjust (i, j) ((_, y1), (x2 : xs2, []))
-      = insert (i + 1) j x2 y1 xs2 []
-    adjust (i, j) ((x1, y1), (xs1@(x2 : xs2), ys1@(y2 : ys2)))
-      = insert i (j + 1) x1 y2 xs1 ys2
-      . insert (i + 1) j x2 y1 xs2 ys1
-
-    insert
-      ::             Int->Int -> a->b -> [a]->[b]
-      -> Map c (Map (Int, Int) ((a, b), ([a], [b])))
-      -> Map c (Map (Int, Int) ((a, b), ([a], [b])))
-    insert i j x y xs ys | i ? j = M.insertWith M.union (x >+< y)
-                                 $ M.singleton (i, j) ((x, y), (xs, ys))
-    insert _ _ _ _ _  _          = id
-
-sortedCartesianProductWithInternal _ _ _ _ = []
-
-
-likelihoodDelta :: (Ord l, Ord v) => RevMap v v -> CRTG v l -> Log Double
-likelihoodDelta mrgs CRTG{..}
-  = product  -- initial states
-    [ p (sum cs) / product (map p cs)
-    | vS <- M.elems $ RM.backward mrgs
-    , let cs = M.elems $ M.intersection cntInit (M.fromSet undefined vS)
-      -- only consider explicitly given counts from cntInit
-      -- these must be > 0
-    , not (null cs)
-    ]
-  * product  -- rules
-    [ p (sum cs) / product (map p cs)
-    | cs <- map (map count) $ M.elems $ ruleEquivalenceClasses mrgs getRTG
-    ]
-  * product  -- states
-    [ product (map p cs) / p (sum cs)
-    | vS <- M.elems $ RM.backward mrgs
-    , let cs = map (getCnt cntState) $ S.toList vS
-    ]
-  where
-    -- | power with itself
-    p :: Int -> Log Double
-    p n = Exp (x * log x)  -- = Exp (log (x ** x))
-      where x = fromIntegral n
-
-    getCnt m k = M.findWithDefault 0 k m
-
-
-ruleEquivalenceClasses
-  :: (Ord l, Ord v) => RevMap v v -> RTG v l -> Map (Rule v l) [Rule v l]
-ruleEquivalenceClasses mrgs g
-  = M.fromListWith (++)
-  $ map (\ r -> (mergeRule mrgs r, [r]))
-  $ S.elems
-  $ S.unions
-  $ map (uncurry S.union)
-  $ concatMap M.elems
-  $ M.elems
-  $ M.intersection g (RM.forward mrgs)
-
-
-mergeState :: Ord k => RevMap k k -> k -> k
-mergeState m = \ s -> M.findWithDefault s s (RM.forward m)
-
-
-mergeRule :: Ord v => RevMap v v -> Rule v l -> Rule v l
-mergeRule mrgs Rule{..} = Rule (mrg to) (map mrg from) label count
-  where mrg = mergeState mrgs
-
-
-whileM :: Monad m => m Bool -> m a -> m ()
-whileM cond act = do
-  b <- cond
-  case b of
-    True  -> act >> whileM cond act
-    False -> return ()
+asBackwardStar :: H.BackwardStar v l i -> H.BackwardStar v l i
+asBackwardStar = id
