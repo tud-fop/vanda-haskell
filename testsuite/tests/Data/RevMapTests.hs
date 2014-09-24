@@ -45,6 +45,7 @@ tests =
            , [(x00, x01), (x10, x10)]
            ]
 
+      -- equivalence classes
       es = [ []
            , [[x00]]
            , [[x00], [x10]]
@@ -54,13 +55,13 @@ tests =
            , [[x00], [x10]]
            ]
 
-      ordOnFstPairs   = map (  OrdOnFst ***   OrdOnFst)
+      -- ordOnFstPairs   = map (  OrdOnFst ***   OrdOnFst)
       unOrdOnFstPairs = map (unOrdOnFst *** unOrdOnFst)
 
       flatForward  = unOrdOnFstPairs . M.toAscList . forward
-      flatBackward = map (unOrdOnFst *** (map unOrdOnFst . S.toAscList))
-                   . M.toAscList
-                   . backward
+      -- flatBackward = map (unOrdOnFst *** (map unOrdOnFst . S.toAscList))
+      --              . M.toAscList
+      --              . backward
   in TestList
   [ "insert/delete/toAscList" ~: TestList $ zipWith (\ m l -> TestList
     [ "forward"  ~: flatForward m ~?= l
@@ -70,6 +71,7 @@ tests =
     [ "forward"  ~: flatForward m ~?= l
     , "backward" ~: (S.fromList $ map swap $ unOrdOnFstPairs $ MM.toList $ backward m) ~?= S.fromList l
     ]) (map fromList $ inits insertions) ls
+  , "toList" ~: TestList $ zipWith (\ m l -> unOrdOnFstPairs (toList m) ~?= l) ms ls
   , "equivalenceClass" ~: TestList $ zipWith (\ m e ->
           (map (map unOrdOnFst . S.toList) $ mapMaybe (\ k -> equivalenceClass k m) $ M.keys $ forward m) ~?= e
         ) ms es

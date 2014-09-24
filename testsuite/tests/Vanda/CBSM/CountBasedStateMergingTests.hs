@@ -82,6 +82,11 @@ tests = TestList
           )
         )
     ]
+  , "saturateMerge" ~: TestList
+    [ (RM.toList $ saturateMerge rtg0 $ createMerge []) ~?= (RM.toList $ createMerge [])
+    , (RM.toList $ saturateMerge rtg1 $ createMerge ["AB", "GH"]) ~?= (RM.toList $ createMerge ["AB", "CD", "EF", "GH"])
+    , (RM.toList $ saturateMerge rtg1 $ createMerge ["CD", "EF", "IJ"]) ~?= (RM.toList $ createMerge ["CD", "EF", "IJ"])
+    ]
   ]
 
 
@@ -122,6 +127,17 @@ rtg0 = fromList
   ]
 
 
+rtg1 :: RTG Char Char
+rtg1 = fromList
+  [ Rule 'C' "AZ" 's' 1
+  , Rule 'D' "BZ" 's' 2
+  , Rule 'E' "CA" 's' 3
+  , Rule 'F' "DB" 's' 4
+  , Rule 'I' "GZ" 'a' 5
+  , Rule 'J' "HZ" 'b' 6
+  ]
+
+
 crtg0 :: CRTG Char Char
 crtg0 = CRTG
   rtg0
@@ -129,6 +145,7 @@ crtg0 = CRTG
   (M.fromList [('A', 1), ('a', 2)])
 
 
+t0, t1 :: Tree String
 t0 = parseTree "A(B(D, E), C(D, E))"
 t1 = parseTree "X(B(Y, E), C(Z, E))"
 

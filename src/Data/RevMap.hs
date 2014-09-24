@@ -27,6 +27,7 @@ module Data.RevMap
 , empty
 , insert
 , fromList
+, toList
 , equivalenceClass
 ) where
 
@@ -66,6 +67,10 @@ insert k v RevMap{..} = RevMap f b
 
 fromList :: (Ord k, Ord v) => [(k, v)] -> RevMap k v
 fromList = foldl' (\ m (k, v) -> insert k v m) empty
+
+
+toList :: RevMap k a -> [(k, a)]
+toList = M.toList . forward
 
 
 equivalenceClass :: (Ord k, Ord v) => k -> RevMap k v -> Maybe (Set k)

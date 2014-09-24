@@ -62,9 +62,14 @@ instance (Show s, Show t) => Show (Rule s t) where
   show Rule{..} = "Rule " ++ show to ++ " " ++ show from ++ " " ++ show label ++ " " ++ show count
 
 
--- s … states, t … terminals
-type RTG s t = Map s (Map t (Set (Rule s t), Set (Rule s t)))
-                          -- ↳ forward star  ↳ backward star
+-- | helper type to prevent confusion of forward and backward star
+data RuleSets v l = (:->)
+  { backward :: Set (Rule v l)  -- ^ reserved for backward star
+  , forward  :: Set (Rule v l)  -- ^ reserved for forward star
+  } deriving Show
+
+-- v … vertices/states, l … labels/terminals
+type RTG v l = Map v (Map l (RuleSets v l))
 
 
 -- | Count RTG
@@ -78,11 +83,17 @@ data CRTG v l = CRTG
 fromList :: (Ord s, Ord t) => [Rule s t] -> RTG s t
 fromList = unions . concatMap step
   where
-    step r@(Rule s ss t _) = singletonSnd s t r : map (\ s' -> singletonFst s' t r) ss
-    singletonFst k1 k2 v = M.singleton k1 $ M.singleton k2 (S.singleton v, S.empty)
-    singletonSnd k1 k2 v = M.singleton k1 $ M.singleton k2 (S.empty, S.singleton v)
-    union = M.unionWith (M.unionWith (S.union **** S.union))
+    step r@(Rule v vs l _) = singletonBW v l r : map (\ v' -> singletonFW v' l r) vs
+    singletonBW v l r = M.singleton v $ M.singleton l (S.singleton r :-> S.empty)
+    singletonFW v l r = M.singleton v $ M.singleton l (S.empty :-> S.singleton r)
+    union = M.unionWith (M.unionWith unionRuleSets)
     unions = foldl' union M.empty
+
+
+unionRuleSets
+  :: (Ord l, Ord v) => RuleSets v l -> RuleSets v l -> RuleSets v l
+unionRuleSets (bw1 :-> fw1) (bw2 :-> fw2)
+  = (S.union bw1 bw2 :-> S.union fw1 fw2)
 
 
 toHypergraph
@@ -91,7 +102,7 @@ toHypergraph
 toHypergraph CRTG{..}
   = ( H.mkHypergraph
       $ map (\ Rule{..} -> (H.mkHyperedge to from label (fromIntegral count / fromIntegral (cntState M.! to))))
-      $   S.toList . snd
+      $   S.toList . backward
       =<< M.elems
       =<< M.elems getRTG
     , M.map (((1 / (fromIntegral $ sum $ M.elems cntInit)) *) . fromIntegral)
@@ -272,13 +283,13 @@ saturateMerge g m0 = evalState go (M.keysSet (RM.forward m0), m0)
           mrgs <- gets snd
           forM_ ( M.elems
                 $ M.unionsWith S.union
-                $ map (fmap snd)
+                $ map (fmap forward)
                 $ mapMaybe (flip M.lookup g)
                 $ maybe [] S.toList (RM.equivalenceClass s mrgs)
                 )
             $ mapM_ (\ mrg -> modify ((S.insert (head mrg)) *** addMerge (S.fromList mrg)))
-            . filter lengthGE2
             . map S.toList
+            . filter ((2 <=) . S.size)
             . M.elems
             . M.fromListWith S.union
             . map (\ Rule{..} -> (map (mergeState mrgs) from, S.singleton (mergeState mrgs to)))
@@ -293,11 +304,6 @@ traceShow' cs x = trace (cs ++ ": " ++ show x) x
 putFst :: Monad m => s1 -> StateT (s1, s2) m ()
 putFst x = modify (\ (_, y) -> (x, y))
 -- putSnd y = modify (\ (x, _) -> (x, y))
-
-
-lengthGE2 :: [a] -> Bool
-lengthGE2 (_ : _ : _) = True
-lengthGE2          _  = False
 
 
 createMerge :: Ord k => [[k]] -> RevMap k k
@@ -426,7 +432,7 @@ ruleEquivalenceClasses mrgs g
   $ map (\ r -> (mergeRule mrgs r, [r]))
   $ S.elems
   $ S.unions
-  $ map (uncurry S.union)
+  $ map (\ (bw :-> fw) -> S.union bw fw)
   $ concatMap M.elems
   $ M.elems
   $ M.intersection g (RM.forward mrgs)
@@ -443,10 +449,11 @@ mergeRule mrgs Rule{..} = Rule (mrg to) (map mrg from) label count
 
 mergeRTG :: (Ord l, Ord v) => RevMap v v -> RTG v l -> RTG v l
 mergeRTG mrgs
-  = M.mapKeysWith (M.unionWith (S.union **** S.union)) (mergeState mrgs)
-  . M.map (M.map (mergeRuleS *** mergeRuleS))
+  = M.mapKeysWith (M.unionWith unionRuleSets) (mergeState mrgs)
+  . M.map (M.map (mergeRuleS *->* mergeRuleS))
   where
     mergeRuleS = S.map (mergeRule mrgs)
+    f *->* g = \ (bw :-> fw) -> (f bw :-> g fw)
 
 
 mergeCRTG :: (Ord l, Ord v) => RevMap v v -> CRTG v l -> CRTG v l
