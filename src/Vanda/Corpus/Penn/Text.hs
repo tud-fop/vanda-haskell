@@ -32,6 +32,11 @@ import Data.Int ( Int32 )
 import Text.Parsec hiding ( many, (<|>) )
 import Text.Parsec.Text.Lazy
 
+
+moduleName :: String
+moduleName = "Vanda.Corpus.Penn.Text"
+
+
 class PennFamily t where
   -- | Used in the parsing process to map identifiers to 'String' (via 'id')
   -- or to 'Int' (via 'read')
@@ -62,11 +67,12 @@ instance PennFamily Int32 where
 -- 'Vanda.Token.updateToken'.
 parsePennMap :: (u -> String -> (u, b)) -> u -> T.Text -> (u, [T.Tree b])
 parsePennMap f ustate contents
-  = go ustate $ zip [(0 :: Int)..] (T.lines contents)
+  = go ustate $ zip [(1 :: Int)..] (T.lines contents)
   where
     go u [] = (u, [])
     go u ((i, x):xs) =
-      let Right (u', x') = runParser p u ("line " ++ show i) x
+      let (u', x') = either (error . show) id
+            $ runParser p u (moduleName ++ ".parsePennMap: line " ++ show i) x
           (u'', xs') = go u' xs
       in (u'', x':xs')
     p = do
