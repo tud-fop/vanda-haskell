@@ -24,8 +24,10 @@ import qualified Vanda.Hypergraph as H
 import           Vanda.Util.Histogram (histogram)
 import           Vanda.Util.Tree as T
 
+import           Control.Applicative ((<*>), (<$>))
 import           Control.Arrow ((***), first, second)
 import           Control.Monad.State.Lazy
+import qualified Data.Binary as B
 import           Data.List (foldl', groupBy, sortBy)
 import           Data.Function (on)
 import qualified Data.Map as M
@@ -61,12 +63,21 @@ instance (Ord s, Ord t) => Ord (Rule s t) where
 instance (Show s, Show t) => Show (Rule s t) where
   show Rule{..} = "Rule " ++ show to ++ " " ++ show from ++ " " ++ show label ++ " " ++ show count
 
+instance (B.Binary v, B.Binary l) => B.Binary (Rule v l) where
+  put (Rule w x y z) = B.put w >> B.put x >> B.put y >> B.put z
+  get = Rule <$> B.get <*> B.get <*> B.get <*> B.get
+
 
 -- | helper type to prevent confusion of forward and backward star
 data RuleSets v l = (:->)
   { backward :: Set (Rule v l)  -- ^ reserved for backward star
   , forward  :: Set (Rule v l)  -- ^ reserved for forward star
   } deriving Show
+
+instance (B.Binary v, B.Binary l) => B.Binary (RuleSets v l) where
+  put (bw :-> fw) = B.put bw >> B.put fw
+  get = (:->) <$> B.get <*> B.get
+
 
 -- v … vertices/states, l … labels/terminals
 type RTG v l = Map v (Map l (RuleSets v l))
@@ -78,6 +89,10 @@ data CRTG v l = CRTG
   , cntState :: Map v Int
   , cntInit  :: Map v Int
   } deriving Show
+
+instance (B.Binary v, B.Binary l) => B.Binary (CRTG v l) where
+  put (CRTG x y z) = B.put x >> B.put y >> B.put z
+  get = CRTG <$> B.get <*> B.get <*> B.get
 
 
 fromList :: (Ord s, Ord t) => [Rule s t] -> RTG s t
@@ -126,10 +141,12 @@ asBackwardStar :: H.BackwardStar v l i -> H.BackwardStar v l i
 asBackwardStar = id
 
 
+-- | Merge sorted lists to a single sorted list.
 mergesBy :: (a -> a -> Ordering) -> [[a]] -> [a]
 mergesBy cmp = foldl (mergeBy cmp) []
 
 
+-- | Merge two sorted lists to a single sorted list.
 mergeBy :: (a -> a -> Ordering) -> [a] -> [a] -> [a]
 mergeBy cmp xs@(x:xs') ys@(y:ys')
   = case x `cmp` y of
@@ -166,6 +183,10 @@ instance Show a => Show (OrdTree a) where
   showsPrec _ (OrdTree (Node x ts)) = showsPrec 11 x . showsPrec 11 (map OrdTree ts)
 --   show (OrdTree (Node x [])) = stripQuotes (show x)
 --   show (OrdTree (Node x ts)) = stripQuotes (show x) ++ show (map OrdTree ts)
+
+instance (B.Binary a) => B.Binary (OrdTree a) where
+  put (OrdTree x) = B.put x
+  get = OrdTree <$> B.get
 
 
 {-
@@ -224,6 +245,15 @@ f **** g = \ (xf, xg) (yf, yg) -> (f xf yf, g xg yg)
 -- cbsm = iterate cbsmStep
 
 -- cbsmStep :: CRTG v l -> CRTG v l
+
+
+cbsm g@CRTG{..}
+  = case fst (mergeRanking g) of
+      (_, ((v1, _), (v2, _))) : _
+        -> let g' = flip mergeCRTG g
+                  $ saturateMerge getRTG (createMerge [[v1, v2]])
+           in g' : cbsm g'
+      _ -> []
 
 
 cbsmStep2 g@CRTG{..}
