@@ -91,7 +91,7 @@ argModes
   &= summary "Count-Based State Merging"
 
 
-type BinaryCRTG = CRTG (OrdTree String) String
+type BinaryCRTG = CRTG Int String
 
 
 main :: IO ()

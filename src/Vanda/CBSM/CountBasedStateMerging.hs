@@ -27,11 +27,12 @@ import           Vanda.Util.Tree as T
 import           Control.Applicative ((<*>), (<$>))
 import           Control.Arrow ((***), first, second)
 import           Control.Monad.State.Lazy
+import           Control.Parallel.Strategies
 import qualified Data.Binary as B
 import           Data.List (foldl', groupBy, sortBy)
 import           Data.Function (on)
-import qualified Data.Map as M
-import           Data.Map (Map, (!))
+import           Data.Map.Strict (Map, (!))
+import qualified Data.Map.Strict as M
 import           Data.Maybe
 import           Data.Ord (comparing, Down(..))
 import qualified Data.Set as S
@@ -44,10 +45,10 @@ import Debug.Trace
 
 
 data Rule s t = Rule
-  { to    :: s
-  , from  :: [s]
-  , label :: t
-  , count :: Int
+  { to    :: !s
+  , from  :: ![s]
+  , label :: !t
+  , count :: !Int
   }
 
 instance (Eq s, Eq t) => Eq (Rule s t) where
@@ -70,8 +71,8 @@ instance (B.Binary v, B.Binary l) => B.Binary (Rule v l) where
 
 -- | helper type to prevent confusion of forward and backward star
 data RuleSets v l = (:->)
-  { backward :: Set (Rule v l)  -- ^ reserved for backward star
-  , forward  :: Set (Rule v l)  -- ^ reserved for forward star
+  { backward :: !(Set (Rule v l))  -- ^ reserved for backward star
+  , forward  :: !(Set (Rule v l))  -- ^ reserved for forward star
   } deriving Show
 
 instance (B.Binary v, B.Binary l) => B.Binary (RuleSets v l) where
@@ -85,9 +86,9 @@ type RTG v l = Map v (Map l (RuleSets v l))
 
 -- | Count RTG
 data CRTG v l = CRTG
-  { getRTG   :: RTG v l
-  , cntState :: Map v Int
-  , cntInit  :: Map v Int
+  { getRTG   :: !(RTG v l)
+  , cntState :: !(Map v Int)
+  , cntInit  :: !(Map v Int)
   } deriving Show
 
 instance (B.Binary v, B.Binary l) => B.Binary (CRTG v l) where
@@ -224,15 +225,17 @@ instance Read a => Read (OrdTree a) where
     where unpack (OrdTree t) = t
 -}
 
-forestToGrammar :: Ord l => [Tree l] -> CRTG (OrdTree l) l
+forestToGrammar :: Ord l => [Tree l] -> CRTG Int l
 forestToGrammar corpus
   = CRTG
-      (fromList $ map toRule $ M.toList cntState')
-      cntState'
-      (histogram $ map OrdTree corpus)
+      (fromList $ map toRule $ M.toList cntTrees)
+      (M.mapKeysMonotonic (ints M.!) cntTrees)
+      (M.mapKeysMonotonic (ints M.!) $ histogram $ map OrdTree corpus)
   where
-    cntState' = histogram $ map OrdTree $ concatMap T.subTrees corpus
-    toRule (t@(OrdTree (Node x ts)), c) = Rule t (map OrdTree ts) x c
+    cntTrees = histogram $ map OrdTree $ concatMap T.subTrees corpus
+    ints = snd $ M.mapAccum (\ i _ -> (i + 1, i)) 0 $ cntTrees
+    toRule (t@(OrdTree (Node x ts)), c)
+      = Rule (ints M.! t) (map ((ints M.!) . OrdTree) ts) x c
 
 
 (****) :: (a -> b -> c) -> (d -> e -> f) -> (a, d) -> (b, e) -> (c, f)
@@ -252,7 +255,7 @@ cbsm g@CRTG{..}
       (_, ((v1, _), (v2, _))) : _
         -> let g' = flip mergeCRTG g
                   $ saturateMerge getRTG (createMerge [[v1, v2]])
-           in g' : cbsm g'
+           in g' : (g' `seq` cbsm g')
       _ -> []
 
 
@@ -432,7 +435,7 @@ likelihoodDelta mrgs CRTG{..}
   = product  -- initial states
     [ p (sum cs) / product (map p cs)
     | vS <- M.elems $ RM.backward mrgs
-    , let cs = M.elems $ M.intersection cntInit (M.fromSet undefined vS)
+    , let cs = M.elems $ M.intersection cntInit (M.fromSet (const ()) vS)
       -- only consider explicitly given counts from cntInit
       -- these must be > 0
     , not (null cs)
@@ -473,13 +476,13 @@ mergeState m = \ v -> M.findWithDefault v v (RM.forward m)
 
 
 mergeRule :: Ord v => RevMap v v -> Rule v l -> Rule v l
-mergeRule mrgs Rule{..} = Rule (mrg to) (map mrg from) label count
+mergeRule mrgs Rule{..} = Rule (mrg to) (map mrg from `using` evalList rseq) label count
   where mrg = mergeState mrgs
 
 
 mergeRTG :: (Ord l, Ord v) => RevMap v v -> RTG v l -> RTG v l
 mergeRTG mrgs
-  = M.mapKeysWith (M.unionWith unionRuleSets) (mergeState mrgs)
+  = mergeKeysWith (M.unionWith unionRuleSets) mrgs
   . M.map (M.map (mergeRuleS *->* mergeRuleS))
   where
     mergeRuleS = S.map (mergeRule mrgs)
@@ -490,8 +493,18 @@ mergeCRTG :: (Ord l, Ord v) => RevMap v v -> CRTG v l -> CRTG v l
 mergeCRTG mrgs CRTG{..}
   = CRTG
       (mergeRTG mrgs getRTG)
-      (M.mapKeysWith (+) (mergeState mrgs) cntState)
-      (M.mapKeysWith (+) (mergeState mrgs) cntInit)
+      (mergeKeysWith (+) mrgs cntState)
+      (mergeKeysWith (+) mrgs cntInit)
+
+
+-- | Similar to 'M.mapKeysWith', but optimized for merging, because many keys
+-- are left unchanged.
+mergeKeysWith
+  :: Ord k => (a -> a -> a) -> RM.RevMap k k -> M.Map k a -> M.Map k a
+mergeKeysWith (?) mrgs
+  = uncurry (M.unionWith (?))
+  . first (M.mapKeysWith (?) (mergeState mrgs))
+  . M.partitionWithKey (\ k _ -> M.member k (RM.forward mrgs))
 
 
 whileM :: Monad m => m Bool -> m a -> m ()

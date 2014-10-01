@@ -61,8 +61,8 @@ tests = TestList
         ]
     , ruleEquivalenceClasses (createMerge ["Aa", "Bb", "Cc"]) rtg0
       ~?= M.fromList
-        [ (Rule 'A' "BC" 's' undefined, [Rule 'a' "bc" 's' 4, Rule 'A' "BC" 's' 1])
-        , (Rule 'B' "AC" 's' undefined, [Rule 'b' "ac" 's' 5, Rule 'B' "AC" 's' 2])
+        [ (Rule 'A' "BC" 's' 0, [Rule 'a' "bc" 's' 4, Rule 'A' "BC" 's' 1])
+        , (Rule 'B' "AC" 's' 0, [Rule 'b' "ac" 's' 5, Rule 'B' "AC" 's' 2])
         , (Rule 'C' ""   'C' 3, [Rule 'C' ""   'C' 3])
         , (Rule 'C' ""   'c' 6, [Rule 'c' ""   'c' 6])
         ]
