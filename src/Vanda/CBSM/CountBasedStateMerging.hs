@@ -25,7 +25,7 @@ import           Vanda.Util.Histogram (histogram)
 import           Vanda.Util.Tree as T
 
 import           Control.Applicative ((<*>), (<$>))
-import           Control.Arrow ((***), first, second)
+import           Control.Arrow ((***), first)
 import           Control.Monad.State.Lazy
 import           Control.Parallel.Strategies
 import qualified Data.Binary as B
@@ -48,45 +48,19 @@ data Rule s t = Rule
   { to    :: !s
   , from  :: ![s]
   , label :: !t
-  , count :: !Int
-  }
-
-instance (Eq s, Eq t) => Eq (Rule s t) where
-  Rule  x1  y1  z1  _  ==  Rule  x2  y2  z2  _
-    =  (x1, y1, z1)    ==       (x2, y2, z2)
-  Rule  x1  y1  z1  _  /=  Rule  x2  y2  z2  _
-    =  (x1, y1, z1)    /=       (x2, y2, z2)
-
-instance (Ord s, Ord t) => Ord (Rule s t) where
-  Rule  x1  y1  z1  _  `compare`  Rule  x2  y2  z2  _
-    =  (x1, y1, z1)    `compare`       (x2, y2, z2)
+  } deriving (Eq, Ord)
 
 instance (Show s, Show t) => Show (Rule s t) where
-  show Rule{..} = "Rule " ++ show to ++ " " ++ show from ++ " " ++ show label ++ " " ++ show count
+  show Rule{..} = "Rule " ++ show to ++ " " ++ show from ++ " " ++ show label
 
 instance (B.Binary v, B.Binary l) => B.Binary (Rule v l) where
-  put (Rule w x y z) = B.put w >> B.put x >> B.put y >> B.put z
-  get = Rule <$> B.get <*> B.get <*> B.get <*> B.get
-
-
--- | helper type to prevent confusion of forward and backward star
-data RuleSets v l = (:->)
-  { backward :: !(Set (Rule v l))  -- ^ reserved for backward star
-  , forward  :: !(Set (Rule v l))  -- ^ reserved for forward star
-  } deriving Show
-
-instance (B.Binary v, B.Binary l) => B.Binary (RuleSets v l) where
-  put (bw :-> fw) = B.put bw >> B.put fw
-  get = (:->) <$> B.get <*> B.get
-
-
--- v … vertices/states, l … labels/terminals
-type RTG v l = Map v (Map l (RuleSets v l))
+  put (Rule x y z) = B.put x >> B.put y >> B.put z
+  get = Rule <$> B.get <*> B.get <*> B.get
 
 
 -- | Count RTG
 data CRTG v l = CRTG
-  { getRTG   :: !(RTG v l)
+  { cntRule  :: !(Map (Rule v l) Int)
   , cntState :: !(Map v Int)
   , cntInit  :: !(Map v Int)
   } deriving Show
@@ -96,6 +70,35 @@ instance (B.Binary v, B.Binary l) => B.Binary (CRTG v l) where
   get = CRTG <$> B.get <*> B.get <*> B.get
 
 
+rules :: CRTG v l -> [Rule v l]
+rules = M.keys . cntRule
+
+
+type ForwardStar v l = Map v (Map l [Rule v l])
+
+
+forwardStar :: (Ord v, Ord l) => [Rule v l] -> ForwardStar v l
+forwardStar
+  = fmap (M.fromListWith (++)) . M.fromListWith (++) . concatMap step
+  where
+    step r@(Rule _ vs l)
+      = map (\ v -> (v, [(l, [r])]))
+      $ (S.toList . S.fromList) vs
+
+
+-- | bidirectional star: finding rules with state
+type BidiStar v l = Map v [Rule v l]
+
+
+bidiStar :: (Ord v, Ord l) => [Rule v l] -> BidiStar v l
+bidiStar = M.fromListWith (++) . concatMap step
+  where
+    step r@(Rule v vs _)
+      = map (\ v' -> (v', [r]))
+      $ (S.toList . S.fromList) (v : vs)
+
+
+{-
 fromList :: (Ord s, Ord t) => [Rule s t] -> RTG s t
 fromList = unions . concatMap step
   where
@@ -104,23 +107,22 @@ fromList = unions . concatMap step
     singletonFW v l r = M.singleton v $ M.singleton l (S.empty :-> S.singleton r)
     union = M.unionWith (M.unionWith unionRuleSets)
     unions = foldl' union M.empty
-
-
+-}
+{-
 unionRuleSets
   :: (Ord l, Ord v) => RuleSets v l -> RuleSets v l -> RuleSets v l
 unionRuleSets (bw1 :-> fw1) (bw2 :-> fw2)
   = (S.union bw1 bw2 :-> S.union fw1 fw2)
-
+-}
 
 toHypergraph
   :: (H.Hypergraph h, Ord v) => CRTG v l -> (h v l Double, Map v Double)
   -- not the most general type: Double is specific
 toHypergraph CRTG{..}
   = ( H.mkHypergraph
-      $ map (\ Rule{..} -> (H.mkHyperedge to from label (fromIntegral count / fromIntegral (cntState M.! to))))
-      $   S.toList . backward
-      =<< M.elems
-      =<< M.elems getRTG
+      $ map (\ (Rule{..}, count) -> (H.mkHyperedge to from label
+                       (fromIntegral count / fromIntegral (cntState M.! to))))
+      $ M.toList cntRule
     , M.map (((1 / (fromIntegral $ sum $ M.elems cntInit)) *) . fromIntegral)
             cntInit
     )
@@ -228,14 +230,14 @@ instance Read a => Read (OrdTree a) where
 forestToGrammar :: Ord l => [Tree l] -> CRTG Int l
 forestToGrammar corpus
   = CRTG
-      (fromList $ map toRule $ M.toList cntTrees)
+      (M.mapKeys toRule cntTrees)
       (M.mapKeysMonotonic (ints M.!) cntTrees)
       (M.mapKeysMonotonic (ints M.!) $ histogram $ map OrdTree corpus)
   where
     cntTrees = histogram $ map OrdTree $ concatMap T.subTrees corpus
     ints = snd $ M.mapAccum (\ i _ -> (i + 1, i)) 0 $ cntTrees
-    toRule (t@(OrdTree (Node x ts)), c)
-      = Rule (ints M.! t) (map ((ints M.!) . OrdTree) ts) x c
+    toRule t@(OrdTree (Node x ts))
+      = Rule (ints M.! t) (map ((ints M.!) . OrdTree) ts) x
 
 
 (****) :: (a -> b -> c) -> (d -> e -> f) -> (a, d) -> (b, e) -> (c, f)
@@ -250,53 +252,64 @@ f **** g = \ (xf, xg) (yf, yg) -> (f xf yf, g xg yg)
 -- cbsmStep :: CRTG v l -> CRTG v l
 
 
-cbsm g@CRTG{..}
+cbsm :: (Ord v, Ord l) => CRTG v l -> [CRTG v l]
+cbsm g
   = case fst (mergeRanking g) of
       (_, ((v1, _), (v2, _))) : _
         -> let g' = flip mergeCRTG g
-                  $ saturateMerge getRTG (createMerge [[v1, v2]])
+                  $ saturateMerge (forwardStar (rules g)) (createMerge [[v1, v2]])
            in g' : (g' `seq` cbsm g')
       _ -> []
 
 
-cbsmStep2 g@CRTG{..}
+cbsmStep2 :: (Ord v, Ord l) => CRTG v l -> CRTG v l
+cbsmStep2 g
   = flip mergeCRTG g
-  $ (\ ((_, ((v1, _), (v2, _))) : _) -> saturateMerge getRTG (createMerge [[v1, v2]]))
+  $ (\ ((_, ((v1, _), (v2, _))) : _) -> saturateMerge (forwardStar (rules g)) (createMerge [[v1, v2]]))
   $ fst $ mergeRanking g
 
 
-cbsmStep1 g@CRTG{..}
+cbsmStep1
+  :: (Ord v, Ord l)
+  => CRTG v l
+  -> [((Int, ((v, Int), (v, Int))), ([[v]], Log Double))]
+cbsmStep1 g
   = map (\ x@(_, ((v1, _), (v2, _))) ->
         (,) x
-      $ let mrg = saturateMerge getRTG (createMerge [[v1, v2]]) in
-        (map S.toList $ M.elems $ RM.backward mrg, likelihoodDelta mrg g)
+      $ let mrg = saturateMerge (forwardStar (rules g)) (createMerge [[v1, v2]]) in
+        (map S.toList $ M.elems $ RM.backward mrg, likelihoodDelta g mrg)
       )
   $ fst $ mergeRanking g
 
 
-refineRanking (xs, g@CRTG{..})
+refineRanking
+  :: (Eq a, Ord v, Ord l)
+  => ([(a, ((v, b), (v, c)))], CRTG v l)
+  -> [((a, ((v, b), (v, c))), (RevMap v v, Log Double))]
+refineRanking (xs, g)
   = concatMap (sortBy (comparing (Down . snd . snd)))
   $ groupBy ((==) `on` fst . fst)
   $ map (\ x@(_, ((v1, _), (v2, _))) ->
           ( x
-          , let mrg = saturateMerge getRTG (createMerge [[v1, v2]]) in
-            (mrg, likelihoodDelta mrg g)
+          , let mrg = saturateMerge (forwardStar (rules g)) (createMerge [[v1, v2]]) in
+            (mrg, likelihoodDelta g mrg)
         ) )
   $ xs
 
 
-mergeRanking g@CRTG{..}
+mergeRanking :: CRTG v l -> ([(Int, ((v, Int), (v, Int)))], CRTG v l)
+mergeRanking g
   = (sortedCartesianProductWith' ((+) `on` snd) vs (tail vs), g)
     -- ToDo: instead of (+) maybe use states part of likelihood
   where
-    vs = sortBy (comparing snd) (M.toList cntState)
+    vs = sortBy (comparing snd) (M.toList (cntState g))
 
 
 
 saturateMerge
   :: forall s t
   .  (Ord s, Ord t)
-  => RTG s t
+  => ForwardStar s t
   -> RevMap s s  -- ^ merges (must be an equivalence relation)
   -> RevMap s s
 -- saturateMerge
@@ -315,8 +328,7 @@ saturateMerge g m0 = evalState go (M.keysSet (RM.forward m0), m0)
           putFst sS
           mrgs <- gets snd
           forM_ ( M.elems
-                $ M.unionsWith S.union
-                $ map (fmap forward)
+                $ M.unionsWith (++)
                 $ mapMaybe (flip M.lookup g)
                 $ maybe [] S.toList (RM.equivalenceClass s mrgs)
                 )
@@ -326,7 +338,6 @@ saturateMerge g m0 = evalState go (M.keysSet (RM.forward m0), m0)
             . M.elems
             . M.fromListWith S.union
             . map (\ Rule{..} -> (map (mergeState mrgs) from, S.singleton (mergeState mrgs to)))
-            . S.toList
           go
 
 
@@ -430,9 +441,9 @@ sortedCartesianProductWithInternal (?) (>+<) (x0 : xs0) (y0 : ys0)
 sortedCartesianProductWithInternal _ _ _ _ = []
 
 
-likelihoodDelta :: (Ord l, Ord v) => RevMap v v -> CRTG v l -> Log Double
-likelihoodDelta mrgs CRTG{..}
-  = product  -- initial states
+likelihoodDelta :: (Ord l, Ord v) => CRTG v l -> RevMap v v -> Log Double
+likelihoodDelta g@CRTG{..} = \ mrgs
+ -> product  -- initial states
     [ p (sum cs) / product (map p cs)
     | vS <- M.elems $ RM.backward mrgs
     , let cs = M.elems $ M.intersection cntInit (M.fromSet (const ()) vS)
@@ -442,7 +453,7 @@ likelihoodDelta mrgs CRTG{..}
     ]
   * product  -- rules
     [ p (sum cs) / product (map p cs)
-    | cs <- map (map count) $ M.elems $ ruleEquivalenceClasses mrgs getRTG
+    | cs <- map (map (cntRule M.!)) $ M.elems $ ruleEquivalenceClasses (bidiStar (rules g)) mrgs
     ]
   * product  -- states
     [ product (map p cs) / p (sum cs)
@@ -459,14 +470,12 @@ likelihoodDelta mrgs CRTG{..}
 
 
 ruleEquivalenceClasses
-  :: (Ord l, Ord v) => RevMap v v -> RTG v l -> Map (Rule v l) [Rule v l]
-ruleEquivalenceClasses mrgs g
+  :: (Ord l, Ord v) => BidiStar v l -> RevMap v v -> Map (Rule v l) [Rule v l]
+ruleEquivalenceClasses g mrgs
   = M.fromListWith (++)
   $ map (\ r -> (mergeRule mrgs r, [r]))
-  $ S.elems
-  $ S.unions
-  $ map (\ (bw :-> fw) -> S.union bw fw)
-  $ concatMap M.elems
+  $ (S.toList . S.fromList)
+  $ concat
   $ M.elems
   $ M.intersection g (RM.forward mrgs)
 
@@ -476,23 +485,14 @@ mergeState m = \ v -> M.findWithDefault v v (RM.forward m)
 
 
 mergeRule :: Ord v => RevMap v v -> Rule v l -> Rule v l
-mergeRule mrgs Rule{..} = Rule (mrg to) (map mrg from `using` evalList rseq) label count
+mergeRule mrgs Rule{..} = Rule (mrg to) (map mrg from `using` evalList rseq) label
   where mrg = mergeState mrgs
-
-
-mergeRTG :: (Ord l, Ord v) => RevMap v v -> RTG v l -> RTG v l
-mergeRTG mrgs
-  = mergeKeysWith (M.unionWith unionRuleSets) mrgs
-  . M.map (M.map (mergeRuleS *->* mergeRuleS))
-  where
-    mergeRuleS = S.map (mergeRule mrgs)
-    f *->* g = \ (bw :-> fw) -> (f bw :-> g fw)
 
 
 mergeCRTG :: (Ord l, Ord v) => RevMap v v -> CRTG v l -> CRTG v l
 mergeCRTG mrgs CRTG{..}
   = CRTG
-      (mergeRTG mrgs getRTG)
+      (M.mapKeysWith (+) (mergeRule mrgs) cntRule)
       (mergeKeysWith (+) mrgs cntState)
       (mergeKeysWith (+) mrgs cntInit)
 

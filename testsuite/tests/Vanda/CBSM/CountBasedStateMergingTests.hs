@@ -35,43 +35,43 @@ tests = TestList
     , testSortedCartesianProductWith' (+) [0, 2, 4] [0, 5, 10 :: Int]
     ]
   , "ruleEquivalenceClasses" ~: TestList
-    [ ruleEquivalenceClasses RM.empty rtg0 ~?= M.empty
-    , ruleEquivalenceClasses (createMerge ["Aa"]) rtg0
+    [ ruleEquivalenceClasses (bidiStar rtg0) RM.empty ~?= M.empty
+    , ruleEquivalenceClasses (bidiStar rtg0) (createMerge ["Aa"])
       ~?= M.fromList
-        [ (Rule 'A' "BC" 's' 1, [Rule 'A' "BC" 's' 1])
-        , (Rule 'A' "bc" 's' 4, [Rule 'a' "bc" 's' 4])
-        , (Rule 'B' "AC" 's' 2, [Rule 'B' "AC" 's' 2])
-        , (Rule 'b' "Ac" 's' 5, [Rule 'b' "ac" 's' 5])
+        [ (Rule 'A' "BC" 's', [Rule 'A' "BC" 's'])
+        , (Rule 'A' "bc" 's', [Rule 'a' "bc" 's'])
+        , (Rule 'B' "AC" 's', [Rule 'B' "AC" 's'])
+        , (Rule 'b' "Ac" 's', [Rule 'b' "ac" 's'])
         ]
-    , ruleEquivalenceClasses (createMerge ["Cc"]) rtg0
+    , ruleEquivalenceClasses (bidiStar rtg0) (createMerge ["Cc"])
       ~?= M.fromList
-        [ (Rule 'A' "BC" 's' 1, [Rule 'A' "BC" 's' 1])
-        , (Rule 'B' "AC" 's' 2, [Rule 'B' "AC" 's' 2])
-        , (Rule 'C' ""   'C' 3, [Rule 'C' ""   'C' 3])
-        , (Rule 'C' ""   'c' 6, [Rule 'c' ""   'c' 6])
-        , (Rule 'a' "bC" 's' 4, [Rule 'a' "bc" 's' 4])
-        , (Rule 'b' "aC" 's' 5, [Rule 'b' "ac" 's' 5])
+        [ (Rule 'A' "BC" 's', [Rule 'A' "BC" 's'])
+        , (Rule 'B' "AC" 's', [Rule 'B' "AC" 's'])
+        , (Rule 'C' ""   'C', [Rule 'C' ""   'C'])
+        , (Rule 'C' ""   'c', [Rule 'c' ""   'c'])
+        , (Rule 'a' "bC" 's', [Rule 'a' "bc" 's'])
+        , (Rule 'b' "aC" 's', [Rule 'b' "ac" 's'])
         ]
-    , ruleEquivalenceClasses (createMerge ["Aa", "Bb"]) rtg0
+    , ruleEquivalenceClasses (bidiStar rtg0) (createMerge ["Aa", "Bb"])
       ~?= M.fromList
-        [ (Rule 'A' "BC" 's' 1, [Rule 'A' "BC" 's' 1])
-        , (Rule 'A' "Bc" 's' 4, [Rule 'a' "bc" 's' 4])
-        , (Rule 'B' "AC" 's' 2, [Rule 'B' "AC" 's' 2])
-        , (Rule 'B' "Ac" 's' 5, [Rule 'b' "ac" 's' 5])
+        [ (Rule 'A' "BC" 's', [Rule 'A' "BC" 's'])
+        , (Rule 'A' "Bc" 's', [Rule 'a' "bc" 's'])
+        , (Rule 'B' "AC" 's', [Rule 'B' "AC" 's'])
+        , (Rule 'B' "Ac" 's', [Rule 'b' "ac" 's'])
         ]
-    , ruleEquivalenceClasses (createMerge ["Aa", "Bb", "Cc"]) rtg0
+    , ruleEquivalenceClasses (bidiStar rtg0) (createMerge ["Aa", "Bb", "Cc"])
       ~?= M.fromList
-        [ (Rule 'A' "BC" 's' 0, [Rule 'a' "bc" 's' 4, Rule 'A' "BC" 's' 1])
-        , (Rule 'B' "AC" 's' 0, [Rule 'b' "ac" 's' 5, Rule 'B' "AC" 's' 2])
-        , (Rule 'C' ""   'C' 3, [Rule 'C' ""   'C' 3])
-        , (Rule 'C' ""   'c' 6, [Rule 'c' ""   'c' 6])
+        [ (Rule 'A' "BC" 's', [Rule 'a' "bc" 's', Rule 'A' "BC" 's'])
+        , (Rule 'B' "AC" 's', [Rule 'b' "ac" 's', Rule 'B' "AC" 's'])
+        , (Rule 'C' ""   'C', [Rule 'C' ""   'C'])
+        , (Rule 'C' ""   'c', [Rule 'c' ""   'c'])
         ]
     ]
   , "likelihoodDelta" ~: TestList
-    [ ln (likelihoodDelta RM.empty crtg0) ~?= 0
-    , ln (likelihoodDelta (createMerge ["Cc"]) crtg0) ~?= log ((3**3 * 6**6) / 9**9)
+    [ ln (likelihoodDelta crtg0 RM.empty) ~?= 0
+    , ln (likelihoodDelta crtg0 (createMerge ["Cc"])) ~?= log ((3**3 * 6**6) / 9**9)
     , TestCase $ assertRoughly "" 1e-10
-        ( ln (likelihoodDelta (createMerge ["Aa", "Bb", "Cc"]) crtg0) )
+        ( ln (likelihoodDelta crtg0 (createMerge ["Aa", "Bb", "Cc"])) )
         ( log
           ( 3**3 / (1**1 * 2**2)  -- } merged initial states
           * 5**5 / (1**1 * 4**4)  -- ⎫ merged
@@ -83,9 +83,9 @@ tests = TestList
         )
     ]
   , "saturateMerge" ~: TestList
-    [ (RM.toList $ saturateMerge rtg0 $ createMerge []) ~?= (RM.toList $ createMerge [])
-    , (RM.toList $ saturateMerge rtg1 $ createMerge ["AB", "GH"]) ~?= (RM.toList $ createMerge ["AB", "CD", "EF", "GH"])
-    , (RM.toList $ saturateMerge rtg1 $ createMerge ["CD", "EF", "IJ"]) ~?= (RM.toList $ createMerge ["CD", "EF", "IJ"])
+    [ (RM.toList $ saturateMerge (forwardStar rtg0) $ createMerge []) ~?= (RM.toList $ createMerge [])
+    , (RM.toList $ saturateMerge (forwardStar rtg1) $ createMerge ["AB", "GH"]) ~?= (RM.toList $ createMerge ["AB", "CD", "EF", "GH"])
+    , (RM.toList $ saturateMerge (forwardStar rtg1) $ createMerge ["CD", "EF", "IJ"]) ~?= (RM.toList $ createMerge ["CD", "EF", "IJ"])
     ]
   ]
 
@@ -116,31 +116,31 @@ naiveSortedCartesianProductWithInternal (?) (>+<) xs ys
       ]
 
 
-rtg0 :: RTG Char Char
-rtg0 = fromList
-  [ Rule 'A' "BC" 's' 1
-  , Rule 'B' "AC" 's' 2
-  , Rule 'C' ""   'C' 3
-  , Rule 'a' "bc" 's' 4
-  , Rule 'b' "ac" 's' 5
-  , Rule 'c' ""   'c' 6
-  ]
+rtg0 :: [Rule Char Char]
+rtg0
+  = [ Rule 'A' "BC" 's'
+    , Rule 'B' "AC" 's'
+    , Rule 'C' ""   'C'
+    , Rule 'a' "bc" 's'
+    , Rule 'b' "ac" 's'
+    , Rule 'c' ""   'c'
+    ]
 
 
-rtg1 :: RTG Char Char
-rtg1 = fromList
-  [ Rule 'C' "AZ" 's' 1
-  , Rule 'D' "BZ" 's' 2
-  , Rule 'E' "CA" 's' 3
-  , Rule 'F' "DB" 's' 4
-  , Rule 'I' "GZ" 'a' 5
-  , Rule 'J' "HZ" 'b' 6
-  ]
+rtg1 :: [Rule Char Char]
+rtg1
+  = [ Rule 'C' "AZ" 's'
+    , Rule 'D' "BZ" 's'
+    , Rule 'E' "CA" 's'
+    , Rule 'F' "DB" 's'
+    , Rule 'I' "GZ" 'a'
+    , Rule 'J' "HZ" 'b'
+    ]
 
 
 crtg0 :: CRTG Char Char
 crtg0 = CRTG
-  rtg0
+  (M.fromList $ zip rtg0 [1 ..])
   (M.fromList [('A', 1), ('B', 2), ('C', 3), ('a', 4), ('b', 5), ('c', 6)])
   (M.fromList [('A', 1), ('a', 2)])
 
