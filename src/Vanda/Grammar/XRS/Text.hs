@@ -147,9 +147,8 @@ p_svar = do
 
 p_weight :: Parser Double
 p_weight = do
-  c <- oneOf "0123456789"
-  cs <- many (oneOf "0123456789.E-")
-  return $! read (c : cs)
+  cs <- many (oneOf "0123456789.Ee-")
+  return $! read cs
 
 
 mkLst :: Interner t -> [t]
