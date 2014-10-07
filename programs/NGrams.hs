@@ -1,8 +1,8 @@
 module Main where
 
 import qualified Data.List as L
-import qualified Data.Text as T
-import qualified Data.Text.IO as TIO
+import qualified Data.Text.Lazy as T
+import qualified Data.Text.Lazy.IO as TIO
 import System.Environment ( getArgs )
 
 import Vanda.Grammar.NGrams.Functions
@@ -12,9 +12,9 @@ main
 main = do
   args <- getArgs
   case args of
-    ["--train"] -> do
+    ["--train", "-n", n, "-k", k] -> do
       corpus <- TIO.getContents
-      let nGrams = trainModel 5 3 corpus
+      let nGrams = trainModel (read k) (read n) corpus
       TIO.putStr $ writeNGrams nGrams
     [grammar, "-l"] -> do
       nGrams <- loadNGrams grammar
