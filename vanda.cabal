@@ -38,6 +38,8 @@ library
     , QuickCheck
     , log-domain
     , cmdargs
+    , directory
+    , filepath
   exposed-modules:
       Vanda.Features
     , Vanda.Hypergraph
@@ -64,6 +66,7 @@ library
     , Vanda.Corpus.Negra.Text
     , Vanda.Corpus.Penn.Simple
     , Vanda.Corpus.Penn.Text
+    , Vanda.Corpus.SExpression
     , Vanda.Corpus.TreeTerm
     , Vanda.Grammar.Berkeley.Binary
     , Vanda.Grammar.Berkeley.IRTG
