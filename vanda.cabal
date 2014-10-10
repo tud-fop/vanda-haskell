@@ -97,6 +97,7 @@ library
     , Vanda.PBSM.PatternBasedStateMerging
     , Vanda.PBSM.PrettyPrint
     , Vanda.PBSM.Types
+    , Control.Error
     , Data.Interner
     , Data.MultiMap
     , Data.NTT

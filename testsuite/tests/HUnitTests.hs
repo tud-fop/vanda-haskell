@@ -3,6 +3,7 @@ module HUnitTests where
 import Control.Monad (void)
 import Test.HUnit
 
+import qualified Control.ErrorTests
 import qualified Data.MultiMapTests
 import qualified Data.RevMapTests
 import qualified Vanda.CBSM.CountBasedStateMergingTests
@@ -15,7 +16,9 @@ main = void (runTestTT tests)
 
 tests :: Test
 tests = TestList
-  [   "Data.MultiMapTests"
+  [ "Control.Error"
+    ~: Control.ErrorTests.tests
+  , "Data.MultiMapTests"
     ~: Data.MultiMapTests.tests
   ,   "Data.RevMapTests"
     ~: Data.RevMapTests.tests
