@@ -37,6 +37,7 @@ library
     , pretty
     , QuickCheck
     , log-domain
+    , cmdargs
   exposed-modules:
       Vanda.Features
     , Vanda.Hypergraph
