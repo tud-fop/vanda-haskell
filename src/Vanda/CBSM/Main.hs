@@ -30,6 +30,7 @@ import           Vanda.CBSM.CountBasedStateMerging
 import           Vanda.Corpus.SExpression as SExp
 import qualified Vanda.Features as F
 import qualified Vanda.Hypergraph as H
+import           Vanda.Util.IO
 import           Vanda.Util.Tree as T
 
 import           Control.Applicative ((<$>))
@@ -60,7 +61,7 @@ data Args
     { flagAsForests :: Bool
     , flagDefoliate :: Bool
     , flagGrammar :: FilePath
-    , argIterations :: Int
+    , flagIterations :: Int
     , argCorpora :: [FilePath]
     }
   | Parse
@@ -86,20 +87,19 @@ cmdArgs
     , modeArgs = ([], Just flagArgCorpora)
     , modeGroupFlags = toGroup [flagNoneAsForests]
     }
-  , (modeEmpty $ CBSM False False "" undefined [])
+  , (modeEmpty $ CBSM False False "" maxBound [])
     { modeNames = ["cbsm"]
     , modeHelp = "Read-off a grammar from TREEBANKs and generalize it. See \
         \printcorpora for further information about the TREEBANK arguments."
-    , modeArgs =
-        ( [ (flagArg (readUpdate $ \ a x -> x{argIterations = a}) "ITERATIONS")
-              {argRequire = True}
-          ]
-        , (Just flagArgCorpora)
-        )
+    , modeArgs = ([], (Just flagArgCorpora))
     , modeGroupFlags = toGroup
         [ flagNoneAsForests
         , flagNone ["defoliate"] (\ x -> x{flagDefoliate = True})
             "remove leaves from trees in TREEBANKs"
+        , flagReq ["iterations"]
+                  (readUpdate $ \ a x -> x{flagIterations = a})
+                  "ITERATIONS"
+                  "limit number of iterations"
         , flagReq ["output"] (\ a x -> Right x{flagGrammar = a}) "FILE"
             "write result to FILE instead of stdout"
         ]
@@ -155,16 +155,21 @@ mainArgs PrintCorpora{..}
     . zip [1 :: Int ..]
   =<< readCorpora flagAsForests argCorpora
 
-mainArgs CBSM{..}
-    = ( if null flagGrammar
-        then print
-        else B.encodeFile flagGrammar :: BinaryCRTG -> IO ()
-      )
-  =<< progress (\ i -> "Iteration " ++ show i) argIterations
-    . cbsm
-    . forestToGrammar
-    . map (if flagDefoliate then T.defoliate else id)
-  =<< readCorpora flagAsForests argCorpora
+mainArgs CBSM{..} = do
+  results <- cbsm
+         <$> forestToGrammar
+         <$> map (if flagDefoliate then T.defoliate else id)
+         <$> readCorpora flagAsForests argCorpora
+  let worker update
+        = forM_ (zip [0 :: Int .. flagIterations] results) $ \ (i, r) -> do
+            putStrLn $ "Iteration " ++ show i ++ " ..."
+            update $! r
+      handler r
+        =  putStrLn "Writing result ..."
+        >> if null flagGrammar
+           then print r
+           else B.encodeFile flagGrammar (r :: BinaryCRTG)
+  handleInterrupt worker handler
 
 mainArgs Parse{..} = do
   (hg, inis) <- toHypergraph <$> (B.decodeFile argGrammar :: IO BinaryCRTG)
