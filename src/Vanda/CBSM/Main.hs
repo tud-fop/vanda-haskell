@@ -166,22 +166,22 @@ mainArgs CBSM{..} = do
          <$> forestToGrammar
          <$> map (if flagDefoliate then T.defoliate else id)
          <$> readCorpora flagAsForests argCorpora
-  let worker :: (BinaryCRTG -> IO ()) -> IO ()
+  let worker :: ((Int, BinaryCRTG) -> IO ()) -> IO ()
       worker update
         = forM_ (zip [0 :: Int .. flagIterations] results) $ \ (i, g) -> do
-            update $! g
+            update $! (,) i $! g
             putStrLn
               $ "Iteration " ++ show i ++ ": "
                 ++ (show $ M.size $ cntRule  g) ++ " rules, "
                 ++ (show $ M.size $ cntState g) ++ " states, "
                 ++ (show $ M.size $ cntInit  g) ++ " initial states."
-      handler :: BinaryCRTG -> IO ()
-      handler g = do
-        putStrLn "Writing result ..."
+      handler :: (Int, BinaryCRTG) -> IO ()
+      handler (i, g) = do
+        putStrLn $ "Writing result of iteration " ++ show i ++ " ..."
         if null flagGrammar
           then print g
-          else B.encodeFile flagGrammar (g :: BinaryCRTG)
-        putStrLn "... done writing result."
+          else B.encodeFile (flagGrammar ++ show i) (g :: BinaryCRTG)
+        putStrLn $ "... done writing result of iteration " ++ show i ++ "."
   handleInterrupt worker handler
 
 mainArgs Parse{..} = do
