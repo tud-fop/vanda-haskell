@@ -40,11 +40,13 @@ library
     , cmdargs
     , directory
     , filepath
+    , unix
   exposed-modules:
       Vanda.Features
     , Vanda.Hypergraph
     , Vanda.Token
     , Vanda.Util
+    , Vanda.Util.IO
     , Vanda.Util.Memorysavers
     , Vanda.Util.Tree
     , Vanda.Algorithms.Earley
