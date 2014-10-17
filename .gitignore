@@ -2,7 +2,6 @@
 *.o
 *~
 /.cabal-sandbox/
-/.kateproject
 /.kateproject.d/
 /.project
 /cabal.sandbox.config
