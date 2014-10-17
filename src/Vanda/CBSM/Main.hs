@@ -14,10 +14,16 @@
 -- Portability :  portable
 -----------------------------------------------------------------------------
 
-module Vanda.CBSM.Main where
+module Vanda.CBSM.Main
+( main
+, mainArgs
+, cmdArgs
+) where
 
 
+import qualified Control.Error
 import qualified Data.RevMap as RM
+import           System.Console.CmdArgs.Explicit.Misc
 import           Vanda.Algorithms.EarleyMonadic
 import qualified Vanda.Algorithms.Earley.WSA as WSA
 import           Vanda.CBSM.CountBasedStateMerging
@@ -36,21 +42,16 @@ import qualified Data.Set as S
 import           Data.Tree
 import qualified Data.Vector as V
 import           System.Console.CmdArgs.Explicit
-import           System.Console.CmdArgs.Text
 import           System.Directory (doesDirectoryExist, getDirectoryContents)
 import           System.FilePath ((</>))
 
 
-moduleName :: String
-moduleName = "Vanda.CBSM.Main"
-
-
 errorHere :: String -> String -> a
-errorHere fun msg = error $ moduleName ++ "." ++ fun ++ ": " ++ msg
+errorHere = Control.Error.errorHere "Vanda.CBSM.Main"
 
 
 data Args
-  = Help HelpFormat TextFormat
+  = Help String
   | PrintCorpora
     { flagAsForests :: Bool
     , argCorpora :: [FilePath]
@@ -72,53 +73,57 @@ data Args
     }
   deriving Show
 
-argMode :: Mode Args
-argMode
-  = modes' "Main" (Help HelpFormatAll defaultWrap) "Count-Based State Merging"
-  [ flagHelpFormat (\ h t _ -> Help h t) ]
-  [ mode'
-      "print-corpora"
-      (PrintCorpora False [])
-      "Print trees from TREEBANKs. Can be used to check for parsing \
-      \errors. Every TREEBANK can be a file or a directory. Directories \
-      \are traversed recursively. If no TREEBANK is given, the trees are \
-      \read from standard input."
-      [flagNoneAsForests]
-      []
-      (Just flagArgCorpora)
-  , mode'
-      "cbsm"
-      (CBSM False False "" undefined [])
-      "Read-off a grammar from TREEBANKs and generalize it. See \
-      \printcorpora for further information about the TREEBANK arguments."
-      [ flagNoneAsForests
-      , flagNone ["defoliate"] (\ x -> x{flagDefoliate = True})
-          "remove leaves from trees in TREEBANKs"
-      , flagReq ["output"] (\ a x -> Right x{flagGrammar = a}) "FILE"
-          "write result to FILE instead of stdout"
-      ]
-      [ (flagArg (readUpdate $ \ a x -> x{argIterations = a}) "ITERATIONS")
-          {argRequire = True}
-      ]
-      (Just flagArgCorpora)
-  , mode'
-      "parse"
-      (Parse "" 1)
-      "Parse newline-separated sentences from standard input."
-      []
-      [ flagArgGrammar{argRequire = True}
-      , flagArgCount
-      ]
-      Nothing
-  , mode'
-      "bests"
-      (Bests "" 1)
-      "View best trees of a grammar."
-      []
-      [ flagArgGrammar{argRequire = True}
-      , flagArgCount
-      ]
-      Nothing
+cmdArgs :: Mode Args
+cmdArgs
+  = modes "Main" (Help $ defaultHelp cmdArgs) "Count-Based State Merging"
+  [ (modeEmpty $ PrintCorpora False [])
+    { modeNames = ["print-corpora"]
+    , modeHelp =
+        "Print trees from TREEBANKs. Can be used to check for parsing \
+        \errors. Every TREEBANK can be a file or a directory. Directories \
+        \are traversed recursively. If no TREEBANK is given, the trees are \
+        \read from standard input."
+    , modeArgs = ([], Just flagArgCorpora)
+    , modeGroupFlags = toGroup [flagNoneAsForests]
+    }
+  , (modeEmpty $ CBSM False False "" undefined [])
+    { modeNames = ["cbsm"]
+    , modeHelp = "Read-off a grammar from TREEBANKs and generalize it. See \
+        \printcorpora for further information about the TREEBANK arguments."
+    , modeArgs =
+        ( [ (flagArg (readUpdate $ \ a x -> x{argIterations = a}) "ITERATIONS")
+              {argRequire = True}
+          ]
+        , (Just flagArgCorpora)
+        )
+    , modeGroupFlags = toGroup
+        [ flagNoneAsForests
+        , flagNone ["defoliate"] (\ x -> x{flagDefoliate = True})
+            "remove leaves from trees in TREEBANKs"
+        , flagReq ["output"] (\ a x -> Right x{flagGrammar = a}) "FILE"
+            "write result to FILE instead of stdout"
+        ]
+    }
+  , (modeEmpty $ Parse "" 1)
+    { modeNames = ["parse"]
+    , modeHelp = "Parse newline-separated sentences from standard input."
+    , modeArgs =
+        ( [ flagArgGrammar{argRequire = True}
+          , flagArgCount
+          ]
+        , Nothing
+        )
+    }
+  , (modeEmpty $ Bests "" 1)
+    { modeNames = ["bests"]
+    , modeHelp = "View best trees of a grammar."
+    , modeArgs =
+        ( [ flagArgGrammar{argRequire = True}
+          , flagArgCount
+          ]
+        , Nothing
+        )
+    }
   ]
   where
     flagNoneAsForests
@@ -132,104 +137,76 @@ argMode
       = flagArg (readUpdate $ \ a x -> x{argCount = a}) "COUNT"
 
 
-readUpdate :: Read r => (r -> a -> a) -> Update a
-readUpdate update a x = fmap (\ r -> update r x) (readEither "no parse" a)
-
-
-readEither :: Read r => a -> String -> Either a r
-readEither msg cs = case reads cs of
-  (x, "") : _ -> Right x
-  _           -> Left msg
-
-mode' :: Name -> a -> Help -> [Flag a] -> [Arg a] -> Maybe (Arg a) -> Mode a
-mode' name value help flags args argSweeper
-  = (modeEmpty value)
-  { modeNames = [name]
-  , modeHelp = help
-  , modeArgs = (args, argSweeper)
-  , modeGroupFlags = toGroup flags
-  }
-
-
-modes' :: Name -> a -> Help -> [Flag a] -> [Mode a] -> Mode a
-modes' name value help flags xs = (modeEmpty value)
-  { modeNames      = [name]
-  , modeHelp       = help
-  , modeGroupFlags = toGroup flags
-  , modeGroupModes = toGroup xs
-  }
-
-
 type BinaryCRTG = CRTG Int String
 
 
 main :: IO ()
-main = do
-  arguments <- processArgs argMode
-  case arguments of
+main = processArgs (populateHelpMode Help cmdArgs) >>= mainArgs
 
-    Help helpFormat textFormat
-      -> putStr
-       $ showText textFormat
-       $ helpText [] helpFormat argMode
 
-    PrintCorpora{..}
-       -> putStr
-        . unlines
-        . concatMap (\ (i, t) -> [show i ++ ":", drawTreeColored t])
-        . zip [1 :: Int ..]
-      =<< readCorpora flagAsForests argCorpora
+mainArgs :: Args -> IO ()
 
-    CBSM{..}
-       -> ( if null flagGrammar
-            then print
-            else B.encodeFile flagGrammar :: BinaryCRTG -> IO ()
-          )
-      =<< progress (\ i -> "Iteration " ++ show i) argIterations
-        . cbsm
-        . forestToGrammar
-        . map (if flagDefoliate then T.defoliate else id)
-      =<< readCorpora flagAsForests argCorpora
+mainArgs (Help cs) = putStr cs
 
-    Parse{..} -> do
-      (hg, inis) <- toHypergraph <$> (B.decodeFile argGrammar :: IO BinaryCRTG)
-      let comp e | a == 0    = [Right (H.label e)]
-                 | otherwise = map Left [0 .. a - 1]
-            where a = H.arity e
-      let feature = F.Feature (\ _ (i, _) xs -> i * product xs) V.singleton
-      sents <- map words . lines <$> getContents
-      forM_ sents $ \ sent -> do
-        let (hg', _) = earley' (asBackwardStar hg) comp (WSA.fromList 1 sent) (M.keys inis)
-        let inis' = M.mapKeys (\ k -> (0, k, length sent)) inis
-        printWeightedDerivations
-          $ take argCount
-          $ bestsIni hg' feature (V.singleton 1) inis'
+mainArgs PrintCorpora{..}
+    = putStr
+    . unlines
+    . concatMap (\ (i, t) -> [show i ++ ":", drawTreeColored t])
+    . zip [1 :: Int ..]
+  =<< readCorpora flagAsForests argCorpora
 
-    Bests{..} -> do
-      (hg, inis) <- toHypergraph <$> (B.decodeFile argGrammar :: IO BinaryCRTG)
-      let feature = F.Feature (\ _ i xs -> i * product xs) V.singleton
-      printWeightedDerivations
-        $ take argCount
-        $ bestsIni (asBackwardStar hg) feature (V.singleton 1) inis
+mainArgs CBSM{..}
+    = ( if null flagGrammar
+        then print
+        else B.encodeFile flagGrammar :: BinaryCRTG -> IO ()
+      )
+  =<< progress (\ i -> "Iteration " ++ show i) argIterations
+    . cbsm
+    . forestToGrammar
+    . map (if flagDefoliate then T.defoliate else id)
+  =<< readCorpora flagAsForests argCorpora
 
-  where
-    readCorpora :: Bool -> [FilePath] -> IO (Forest String)
-    readCorpora asForests corpora
-        = (if asForests then concatMap SExp.toForest else map SExp.toTree)
-      <$> if null corpora
-            then SExp.parse SExp.pSExpressions "stdin"
-             <$> getContents
-            else concat
-             <$> (   SExp.parseFromFiles SExp.pSExpressions
-                 =<< getContentsRecursive corpora
-                 )
+mainArgs Parse{..} = do
+  (hg, inis) <- toHypergraph <$> (B.decodeFile argGrammar :: IO BinaryCRTG)
+  let comp e | a == 0    = [Right (H.label e)]
+              | otherwise = map Left [0 .. a - 1]
+        where a = H.arity e
+  let feature = F.Feature (\ _ (i, _) xs -> i * product xs) V.singleton
+  sents <- map words . lines <$> getContents
+  forM_ sents $ \ sent -> do
+    let (hg', _) = earley' (asBackwardStar hg) comp (WSA.fromList 1 sent) (M.keys inis)
+    let inis' = M.mapKeys (\ k -> (0, k, length sent)) inis
+    printWeightedDerivations
+      $ take argCount
+      $ bestsIni hg' feature (V.singleton 1) inis'
 
-    printWeightedDerivations xs =
-      forM_ (zip [1 :: Int ..] xs) $ \ (i, (w, t)) -> do
-        let t' = fmap H.label t
-        putStrLn $ show i ++ ": " ++ show w
-        putStrLn $ unwords $ yield t'
-        putStrLn $ drawTreeColored t'
+mainArgs Bests{..} = do
+  (hg, inis) <- toHypergraph <$> (B.decodeFile argGrammar :: IO BinaryCRTG)
+  let feature = F.Feature (\ _ i xs -> i * product xs) V.singleton
+  printWeightedDerivations
+    $ take argCount
+    $ bestsIni (asBackwardStar hg) feature (V.singleton 1) inis
+
+
+readCorpora :: Bool -> [FilePath] -> IO (Forest String)
+readCorpora asForests corpora
+    = (if asForests then concatMap SExp.toForest else map SExp.toTree)
+  <$> if null corpora
+        then SExp.parse SExp.pSExpressions "stdin"
+          <$> getContents
+        else concat
+          <$> (   SExp.parseFromFiles SExp.pSExpressions
+              =<< getContentsRecursive corpora
+              )
+
+printWeightedDerivations
+  :: Show a => [(a, Tree (H.Hyperedge v String i))] -> IO ()
+printWeightedDerivations xs =
+  forM_ (zip [1 :: Int ..] xs) $ \ (i, (w, t)) -> do
+    let t' = fmap H.label t
+    putStrLn $ show i ++ ": " ++ show w
+    putStrLn $ unwords $ yield t'
+    putStrLn $ drawTreeColored t'
 
 
 drawTreeColored :: Tree String -> String
