@@ -59,9 +59,10 @@ data Args
     }
   | CBSM
     { flagAsForests :: Bool
+    , flagBeamWidth :: Int
     , flagDefoliate :: Bool
-    , flagGrammar :: FilePath
     , flagIterations :: Int
+    , flagGrammar :: FilePath
     , argCorpora :: [FilePath]
     }
   | Parse
@@ -87,7 +88,7 @@ cmdArgs
     , modeArgs = ([], Just flagArgCorpora)
     , modeGroupFlags = toGroup [flagNoneAsForests]
     }
-  , (modeEmpty $ CBSM False False "" maxBound [])
+  , (modeEmpty $ CBSM False 1000 False maxBound "" [])
     { modeNames = ["cbsm"]
     , modeHelp = "Read-off a grammar from TREEBANKs and generalize it. See \
         \printcorpora for further information about the TREEBANK arguments."
@@ -96,6 +97,11 @@ cmdArgs
         [ flagNoneAsForests
         , flagNone ["defoliate"] (\ x -> x{flagDefoliate = True})
             "remove leaves from trees in TREEBANKs"
+        , flagReq ["beam-width"]
+                  (readUpdate $ \ a x -> x{flagBeamWidth = a})
+                  "BEAMWIDTH"
+                  "Larger values refine the search for the best merge \
+                  \candidate"
         , flagReq ["iterations"]
                   (readUpdate $ \ a x -> x{flagIterations = a})
                   "ITERATIONS"
@@ -156,19 +162,26 @@ mainArgs PrintCorpora{..}
   =<< readCorpora flagAsForests argCorpora
 
 mainArgs CBSM{..} = do
-  results <- cbsm
+  results <- cbsm flagBeamWidth
          <$> forestToGrammar
          <$> map (if flagDefoliate then T.defoliate else id)
          <$> readCorpora flagAsForests argCorpora
-  let worker update
-        = forM_ (zip [0 :: Int .. flagIterations] results) $ \ (i, r) -> do
-            putStrLn $ "Iteration " ++ show i ++ " ..."
-            update $! r
-      handler r
-        =  putStrLn "Writing result ..."
-        >> if null flagGrammar
-           then print r
-           else B.encodeFile flagGrammar (r :: BinaryCRTG)
+  let worker :: (BinaryCRTG -> IO ()) -> IO ()
+      worker update
+        = forM_ (zip [0 :: Int .. flagIterations] results) $ \ (i, g) -> do
+            update $! g
+            putStrLn
+              $ "Iteration " ++ show i ++ ": "
+                ++ (show $ M.size $ cntRule  g) ++ " rules, "
+                ++ (show $ M.size $ cntState g) ++ " states, "
+                ++ (show $ M.size $ cntInit  g) ++ " initial states."
+      handler :: BinaryCRTG -> IO ()
+      handler g = do
+        putStrLn "Writing result ..."
+        if null flagGrammar
+          then print g
+          else B.encodeFile flagGrammar (g :: BinaryCRTG)
+        putStrLn "... done writing result."
   handleInterrupt worker handler
 
 mainArgs Parse{..} = do
@@ -310,7 +323,7 @@ test1 n
   . iterate step . (\ x -> (x, undefined))
   . forestToGrammar
   where
-    step (g, _) = (cbsmStep2 g, refineRanking (mergeRanking g))
+    step (g, _) = (cbsmStep2 g, refineRanking $ enrichRanking $ mergeRanking g)
 
     showStep1 ((s, ((v1, n1), (v2, n2))), (mrg, delta))
       =  show s ++ "=" ++ show n1 ++ "+" ++ show n2 ++ ": "

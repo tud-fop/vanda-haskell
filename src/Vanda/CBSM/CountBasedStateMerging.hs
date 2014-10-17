@@ -29,7 +29,7 @@ import           Control.Arrow ((***), first)
 import           Control.Monad.State.Lazy
 import           Control.Parallel.Strategies
 import qualified Data.Binary as B
-import           Data.List (foldl', groupBy, sortBy)
+import           Data.List (foldl', groupBy, minimumBy, sortBy)
 import           Data.Function (on)
 import           Data.Map.Strict (Map, (!))
 import qualified Data.Map.Strict as M
@@ -252,14 +252,24 @@ f **** g = \ (xf, xg) (yf, yg) -> (f xf yf, g xg yg)
 -- cbsmStep :: CRTG v l -> CRTG v l
 
 
-cbsm :: (Ord v, Ord l) => CRTG v l -> [CRTG v l]
-cbsm g
-  = case fst (mergeRanking g) of
-      (_, ((v1, _), (v2, _))) : _
-        -> let g' = flip mergeCRTG g
-                  $ saturateMerge (forwardStar (rules g)) (createMerge [[v1, v2]])
-           in g' : (g' `seq` cbsm g')
-      _ -> []
+cbsm :: (Ord v, Ord l) => Int -> CRTG v l -> [CRTG v l]
+cbsm beamWidth g
+  = (g :)
+  $ seq g
+  $ let cands = mergeRanking g
+        g' = (\ (_, (mrg, _)) -> mergeCRTG mrg g)
+           $ minimumBy (comparing (Down . snd . snd))
+           $ take beamWidth  -- TODO: Group?
+           $ enrichRanking cands
+    in if null (fst cands) then [] else cbsm beamWidth g'
+--   = g
+--   : ( g `seq` case refineRanking $ enrichRanking $ mergeRanking g of
+--         ((_, ((v1, _), (v2, _))), _) : _
+--           -> let g' = flip mergeCRTG g
+--                     $ saturateMerge (forwardStar (rules g)) (createMerge [[v1, v2]])
+--             in cbsm g'
+--         _ -> []
+--     )
 
 
 cbsmStep2 :: (Ord v, Ord l) => CRTG v l -> CRTG v l
@@ -283,18 +293,26 @@ cbsmStep1 g
 
 
 refineRanking
-  :: (Eq a, Ord v, Ord l)
+  :: Eq a
+  => [((a, b), (c, Log Double))]
+  -> [((a, b), (c, Log Double))]
+refineRanking
+  = concatMap (sortBy (comparing (Down . snd . snd)))
+  . groupBy ((==) `on` fst . fst)
+
+
+enrichRanking
+  :: (Ord v, Ord l)
   => ([(a, ((v, b), (v, c)))], CRTG v l)
   -> [((a, ((v, b), (v, c))), (RevMap v v, Log Double))]
-refineRanking (xs, g)
-  = concatMap (sortBy (comparing (Down . snd . snd)))
-  $ groupBy ((==) `on` fst . fst)
-  $ map (\ x@(_, ((v1, _), (v2, _))) ->
+enrichRanking (xs, g)
+  = map (\ x@(_, ((v1, _), (v2, _))) ->
           ( x
           , let mrg = saturateMerge (forwardStar (rules g)) (createMerge [[v1, v2]]) in
-            (mrg, likelihoodDelta g mrg)
+            (mrg, lklhdDelta mrg)
         ) )
   $ xs
+  where lklhdDelta = likelihoodDelta g
 
 
 mergeRanking :: CRTG v l -> ([(Int, ((v, Int), (v, Int)))], CRTG v l)
