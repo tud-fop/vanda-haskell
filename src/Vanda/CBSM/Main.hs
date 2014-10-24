@@ -31,6 +31,7 @@ import           Vanda.Corpus.SExpression as SExp
 import qualified Vanda.Features as F
 import qualified Vanda.Hypergraph as H
 import           Vanda.Util.IO
+import           Vanda.Util.Timestamps
 import           Vanda.Util.Tree as T
 
 import           Control.Applicative ((<$>))
@@ -45,6 +46,7 @@ import qualified Data.Vector as V
 import           System.Console.CmdArgs.Explicit
 import           System.Directory (doesDirectoryExist, getDirectoryContents)
 import           System.FilePath ((</>))
+import           System.IO (hFlush, stdout)
 
 
 errorHere :: String -> String -> a
@@ -259,19 +261,23 @@ safeSaveLastGrammar i0 filename gs
     worker update
       = forM_ (zip [i0 ..] gs) $ \ (i, g) -> do
           update $! (,) i $! g
-          putStrLn
+          putStrLnTimestamped
             $ "Iteration " ++ show i ++ ": "
               ++ (show $ M.size $ cntRule  g) ++ " rules, "
               ++ (show $ M.size $ cntState g) ++ " states, "
               ++ (show $ M.size $ cntInit  g) ++ " initial states."
+          hFlush stdout
 
     handler :: (Int, BinaryCRTG) -> IO ()
     handler (i, g) = do
-      putStrLn $ "Writing result of iteration " ++ show i ++ " ..."
+      putStrLnTimestamped $ "Writing result of iteration " ++ show i ++ " ..."
+      hFlush stdout
       if null filename
         then print g
         else B.encodeFile (filename ++ show i) (g :: BinaryCRTG)
-      putStrLn $ "... done writing result of iteration " ++ show i ++ "."
+      putStrLnTimestamped
+        $ "... done writing result of iteration " ++ show i ++ "."
+      hFlush stdout
 
 
 progress :: (Int -> String) -> Int -> [a] -> IO a
