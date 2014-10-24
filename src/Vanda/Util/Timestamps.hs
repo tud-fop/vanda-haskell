@@ -1,4 +1,4 @@
-module Tools.Timestamps
+module Vanda.Util.Timestamps
 ( printTimestamp
 , putStrLnTimestamped
 , putStrLnTimestamped'
