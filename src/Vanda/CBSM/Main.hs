@@ -65,6 +65,13 @@ data Args
     , flagGrammar :: FilePath
     , argCorpora :: [FilePath]
     }
+  | CBSM_Continue
+    { flagBeamWidth :: Int
+    , flagLastIteration :: Int
+    , flagIterations :: Int
+    , flagGrammar :: FilePath
+    , argGrammar :: FilePath
+    }
   | Parse
     { argGrammar :: FilePath
     , argCount :: Int
@@ -92,22 +99,29 @@ cmdArgs
     { modeNames = ["cbsm"]
     , modeHelp = "Read-off a grammar from TREEBANKs and generalize it. See \
         \printcorpora for further information about the TREEBANK arguments."
-    , modeArgs = ([], (Just flagArgCorpora))
+    , modeArgs = ([], Just flagArgCorpora)
     , modeGroupFlags = toGroup
         [ flagNoneAsForests
         , flagNone ["defoliate"] (\ x -> x{flagDefoliate = True})
             "remove leaves from trees in TREEBANKs"
-        , flagReq ["beam-width"]
-                  (readUpdate $ \ a x -> x{flagBeamWidth = a})
-                  "BEAMWIDTH"
-                  "Larger values refine the search for the best merge \
-                  \candidate"
-        , flagReq ["iterations"]
-                  (readUpdate $ \ a x -> x{flagIterations = a})
-                  "ITERATIONS"
-                  "limit number of iterations"
-        , flagReq ["output"] (\ a x -> Right x{flagGrammar = a}) "FILE"
-            "write result to FILE instead of stdout"
+        , flagReqBeamWidth
+        , flagReqIterations
+        , flagReqGrammar
+        ]
+    }
+  , (modeEmpty $ CBSM_Continue 1000 0 maxBound "" "")
+    { modeNames = ["cbsm-continue"]
+    , modeHelp = "Continue cbsm training with a grammar."
+    , modeArgs = ([flagArgGrammar], Nothing)
+    , modeGroupFlags = toGroup
+        [ flagReqBeamWidth
+        , flagReq ["last-iteration"]
+                  (readUpdate $ \ a x -> x{flagLastIteration = a})
+                  "LAST_ITERATION"
+                  "iteration number of the input grammar (only used to \
+                  \generate sensible iteration counts)"
+        , flagReqIterations
+        , flagReqGrammar
         ]
     }
   , (modeEmpty $ Parse "" 1)
@@ -135,6 +149,20 @@ cmdArgs
     flagNoneAsForests
       = flagNone ["as-forests"] (\ x -> x{flagAsForests = True})
           "the TREEBANKs contain forests instead of trees"
+    flagReqBeamWidth
+      = flagReq ["beam-width"]
+                (readUpdate $ \ a x -> x{flagBeamWidth = a})
+                "BEAMWIDTH"
+                "Larger values refine the search for the best merge \
+                \candidate"
+    flagReqIterations
+      = flagReq ["iterations"]
+                (readUpdate $ \ a x -> x{flagIterations = a})
+                "ITERATIONS"
+                "limit number of iterations"
+    flagReqGrammar
+      = flagReq ["output"] (\ a x -> Right x{flagGrammar = a}) "FILE"
+          "write result to FILE instead of stdout"
     flagArgCorpora
       = flagArg (\ a x -> Right x{argCorpora = argCorpora x ++ [a]}) "TREEBANK"
     flagArgGrammar
@@ -161,28 +189,19 @@ mainArgs PrintCorpora{..}
     . zip [1 :: Int ..]
   =<< readCorpora flagAsForests argCorpora
 
-mainArgs CBSM{..} = do
-  results <- cbsm flagBeamWidth
-         <$> forestToGrammar
-         <$> map (if flagDefoliate then T.defoliate else id)
-         <$> readCorpora flagAsForests argCorpora
-  let worker :: ((Int, BinaryCRTG) -> IO ()) -> IO ()
-      worker update
-        = forM_ (zip [0 :: Int .. flagIterations] results) $ \ (i, g) -> do
-            update $! (,) i $! g
-            putStrLn
-              $ "Iteration " ++ show i ++ ": "
-                ++ (show $ M.size $ cntRule  g) ++ " rules, "
-                ++ (show $ M.size $ cntState g) ++ " states, "
-                ++ (show $ M.size $ cntInit  g) ++ " initial states."
-      handler :: (Int, BinaryCRTG) -> IO ()
-      handler (i, g) = do
-        putStrLn $ "Writing result of iteration " ++ show i ++ " ..."
-        if null flagGrammar
-          then print g
-          else B.encodeFile (flagGrammar ++ show i) (g :: BinaryCRTG)
-        putStrLn $ "... done writing result of iteration " ++ show i ++ "."
-  handleInterrupt worker handler
+mainArgs CBSM{..}
+  =   safeSaveLastGrammar 0 flagGrammar
+  =<< take flagIterations
+  <$> cbsm flagBeamWidth
+  <$> forestToGrammar
+  <$> map (if flagDefoliate then T.defoliate else id)
+  <$> readCorpora flagAsForests argCorpora
+
+mainArgs CBSM_Continue{..}
+  =   safeSaveLastGrammar flagLastIteration flagGrammar
+  =<< take flagIterations
+  <$> cbsm flagBeamWidth
+  <$> (B.decodeFile argGrammar :: IO BinaryCRTG)
 
 mainArgs Parse{..} = do
   (hg, inis) <- toHypergraph <$> (B.decodeFile argGrammar :: IO BinaryCRTG)
@@ -231,6 +250,28 @@ drawTreeColored :: Tree String -> String
 drawTreeColored
   = drawTree' (drawstyleCompact2 0 "")
   . mapLeafs (\ cs -> "\ESC[93m" ++ cs ++ "\ESC[m")
+
+
+safeSaveLastGrammar i0 filename gs
+  = handleInterrupt worker handler
+  where
+    worker :: ((Int, BinaryCRTG) -> IO ()) -> IO ()
+    worker update
+      = forM_ (zip [i0 ..] gs) $ \ (i, g) -> do
+          update $! (,) i $! g
+          putStrLn
+            $ "Iteration " ++ show i ++ ": "
+              ++ (show $ M.size $ cntRule  g) ++ " rules, "
+              ++ (show $ M.size $ cntState g) ++ " states, "
+              ++ (show $ M.size $ cntInit  g) ++ " initial states."
+
+    handler :: (Int, BinaryCRTG) -> IO ()
+    handler (i, g) = do
+      putStrLn $ "Writing result of iteration " ++ show i ++ " ..."
+      if null filename
+        then print g
+        else B.encodeFile (filename ++ show i) (g :: BinaryCRTG)
+      putStrLn $ "... done writing result of iteration " ++ show i ++ "."
 
 
 progress :: (Int -> String) -> Int -> [a] -> IO a
