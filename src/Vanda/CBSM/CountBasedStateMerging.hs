@@ -14,9 +14,22 @@
 -- Portability :  portable
 -----------------------------------------------------------------------------
 
-module Vanda.CBSM.CountBasedStateMerging where
+module Vanda.CBSM.CountBasedStateMerging
+( CRTG(..)
+, MergeTree(..)
+, forestToGrammar
+, cbsm
+, toHypergraph
+, asBackwardStar
+, bests
+, cbsmStep2
+, refineRanking
+, mergeRanking
+, enrichRanking
+) where
 
 
+import qualified Control.Error
 import qualified Data.RevMap as RM
 import           Data.RevMap (RevMap)
 import qualified Vanda.Features as F
@@ -38,10 +51,15 @@ import           Data.Ord (comparing, Down(..))
 import qualified Data.Set as S
 import           Data.Set (Set)
 import           Data.Tree
+import           Data.Tuple (swap)
 import qualified Data.Vector as V
 import           Numeric.Log (Log(..))
 
 import Debug.Trace
+
+
+errorHere :: String -> String -> a
+errorHere = Control.Error.errorHere "Vanda.CBSM.CountBasedStateMerging"
 
 
 data Rule s t = Rule
@@ -174,6 +192,10 @@ unshowTree (x :<     ts) = x `Node` map unshowTree ts
 newtype OrdTree a = OrdTree (Tree a) deriving Eq
 
 
+unOrdTree :: OrdTree t -> Tree t
+unOrdTree (OrdTree t) = t
+
+
 instance Ord a => Ord (OrdTree a) where
   compare (OrdTree (Node x1 ts1)) (OrdTree (Node x2 ts2))
     = case compare x1 x2 of
@@ -227,12 +249,19 @@ instance Read a => Read (OrdTree a) where
     where unpack (OrdTree t) = t
 -}
 
-forestToGrammar :: Ord l => [Tree l] -> CRTG Int l
+forestToGrammar
+  :: Ord l
+  => [Tree l]
+  -> ((CRTG Int l, Map Int (MergeTree Int)), Map Int (Tree l))
 forestToGrammar corpus
-  = CRTG
-      (M.mapKeys toRule cntTrees)
-      (M.mapKeysMonotonic (ints M.!) cntTrees)
-      (M.mapKeysMonotonic (ints M.!) $ histogram $ map OrdTree corpus)
+  = ( ( CRTG
+          (M.mapKeys toRule cntTrees)
+          (M.mapKeysMonotonic (ints M.!) cntTrees)
+          (M.mapKeysMonotonic (ints M.!) $ histogram $ map OrdTree corpus)
+      , M.fromAscList $ map (\ v -> (v, State v)) $ M.elems ints
+      )
+    , M.map unOrdTree $ M.fromAscList $ map swap $ M.toAscList $ ints
+    )
   where
     cntTrees = histogram $ map OrdTree $ concatMap T.subTrees corpus
     ints = snd $ M.mapAccum (\ i _ -> (i + 1, i)) 0 $ cntTrees
@@ -252,16 +281,41 @@ f **** g = \ (xf, xg) (yf, yg) -> (f xf yf, g xg yg)
 -- cbsmStep :: CRTG v l -> CRTG v l
 
 
-cbsm :: (Ord v, Ord l) => Int -> CRTG v l -> [CRTG v l]
-cbsm beamWidth g
-  = (g :)
+
+data MergeTree v = State v | Merge Int [MergeTree v]
+
+
+instance (B.Binary a) => B.Binary (MergeTree a) where
+  put (State x)    = B.putWord8 0 >> B.put x
+  put (Merge i xs) = B.putWord8 1 >> B.put i >> B.put xs
+  get = do ctor <- B.getWord8
+           case ctor of
+             0 -> State <$> B.get
+             1 -> Merge <$> B.get <*> B.get
+             _ -> errorHere "get/MergeTree" "invalid binary data"
+
+
+cbsm
+  :: (Ord v, Ord l)
+  => Int
+  ->  (Int, (CRTG v l, Map v (MergeTree v)))
+  -> [(Int, (CRTG v l, Map v (MergeTree v)))]
+cbsm beamWidth prev@(n, (g, mtM))
+  = (prev :)
+  $ seq n
   $ seq g
-  $ let cands = mergeRanking g
-        g' = (\ (_, (mrg, _)) -> mergeCRTG mrg g)
-           $ minimumBy (comparing (Down . snd . snd))
-           $ take beamWidth  -- TODO: Group?
-           $ enrichRanking cands
-    in if null (fst cands) then [] else cbsm beamWidth g'
+  $ seq mtM
+  $ let n' = n + 1
+        cands = mergeRanking g
+        mrg = fst $ snd
+            $ minimumBy (comparing (Down . snd . snd))
+            $ take beamWidth  -- TODO: Group?
+            $ enrichRanking cands
+        g' = mergeCRTG mrg g
+        mtM' = M.map (\ case [x] -> x; xs -> Merge n' xs)
+             $ M.mapKeysWith (++) (mergeState mrg)
+             $ M.map (: []) mtM
+    in if null (fst cands) then [] else cbsm beamWidth (n', (g', mtM'))
 --   = g
 --   : ( g `seq` case refineRanking $ enrichRanking $ mergeRanking g of
 --         ((_, ((v1, _), (v2, _))), _) : _

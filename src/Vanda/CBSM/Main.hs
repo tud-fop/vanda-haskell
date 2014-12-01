@@ -174,6 +174,8 @@ cmdArgs
 
 
 type BinaryCRTG = CRTG Int String
+type BinaryIntToTreeMap = M.Map Int (Tree String)
+type BinaryMergeTreeMap = M.Map Int (MergeTree Int)
 
 
 main :: IO ()
@@ -191,19 +193,22 @@ mainArgs PrintCorpora{..}
     . zip [1 :: Int ..]
   =<< readCorpora flagAsForests argCorpora
 
-mainArgs CBSM{..}
-  =   safeSaveLastGrammar 0 flagGrammar
-  =<< take flagIterations
-  <$> cbsm flagBeamWidth
-  <$> forestToGrammar
-  <$> map (if flagDefoliate then T.defoliate else id)
-  <$> readCorpora flagAsForests argCorpora
+mainArgs CBSM{..} = do
+  (it0, tM) <- forestToGrammar
+           <$> map (if flagDefoliate then T.defoliate else id)
+           <$> readCorpora flagAsForests argCorpora
+  B.encodeFile (flagGrammar ++ "int2tree") (tM :: BinaryIntToTreeMap)
+  safeSaveLastGrammar 0 flagGrammar tM
+    $ take flagIterations
+    $ cbsm flagBeamWidth (0, it0)
 
-mainArgs CBSM_Continue{..}
-  =   safeSaveLastGrammar flagLastIteration flagGrammar
-  =<< take flagIterations
-  <$> cbsm flagBeamWidth
-  <$> (B.decodeFile argGrammar :: IO BinaryCRTG)
+mainArgs CBSM_Continue{..} = do
+  tM  <- B.decodeFile (flagGrammar ++ "int2tree") :: IO BinaryIntToTreeMap
+  g   <- B.decodeFile argGrammar :: IO BinaryCRTG
+  mtM <- B.decodeFile (argGrammar ++ "mergeTree"):: IO BinaryMergeTreeMap
+  safeSaveLastGrammar flagLastIteration flagGrammar tM
+    $ take flagIterations
+    $ cbsm flagBeamWidth (flagLastIteration, (g, mtM))
 
 mainArgs Parse{..} = do
   (hg, inis) <- toHypergraph <$> (B.decodeFile argGrammar :: IO BinaryCRTG)
@@ -254,13 +259,13 @@ drawTreeColored
   . mapLeafs (\ cs -> "\ESC[93m" ++ cs ++ "\ESC[m")
 
 
-safeSaveLastGrammar i0 filename gs
+safeSaveLastGrammar i0 filename tM xs
   = handleInterrupt worker handler
   where
-    worker :: ((Int, BinaryCRTG) -> IO ()) -> IO ()
+    worker :: ((Int, (BinaryCRTG, BinaryMergeTreeMap)) -> IO ()) -> IO ()
     worker update
-      = forM_ (zip [i0 ..] gs) $ \ (i, g) -> do
-          update $! (,) i $! g
+      = forM_ xs $ \ x@(i, (g, _)) -> do
+          update $! x
           putStrLnTimestamped
             $ "Iteration " ++ show i ++ ": "
               ++ (show $ M.size $ cntRule  g) ++ " rules, "
@@ -268,13 +273,15 @@ safeSaveLastGrammar i0 filename gs
               ++ (show $ M.size $ cntInit  g) ++ " initial states."
           hFlush stdout
 
-    handler :: (Int, BinaryCRTG) -> IO ()
-    handler (i, g) = do
+    handler :: (Int, (BinaryCRTG, BinaryMergeTreeMap)) -> IO ()
+    handler (i, (g, mrgTree)) = do
       putStrLnTimestamped $ "Writing result of iteration " ++ show i ++ " ..."
       hFlush stdout
       if null filename
         then print g
-        else B.encodeFile (filename ++ show i) (g :: BinaryCRTG)
+        else B.encodeFile (filename ++ show i ++ "rtg") (g :: BinaryCRTG)
+          >> B.encodeFile (filename ++ show i ++ "mergeTree")
+                          (mrgTree :: BinaryMergeTreeMap)
       putStrLnTimestamped
         $ "... done writing result of iteration " ++ show i ++ "."
       hFlush stdout
@@ -347,6 +354,8 @@ test3 n
   . bests
   . (!! n)
   . iterate cbsmStep2
+  . fst
+  . fst
   . forestToGrammar
 
 
@@ -357,6 +366,8 @@ test2 n
   . map (unlines . map show . H.edges . asEdgeList . fst . toHypergraph)
   . take n
   . iterate cbsmStep2
+  . fst
+  . fst
   . forestToGrammar
 
 
@@ -368,6 +379,8 @@ test1 n
   . take n
   . tail
   . iterate step . (\ x -> (x, undefined))
+  . fst
+  . fst
   . forestToGrammar
   where
     step (g, _) = (cbsmStep2 g, refineRanking $ enrichRanking $ mergeRanking g)
