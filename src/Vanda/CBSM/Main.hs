@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, RecordWildCards #-}
+{-# LANGUAGE BangPatterns, DeriveDataTypeable, RecordWildCards #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -76,6 +76,7 @@ data Args
     , flagIterations :: Int
     , flagGrammar :: FilePath
     , argGrammar :: FilePath
+    , argMergeTreeMap :: FilePath
     }
   | ShowMergeTrees
     { flagIntToTreeMap :: FilePath
@@ -120,10 +121,15 @@ cmdArgs
         , flagReqGrammar
         ]
     }
-  , (modeEmpty $ CBSM_Continue 1000 0 maxBound "" "")
+  , (modeEmpty $ CBSM_Continue 1000 0 maxBound "" "" "")
     { modeNames = ["cbsm-continue"]
     , modeHelp = "Continue cbsm training with a grammar."
-    , modeArgs = ([flagArgGrammar], Nothing)
+    , modeArgs =
+        ( [ flagArgGrammar{argRequire = True}
+          , flagArgMergeTreeMap{argRequire = True}
+          ]
+        , Nothing
+        )
     , modeGroupFlags = toGroup
         [ flagReqBeamWidth
         , flagReq ["last-iteration"]
@@ -195,7 +201,7 @@ cmdArgs
     flagArgCorpora
       = flagArg (\ a x -> Right x{argCorpora = argCorpora x ++ [a]}) "TREEBANK"
     flagArgMergeTreeMap
-      = flagArg (\ a x -> Right x{argMergeTreeMap = a}) "MERGE-TREE-FILE"
+      = flagArg (\ a x -> Right x{argMergeTreeMap = a}) "MERGE-TREES-FILE"
     flagArgGrammar
       = flagArg (\ a x -> Right x{argGrammar = a}) "GRAMMAR-FILE"
     flagArgCount
@@ -230,15 +236,14 @@ mainArgs CBSM{..} = do
            <$> map (if flagDefoliate then T.defoliate else id)
            <$> readCorpora flagAsForests argCorpora
   B.encodeFile (flagGrammar ++ "int2tree") (tM :: BinaryIntToTreeMap)
-  safeSaveLastGrammar 0 flagGrammar tM
+  safeSaveLastGrammar 0 flagGrammar
     $ take flagIterations
     $ cbsm flagBeamWidth (0, it0)
 
 mainArgs CBSM_Continue{..} = do
-  tM  <- B.decodeFile (flagGrammar ++ "int2tree") :: IO BinaryIntToTreeMap
   g   <- B.decodeFile argGrammar :: IO BinaryCRTG
-  mtM <- B.decodeFile (argGrammar ++ "mergeTree"):: IO BinaryMergeTreeMap
-  safeSaveLastGrammar flagLastIteration flagGrammar tM
+  mtM <- B.decodeFile argMergeTreeMap:: IO BinaryMergeTreeMap
+  safeSaveLastGrammar flagLastIteration flagGrammar
     $ take flagIterations
     $ cbsm flagBeamWidth (flagLastIteration, (g, mtM))
 
@@ -309,13 +314,13 @@ colorTTY cols str
   = "\ESC[" ++ intercalate ";" (map show cols) ++ "m" ++ str ++ "\ESC[m"
 
 
-safeSaveLastGrammar i0 filename tM xs
+safeSaveLastGrammar i0 filename xs
   = handleInterrupt worker handler
   where
     worker :: ((Int, (BinaryCRTG, BinaryMergeTreeMap)) -> IO ()) -> IO ()
     worker update
-      = forM_ xs $ \ x@(i, (g, _)) -> do
-          update $! x
+      = forM_ xs $ \ x@(!i, (!g, !_)) -> do
+          update $ x
           putStrLnTimestamped
             $ "Iteration " ++ show i ++ ": "
               ++ (show $ M.size $ cntRule  g) ++ " rules, "
