@@ -41,6 +41,8 @@ library
     , directory
     , filepath
     , unix
+    , old-locale
+    , time
   exposed-modules:
       Vanda.Features
     , Vanda.Hypergraph
