@@ -15,7 +15,8 @@
 -----------------------------------------------------------------------------
 
 module Vanda.CBSM.CountBasedStateMerging
-( CRTG(..)
+( Rule(..)
+, CRTG(..)
 , MergeTree(..)
 , forestToGrammar
 , cbsm
@@ -26,6 +27,14 @@ module Vanda.CBSM.CountBasedStateMerging
 , refineRanking
 , mergeRanking
 , enrichRanking
+, ruleEquivalenceClasses
+, forwardStar
+, bidiStar
+, createMerge
+, likelihoodDelta
+, saturateMerge
+, sortedCartesianProductWith
+, sortedCartesianProductWith'
 ) where
 
 
