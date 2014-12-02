@@ -1,7 +1,9 @@
 module Data.RevMapTests where
 import Data.RevMap
 
+{-
 import TestUtil
+-}
 
 import           Control.Arrow ((***))
 import           Data.List (inits)
@@ -13,6 +15,56 @@ import           Data.Tuple (swap)
 import           Test.HUnit
 
 
+
+tests :: Test
+tests =
+  let insertions =
+        [ (4, 'a')
+        , (6, 'b')
+        , (2, 'b')
+        , (6, 'a')
+        , (8, 'b')
+        , (2, 'c')
+        ]
+
+      ms = scanl (\ acc (k, v) -> insert k v acc) empty insertions
+
+      ls = [ []
+           , [(4, 'a')]
+           , [(4, 'a'), (6, 'b')]
+           , [(2, 'b'), (4, 'a'), (6, 'b')]
+           , [(2, 'b'), (4, 'a'), (6, 'a')]
+           , [(2, 'b'), (4, 'a'), (6, 'a'), (8, 'b')]
+           , [(2, 'c'), (4, 'a'), (6, 'a'), (8, 'b')]
+           ]
+
+      -- equivalence classes
+      es = [ []
+           , [[4]]
+           , [[4], [6]]
+           , [[2, 6], [4], [2, 6]]
+           , [[2], [4, 6], [4, 6]]
+           , [[2, 8], [4, 6], [4, 6], [2, 8]]
+           , [[2], [4, 6], [4, 6], [8]]
+           ]
+
+  in TestList
+  [ "insert/delete/toAscList" ~: TestList $ zipWith (\ m l -> TestList
+    [ "forward"  ~: M.toAscList (forward m) ~?= l
+    , "backward" ~: (S.fromList $ map swap $ MM.toList $ backward m) ~?= S.fromList l
+    ]) ms ls
+  , "fromList" ~: TestList $ zipWith (\ m l -> TestList
+    [ "forward"  ~: M.toAscList (forward m) ~?= l
+    , "backward" ~: (S.fromList $ map swap $ MM.toList $ backward m) ~?= S.fromList l
+    ]) (map fromList $ inits insertions) ls
+  , "toList" ~: TestList $ zipWith (\ m l -> toList m ~?= l) ms ls
+  , "equivalenceClass" ~: TestList $ zipWith (\ m e ->
+          (map S.toList $ mapMaybe (\ k -> equivalenceClass k m) $ M.keys $ forward m) ~?= e
+        ) ms es
+  ]
+
+
+{- tests if operations left-biased
 tests :: Test
 tests =
   let x00 = (int 0, int 0)
@@ -76,3 +128,4 @@ tests =
           (map (map unOrdOnFst . S.toList) $ mapMaybe (\ k -> equivalenceClass k m) $ M.keys $ forward m) ~?= e
         ) ms es
   ]
+-}
