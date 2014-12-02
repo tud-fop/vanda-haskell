@@ -295,6 +295,11 @@ instance (B.Binary a) => B.Binary (MergeTree a) where
              _ -> errorHere "get/MergeTree" "invalid binary data"
 
 
+instance Functor MergeTree where
+  fmap f (State v   ) = State (f v)
+  fmap f (Merge i xs) = Merge i (fmap (fmap f) xs)
+
+
 cbsm
   :: (Ord v, Ord l)
   => Int

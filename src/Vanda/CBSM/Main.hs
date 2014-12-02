@@ -38,6 +38,8 @@ import           Control.Applicative ((<$>))
 import           Control.Arrow ((***))
 import           Control.Monad
 import qualified Data.Binary as B
+import           Data.List (intercalate)
+import           Data.Map ((!))
 import qualified Data.Map as M
 import           Data.Ord
 import qualified Data.Set as S
@@ -73,6 +75,10 @@ data Args
     , flagIterations :: Int
     , flagGrammar :: FilePath
     , argGrammar :: FilePath
+    }
+  | ShowMergeTrees
+    { flagIntToTreeMap :: FilePath
+    , argMergeTreeMap :: FilePath
     }
   | Parse
     { argGrammar :: FilePath
@@ -126,6 +132,18 @@ cmdArgs
         , flagReqGrammar
         ]
     }
+  , (modeEmpty $ ShowMergeTrees "" "")
+    { modeNames = ["show-merge-trees"]
+    , modeHelp = "Visualize the done merges."
+    , modeArgs =
+        ( [ flagArgMergeTreeMap{argRequire = True}
+          ]
+        , Nothing
+        )
+    , modeGroupFlags = toGroup
+        [ flagReqIntToTreeMap
+        ]
+    }
   , (modeEmpty $ Parse "" 1)
     { modeNames = ["parse"]
     , modeHelp = "Parse newline-separated sentences from standard input."
@@ -165,8 +183,13 @@ cmdArgs
     flagReqGrammar
       = flagReq ["output"] (\ a x -> Right x{flagGrammar = a}) "FILE"
           "write result to FILE instead of stdout"
+    flagReqIntToTreeMap
+      = flagReq ["int2tree"] (\ a x -> Right x{flagIntToTreeMap = a}) "FILE"
+          "resolve Int to trees from the original corpus"
     flagArgCorpora
       = flagArg (\ a x -> Right x{argCorpora = argCorpora x ++ [a]}) "TREEBANK"
+    flagArgMergeTreeMap
+      = flagArg (\ a x -> Right x{argMergeTreeMap = a}) "MERGE-TREE-FILE"
     flagArgGrammar
       = flagArg (\ a x -> Right x{argGrammar = a}) "GRAMMAR-FILE"
     flagArgCount
@@ -209,6 +232,19 @@ mainArgs CBSM_Continue{..} = do
   safeSaveLastGrammar flagLastIteration flagGrammar tM
     $ take flagIterations
     $ cbsm flagBeamWidth (flagLastIteration, (g, mtM))
+
+mainArgs ShowMergeTrees{..} = do
+  mtM <- B.decodeFile argMergeTreeMap :: IO BinaryMergeTreeMap
+  m <- if null flagIntToTreeMap
+       then return $ M.map (fmap $ \ x -> Node (show x) []) mtM
+       else do tM <- B.decodeFile flagIntToTreeMap :: IO BinaryIntToTreeMap
+               return $ M.map (fmap $ (tM !)) mtM
+  let mergeTree2Tree (State t   ) = mapLeafs (colorTTY [93] ) t
+      mergeTree2Tree (Merge i ms) = Node (colorTTY [96] $ show i)
+                                  $ map mergeTree2Tree ms
+  forM_ (M.toAscList m) $ \ (i, t) -> do
+    putStrLn $ show i ++ ":"
+    putStrLn $ drawTree' (drawstyleCompact2 1 "") $ mergeTree2Tree t
 
 mainArgs Parse{..} = do
   (hg, inis) <- toHypergraph <$> (B.decodeFile argGrammar :: IO BinaryCRTG)
@@ -256,7 +292,12 @@ printWeightedDerivations xs =
 drawTreeColored :: Tree String -> String
 drawTreeColored
   = drawTree' (drawstyleCompact2 0 "")
-  . mapLeafs (\ cs -> "\ESC[93m" ++ cs ++ "\ESC[m")
+  . mapLeafs (colorTTY [93])
+
+
+colorTTY :: [Int] -> String -> String
+colorTTY cols str
+  = "\ESC[" ++ intercalate ";" (map show cols) ++ "m" ++ str ++ "\ESC[m"
 
 
 safeSaveLastGrammar i0 filename tM xs
