@@ -218,7 +218,9 @@ mainArgs (Help cs) = putStr cs
 mainArgs PrintCorpora{..}
     = putStr
     . unlines
-    . concatMap (\ (i, t) -> [show i ++ ":", drawTreeColored t])
+    . concatMap (\ (i, t) -> [ show i ++ ":"
+                             , unwords (yield t)
+                             , drawTreeColored t])
     . zip [1 :: Int ..]
     . map (if flagDefoliate then T.defoliate else id)
   =<< readCorpora flagAsForests argCorpora
