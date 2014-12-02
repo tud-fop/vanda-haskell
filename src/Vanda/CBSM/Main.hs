@@ -59,6 +59,7 @@ data Args
   = Help String
   | PrintCorpora
     { flagAsForests :: Bool
+    , flagDefoliate :: Bool
     , argCorpora :: [FilePath]
     }
   | CBSM
@@ -93,7 +94,7 @@ data Args
 cmdArgs :: Mode Args
 cmdArgs
   = modes "Main" (Help $ defaultHelp cmdArgs) "Count-Based State Merging"
-  [ (modeEmpty $ PrintCorpora False [])
+  [ (modeEmpty $ PrintCorpora False False [])
     { modeNames = ["print-corpora"]
     , modeHelp =
         "Print trees from TREEBANKs. Can be used to check for parsing \
@@ -101,7 +102,10 @@ cmdArgs
         \are traversed recursively. If no TREEBANK is given, the trees are \
         \read from standard input."
     , modeArgs = ([], Just flagArgCorpora)
-    , modeGroupFlags = toGroup [flagNoneAsForests]
+    , modeGroupFlags = toGroup
+        [ flagNoneAsForests
+        , flagNoneDefoliate
+        ]
     }
   , (modeEmpty $ CBSM False 1000 False maxBound "" [])
     { modeNames = ["cbsm"]
@@ -110,8 +114,7 @@ cmdArgs
     , modeArgs = ([], Just flagArgCorpora)
     , modeGroupFlags = toGroup
         [ flagNoneAsForests
-        , flagNone ["defoliate"] (\ x -> x{flagDefoliate = True})
-            "remove leaves from trees in TREEBANKs"
+        , flagNoneDefoliate
         , flagReqBeamWidth
         , flagReqIterations
         , flagReqGrammar
@@ -169,6 +172,9 @@ cmdArgs
     flagNoneAsForests
       = flagNone ["as-forests"] (\ x -> x{flagAsForests = True})
           "the TREEBANKs contain forests instead of trees"
+    flagNoneDefoliate
+      = flagNone ["defoliate"] (\ x -> x{flagDefoliate = True})
+          "remove leaves from trees in TREEBANKs"
     flagReqBeamWidth
       = flagReq ["beam-width"]
                 (readUpdate $ \ a x -> x{flagBeamWidth = a})
@@ -214,6 +220,7 @@ mainArgs PrintCorpora{..}
     . unlines
     . concatMap (\ (i, t) -> [show i ++ ":", drawTreeColored t])
     . zip [1 :: Int ..]
+    . map (if flagDefoliate then T.defoliate else id)
   =<< readCorpora flagAsForests argCorpora
 
 mainArgs CBSM{..} = do
