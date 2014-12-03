@@ -376,11 +376,12 @@ enrichRanking
 enrichRanking (xs, g)
   = map (\ x@(_, ((v1, _), (v2, _))) ->
           ( x
-          , let mrg = saturateMerge (forwardStar (rules g)) (createMerge [[v1, v2]]) in
+          , let mrg = satMrg $ createMerge [[v1, v2]] in
             (mrg, lklhdDelta mrg)
         ) )
   $ xs
   where lklhdDelta = likelihoodDelta g
+        satMrg = saturateMerge (forwardStar (rules g))
 
 
 mergeRanking :: CRTG v l -> ([(Int, ((v, Int), (v, Int)))], CRTG v l)
@@ -402,7 +403,7 @@ saturateMerge
 --   :: RevMap Char Char  -- ^ merges (must be an equivalence relation)
 --   -> RTG Char Char
 --   -> RevMap Char Char
-saturateMerge g m0 = evalState go (M.keysSet (RM.forward m0), m0)
+saturateMerge g = \ m0 -> evalState go (M.keysSet (RM.forward m0), m0)
   where
     go :: State (Set s, RevMap s s) (RevMap s s)
     -- go :: State (Set Char, RevMap Char Char) (RevMap Char Char)
@@ -418,8 +419,7 @@ saturateMerge g m0 = evalState go (M.keysSet (RM.forward m0), m0)
                 $ mapMaybe (flip M.lookup g)
                 $ maybe [] S.toList (RM.equivalenceClass s mrgs)
                 )
-            $ mapM_ (\ mrg -> modify ((S.insert (head mrg)) *** addMerge (S.fromList mrg)))
-            . map S.toList
+            $ mapM_ (\ mrg -> modify (S.insert (S.findMin mrg) *** addMerge mrg))
             . filter ((2 <=) . S.size)
             . M.elems
             . M.fromListWith S.union
