@@ -324,6 +324,7 @@ cbsm beamWidth prev@(n, (g, mtM))
         mrg = fst $ snd
             $ minimumBy (comparing (Down . snd . snd))
             $ take beamWidth  -- TODO: Group?
+            $ map (\ (x, (m, l)) -> (x, (m, l ** recip (fromIntegral (mergeSize m)))))
             $ enrichRanking cands
         g' = mergeCRTG mrg g
         mtM' = M.map (\ case [x] -> x; xs -> Merge n' xs)
@@ -456,6 +457,10 @@ addMerge new old
   where
     representative = S.findMin new
     insertList = flip $ foldl' (\ m k -> RM.insert k representative m)
+
+
+mergeSize :: RevMap k v -> Int
+mergeSize = sum . map (pred . S.size) . M.elems . RM.backward
 
 
 -- | Lazily calculate the Cartesian product of two lists sorted by a score
