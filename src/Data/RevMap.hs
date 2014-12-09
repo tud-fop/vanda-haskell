@@ -24,6 +24,7 @@ module Data.RevMap
 , backward
 , empty
 , insert
+, fromMap
 , fromList
 , toList
 , equivalenceClass
@@ -34,17 +35,23 @@ import qualified Data.MultiMap as MM
 import           Data.MultiMap (MultiMap)
 
 
+import qualified Data.Binary as B
 import           Data.List (foldl')
 import qualified Data.Map as M
 import           Data.Map (Map)
-import qualified Data.Set as S
 import           Data.Set (Set)
+import           Data.Tuple (swap)
 
 
 data RevMap k v = RevMap
   { forward  :: Map k v
   , backward :: MultiMap v k
   } deriving Show
+
+
+instance (B.Binary k, B.Binary v, Ord k, Ord v) => B.Binary (RevMap k v) where
+  put (RevMap f _) = B.put f
+  get = fmap fromMap B.get
 
 
 empty :: RevMap k v
@@ -61,6 +68,14 @@ insert k v RevMap{..} = RevMap f b
 --         f = foldl' (\ m k' -> M.insert k' v m) forward
 --           $ S.toList
 --           $ b M.! v
+
+
+fromMap :: (Ord k, Ord v) => Map k v -> RevMap k v
+fromMap m = RevMap m $ backwardFromList $ M.toList m
+
+
+backwardFromList :: (Ord k, Ord v) => [(k, v)] -> MultiMap v k
+backwardFromList = MM.fromList . map swap
 
 
 fromList :: (Ord k, Ord v) => [(k, v)] -> RevMap k v

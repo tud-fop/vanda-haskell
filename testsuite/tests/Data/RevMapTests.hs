@@ -1,11 +1,8 @@
 module Data.RevMapTests where
 import Data.RevMap
 
-{-
-import TestUtil
--}
 
-import           Control.Arrow ((***))
+import           Data.Binary
 import           Data.List (inits)
 import qualified Data.Map as M
 import           Data.Maybe (mapMaybe)
@@ -18,7 +15,8 @@ import           Test.HUnit
 
 tests :: Test
 tests =
-  let insertions =
+  let insertions :: [(Int, Char)]
+      insertions =
         [ (4, 'a')
         , (6, 'b')
         , (2, 'b')
@@ -27,8 +25,10 @@ tests =
         , (2, 'c')
         ]
 
+      ms :: [RevMap Int Char]
       ms = scanl (\ acc (k, v) -> insert k v acc) empty insertions
 
+      ls :: [[(Int, Char)]]
       ls = [ []
            , [(4, 'a')]
            , [(4, 'a'), (6, 'b')]
@@ -39,6 +39,7 @@ tests =
            ]
 
       -- equivalence classes
+      es :: [[[Int]]]
       es = [ []
            , [[4]]
            , [[4], [6]]
@@ -49,14 +50,10 @@ tests =
            ]
 
   in TestList
-  [ "insert/delete/toAscList" ~: TestList $ zipWith (\ m l -> TestList
-    [ "forward"  ~: M.toAscList (forward m) ~?= l
-    , "backward" ~: (S.fromList $ map swap $ MM.toList $ backward m) ~?= S.fromList l
-    ]) ms ls
-  , "fromList" ~: TestList $ zipWith (\ m l -> TestList
-    [ "forward"  ~: M.toAscList (forward m) ~?= l
-    , "backward" ~: (S.fromList $ map swap $ MM.toList $ backward m) ~?= S.fromList l
-    ]) (map fromList $ inits insertions) ls
+  [ "put/get"  ~: testRevMaps (map (decode . encode) ms) ls
+  , "insert"   ~: testRevMaps ms ls
+  , "fromMap"  ~: testRevMaps (map (fromMap . forward) ms) ls
+  , "fromList" ~: testRevMaps (map fromList $ inits insertions) ls
   , "toList" ~: TestList $ zipWith (\ m l -> toList m ~?= l) ms ls
   , "equivalenceClass" ~: TestList $ zipWith (\ m e ->
           (map S.toList $ mapMaybe (\ k -> equivalenceClass k m) $ M.keys $ forward m) ~?= e
@@ -64,7 +61,26 @@ tests =
   ]
 
 
+testRevMaps
+  :: (Ord k, Ord v, Show k, Show v) => [RevMap k v] -> [[(k, v)]] -> Test
+testRevMaps ms ls = TestList $ zipWith testRevMap ms ls
+
+
+testRevMap :: (Ord k, Ord v, Show k, Show v) => RevMap k v -> [(k, v)] -> Test
+testRevMap m l = TestList
+  [ "forward"  ~: M.toAscList (forward m) ~?= l
+  , "backward" ~: (S.fromList $ map swap $ MM.toList $ backward m)
+                  ~?= S.fromList l
+  ]
+
+
 {- tests if operations left-biased
+
+import TestUtil
+
+import           Control.Arrow ((***))
+
+
 tests :: Test
 tests =
   let x00 = (int 0, int 0)
