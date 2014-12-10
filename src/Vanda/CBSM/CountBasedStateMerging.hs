@@ -19,7 +19,10 @@ module Vanda.CBSM.CountBasedStateMerging
 , CRTG(..)
 , MergeTree(..)
 , forestToGrammar
+, Info(..)
+, initialInfo
 , cbsm
+, normalizeLklhdByMrgdStates
 , toHypergraph
 , asBackwardStar
 , bests
@@ -261,14 +264,12 @@ instance Read a => Read (OrdTree a) where
 forestToGrammar
   :: Ord l
   => [Tree l]
-  -> ((CRTG Int l, Map Int (MergeTree Int)), Map Int (Tree l))
+  -> (CRTG Int l, Map Int (Tree l))
 forestToGrammar corpus
-  = ( ( CRTG
-          (M.mapKeys toRule cntTrees)
-          (M.mapKeysMonotonic (ints M.!) cntTrees)
-          (M.mapKeysMonotonic (ints M.!) $ histogram $ map OrdTree corpus)
-      , M.fromAscList $ map (\ v -> (v, State v)) $ M.elems ints
-      )
+  = ( CRTG
+        (M.mapKeys toRule cntTrees)
+        (M.mapKeysMonotonic (ints M.!) cntTrees)
+        (M.mapKeysMonotonic (ints M.!) $ histogram $ map OrdTree corpus)
     , M.map unOrdTree $ M.fromAscList $ map swap $ M.toAscList $ ints
     )
   where
@@ -291,46 +292,85 @@ f **** g = \ (xf, xg) (yf, yg) -> (f xf yf, g xg yg)
 
 
 
-data MergeTree v = State v | Merge Int [MergeTree v]
+type MergeHistory v = Map v (MergeTree v)
+
+data MergeTree v
+  = State v Int              -- ^ state and count before any merge
+  | Merge Int [MergeTree v]  -- ^ iteration and merged states
 
 
-instance (B.Binary a) => B.Binary (MergeTree a) where
-  put (State x)    = B.putWord8 0 >> B.put x
+instance B.Binary a => B.Binary (MergeTree a) where
+  put (State x i ) = B.putWord8 0 >> B.put x >> B.put i
   put (Merge i xs) = B.putWord8 1 >> B.put i >> B.put xs
   get = do ctor <- B.getWord8
            case ctor of
-             0 -> State <$> B.get
+             0 -> State <$> B.get <*> B.get
              1 -> Merge <$> B.get <*> B.get
              _ -> errorHere "get/MergeTree" "invalid binary data"
 
 
 instance Functor MergeTree where
-  fmap f (State v   ) = State (f v)
+  fmap f (State v i ) = State (f v) i
   fmap f (Merge i xs) = Merge i (fmap (fmap f) xs)
+
+
+data Info v = Info
+  { infoIteration :: !Int
+  , infoBeamWidth :: !Int
+  , infoCandidateIndex :: !Int
+  , infoMerge :: !(RevMap v v)
+  , infoMergedRules :: !Int
+  , infoMergedStates :: !Int
+  , infoMergedInitials :: !Int
+  , infoLikelihoodDelta :: !(Log Double)
+  , infoEvaluation :: !(Log Double)
+  , infoMergeTreeMap :: !(MergeHistory v)
+  }
+
+
+instance (B.Binary v, Ord v) => B.Binary (Info v) where
+  put (Info a b c d e f g h i j)
+    = B.put a >> B.put b >> B.put c >> B.put d >> B.put e
+   >> B.put f >> B.put g >> B.put h >> B.put i >> B.put j
+  get = Info
+    <$> B.get <*> B.get <*> B.get <*> B.get <*> B.get
+    <*> B.get <*> B.get <*> B.get <*> B.get <*> B.get
+
+
+initialInfo :: Map v Int -> Info v
+initialInfo
+  = Info 0 0 0 RM.empty 0 0 0 1 1
+  . M.mapWithKey State
 
 
 cbsm
   :: (Ord v, Ord l)
-  => Int
-  ->  (Int, (CRTG v l, Map v (MergeTree v)))
-  -> [(Int, (CRTG v l, Map v (MergeTree v)))]
-cbsm beamWidth prev@(n, (g, mtM))
+  => ((Int, Int, Int) -> Log Double -> Log Double)
+  -> Int
+  ->  (CRTG v l, Info v)
+  -> [(CRTG v l, Info v)]
+cbsm evaluate beamWidth prev@(g, info@Info{..})
   = (prev :)
-  $ seq n
   $ seq g
-  $ seq mtM
-  $ let n' = n + 1
+  $ seq info
+  $ let n = infoIteration + 1
         cands = mergeRanking g
-        mrg = fst $ snd
-            $ minimumBy (comparing (Down . snd . snd))
-            $ take beamWidth  -- TODO: Group?
-            $ map (\ (x, (m, l)) -> (x, (m, l ** recip (fromIntegral (mergeSize m)))))
-            $ enrichRanking cands
-        g' = mergeCRTG mrg g
-        mtM' = M.map (\ case [x] -> x; xs -> Merge n' xs)
-             $ M.mapKeysWith (++) (mergeState mrg)
-             $ M.map (: []) mtM
-    in if null (fst cands) then [] else cbsm beamWidth (n', (g', mtM'))
+        (ind, mrg, (mrgR, mrgS, mrgI), lklhdD, evaluation)
+          = minimumBy (comparing (Down . (\ (_, _, _, _, x) -> x)))
+          $ take beamWidth  -- TODO: Group?
+          $ map ( \ (i, (_, (m, (l, sizes))))
+                  -> (i, m, sizes, l, evaluate sizes l)
+                )
+          $ zip [1 ..]
+          $ enrichRanking cands
+        info'
+          = Info n beamWidth ind mrg mrgR mrgS mrgI lklhdD evaluation
+          $ M.map (\ case [x] -> x; xs -> Merge n xs)
+          $ M.mapKeysWith (++) (mergeState mrg)
+          $ M.map (: []) infoMergeTreeMap
+    in if null (fst cands)
+       then []
+       else cbsm evaluate beamWidth (mergeCRTG mrg g, info')
 --   = g
 --   : ( g `seq` case refineRanking $ enrichRanking $ mergeRanking g of
 --         ((_, ((v1, _), (v2, _))), _) : _
@@ -339,6 +379,12 @@ cbsm beamWidth prev@(n, (g, mtM))
 --             in cbsm g'
 --         _ -> []
 --     )
+
+
+normalizeLklhdByMrgdStates :: (Int, Int, Int) -> Log Double -> Log Double
+normalizeLklhdByMrgdStates (_, mrgS, _) l
+  = l ** recip (fromIntegral mrgS)
+
 
 
 cbsmStep2 :: (Ord v, Ord l) => CRTG v l -> CRTG v l
@@ -351,7 +397,7 @@ cbsmStep2 g
 cbsmStep1
   :: (Ord v, Ord l)
   => CRTG v l
-  -> [((Int, ((v, Int), (v, Int))), ([[v]], Log Double))]
+  -> [((Int, ((v, Int), (v, Int))), ([[v]], (Log Double, (Int, Int, Int))))]
 cbsmStep1 g
   = map (\ x@(_, ((v1, _), (v2, _))) ->
         (,) x
@@ -363,8 +409,8 @@ cbsmStep1 g
 
 refineRanking
   :: Eq a
-  => [((a, b), (c, Log Double))]
-  -> [((a, b), (c, Log Double))]
+  => [((a, b), (c, (Log Double, (Int, Int, Int))))]
+  -> [((a, b), (c, (Log Double, (Int, Int, Int))))]
 refineRanking
   = concatMap (sortBy (comparing (Down . snd . snd)))
   . groupBy ((==) `on` fst . fst)
@@ -373,7 +419,7 @@ refineRanking
 enrichRanking
   :: (Ord v, Ord l)
   => ([(a, ((v, b), (v, c)))], CRTG v l)
-  -> [((a, ((v, b), (v, c))), (RevMap v v, Log Double))]
+  -> [((a, ((v, b), (v, c))), (RevMap v v, (Log Double, (Int, Int, Int))))]
 enrichRanking (xs, g)
   = map (\ x@(_, ((v1, _), (v2, _))) ->
           ( x
@@ -532,30 +578,53 @@ sortedCartesianProductWithInternal (?) (>+<) (x0 : xs0) (y0 : ys0)
 sortedCartesianProductWithInternal _ _ _ _ = []
 
 
-likelihoodDelta :: (Ord l, Ord v) => CRTG v l -> RevMap v v -> Log Double
-likelihoodDelta g@CRTG{..} = \ mrgs
- -> product  -- initial states
-    [ p (sum cs) / product (map p cs)
-    | vS <- M.elems $ RM.backward mrgs
-    , let cs = M.elems $ M.intersection cntInit (M.fromSet (const ()) vS)
-      -- only consider explicitly given counts from cntInit
-      -- these must be > 0
-    , not (null cs)
-    ]
-  * product  -- rules
-    [ p (sum cs) / product (map p cs)
-    | cs <- map (map (cntRule M.!)) $ M.elems $ ruleEquivalenceClasses (bidiStar (rules g)) mrgs
-    ]
-  * product  -- states
-    [ product (map p cs) / p (sum cs)
-    | vS <- M.elems $ RM.backward mrgs
-    , let cs = map (getCnt cntState) $ S.toList vS
-    ]
+likelihoodDelta :: (Ord l, Ord v) => CRTG v l -> RevMap v v -> (Log Double, (Int, Int, Int))
+likelihoodDelta g@CRTG{..} = \ mrgs ->
+  let (rw, rc) = productAndSum  -- rules
+               $ map ( (\ (pr, su, si) -> (p su / pr, si))
+                     . productPAndSumAndSize
+                     . map (cntRule M.!)
+                     )
+               $ M.elems
+               $ ruleEquivalenceClasses (bidiStar (rules g)) mrgs
+      (vw, vc) = productAndSum  -- states
+               $ map ( (\ (pr, su, si) -> (pr / p su, si))
+                     . productPAndSumAndSize
+                     . map (getCnt cntState)
+                     . S.toList
+                     )
+               $ M.elems
+               $ RM.backward mrgs
+
+      (iw, ic) = productAndSum  -- initial states
+               $ map ( (\ (pr, su, si) -> (p su / pr, si))
+                     . productPAndSumAndSize
+                     . M.elems
+                     )
+               $ filter ((1 <) . M.size)
+               $ map (M.intersection cntInit . M.fromSet (const ()))
+               $ M.elems
+               $ RM.backward mrgs
+  in (rw * vw * iw, (rc, vc, ic))
   where
     -- | power with itself
     p :: Int -> Log Double
     p n = Exp (x * log x)  -- = Exp (log (x ** x))
       where x = fromIntegral n
+
+    productAndSum :: [(Log Double, Int)] -> (Log Double, Int)
+    productAndSum = foldl' step (1, 0)
+      where step (a1, a2) (b1, b2) = strictPair (a1 * b1) (a2 + b2)
+
+    productPAndSumAndSize :: [Int] -> (Log Double, Int, Int)
+    productPAndSumAndSize = foldl' step (1, 0, -1)
+      where step (a1, a2, a3) b = strictTriple (a1 * p b) (a2 + b) (succ a3)
+
+    strictPair :: a -> b -> (a, b)
+    strictPair x y = x `seq` y `seq` (x, y)
+
+    strictTriple :: a -> b -> c -> (a, b, c)
+    strictTriple x y z = x `seq` y `seq` z `seq` (x, y, z)
 
     getCnt m k = M.findWithDefault 0 k m
 
@@ -563,12 +632,16 @@ likelihoodDelta g@CRTG{..} = \ mrgs
 ruleEquivalenceClasses
   :: (Ord l, Ord v) => BidiStar v l -> RevMap v v -> Map (Rule v l) [Rule v l]
 ruleEquivalenceClasses g mrgs
-  = M.fromListWith (++)
+  = M.filter notSingle
+  $ M.fromListWith (++)
   $ map (\ r -> (mergeRule mrgs r, [r]))
   $ (S.toList . S.fromList)
   $ concat
   $ M.elems
   $ M.intersection g (RM.forward mrgs)
+  where
+    notSingle [_] = False
+    notSingle  _  = True
 
 
 mergeState :: Ord v => RevMap v v -> v -> v

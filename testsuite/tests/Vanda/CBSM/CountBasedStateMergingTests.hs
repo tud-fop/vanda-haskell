@@ -37,14 +37,17 @@ tests = TestList
   , "ruleEquivalenceClasses" ~: TestList
     [ ruleEquivalenceClasses (bidiStar rtg0) RM.empty ~?= M.empty
     , ruleEquivalenceClasses (bidiStar rtg0) (createMerge ["Aa"])
-      ~?= M.fromList
+      ~?= M.empty
+        {-
         [ (Rule 'A' "BC" 's', [Rule 'A' "BC" 's'])
         , (Rule 'A' "bc" 's', [Rule 'a' "bc" 's'])
         , (Rule 'B' "AC" 's', [Rule 'B' "AC" 's'])
         , (Rule 'b' "Ac" 's', [Rule 'b' "ac" 's'])
         ]
+        -}
     , ruleEquivalenceClasses (bidiStar rtg0) (createMerge ["Cc"])
-      ~?= M.fromList
+      ~?= M.empty
+        {-
         [ (Rule 'A' "BC" 's', [Rule 'A' "BC" 's'])
         , (Rule 'B' "AC" 's', [Rule 'B' "AC" 's'])
         , (Rule 'C' ""   'C', [Rule 'C' ""   'C'])
@@ -52,26 +55,31 @@ tests = TestList
         , (Rule 'a' "bC" 's', [Rule 'a' "bc" 's'])
         , (Rule 'b' "aC" 's', [Rule 'b' "ac" 's'])
         ]
+        -}
     , ruleEquivalenceClasses (bidiStar rtg0) (createMerge ["Aa", "Bb"])
-      ~?= M.fromList
+      ~?= M.empty
+        {-
         [ (Rule 'A' "BC" 's', [Rule 'A' "BC" 's'])
         , (Rule 'A' "Bc" 's', [Rule 'a' "bc" 's'])
         , (Rule 'B' "AC" 's', [Rule 'B' "AC" 's'])
         , (Rule 'B' "Ac" 's', [Rule 'b' "ac" 's'])
         ]
+        -}
     , ruleEquivalenceClasses (bidiStar rtg0) (createMerge ["Aa", "Bb", "Cc"])
       ~?= M.fromList
         [ (Rule 'A' "BC" 's', [Rule 'a' "bc" 's', Rule 'A' "BC" 's'])
         , (Rule 'B' "AC" 's', [Rule 'b' "ac" 's', Rule 'B' "AC" 's'])
+        {-
         , (Rule 'C' ""   'C', [Rule 'C' ""   'C'])
         , (Rule 'C' ""   'c', [Rule 'c' ""   'c'])
+        -}
         ]
     ]
-  , "likelihoodDelta" ~: TestList
-    [ ln (likelihoodDelta crtg0 RM.empty) ~?= 0
-    , ln (likelihoodDelta crtg0 (createMerge ["Cc"])) ~?= log ((3**3 * 6**6) / 9**9)
+  , "fst . likelihoodDelta" ~: TestList
+    [ (ln $ fst $ likelihoodDelta crtg0 RM.empty) ~?= 0
+    , (ln $ fst $ likelihoodDelta crtg0 $ createMerge ["Cc"]) ~?= log ((3**3 * 6**6) / 9**9)
     , TestCase $ assertRoughly "" 1e-10
-        ( ln (likelihoodDelta crtg0 (createMerge ["Aa", "Bb", "Cc"])) )
+        ( ln $ fst $ likelihoodDelta crtg0 $ createMerge ["Aa", "Bb", "Cc"] )
         ( log
           ( 3**3 / (1**1 * 2**2)  -- } merged initial states
           * 5**5 / (1**1 * 4**4)  -- ⎫ merged
@@ -81,6 +89,11 @@ tests = TestList
           * (3**3 * 6**6) / 9**9  -- ⎭
           )
         )
+    ]
+  , "snd . likelihoodDelta" ~: TestList
+    [ (snd $ likelihoodDelta crtg0 RM.empty) ~?= (0, 0, 0)
+    , (snd $ likelihoodDelta crtg0 $ createMerge ["Cc"]) ~?= (0, 1, 0)
+    , (snd $ likelihoodDelta crtg0 $ createMerge ["Aa", "Bb", "Cc"]) ~?= (2, 3, 1)
     ]
   , "saturateMerge" ~: TestList
     [ (RM.toList $ saturateMerge (forwardStar rtg0) $ createMerge []) ~?= (RM.toList $ createMerge [])

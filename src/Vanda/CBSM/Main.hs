@@ -210,7 +210,7 @@ cmdArgs
 
 type BinaryCRTG = CRTG Int String
 type BinaryIntToTreeMap = M.Map Int (Tree String)
-type BinaryMergeTreeMap = M.Map Int (MergeTree Int)
+type BinaryInfo = Info Int
 
 
 main :: IO ()
@@ -232,29 +232,35 @@ mainArgs PrintCorpora{..}
   =<< readCorpora flagAsForests argCorpora
 
 mainArgs CBSM{..} = do
-  (it0, tM) <- forestToGrammar
-           <$> map (if flagDefoliate then T.defoliate else id)
-           <$> readCorpora flagAsForests argCorpora
+  (g, tM) <- forestToGrammar
+         <$> map (if flagDefoliate then T.defoliate else id)
+         <$> readCorpora flagAsForests argCorpora
   B.encodeFile (flagGrammar ++ "int2tree") (tM :: BinaryIntToTreeMap)
-  safeSaveLastGrammar 0 flagGrammar
+  safeSaveLastGrammar flagGrammar
     $ take flagIterations
-    $ cbsm flagBeamWidth (0, it0)
+    $ cbsm normalizeLklhdByMrgdStates flagBeamWidth
+           (g, initialInfo (cntState g))
 
 mainArgs CBSM_Continue{..} = do
-  g   <- B.decodeFile argGrammar :: IO BinaryCRTG
-  mtM <- B.decodeFile argMergeTreeMap:: IO BinaryMergeTreeMap
-  safeSaveLastGrammar flagLastIteration flagGrammar
+  g    <- B.decodeFile argGrammar :: IO BinaryCRTG
+  info <- B.decodeFile argMergeTreeMap:: IO BinaryInfo
+  safeSaveLastGrammar flagGrammar
     $ take flagIterations
-    $ cbsm flagBeamWidth (flagLastIteration, (g, mtM))
+    $ cbsm normalizeLklhdByMrgdStates flagBeamWidth (g, info)
 
 mainArgs ShowMergeTrees{..} = do
-  mtM <- B.decodeFile argMergeTreeMap :: IO BinaryMergeTreeMap
+  info <- B.decodeFile argMergeTreeMap :: IO BinaryInfo
   m <- if null flagIntToTreeMap
-       then return $ M.map (fmap $ \ x -> Node (show x) []) mtM
+       then return
+          $ M.map (fmap $ \ x -> Node (show x) [])
+          $ infoMergeTreeMap info
        else do tM <- B.decodeFile flagIntToTreeMap :: IO BinaryIntToTreeMap
-               return $ M.map (fmap $ (tM !)) mtM
-  let mergeTree2Tree (State t   ) = mapLeafs (colorTTY [93] ) t
-      mergeTree2Tree (Merge i ms) = Node (colorTTY [96] $ show i)
+               return
+                $ M.map (fmap $ (tM !))
+                $ infoMergeTreeMap info
+  let mergeTree2Tree (State t c ) = Node (colorTTY [96] ("count: " ++ show c))
+                                         [mapLeafs (colorTTY [93]) t]
+      mergeTree2Tree (Merge i ms) = Node (colorTTY [7, 96] $ show i)
                                   $ map mergeTree2Tree ms
   forM_ (M.toAscList m) $ \ (i, t) -> do
     putStrLn $ show i ++ ":"
@@ -314,29 +320,30 @@ colorTTY cols str
   = "\ESC[" ++ intercalate ";" (map show cols) ++ "m" ++ str ++ "\ESC[m"
 
 
-safeSaveLastGrammar i0 filename xs
+safeSaveLastGrammar filename xs
   = handleInterrupt worker handler
   where
-    worker :: ((Int, (BinaryCRTG, BinaryMergeTreeMap)) -> IO ()) -> IO ()
+    worker :: ((BinaryCRTG, BinaryInfo) -> IO ()) -> IO ()
     worker update
-      = forM_ xs $ \ x@(!i, (!g, !_)) -> do
+      = forM_ xs $ \ x@(!g, Info{..}) -> do
           update $ x
           putStrLnTimestamped
-            $ "Iteration " ++ show i ++ ": "
+            $ "Iteration " ++ show infoIteration ++ ": "
               ++ (show $ M.size $ cntRule  g) ++ " rules, "
               ++ (show $ M.size $ cntState g) ++ " states, "
               ++ (show $ M.size $ cntInit  g) ++ " initial states."
           hFlush stdout
 
-    handler :: (Int, (BinaryCRTG, BinaryMergeTreeMap)) -> IO ()
-    handler (i, (g, mrgTree)) = do
+    handler :: (BinaryCRTG, BinaryInfo) -> IO ()
+    handler (g, info) = do
+      let i = infoIteration info
       putStrLnTimestamped $ "Writing result of iteration " ++ show i ++ " ..."
       hFlush stdout
       if null filename
         then print g
         else B.encodeFile (filename ++ show i ++ "rtg") (g :: BinaryCRTG)
           >> B.encodeFile (filename ++ show i ++ "mergeTree")
-                          (mrgTree :: BinaryMergeTreeMap)
+                          (info :: BinaryInfo)
       putStrLnTimestamped
         $ "... done writing result of iteration " ++ show i ++ "."
       hFlush stdout
@@ -410,7 +417,6 @@ test3 n
   . (!! n)
   . iterate cbsmStep2
   . fst
-  . fst
   . forestToGrammar
 
 
@@ -421,7 +427,6 @@ test2 n
   . map (unlines . map show . H.edges . asEdgeList . fst . toHypergraph)
   . take n
   . iterate cbsmStep2
-  . fst
   . fst
   . forestToGrammar
 
@@ -434,7 +439,6 @@ test1 n
   . take n
   . tail
   . iterate step . (\ x -> (x, undefined))
-  . fst
   . fst
   . forestToGrammar
   where
