@@ -66,13 +66,14 @@ data Args
     { flagAsForests :: Bool
     , flagBeamWidth :: Int
     , flagDefoliate :: Bool
+    , flagNormalize :: Bool
     , flagIterations :: Int
     , flagGrammar :: FilePath
     , argCorpora :: [FilePath]
     }
   | CBSM_Continue
     { flagBeamWidth :: Int
-    , flagLastIteration :: Int
+    , flagNormalize :: Bool
     , flagIterations :: Int
     , flagGrammar :: FilePath
     , argGrammar :: FilePath
@@ -108,7 +109,7 @@ cmdArgs
         , flagNoneDefoliate
         ]
     }
-  , (modeEmpty $ CBSM False 1000 False maxBound "" [])
+  , (modeEmpty $ CBSM False 1000 False False maxBound "" [])
     { modeNames = ["cbsm"]
     , modeHelp = "Read-off a grammar from TREEBANKs and generalize it. See \
         \printcorpora for further information about the TREEBANK arguments."
@@ -117,11 +118,12 @@ cmdArgs
         [ flagNoneAsForests
         , flagNoneDefoliate
         , flagReqBeamWidth
+        , flagNoneNormalize
         , flagReqIterations
         , flagReqGrammar
         ]
     }
-  , (modeEmpty $ CBSM_Continue 1000 0 maxBound "" "" "")
+  , (modeEmpty $ CBSM_Continue 1000 False  maxBound "" "" "")
     { modeNames = ["cbsm-continue"]
     , modeHelp = "Continue cbsm training with a grammar."
     , modeArgs =
@@ -132,11 +134,7 @@ cmdArgs
         )
     , modeGroupFlags = toGroup
         [ flagReqBeamWidth
-        , flagReq ["last-iteration"]
-                  (readUpdate $ \ a x -> x{flagLastIteration = a})
-                  "LAST_ITERATION"
-                  "iteration number of the input grammar (only used to \
-                  \generate sensible iteration counts)"
+        , flagNoneNormalize
         , flagReqIterations
         , flagReqGrammar
         ]
@@ -181,6 +179,9 @@ cmdArgs
     flagNoneDefoliate
       = flagNone ["defoliate"] (\ x -> x{flagDefoliate = True})
           "remove leaves from trees in TREEBANKs"
+    flagNoneNormalize
+      = flagNone ["normalize"] (\ x -> x{flagNormalize = True})
+          "normalize likelihood deltas by number of merged states"
     flagReqBeamWidth
       = flagReq ["beam-width"]
                 (readUpdate $ \ a x -> x{flagBeamWidth = a})
@@ -238,7 +239,8 @@ mainArgs CBSM{..} = do
   B.encodeFile (flagGrammar ++ "int2tree") (tM :: BinaryIntToTreeMap)
   safeSaveLastGrammar flagGrammar
     $ take flagIterations
-    $ cbsm normalizeLklhdByMrgdStates flagBeamWidth
+    $ cbsm (if flagNormalize then normalizeLklhdByMrgdStates else flip const)
+           flagBeamWidth
            (g, initialInfo (cntState g))
 
 mainArgs CBSM_Continue{..} = do
@@ -246,7 +248,9 @@ mainArgs CBSM_Continue{..} = do
   info <- B.decodeFile argMergeTreeMap:: IO BinaryInfo
   safeSaveLastGrammar flagGrammar
     $ take flagIterations
-    $ cbsm normalizeLklhdByMrgdStates flagBeamWidth (g, info)
+    $ cbsm (if flagNormalize then normalizeLklhdByMrgdStates else flip const)
+           flagBeamWidth
+           (g, info)
 
 mainArgs ShowMergeTrees{..} = do
   info <- B.decodeFile argMergeTreeMap :: IO BinaryInfo
