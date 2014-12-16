@@ -45,6 +45,7 @@ import           Data.Ord
 import qualified Data.Set as S
 import           Data.Tree
 import qualified Data.Vector as V
+import           Numeric.Log (Log(..))
 import           System.Console.CmdArgs.Explicit
 import           System.Directory (doesDirectoryExist, getDirectoryContents)
 import           System.FilePath ((</>))
@@ -79,7 +80,7 @@ data Args
     , argGrammar :: FilePath
     , argMergeTreeMap :: FilePath
     }
-  | ShowMergeTrees
+  | ShowInfo
     { flagIntToTreeMap :: FilePath
     , argMergeTreeMap :: FilePath
     }
@@ -139,9 +140,10 @@ cmdArgs
         , flagReqGrammar
         ]
     }
-  , (modeEmpty $ ShowMergeTrees "" "")
-    { modeNames = ["show-merge-trees"]
-    , modeHelp = "Visualize the done merges."
+  , (modeEmpty $ ShowInfo "" "")
+    { modeNames = ["show-info"]
+    , modeHelp = "Show collected meta information and visualize the done \
+                 \merges, if available."
     , modeArgs =
         ( [ flagArgMergeTreeMap{argRequire = True}
           ]
@@ -202,7 +204,7 @@ cmdArgs
     flagArgCorpora
       = flagArg (\ a x -> Right x{argCorpora = argCorpora x ++ [a]}) "TREEBANK"
     flagArgMergeTreeMap
-      = flagArg (\ a x -> Right x{argMergeTreeMap = a}) "MERGE-TREES-FILE"
+      = flagArg (\ a x -> Right x{argMergeTreeMap = a}) "INFO-FILE"
     flagArgGrammar
       = flagArg (\ a x -> Right x{argGrammar = a}) "GRAMMAR-FILE"
     flagArgCount
@@ -252,8 +254,22 @@ mainArgs CBSM_Continue{..} = do
            flagBeamWidth
            (g, info)
 
-mainArgs ShowMergeTrees{..} = do
+mainArgs ShowInfo{..} = do
   info <- B.decodeFile argMergeTreeMap :: IO BinaryInfo
+  putStr "iteration           : " >> print (infoIteration       info)
+  putStr "beam width          : " >> print (infoBeamWidth       info)
+  putStr "candidate index     : " >> print (infoCandidateIndex  info)
+  putStr "rule merges         : " >> print (infoMergedRules     info)
+  putStr "state merges        : " >> print (infoMergedStates    info)
+  putStr "initial-state merges: " >> print (infoMergedInitials  info)
+  putStrLn $ let l = infoLikelihoodDelta info
+      in "likelihood delta    : exp " ++ show (ln l) ++ " = " ++ show l
+  putStrLn $ let l = infoEvaluation info
+      in "evaluation of merge : exp " ++ show (ln l) ++ " = " ++ show l
+  putStrLn ""
+  putStrLn ""
+  putStrLn "merge history:"
+  putStrLn ""
   m <- if null flagIntToTreeMap
        then return
           $ M.map (fmap $ \ x -> Node (show x) [])
