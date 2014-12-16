@@ -382,8 +382,8 @@ cbsm evaluate beamWidth prev@(g, info@Info{..})
 
 
 normalizeLklhdByMrgdStates :: (Int, Int, Int) -> Log Double -> Log Double
-normalizeLklhdByMrgdStates (_, mrgS, _) l
-  = l ** recip (fromIntegral mrgS)
+normalizeLklhdByMrgdStates (_, mrgS, _) (Exp l)
+  = Exp (l / fromIntegral mrgS)  -- = Exp l ** recip (fromIntegral mrgS)
 
 
 

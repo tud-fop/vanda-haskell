@@ -78,11 +78,11 @@ data Args
     , flagIterations :: Int
     , flagGrammar :: FilePath
     , argGrammar :: FilePath
-    , argMergeTreeMap :: FilePath
+    , argInfo :: FilePath
     }
   | ShowInfo
     { flagIntToTreeMap :: FilePath
-    , argMergeTreeMap :: FilePath
+    , argInfo :: FilePath
     }
   | Parse
     { argGrammar :: FilePath
@@ -204,7 +204,7 @@ cmdArgs
     flagArgCorpora
       = flagArg (\ a x -> Right x{argCorpora = argCorpora x ++ [a]}) "TREEBANK"
     flagArgMergeTreeMap
-      = flagArg (\ a x -> Right x{argMergeTreeMap = a}) "INFO-FILE"
+      = flagArg (\ a x -> Right x{argInfo = a}) "INFO-FILE"
     flagArgGrammar
       = flagArg (\ a x -> Right x{argGrammar = a}) "GRAMMAR-FILE"
     flagArgCount
@@ -247,7 +247,7 @@ mainArgs CBSM{..} = do
 
 mainArgs CBSM_Continue{..} = do
   g    <- B.decodeFile argGrammar :: IO BinaryCRTG
-  info <- B.decodeFile argMergeTreeMap:: IO BinaryInfo
+  info <- B.decodeFile argInfo:: IO BinaryInfo
   safeSaveLastGrammar flagGrammar
     $ take flagIterations
     $ cbsm (if flagNormalize then normalizeLklhdByMrgdStates else flip const)
@@ -255,7 +255,7 @@ mainArgs CBSM_Continue{..} = do
            (g, info)
 
 mainArgs ShowInfo{..} = do
-  info <- B.decodeFile argMergeTreeMap :: IO BinaryInfo
+  info <- B.decodeFile argInfo :: IO BinaryInfo
   putStr "iteration           : " >> print (infoIteration       info)
   putStr "beam width          : " >> print (infoBeamWidth       info)
   putStr "candidate index     : " >> print (infoCandidateIndex  info)
