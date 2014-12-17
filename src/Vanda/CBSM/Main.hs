@@ -47,9 +47,19 @@ import           Data.Tree
 import qualified Data.Vector as V
 import           Numeric.Log (Log(..))
 import           System.Console.CmdArgs.Explicit
-import           System.Directory (doesDirectoryExist, getDirectoryContents)
-import           System.FilePath ((</>))
-import           System.IO (hFlush, stdout)
+import           System.CPUTime
+import           System.Directory ( createDirectoryIfMissing
+                                  , doesDirectoryExist
+                                  , getDirectoryContents )
+import           System.Exit (exitFailure)
+import           System.FilePath ((</>), (<.>))
+import           System.IO ( Handle
+                           , IOMode(..)
+                           , hFlush
+                           , hPutStrLn
+                           , stdout
+                           , withFile )
+import           System.Posix.Files (fileExist)
 
 
 errorHere :: String -> String -> a
@@ -69,16 +79,14 @@ data Args
     , flagDefoliate :: Bool
     , flagNormalize :: Bool
     , flagIterations :: Int
-    , flagGrammar :: FilePath
+    , flagDir :: FilePath
     , argCorpora :: [FilePath]
     }
   | CBSM_Continue
     { flagBeamWidth :: Int
     , flagNormalize :: Bool
     , flagIterations :: Int
-    , flagGrammar :: FilePath
-    , argGrammar :: FilePath
-    , argInfo :: FilePath
+    , flagDir :: FilePath
     }
   | ShowInfo
     { flagIntToTreeMap :: FilePath
@@ -110,7 +118,7 @@ cmdArgs
         , flagNoneDefoliate
         ]
     }
-  , (modeEmpty $ CBSM False 1000 False False maxBound "" [])
+  , (modeEmpty $ CBSM False 1000 False False (pred maxBound) "" [])
     { modeNames = ["cbsm"]
     , modeHelp = "Read-off a grammar from TREEBANKs and generalize it. See \
         \printcorpora for further information about the TREEBANK arguments."
@@ -121,23 +129,17 @@ cmdArgs
         , flagReqBeamWidth
         , flagNoneNormalize
         , flagReqIterations
-        , flagReqGrammar
+        , flagReqDir
         ]
     }
-  , (modeEmpty $ CBSM_Continue 1000 False  maxBound "" "" "")
+  , (modeEmpty $ CBSM_Continue 1000 False (pred maxBound) "")
     { modeNames = ["cbsm-continue"]
     , modeHelp = "Continue cbsm training with a grammar."
-    , modeArgs =
-        ( [ flagArgGrammar{argRequire = True}
-          , flagArgMergeTreeMap{argRequire = True}
-          ]
-        , Nothing
-        )
     , modeGroupFlags = toGroup
         [ flagReqBeamWidth
         , flagNoneNormalize
         , flagReqIterations
-        , flagReqGrammar
+        , flagReqDir
         ]
     }
   , (modeEmpty $ ShowInfo "" "")
@@ -195,9 +197,9 @@ cmdArgs
                 (readUpdate $ \ a x -> x{flagIterations = a})
                 "ITERATIONS"
                 "limit number of iterations"
-    flagReqGrammar
-      = flagReq ["output"] (\ a x -> Right x{flagGrammar = a}) "FILE"
-          "write result to FILE instead of stdout"
+    flagReqDir
+      = flagReq ["dir"] (\ a x -> Right x{flagDir = a}) "DIRECTORY"
+          "write output files to DIRECTORY instead of current"
     flagReqIntToTreeMap
       = flagReq ["int2tree"] (\ a x -> Right x{flagIntToTreeMap = a}) "FILE"
           "resolve Int to trees from the original corpus"
@@ -209,6 +211,18 @@ cmdArgs
       = flagArg (\ a x -> Right x{argGrammar = a}) "GRAMMAR-FILE"
     flagArgCount
       = flagArg (readUpdate $ \ a x -> x{argCount = a}) "COUNT"
+
+
+filePathGrammar       :: FilePath -> Int -> FilePath
+filePathIntToTreeMap  :: FilePath        -> FilePath
+filePathInfo          :: FilePath -> Int -> FilePath
+filePathLastIteration :: FilePath        -> FilePath
+filePathStatistics    :: FilePath        -> FilePath
+filePathGrammar       dir i = dir </> "grammar-" ++ show i <.> "bin"
+filePathIntToTreeMap  dir   = dir </> "int2tree"           <.> "bin"
+filePathInfo          dir i = dir </> "info-"    ++ show i <.> "bin"
+filePathLastIteration dir   = dir </> "last-iteration"     <.> "txt"
+filePathStatistics    dir   = dir </> "statistics"         <.> "csv"
 
 
 type BinaryCRTG = CRTG Int String
@@ -235,24 +249,41 @@ mainArgs PrintCorpora{..}
   =<< readCorpora flagAsForests argCorpora
 
 mainArgs CBSM{..} = do
+  exist <- fileExist (filePathIntToTreeMap flagDir)
+  when exist $ do
+    putStrLn $ "File exists: " ++ filePathIntToTreeMap flagDir
+    putStrLn $ "Probably you have run cbsm in this directory before."
+    putStrLn $ "Did you mean cbsm-continue?"
+    exitFailure
+  createDirectoryIfMissing True flagDir
   (g, tM) <- forestToGrammar
          <$> map (if flagDefoliate then T.defoliate else id)
          <$> readCorpora flagAsForests argCorpora
-  B.encodeFile (flagGrammar ++ "int2tree") (tM :: BinaryIntToTreeMap)
-  safeSaveLastGrammar flagGrammar
-    $ take flagIterations
-    $ cbsm (if flagNormalize then normalizeLklhdByMrgdStates else flip const)
-           flagBeamWidth
-           (g, initialInfo (cntState g))
+  B.encodeFile (filePathIntToTreeMap flagDir) (tM :: BinaryIntToTreeMap)
+  withFile (filePathStatistics flagDir) AppendMode $ \ h -> do
+    hPutStrLn h
+      "CPU time,iteration,rules,states,initial states,beam width,\
+      \candidate index,rule merges,state merges,initial-state merges,\
+      \log likelihood delta,likelihood delta,log evaluation of merge,\
+      \evaluation of merge"
+    safeSaveLastGrammar flagDir h
+      $ take (succ flagIterations)
+      $ cbsm
+          (if flagNormalize then normalizeLklhdByMrgdStates else flip const)
+          flagBeamWidth
+          (g, initialInfo (cntState g))
 
 mainArgs CBSM_Continue{..} = do
-  g    <- B.decodeFile argGrammar :: IO BinaryCRTG
-  info <- B.decodeFile argInfo:: IO BinaryInfo
-  safeSaveLastGrammar flagGrammar
-    $ take flagIterations
-    $ cbsm (if flagNormalize then normalizeLklhdByMrgdStates else flip const)
-           flagBeamWidth
-           (g, info)
+  it   <- read <$> readFile (filePathLastIteration flagDir) :: IO Int
+  g    <- B.decodeFile (filePathGrammar flagDir it) :: IO BinaryCRTG
+  info <- B.decodeFile (filePathInfo    flagDir it) :: IO BinaryInfo
+  withFile (filePathStatistics flagDir) AppendMode $ \ h -> do
+    safeSaveLastGrammar flagDir h
+      $ take (succ flagIterations)
+      $ cbsm
+          (if flagNormalize then normalizeLklhdByMrgdStates else flip const)
+          flagBeamWidth
+          (g, info)
 
 mainArgs ShowInfo{..} = do
   info <- B.decodeFile argInfo :: IO BinaryInfo
@@ -340,18 +371,40 @@ colorTTY cols str
   = "\ESC[" ++ intercalate ";" (map show cols) ++ "m" ++ str ++ "\ESC[m"
 
 
-safeSaveLastGrammar filename xs
+safeSaveLastGrammar :: FilePath -> Handle -> [(BinaryCRTG, Info Int)] -> IO ()
+safeSaveLastGrammar dir h xs
   = handleInterrupt worker handler
   where
     worker :: ((BinaryCRTG, BinaryInfo) -> IO ()) -> IO ()
     worker update
       = forM_ xs $ \ x@(!g, Info{..}) -> do
           update $ x
+          cpuTime <- getCPUTime
+          let rules         = M.size $ cntRule  g
+              states        = M.size $ cntState g
+              initialStates = M.size $ cntInit  g
+          hPutStrLn h $ intercalate ","
+            [ showFixedComma 12 cpuTime  -- pico = 10^-12
+            , show infoIteration
+            , show rules
+            , show states
+            , show initialStates
+            , show infoBeamWidth
+            , show infoCandidateIndex
+            , show infoMergedRules
+            , show infoMergedStates
+            , show infoMergedInitials
+            , show (ln infoLikelihoodDelta)
+            , show infoLikelihoodDelta
+            , show (ln infoEvaluation)
+            , show infoEvaluation
+            ]
+          hFlush h
           putStrLnTimestamped
             $ "Iteration " ++ show infoIteration ++ ": "
-              ++ (show $ M.size $ cntRule  g) ++ " rules, "
-              ++ (show $ M.size $ cntState g) ++ " states, "
-              ++ (show $ M.size $ cntInit  g) ++ " initial states."
+              ++ show rules         ++ " rules, "
+              ++ show states        ++ " states, "
+              ++ show initialStates ++ " initial states."
           hFlush stdout
 
     handler :: (BinaryCRTG, BinaryInfo) -> IO ()
@@ -359,14 +412,23 @@ safeSaveLastGrammar filename xs
       let i = infoIteration info
       putStrLnTimestamped $ "Writing result of iteration " ++ show i ++ " ..."
       hFlush stdout
-      if null filename
-        then print g
-        else B.encodeFile (filename ++ show i ++ "rtg") (g :: BinaryCRTG)
-          >> B.encodeFile (filename ++ show i ++ "mergeTree")
-                          (info :: BinaryInfo)
+      B.encodeFile (filePathGrammar dir i) (g    :: BinaryCRTG)
+      B.encodeFile (filePathInfo    dir i) (info :: BinaryInfo)
+      writeFile (filePathLastIteration dir) (show i)
       putStrLnTimestamped
         $ "... done writing result of iteration " ++ show i ++ "."
       hFlush stdout
+
+
+showFixedComma :: (Show a, Integral a) => Int -> a -> String
+showFixedComma o = go
+  where
+    d = 10^o
+    go x | r == 0    = show l
+         | otherwise = show l ++ "." ++ replicate (o - length r') '0' ++ r'
+      where l  = x `div` d
+            r  = x - l * d
+            r' = show r
 
 
 progress :: (Int -> String) -> Int -> [a] -> IO a
