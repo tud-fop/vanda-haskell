@@ -357,6 +357,9 @@ cbsm evaluate beamWidth prev@(g, info@Info{..})
         cands = mergeRanking g
         (ind, mrg, (mrgR, mrgS, mrgI), lklhdD, evaluation)
           = minimumBy (comparing (Down . (\ (_, _, _, _, x) -> x)))
+            -- minimumBy returns the first minimum while
+            -- maximumBy would return the last maximum
+            -- but both is not guaranteed by the documentation
           $ take beamWidth  -- TODO: Group?
           $ map ( \ (i, (_, (m, (l, sizes))))
                   -> (i, m, sizes, l, evaluate sizes l)
