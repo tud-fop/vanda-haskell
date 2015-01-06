@@ -62,6 +62,8 @@ library
     , Vanda.Algorithms.IntEarley
     , Vanda.Algorithms.IntersectWithNGram
     , Vanda.Algorithms.IntersectWithNGramUtil
+    , Vanda.CBSM.CountBasedStateMerging
+    , Vanda.CBSM.Dovetailing
     , Vanda.CBSM.Main
     , Vanda.CBSM.ProductOrder
     , Vanda.Corpus.Negra

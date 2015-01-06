@@ -7,6 +7,7 @@ import qualified Control.ErrorTests
 import qualified Data.MultiMapTests
 import qualified Data.RevMapTests
 import qualified Vanda.CBSM.CountBasedStateMergingTests
+import qualified Vanda.CBSM.DovetailingTests
 import qualified Vanda.CBSM.ProductOrderTests
 
 
@@ -24,6 +25,8 @@ tests = TestList
     ~: Data.RevMapTests.tests
   ,   "Vanda.CBSM.CountBasedStateMerging"
     ~: Vanda.CBSM.CountBasedStateMergingTests.tests
+  ,   "Vanda.CBSM.Dovetailing"
+    ~: Vanda.CBSM.DovetailingTests.tests
   ,   "Vanda.CBSM.ProductOrder"
     ~: Vanda.CBSM.ProductOrderTests.tests
   ]

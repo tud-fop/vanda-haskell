@@ -44,6 +44,7 @@ module Vanda.CBSM.CountBasedStateMerging
 import qualified Control.Error
 import qualified Data.RevMap as RM
 import           Data.RevMap (RevMap)
+import           Vanda.CBSM.Dovetailing
 import qualified Vanda.Features as F
 import qualified Vanda.Hypergraph as H
 import           Vanda.Util.Histogram (histogram)
@@ -449,32 +450,38 @@ saturateMerge
   => ForwardStar s t
   -> RevMap s s  -- ^ merges (must be an equivalence relation)
   -> RevMap s s
--- saturateMerge
---   :: RevMap Char Char  -- ^ merges (must be an equivalence relation)
---   -> RTG Char Char
---   -> RevMap Char Char
-saturateMerge g = \ m0 -> evalState go (M.keysSet (RM.forward m0), m0)
+saturateMerge g mrgs
+  = untilRight (saturateMergeStep g) (M.keysSet (RM.forward mrgs), mrgs)
+
+
+saturateMergeStep
+  :: (Ord s, Ord t)
+  => ForwardStar s t
+  -> (Set s, RevMap s s)
+  -> Either (Set s, RevMap s s) (RevMap s s)
+saturateMergeStep g (todo, mrgs)
+  = case S.minView (S.map (mergeState mrgs) todo) of
+      Nothing      -> Right mrgs
+      Just (s, sS) -> Left
+        $ foldl' step (sS, mrgs)
+        $ concatMap
+          ( filter ((2 <=) . S.size)
+          . M.elems
+          . M.fromListWith S.union
+          . map (\ Rule{..} -> ( map (mergeState mrgs) from
+                               , S.singleton (mergeState mrgs to)))
+          )
+        $ M.elems
+        $ M.unionsWith (++)  -- bring together rules with same terminal
+        $ M.elems
+        $ M.intersection g
+        $ M.fromSet (const ())
+        $ fromMaybe (errorHere "saturateMergeStep" "")
+        $ RM.equivalenceClass s mrgs
   where
-    go :: State (Set s, RevMap s s) (RevMap s s)
-    -- go :: State (Set Char, RevMap Char Char) (RevMap Char Char)
-    go = do
-      modify $ \ (todo, mrgs) -> (S.map (mergeState mrgs) todo, mrgs)
-      gets (S.minView . fst) >>= \ case
-        Nothing -> gets snd
-        Just (s, sS) -> do
-          putFst sS
-          mrgs <- gets snd
-          forM_ ( M.elems
-                $ M.unionsWith (++)
-                $ mapMaybe (flip M.lookup g)
-                $ maybe [] S.toList (RM.equivalenceClass s mrgs)
-                )
-            $ mapM_ (\ mrg -> modify (S.insert (S.findMin mrg) *** addMerge mrg))
-            . filter ((2 <=) . S.size)
-            . M.elems
-            . M.fromListWith S.union
-            . map (\ Rule{..} -> (map (mergeState mrgs) from, S.singleton (mergeState mrgs to)))
-          go
+    step (s, m) mrg = let s' = S.insert (S.findMin mrg) s
+                          m' = addMerge mrg m
+                      in s' `seq` m' `seq` (s', m')
 
 
 traceShow' :: Show a => [Char] -> a -> a
