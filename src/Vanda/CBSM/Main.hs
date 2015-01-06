@@ -262,7 +262,7 @@ mainArgs CBSM{..} = do
   B.encodeFile (filePathIntToTreeMap flagDir) (tM :: BinaryIntToTreeMap)
   withFile (filePathStatistics flagDir) AppendMode $ \ h -> do
     hPutStrLn h
-      "CPU time,iteration,rules,states,initial states,beam width,\
+      "CPU time,iteration,rules,states,initial states,beam width,beam index,\
       \candidate index,rule merges,state merges,initial-state merges,\
       \log likelihood delta,likelihood delta,log evaluation of merge,\
       \evaluation of merge"
@@ -289,6 +289,7 @@ mainArgs ShowInfo{..} = do
   info <- B.decodeFile argInfo :: IO BinaryInfo
   putStr "iteration           : " >> print (infoIteration       info)
   putStr "beam width          : " >> print (infoBeamWidth       info)
+  putStr "beam index          : " >> print (infoBeamIndex       info)
   putStr "candidate index     : " >> print (infoCandidateIndex  info)
   putStr "rule merges         : " >> print (infoMergedRules     info)
   putStr "state merges        : " >> print (infoMergedStates    info)
@@ -390,6 +391,7 @@ safeSaveLastGrammar dir h xs
             , show states
             , show initialStates
             , show infoBeamWidth
+            , show infoBeamIndex
             , show infoCandidateIndex
             , show infoMergedRules
             , show infoMergedStates

@@ -318,6 +318,7 @@ instance Functor MergeTree where
 data Info v = Info
   { infoIteration :: !Int
   , infoBeamWidth :: !Int
+  , infoBeamIndex :: !Int
   , infoCandidateIndex :: !Int
   , infoMerge :: !(RevMap v v)
   , infoMergedRules :: !Int
@@ -330,17 +331,19 @@ data Info v = Info
 
 
 instance (B.Binary v, Ord v) => B.Binary (Info v) where
-  put (Info a b c d e f g h i j)
+  put (Info a b c d e f g h i j k)
     = B.put a >> B.put b >> B.put c >> B.put d >> B.put e
    >> B.put f >> B.put g >> B.put h >> B.put i >> B.put j
+   >> B.put k
   get = Info
     <$> B.get <*> B.get <*> B.get <*> B.get <*> B.get
     <*> B.get <*> B.get <*> B.get <*> B.get <*> B.get
+    <*> B.get
 
 
 initialInfo :: Map v Int -> Info v
 initialInfo
-  = Info 0 0 0 RM.empty 0 0 0 1 1
+  = Info 0 0 0 0 RM.empty 0 0 0 1 1
   . M.mapWithKey State
 
 
@@ -356,19 +359,28 @@ cbsm evaluate beamWidth prev@(g, info@Info{..})
   $ seq info
   $ let n = infoIteration + 1
         cands = mergeRanking g
-        (ind, mrg, (mrgR, mrgS, mrgI), lklhdD, evaluation)
-          = minimumBy (comparing (Down . (\ (_, _, _, _, x) -> x)))
+        (indB, indC, mrg, (mrgR, mrgS, mrgI), lklhdD, evaluation)
+          = minimumBy (comparing (Down . (\ (_, _, _, _, _, x) -> x)))
             -- minimumBy returns the first minimum while
             -- maximumBy would return the last maximum
             -- but both is not guaranteed by the documentation
           $ take beamWidth  -- TODO: Group?
-          $ map ( \ (i, (_, (m, (l, sizes))))
-                  -> (i, m, sizes, l, evaluate sizes l)
+          $ map ( \ (i, (j, m))
+                  -> let (l, sizes) = likelihoodDelta g m
+                     in (i, j, m, sizes, l, evaluate sizes l)
                 )
           $ zip [1 ..]
-          $ enrichRanking cands
+          $ dovetail (second' (saturateMergeStep (forwardStar (rules g))))
+          $ zip [1 ..]
+          $ map ( \ (_, ((v1, _), (v2, _)))
+                  -> saturateMergeInit (createMerge [[v1, v2]]))
+          $ let vs = sortBy (comparing snd) (M.toList (cntState g))
+            in sortedCartesianProductWith' ((+) `on` snd) vs (tail vs)
+        second' f (x, y) = case f y of
+          Left  l -> Left  (x, l)
+          Right r -> Right (x, r)
         info'
-          = Info n beamWidth ind mrg mrgR mrgS mrgI lklhdD evaluation
+          = Info n beamWidth indB indC mrg mrgR mrgS mrgI lklhdD evaluation
           $ M.map (\ case [x] -> x; xs -> Merge n xs)
           $ M.mapKeysWith (++) (mergeState mrg)
           $ M.map (: []) infoMergeTreeMap
@@ -451,7 +463,10 @@ saturateMerge
   -> RevMap s s  -- ^ merges (must be an equivalence relation)
   -> RevMap s s
 saturateMerge g mrgs
-  = untilRight (saturateMergeStep g) (M.keysSet (RM.forward mrgs), mrgs)
+  = untilRight (saturateMergeStep g) (saturateMergeInit mrgs)
+
+
+saturateMergeInit mrgs = (M.keysSet (RM.forward mrgs), mrgs)
 
 
 saturateMergeStep
