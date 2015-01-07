@@ -27,6 +27,7 @@ import           System.Console.CmdArgs.Explicit.Misc
 import           Vanda.Algorithms.EarleyMonadic
 import qualified Vanda.Algorithms.Earley.WSA as WSA
 import           Vanda.CBSM.CountBasedStateMerging
+import qualified Vanda.CBSM.Merge as Merge
 import           Vanda.Corpus.SExpression as SExp
 import qualified Vanda.Features as F
 import qualified Vanda.Hypergraph as H
@@ -532,8 +533,8 @@ test1 n
       =  show s ++ "=" ++ show n1 ++ "+" ++ show n2 ++ ": "
       ++ show delta ++ ": "
       ++ show [v1, v2]
-      ++ if M.size (RM.forward mrg) > 2
-         then " -> " ++ show (map S.toList $ M.elems $ RM.backward mrg)
+      ++ if M.size (Merge.forward mrg) > 2
+         then " -> " ++ show (map S.toList $ M.elems $ Merge.backward mrg)
          else " (saturated)"
 
 

@@ -1,7 +1,7 @@
 module Vanda.CBSM.CountBasedStateMergingTests where
 import Vanda.CBSM.CountBasedStateMerging
 
-import qualified Data.RevMap as RM
+import qualified Vanda.CBSM.Merge as Merge
 import           Vanda.Corpus.TreeTerm
 
 import           TestUtil (assertRoughly)
@@ -35,8 +35,8 @@ tests = TestList
     , testSortedCartesianProductWith' (+) [0, 2, 4] [0, 5, 10 :: Int]
     ]
   , "ruleEquivalenceClasses" ~: TestList
-    [ ruleEquivalenceClasses (bidiStar rtg0) RM.empty ~?= M.empty
-    , ruleEquivalenceClasses (bidiStar rtg0) (createMerge ["Aa"])
+    [ ruleEquivalenceClasses (bidiStar rtg0) Merge.empty ~?= M.empty
+    , ruleEquivalenceClasses (bidiStar rtg0) (Merge.fromLists ["Aa"])
       ~?= M.empty
         {-
         [ (Rule 'A' "BC" 's', [Rule 'A' "BC" 's'])
@@ -45,7 +45,7 @@ tests = TestList
         , (Rule 'b' "Ac" 's', [Rule 'b' "ac" 's'])
         ]
         -}
-    , ruleEquivalenceClasses (bidiStar rtg0) (createMerge ["Cc"])
+    , ruleEquivalenceClasses (bidiStar rtg0) (Merge.fromLists ["Cc"])
       ~?= M.empty
         {-
         [ (Rule 'A' "BC" 's', [Rule 'A' "BC" 's'])
@@ -56,7 +56,7 @@ tests = TestList
         , (Rule 'b' "aC" 's', [Rule 'b' "ac" 's'])
         ]
         -}
-    , ruleEquivalenceClasses (bidiStar rtg0) (createMerge ["Aa", "Bb"])
+    , ruleEquivalenceClasses (bidiStar rtg0) (Merge.fromLists ["Aa", "Bb"])
       ~?= M.empty
         {-
         [ (Rule 'A' "BC" 's', [Rule 'A' "BC" 's'])
@@ -65,7 +65,7 @@ tests = TestList
         , (Rule 'B' "Ac" 's', [Rule 'b' "ac" 's'])
         ]
         -}
-    , ruleEquivalenceClasses (bidiStar rtg0) (createMerge ["Aa", "Bb", "Cc"])
+    , ruleEquivalenceClasses (bidiStar rtg0) (Merge.fromLists ["Aa", "Bb", "Cc"])
       ~?= M.fromList
         [ (Rule 'A' "BC" 's', [Rule 'a' "bc" 's', Rule 'A' "BC" 's'])
         , (Rule 'B' "AC" 's', [Rule 'b' "ac" 's', Rule 'B' "AC" 's'])
@@ -76,10 +76,10 @@ tests = TestList
         ]
     ]
   , "fst . likelihoodDelta" ~: TestList
-    [ (ln $ fst $ likelihoodDelta crtg0 RM.empty) ~?= 0
-    , (ln $ fst $ likelihoodDelta crtg0 $ createMerge ["Cc"]) ~?= log ((3**3 * 6**6) / 9**9)
+    [ (ln $ fst $ likelihoodDelta crtg0 Merge.empty) ~?= 0
+    , (ln $ fst $ likelihoodDelta crtg0 $ Merge.fromLists ["Cc"]) ~?= log ((3**3 * 6**6) / 9**9)
     , TestCase $ assertRoughly "" 1e-10
-        ( ln $ fst $ likelihoodDelta crtg0 $ createMerge ["Aa", "Bb", "Cc"] )
+        ( ln $ fst $ likelihoodDelta crtg0 $ Merge.fromLists ["Aa", "Bb", "Cc"] )
         ( log
           ( 3**3 / (1**1 * 2**2)  -- } merged initial states
           * 5**5 / (1**1 * 4**4)  -- ⎫ merged
@@ -91,14 +91,14 @@ tests = TestList
         )
     ]
   , "snd . likelihoodDelta" ~: TestList
-    [ (snd $ likelihoodDelta crtg0 RM.empty) ~?= (0, 0, 0)
-    , (snd $ likelihoodDelta crtg0 $ createMerge ["Cc"]) ~?= (0, 1, 0)
-    , (snd $ likelihoodDelta crtg0 $ createMerge ["Aa", "Bb", "Cc"]) ~?= (2, 3, 1)
+    [ (snd $ likelihoodDelta crtg0 Merge.empty) ~?= (0, 0, 0)
+    , (snd $ likelihoodDelta crtg0 $ Merge.fromLists ["Cc"]) ~?= (0, 1, 0)
+    , (snd $ likelihoodDelta crtg0 $ Merge.fromLists ["Aa", "Bb", "Cc"]) ~?= (2, 3, 1)
     ]
   , "saturateMerge" ~: TestList
-    [ (RM.toList $ saturateMerge (forwardStar rtg0) $ createMerge []) ~?= (RM.toList $ createMerge [])
-    , (RM.toList $ saturateMerge (forwardStar rtg1) $ createMerge ["AB", "GH"]) ~?= (RM.toList $ createMerge ["AB", "CD", "EF", "GH"])
-    , (RM.toList $ saturateMerge (forwardStar rtg1) $ createMerge ["CD", "EF", "IJ"]) ~?= (RM.toList $ createMerge ["CD", "EF", "IJ"])
+    [ (Merge.forward $ saturateMerge (forwardStar rtg0) $ Merge.empty) ~?= (Merge.forward $ Merge.empty)
+    , (Merge.forward $ saturateMerge (forwardStar rtg1) $ Merge.fromLists ["AB", "GH"]) ~?= (Merge.forward $ Merge.fromLists ["AB", "CD", "EF", "GH"])
+    , (Merge.forward $ saturateMerge (forwardStar rtg1) $ Merge.fromLists ["CD", "EF", "IJ"]) ~?= (Merge.forward $ Merge.fromLists ["CD", "EF", "IJ"])
     ]
   ]
 

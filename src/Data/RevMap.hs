@@ -28,6 +28,7 @@ module Data.RevMap
 , fromList
 , toList
 , equivalenceClass
+, equivalenceClasses
 ) where
 
 
@@ -88,3 +89,7 @@ toList = M.toList . forward
 
 equivalenceClass :: (Ord k, Ord v) => k -> RevMap k v -> Maybe (Set k)
 equivalenceClass x RevMap{..} = M.lookup x forward >>= flip M.lookup backward
+
+
+equivalenceClasses :: RevMap k v -> [Set k]
+equivalenceClasses = M.elems . backward

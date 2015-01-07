@@ -33,7 +33,6 @@ module Vanda.CBSM.CountBasedStateMerging
 , ruleEquivalenceClasses
 , forwardStar
 , bidiStar
-, createMerge
 , likelihoodDelta
 , saturateMerge
 , sortedCartesianProductWith
@@ -42,9 +41,9 @@ module Vanda.CBSM.CountBasedStateMerging
 
 
 import qualified Control.Error
-import qualified Data.RevMap as RM
-import           Data.RevMap (RevMap)
 import           Vanda.CBSM.Dovetailing
+import           Vanda.CBSM.Merge (Merge)
+import qualified Vanda.CBSM.Merge as Merge
 import qualified Vanda.Features as F
 import qualified Vanda.Hypergraph as H
 import           Vanda.Util.Histogram (histogram)
@@ -320,7 +319,7 @@ data Info v = Info
   , infoBeamWidth :: !Int
   , infoBeamIndex :: !Int
   , infoCandidateIndex :: !Int
-  , infoMerge :: !(RevMap v v)
+  , infoMerge :: !(Merge v)
   , infoMergedRules :: !Int
   , infoMergedStates :: !Int
   , infoMergedInitials :: !Int
@@ -343,7 +342,7 @@ instance (B.Binary v, Ord v) => B.Binary (Info v) where
 
 initialInfo :: Map v Int -> Info v
 initialInfo
-  = Info 0 0 0 0 RM.empty 0 0 0 1 1
+  = Info 0 0 0 0 Merge.empty 0 0 0 1 1
   . M.mapWithKey State
 
 
@@ -373,7 +372,7 @@ cbsm evaluate beamWidth prev@(g, info@Info{..})
           $ dovetail (second' (saturateMergeStep (forwardStar (rules g))))
           $ zip [1 ..]
           $ map ( \ (_, ((v1, _), (v2, _)))
-                  -> saturateMergeInit (createMerge [[v1, v2]]))
+                  -> saturateMergeInit (Merge.fromLists [[v1, v2]]))
           $ let vs = sortBy (comparing snd) (M.toList (cntState g))
             in sortedCartesianProductWith' ((+) `on` snd) vs (tail vs)
         second' f (x, y) = case f y of
@@ -382,7 +381,7 @@ cbsm evaluate beamWidth prev@(g, info@Info{..})
         info'
           = Info n beamWidth indB indC mrg mrgR mrgS mrgI lklhdD evaluation
           $ M.map (\ case [x] -> x; xs -> Merge n xs)
-          $ M.mapKeysWith (++) (mergeState mrg)
+          $ M.mapKeysWith (++) (Merge.apply mrg)
           $ M.map (: []) infoMergeTreeMap
     in if null (fst cands)
        then []
@@ -391,7 +390,7 @@ cbsm evaluate beamWidth prev@(g, info@Info{..})
 --   : ( g `seq` case refineRanking $ enrichRanking $ mergeRanking g of
 --         ((_, ((v1, _), (v2, _))), _) : _
 --           -> let g' = flip mergeCRTG g
---                     $ saturateMerge (forwardStar (rules g)) (createMerge [[v1, v2]])
+--                     $ saturateMerge (forwardStar (rules g)) (Merge.fromLists [[v1, v2]])
 --             in cbsm g'
 --         _ -> []
 --     )
@@ -406,7 +405,7 @@ normalizeLklhdByMrgdStates (_, mrgS, _) (Exp l)
 cbsmStep2 :: (Ord v, Ord l) => CRTG v l -> CRTG v l
 cbsmStep2 g
   = flip mergeCRTG g
-  $ (\ ((_, ((v1, _), (v2, _))) : _) -> saturateMerge (forwardStar (rules g)) (createMerge [[v1, v2]]))
+  $ (\ ((_, ((v1, _), (v2, _))) : _) -> saturateMerge (forwardStar (rules g)) (Merge.fromLists [[v1, v2]]))
   $ fst $ mergeRanking g
 
 
@@ -417,8 +416,8 @@ cbsmStep1
 cbsmStep1 g
   = map (\ x@(_, ((v1, _), (v2, _))) ->
         (,) x
-      $ let mrg = saturateMerge (forwardStar (rules g)) (createMerge [[v1, v2]]) in
-        (map S.toList $ M.elems $ RM.backward mrg, likelihoodDelta g mrg)
+      $ let mrg = saturateMerge (forwardStar (rules g)) (Merge.fromLists [[v1, v2]]) in
+        (map S.toList $ Merge.equivalenceClasses mrg, likelihoodDelta g mrg)
       )
   $ fst $ mergeRanking g
 
@@ -435,11 +434,11 @@ refineRanking
 enrichRanking
   :: (Ord v, Ord l)
   => ([(a, ((v, b), (v, c)))], CRTG v l)
-  -> [((a, ((v, b), (v, c))), (RevMap v v, (Log Double, (Int, Int, Int))))]
+  -> [((a, ((v, b), (v, c))), (Merge v, (Log Double, (Int, Int, Int))))]
 enrichRanking (xs, g)
   = map (\ x@(_, ((v1, _), (v2, _))) ->
           ( x
-          , let mrg = satMrg $ createMerge [[v1, v2]] in
+          , let mrg = satMrg $ Merge.fromLists [[v1, v2]] in
             (mrg, lklhdDelta mrg)
         ) )
   $ xs
@@ -460,22 +459,22 @@ saturateMerge
   :: forall s t
   .  (Ord s, Ord t)
   => ForwardStar s t
-  -> RevMap s s  -- ^ merges (must be an equivalence relation)
-  -> RevMap s s
+  -> Merge s  -- ^ merges (must be an equivalence relation)
+  -> Merge s
 saturateMerge g mrgs
   = untilRight (saturateMergeStep g) (saturateMergeInit mrgs)
 
 
-saturateMergeInit mrgs = (M.keysSet (RM.forward mrgs), mrgs)
+saturateMergeInit mrgs = (Merge.elemS mrgs, mrgs)
 
 
 saturateMergeStep
   :: (Ord s, Ord t)
   => ForwardStar s t
-  -> (Set s, RevMap s s)
-  -> Either (Set s, RevMap s s) (RevMap s s)
+  -> (Set s, Merge s)
+  -> Either (Set s, Merge s) (Merge s)
 saturateMergeStep g (todo, mrgs)
-  = case S.minView (S.map (mergeState mrgs) todo) of
+  = case S.minView (S.map (Merge.apply mrgs) todo) of
       Nothing      -> Right mrgs
       Just (s, sS) -> Left
         $ foldl' step (sS, mrgs)
@@ -483,8 +482,8 @@ saturateMergeStep g (todo, mrgs)
           ( filter ((2 <=) . S.size)
           . M.elems
           . M.fromListWith S.union
-          . map (\ Rule{..} -> ( map (mergeState mrgs) from
-                               , S.singleton (mergeState mrgs to)))
+          . map (\ Rule{..} -> ( map (Merge.apply mrgs) from
+                               , S.singleton (Merge.apply mrgs to)))
           )
         $ M.elems
         $ M.unionsWith (++)  -- bring together rules with same terminal
@@ -492,10 +491,10 @@ saturateMergeStep g (todo, mrgs)
         $ M.intersection g
         $ M.fromSet (const ())
         $ fromMaybe (errorHere "saturateMergeStep" "")
-        $ RM.equivalenceClass s mrgs
+        $ Merge.equivalenceClass s mrgs
   where
     step (s, m) mrg = let s' = S.insert (S.findMin mrg) s
-                          m' = addMerge mrg m
+                          m' = Merge.insert mrg m
                       in s' `seq` m' `seq` (s', m')
 
 
@@ -506,32 +505,6 @@ traceShow' cs x = trace (cs ++ ": " ++ show x) x
 putFst :: Monad m => s1 -> StateT (s1, s2) m ()
 putFst x = modify (\ (_, y) -> (x, y))
 -- putSnd y = modify (\ (x, _) -> (x, y))
-
-
-createMerge :: Ord k => [[k]] -> RevMap k k
-createMerge = foldl' (flip addMerge) RM.empty . map S.fromList
-
-
-addMerge :: Ord k => Set k -> RevMap k k -> RevMap k k
-addMerge new old
-  | S.size new < 2 = old
-  | otherwise
-    = insertList (S.toList new)
-    $ flip insertList old
-    $ S.toList
-    $ S.unions
-    $ map ((RM.backward old !) . (RM.forward old !))  -- equivalence class
-    $ S.toList
-    $ S.intersection new
-    $ M.keysSet
-    $ RM.forward old
-  where
-    representative = S.findMin new
-    insertList = flip $ foldl' (\ m k -> RM.insert k representative m)
-
-
-mergeSize :: RevMap k v -> Int
-mergeSize = sum . map (pred . S.size) . M.elems . RM.backward
 
 
 -- | Lazily calculate the Cartesian product of two lists sorted by a score
@@ -603,7 +576,7 @@ sortedCartesianProductWithInternal (?) (>+<) (x0 : xs0) (y0 : ys0)
 sortedCartesianProductWithInternal _ _ _ _ = []
 
 
-likelihoodDelta :: (Ord l, Ord v) => CRTG v l -> RevMap v v -> (Log Double, (Int, Int, Int))
+likelihoodDelta :: (Ord l, Ord v) => CRTG v l -> Merge v -> (Log Double, (Int, Int, Int))
 likelihoodDelta g@CRTG{..} = \ mrgs ->
   let (rw, rc) = productAndSum  -- rules
                $ map ( (\ (pr, su, si) -> (p su / pr, si))
@@ -618,8 +591,7 @@ likelihoodDelta g@CRTG{..} = \ mrgs ->
                      . map (getCnt cntState)
                      . S.toList
                      )
-               $ M.elems
-               $ RM.backward mrgs
+               $ Merge.equivalenceClasses mrgs
 
       (iw, ic) = productAndSum  -- initial states
                $ map ( (\ (pr, su, si) -> (p su / pr, si))
@@ -628,8 +600,7 @@ likelihoodDelta g@CRTG{..} = \ mrgs ->
                      )
                $ filter ((1 <) . M.size)
                $ map (M.intersection cntInit . M.fromSet (const ()))
-               $ M.elems
-               $ RM.backward mrgs
+               $ Merge.equivalenceClasses mrgs
   in (rw * vw * iw, (rc, vc, ic))
   where
     -- | power with itself
@@ -655,7 +626,7 @@ likelihoodDelta g@CRTG{..} = \ mrgs ->
 
 
 ruleEquivalenceClasses
-  :: (Ord l, Ord v) => BidiStar v l -> RevMap v v -> Map (Rule v l) [Rule v l]
+  :: (Ord l, Ord v) => BidiStar v l -> Merge v -> Map (Rule v l) [Rule v l]
 ruleEquivalenceClasses g mrgs
   = M.filter notSingle
   $ M.fromListWith (++)
@@ -663,22 +634,18 @@ ruleEquivalenceClasses g mrgs
   $ (S.toList . S.fromList)
   $ concat
   $ M.elems
-  $ M.intersection g (RM.forward mrgs)
+  $ M.intersection g (Merge.forward mrgs)
   where
     notSingle [_] = False
     notSingle  _  = True
 
 
-mergeState :: Ord v => RevMap v v -> v -> v
-mergeState m = \ v -> M.findWithDefault v v (RM.forward m)
-
-
-mergeRule :: Ord v => RevMap v v -> Rule v l -> Rule v l
+mergeRule :: Ord v => Merge v -> Rule v l -> Rule v l
 mergeRule mrgs Rule{..} = Rule (mrg to) (map mrg from `using` evalList rseq) label
-  where mrg = mergeState mrgs
+  where mrg = Merge.apply mrgs
 
 
-mergeCRTG :: (Ord l, Ord v) => RevMap v v -> CRTG v l -> CRTG v l
+mergeCRTG :: (Ord l, Ord v) => Merge v -> CRTG v l -> CRTG v l
 mergeCRTG mrgs CRTG{..}
   = CRTG
       (M.mapKeysWith (+) (mergeRule mrgs) cntRule)
@@ -689,11 +656,11 @@ mergeCRTG mrgs CRTG{..}
 -- | Similar to 'M.mapKeysWith', but optimized for merging, because many keys
 -- are left unchanged.
 mergeKeysWith
-  :: Ord k => (a -> a -> a) -> RM.RevMap k k -> M.Map k a -> M.Map k a
+  :: Ord k => (a -> a -> a) -> Merge k -> M.Map k a -> M.Map k a
 mergeKeysWith (?) mrgs
   = uncurry (M.unionWith (?))
-  . first (M.mapKeysWith (?) (mergeState mrgs))
-  . M.partitionWithKey (\ k _ -> M.member k (RM.forward mrgs))
+  . first (M.mapKeysWith (?) (Merge.apply mrgs))
+  . M.partitionWithKey (\ k _ -> Merge.member k mrgs)
 
 
 whileM :: Monad m => m Bool -> m a -> m ()

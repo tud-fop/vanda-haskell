@@ -65,6 +65,7 @@ library
     , Vanda.CBSM.CountBasedStateMerging
     , Vanda.CBSM.Dovetailing
     , Vanda.CBSM.Main
+    , Vanda.CBSM.Merge
     , Vanda.CBSM.ProductOrder
     , Vanda.Corpus.Negra
     , Vanda.Corpus.Negra.Binary
