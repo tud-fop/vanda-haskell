@@ -29,7 +29,11 @@ module Data.RevMap
 , toList
 , equivalenceClass
 , equivalenceClasses
+, map
 ) where
+
+
+import Prelude hiding (map)
 
 
 import qualified Data.MultiMap as MM
@@ -41,6 +45,7 @@ import           Data.List (foldl')
 import qualified Data.Map as M
 import           Data.Map (Map)
 import           Data.Set (Set)
+import qualified Data.Set as S
 import           Data.Tuple (swap)
 
 
@@ -76,7 +81,7 @@ fromMap m = RevMap m $ backwardFromList $ M.toList m
 
 
 backwardFromList :: (Ord k, Ord v) => [(k, v)] -> MultiMap v k
-backwardFromList = MM.fromList . map swap
+backwardFromList = MM.fromList . fmap swap
 
 
 fromList :: (Ord k, Ord v) => [(k, v)] -> RevMap k v
@@ -93,3 +98,7 @@ equivalenceClass x RevMap{..} = M.lookup x forward >>= flip M.lookup backward
 
 equivalenceClasses :: RevMap k v -> [Set k]
 equivalenceClasses = M.elems . backward
+
+
+map :: (Ord k, Ord v2) => (v1 -> v2) -> RevMap k v1 -> RevMap k v2
+map fun (RevMap f b) = RevMap (M.map fun f) (M.mapKeysWith S.union fun b)
