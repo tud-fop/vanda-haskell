@@ -56,6 +56,7 @@ import           Control.Parallel.Strategies
 import qualified Data.Binary as B
 import           Data.List (foldl', groupBy, minimumBy, sortBy)
 import           Data.Function (on)
+import qualified Data.Map.Lazy as ML
 import           Data.Map.Strict (Map, (!))
 import qualified Data.Map.Strict as M
 import           Data.Maybe
@@ -352,40 +353,64 @@ cbsm
   -> Int
   ->  (CRTG v l, Info v)
   -> [(CRTG v l, Info v)]
-cbsm evaluate beamWidth prev@(g, info@Info{..})
+cbsm = cbsmGo M.empty
+
+
+cbsmGo
+  :: (Ord v, Ord l)
+  => Map (v, v) (Merge v)
+  -> ((Int, Int, Int) -> Log Double -> Log Double)
+  -> Int
+  ->  (CRTG v l, Info v)
+  -> [(CRTG v l, Info v)]
+cbsmGo cache evaluate beamWidth prev@(g, info@Info{..})
   = (prev :)
   $ seq g
   $ seq info
   $ let n = infoIteration + 1
-        cands = mergeRanking g
-        (indB, indC, mrg, (mrgR, mrgS, mrgI), lklhdD, evaluation)
-          = minimumBy (comparing (Down . (\ (_, _, _, _, _, x) -> x)))
+        cands
+          = take beamWidth  -- TODO: Group?
+          $ zipWith
+              ( \ i (j, mv, m)
+               -> let (l, sizes) = likelihoodDelta g m
+                  in (i, j, mv, m, sizes, l, evaluate sizes l)
+              ) [1 ..]
+          $ map (untilRight $ liftSat $ saturateMergeStep $ forwardStar $ rules g)
+          $ zipWith (\ j (mv, m) -> (j, mv, m)) [1 ..]
+          $ map ( \ (_, ((v1, _), (v2, _)))
+                 -> (,) (v1, v2)
+                  $ saturateMergeInit
+                  $ ML.findWithDefault
+                      (Merge.fromLists [[v1, v2]])
+                      (v1, v2)
+                      cache
+                )
+          $ let vs = sortBy (comparing snd) (M.toList (cntState g))
+            in sortedCartesianProductWith' ((+) `on` snd) vs (tail vs)
+        liftSat f (x, y, m) = case f m of
+          Left  l -> Left  (x, y, l)
+          Right r -> Right (x, y, r)
+        (indB, indC, mrgV, mrg, (mrgR, mrgS, mrgI), lklhdD, evaluation)
+          = minimumBy
+              (comparing (Down . (\ (_, _, _, _, _, _, x) -> x)))
+              cands
             -- minimumBy returns the first minimum while
             -- maximumBy would return the last maximum
             -- but both is not guaranteed by the documentation
-          $ take beamWidth  -- TODO: Group?
-          $ map ( \ (i, (j, m))
-                  -> let (l, sizes) = likelihoodDelta g m
-                     in (i, j, m, sizes, l, evaluate sizes l)
-                )
-          $ zip [1 ..]
-          $ dovetail (second' (saturateMergeStep (forwardStar (rules g))))
-          $ zip [1 ..]
-          $ map ( \ (_, ((v1, _), (v2, _)))
-                  -> saturateMergeInit (Merge.fromLists [[v1, v2]]))
-          $ let vs = sortBy (comparing snd) (M.toList (cntState g))
-            in sortedCartesianProductWith' ((+) `on` snd) vs (tail vs)
-        second' f (x, y) = case f y of
-          Left  l -> Left  (x, l)
-          Right r -> Right (x, r)
+        apply = Merge.apply mrg
+        cache'
+          = ML.map (Merge.applyMergeToMerge mrg)
+          $ ML.mapKeysWith Merge.union (apply *** apply)
+          $ ML.fromList
+          $ map (\ (_, _, mv, m, _, _, _) -> (mv, m)) cands
         info'
           = Info n beamWidth indB indC mrg mrgR mrgS mrgI lklhdD evaluation
           $ M.map (\ case [x] -> x; xs -> Merge n xs)
-          $ M.mapKeysWith (++) (Merge.apply mrg)
+          $ M.mapKeysWith (++) apply
           $ M.map (: []) infoMergeTreeMap
-    in if null (fst cands)
+    in if null cands
        then []
-       else cbsm evaluate beamWidth (mergeCRTG mrg g, info')
+       else cbsmGo cache' evaluate beamWidth (mergeCRTG mrg g, info')
 --   = g
 --   : ( g `seq` case refineRanking $ enrichRanking $ mergeRanking g of
 --         ((_, ((v1, _), (v2, _))), _) : _

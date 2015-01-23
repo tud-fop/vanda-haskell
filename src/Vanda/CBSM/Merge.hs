@@ -18,6 +18,7 @@ module Vanda.CBSM.Merge
 , fromSets
 , fromLists
 , insert
+, union
 , size
 , member
 , elemS
@@ -26,6 +27,7 @@ module Vanda.CBSM.Merge
 , equivalenceClass
 , equivalenceClasses
 , apply
+, applyMergeToMerge
 ) where
 
 
@@ -80,6 +82,10 @@ insert new old
       = flip $ foldl' (\ (Merge m) k -> Merge (RM.insert k representative m))
 
 
+union :: Ord a => Merge a -> Merge a -> Merge a
+union m = foldl' (flip insert) m . equivalenceClasses
+
+
 size :: Merge a -> Int
 size = sum . map (pred . S.size) . equivalenceClasses
 
@@ -110,3 +116,11 @@ equivalenceClasses (Merge m) = RM.equivalenceClasses m
 
 apply :: Ord a => Merge a -> a -> a
 apply (Merge m) = \ k -> M.findWithDefault k k (RM.forward m)
+
+
+applyMergeToMerge
+  :: Ord a
+  => Merge a  -- ^ applied 'Merge'
+  -> Merge a
+  -> Merge a
+applyMergeToMerge m = fromSets . map (S.map (apply m)) . equivalenceClasses
