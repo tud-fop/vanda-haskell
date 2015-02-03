@@ -511,7 +511,7 @@ saturateMergeStep g (todo, mrgs)
                                , S.singleton (Merge.apply mrgs to)))
           )
         $ M.elems
-        $ M.unionsWith (++)  -- bring together rules with same terminal
+        $ M.unionsWith (flip (++))  -- bring together rules with same terminal
         $ M.elems
         $ M.intersection g
         $ M.fromSet (const ())
