@@ -368,11 +368,12 @@ cbsmGo cache evaluate beamWidth prev@(g, info@Info{..})
   $ seq g
   $ seq info
   $ let n = infoIteration + 1
+        likelihoodDelta' = likelihoodDelta g
         cands
           = take beamWidth  -- TODO: Group?
           $ zipWith
               ( \ i (j, mv, m)
-               -> let (l, sizes) = likelihoodDelta g m
+               -> let (l, sizes) = likelihoodDelta' m
                   in (i, j, mv, m, sizes, l, evaluate sizes l)
               ) [1 ..]
           $ map (untilRight $ liftSat $ saturateMergeStep $ forwardStar $ rules g)
@@ -609,7 +610,7 @@ likelihoodDelta g@CRTG{..} = \ mrgs ->
                      . map (cntRule M.!)
                      )
                $ M.elems
-               $ ruleEquivalenceClasses (bidiStar (rules g)) mrgs
+               $ ruleEquivalenceClasses bidiStar' mrgs
       (vw, vc) = productAndSum  -- states
                $ map ( (\ (pr, su, si) -> (pr / p su, si))
                      . productPAndSumAndSize
@@ -628,6 +629,8 @@ likelihoodDelta g@CRTG{..} = \ mrgs ->
                $ Merge.equivalenceClasses mrgs
   in (rw * vw * iw, (rc, vc, ic))
   where
+    bidiStar' = bidiStar (rules g)
+
     -- | power with itself
     p :: Int -> Log Double
     p n = Exp (x * log x)  -- = Exp (log (x ** x))
