@@ -50,13 +50,13 @@ tests =
            ]
 
   in TestList
-  [ "put/get"  ~: testRevMaps (map (decode . encode) ms) ls
+  [ "put/get"  ~: testRevMaps (fmap (decode . encode) ms) ls
   , "insert"   ~: testRevMaps ms ls
-  , "fromMap"  ~: testRevMaps (map (fromMap . forward) ms) ls
-  , "fromList" ~: testRevMaps (map fromList $ inits insertions) ls
+  , "fromMap"  ~: testRevMaps (fmap (fromMap . forward) ms) ls
+  , "fromList" ~: testRevMaps (fmap fromList $ inits insertions) ls
   , "toList" ~: TestList $ zipWith (\ m l -> toList m ~?= l) ms ls
   , "equivalenceClass" ~: TestList $ zipWith (\ m e ->
-          (map S.toList $ mapMaybe (\ k -> equivalenceClass k m) $ M.keys $ forward m) ~?= e
+          (fmap S.toList $ mapMaybe (\ k -> equivalenceClass k m) $ M.keys $ forward m) ~?= e
         ) ms es
   ]
 
@@ -69,7 +69,7 @@ testRevMaps ms ls = TestList $ zipWith testRevMap ms ls
 testRevMap :: (Ord k, Ord v, Show k, Show v) => RevMap k v -> [(k, v)] -> Test
 testRevMap m l = TestList
   [ "forward"  ~: M.toAscList (forward m) ~?= l
-  , "backward" ~: (S.fromList $ map swap $ MM.toList $ backward m)
+  , "backward" ~: (S.fromList $ fmap swap $ MM.toList $ backward m)
                   ~?= S.fromList l
   ]
 
