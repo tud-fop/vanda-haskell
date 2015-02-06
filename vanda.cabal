@@ -67,6 +67,7 @@ library
     , Vanda.CBSM.Main
     , Vanda.CBSM.Merge
     , Vanda.CBSM.ProductOrder
+    , Vanda.CFTG.CFTG
     , Vanda.Corpus.Negra
     , Vanda.Corpus.Negra.Binary
     , Vanda.Corpus.Negra.NFData
