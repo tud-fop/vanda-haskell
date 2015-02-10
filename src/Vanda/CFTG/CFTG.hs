@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Vanda.CFTG.CFTG
@@ -18,6 +20,8 @@ module Vanda.CFTG.CFTG
 , substitute
 , applyAt
 , language
+, Derivation
+, language'
 , mainDerive
 , -- * Conversion
   toTree
@@ -31,7 +35,7 @@ import qualified Control.Error
 import           Vanda.Util.Tree
 
 
-import           Control.Arrow (second)
+import           Control.Arrow
 import           Data.Char (isUpper)
 import           Data.Either
 import           Data.List (findIndices, intercalate, mapAccumL)
@@ -125,20 +129,39 @@ equalLength _        _        = False
 
 
 language :: (Ord v, Eq n) => [Rule v n t] -> SF v'' n t -> [SF v' n' t]
-language rs start
-  = go [start]
+language = (map snd .) . language'
+
+
+type Derivation = [([Int], Int)]
+
+
+language'
+  :: forall v v' v'' n n' t
+   . (Ord v, Eq n)
+  => [Rule v n t] -> SF v'' n t -> [(Derivation, SF v' n' t)]
+language' rs start
+  = go [([], start)]
   where
-    go sfs = let (todo, done) = partitionEithers $ map complete' sfs
-             in done ++ go (todo >>= dive)
+    go :: [(Derivation, SF v'' n t)] -> [(Derivation, SF v' n' t)]
+    go sfs = let complete'' (d, sf) = either (Left . (,) d) (Right . (,) d) (complete' sf)
+                 (todo, done) = partitionEithers $ map complete'' sfs
+             in done ++ go (todo >>= (\ (d, sf) -> fmap (first (d ++)) (dive sf)))
+
+    dive :: SF v'' n t -> [(Derivation, SF v'' n t)]
     dive (V _   ) = error "Variable in sentential form."
-    dive (T t ts) = T t `fmap` sequence (fmap dive ts)
+    dive (T t ts) = topConcat t `fmap` sequence (fmap dive ts)
     dive (N n ts)
-      = [ substitute varM r
-        | Rule l vs r <- rs
+      = [ ([([], i)], substitute varM r)
+        | (i, Rule l vs r) <- zip [0 ..] rs
         , l == n
         , equalLength vs ts
         , let varM = M.fromListWith (error "Non-linear lhs.") $ zip vs ts
         ]
+
+    topConcat :: t -> [(Derivation, SF v'' n t)] -> (Derivation, SF v'' n t)
+    topConcat t
+      = ((concat . zipWith (map . first . (:)) [0 ..]) *** T t)
+      . unzip
 
 
 complete' :: SF v n t -> Either (SF v n t) (SF v' n' t)
