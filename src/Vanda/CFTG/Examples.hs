@@ -18,7 +18,45 @@ module Vanda.CFTG.Examples where
 import           Vanda.CFTG.CFTG
 import           Vanda.Corpus.TreeTerm (parseTree)
 
+import           Control.Arrow
+import           Data.List
 import           Data.Tree
+
+
+drawRules :: [Rule String String String] -> String
+drawRules = unlines . map drawRule
+
+
+drawRule :: Rule String String String -> String
+drawRule (Rule l vs r)
+  = unlines
+  $ (lft ++ rght) : map (replicate (length lft) ' ' ++) rghts
+  where
+    lft = l ++ "(" ++ intercalate ", " vs ++ ")" ++ " → "
+    rght : rghts = lines $ drawTreeCompact (toTree id id id r)
+
+
+languageS :: Ord v => [Rule v [Char] t] -> [Tree t]
+languageS = map snd . languageS'
+
+
+languageS' :: Ord v => [Rule v [Char] t] -> [(Derivation, Tree t)]
+languageS' rs = map (second (toTree undefined id id)) $ language' rs (N "S" [])
+
+
+drawDerivation :: Derivation -> String
+drawDerivation
+  = unlines
+  . map (\ (d, r) -> "rule " ++ show r ++ " at " ++ if null d then "ε" else intercalate "-" (map show d))
+  . map (map succ *** succ)
+
+putLanguage :: [Tree String] -> IO ()
+putLanguage = putStr . unlines . map drawTreeCompact
+
+
+putLanguage' :: [(Derivation, Tree String)] -> IO ()
+putLanguage' = putStr . unlines . concatMap f
+  where f (d, t) = [drawDerivation d, drawTreeCompact t]
 
 
 rule :: String -> Int -> String -> Rule String String String
@@ -37,9 +75,6 @@ g1 =
   , rule "B}" 3 "δ₂(_1, δ₁}(_2, _3))"
   ]
 
-ts1 :: Int -> [Tree String]
-ts1 n = take n $ map (toTree undefined id id) $ language g1 (N "S" [])
-
 
 g1trans :: [Rule String String String]
 g1trans =
@@ -54,5 +89,37 @@ g1trans =
   , rule "R}" 1 "δ₁}(α, δ₂(α, _1))"
   ]
 
-ts1trans :: Int -> [Tree String]
-ts1trans n = take n $ map (toTree undefined id id) $ language g1trans (N "S" [])
+
+g1trans2 :: [Rule String String String]
+g1trans2 =
+  {-  1 -} [ rule "S"  0 "δ₁{(α, δ₂(α, δ₁{(α, δ₂(α, B}(α, α, α, α)))))"
+  {-  2 -} , rule "S"  0 "δ₁{(α, δ₂(α, δ₁{(α, δ₂(α, δ₁}(α, δ₂(α, α))))))"
+  {-  3 -} , rule "S"  0 "δ₁{(α, δ₂(α, B{(α, α, α, B}(α, α, α, α))))"
+  {-  4 -} , rule "S"  0 "δ₁{(α, δ₂(α, B{(α, α, α, δ₁}(α, δ₂(α, α)))))"
+
+  {-  5 -} , rule "B{" 4 "δ₁{(α, δ₂(γ(_1), δ₁{(γ(_2), δ₂(α, B}(α, α, _3, _4)))))"
+  {-  6 -} , rule "B{" 4 "δ₁{(α, δ₂(γ(_1), δ₁{(γ(_2), δ₂(α, δ₁}(α, δ₂(_3, _4))))))"
+  {-  7 -} , rule "B{" 4 "δ₁{(α, δ₂(α, B{(γ(_1), γ(_2), α, B}(α, α, _3, _4))))"
+  {-  8 -} , rule "B{" 4 "δ₁{(α, δ₂(α, B{(γ(_1), γ(_2), α, δ₁}(α, δ₂(_3, _4)))))"
+  {-  9 -} , rule "B{" 4 "B{(α, α, γ(_1), δ₁{(γ(_2), δ₂(α, B}(α, α, _3, _4))))"
+  {- 10 -} , rule "B{" 4 "B{(α, α, α, B{(γ(_1), γ(_2), α, B}(α, α, _3, _4)))"
+  {- 11 -} , rule "B{" 4 "B{(α, α, α, B{(γ(_1), γ(_2), α, δ₁}(α, δ₂(_3, _4))))"
+  {- 12 -} , rule "B{" 4 "B{(α, α, γ(_1), δ₁{(γ(_2), δ₂(α, δ₁}(α, δ₂(_3, _4)))))"
+
+  {- 13 -} , rule "B}" 4 "δ₁{(α, δ₂(γ(_1), δ₁}(γ(_2), δ₂(α, B}(α, α, _3, _4)))))"
+  {- 14 -} , rule "B}" 4 "δ₁{(α, δ₂(γ(_1), δ₁}(γ(_2), δ₂(α, δ₁}(α, δ₂(_3, _4))))))"
+  {- 15 -} , rule "B}" 4 "δ₁{(α, δ₂(α, B}(γ(_1), γ(_2), α, B}(α, α, _3, _4))))"
+  {- 16 -} , rule "B}" 4 "δ₁{(α, δ₂(α, B}(γ(_1), γ(_2), α, δ₁}(α, δ₂(_3, _4)))))"
+  {- 17 -} , rule "B}" 4 "B{(α, α, γ(_1), δ₁}(γ(_2), δ₂(α, B}(α, α, _3, _4))))"
+  {- 18 -} , rule "B}" 4 "B{(α, α, α, B}(γ(_1), γ(_2), α, B}(α, α, _3, _4)))"
+  {- 19 -} , rule "B}" 4 "B{(α, α, α, B}(γ(_1), γ(_2), α, δ₁}(α, δ₂(_3, _4))))"
+  {- 20 -} , rule "B}" 4 "B{(α, α, γ(_1), δ₁}(γ(_2), δ₂(α, δ₁}(α, δ₂(_3, _4)))))"
+  ]
+
+
+g2 :: [Rule String String String]
+g2 =
+  [ rule "S" 0 "A(α, α)"
+  , rule "A" 2 "A(A(_1, α), A(_2, α))"
+  , rule "A" 2 "σ(_1, _2)"
+  ]
