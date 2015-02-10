@@ -31,16 +31,22 @@ module Vanda.CBSM.Merge
 ) where
 
 
+import qualified Control.Error
 import           Data.MultiMap (MultiMap)
 import qualified Data.RevMap as RM
 import           Data.RevMap (RevMap)
 
 import qualified Data.Binary as B
 import           Data.List (foldl')
-import           Data.Map (Map, (!))
-import qualified Data.Map as M
+import           Data.Map.Lazy (Map)
+import qualified Data.Map.Lazy as M
+import           Data.Ord
 import qualified Data.Set as S
 import           Data.Set (Set)
+
+
+errorHere :: String -> String -> a
+errorHere = Control.Error.errorHere "Vanda.CBSM.Merge"
 
 
 newtype Merge a = Merge (RevMap a a)
@@ -68,18 +74,36 @@ insert new old
   | S.size new < 2 = old
   | otherwise
     = insertList (S.toList new)
-    $ flip insertList old
-    $ S.toList
-    $ S.unions
-    $ map ((backward old !) . (forward old !))  -- equivalence class
-    $ S.toList
-    $ S.intersection new
-    $ M.keysSet
-    $ forward old
+    $ insertList todo old
   where
-    representative = S.findMin new
+    eqClasses
+      = M.toList
+      $ M.intersection (backward old)
+      $ M.fromList
+      $ map (\ x -> (x, undefined))
+      $ M.elems  -- there might be double entries
+      $ M.intersection (forward old)
+      $ M.fromSet undefined new
+    (representative, todo)
+      = if null eqClasses
+        then (S.findMin new, [])
+        else let ((r, _), xs)
+                   = cutMaximumBy (comparing (S.size . snd)) eqClasses
+             in (r, concatMap (S.toList . snd) xs)
     insertList
       = flip $ foldl' (\ (Merge m) k -> Merge (RM.insert k representative m))
+
+
+-- ^ Find maximum and return it and the remainding list.
+-- /Caution:/ The returned list may have another order.
+cutMaximumBy :: Ord a => (a -> a -> Ordering) -> [a] -> (a, [a])
+cutMaximumBy cmp (x : xs) = go x xs
+  where
+    go m []       = (m, [])
+    go m (y : ys) = case cmp y m of
+                      GT -> let (m', ys') = go y ys in (m', m : ys')
+                      _  -> let (m', ys') = go m ys in (m', y : ys')
+cutMaximumBy _ [] = errorHere "cutMaximumBy" "empty list"
 
 
 union :: Ord a => Merge a -> Merge a -> Merge a
