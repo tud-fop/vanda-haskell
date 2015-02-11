@@ -24,6 +24,8 @@ module Vanda.Util.Tree
 , drawstyleCompact2
 , drawTree'
 , drawForest'
+, -- * Image markup
+  toTikZ
 , -- * Extraction
   flattenRanked
 , yield
@@ -119,6 +121,32 @@ draw Drawstyle{ .. } (Node root ts0)
       ++ drawSubTrees ts
 
     shift first other = zipWith (++) (first : repeat other)
+
+
+-- Image markup --------------------------------------------------------------
+
+-- | Prints TikZ-Code for the given 'Tree'
+toTikZ
+  :: [Char]  -- ^ left delimiter of the node label
+  -> [Char]  -- ^ right delimiter of the node label
+  -> [Char]  -- ^ the indentation character
+  -> Tree [Char]
+  -> [Char]
+toTikZ = go 1 where
+  go _ l r _   (Node lbl []) = "node {" ++ l ++ lbl ++ r ++ "}"
+  go n l r tab (Node lbl ts) 
+    = (++) ("node {" ++ l ++ lbl ++ r ++ "}")
+    . concat
+    $ map (\x -> "\n"
+              ++ (concat $ replicate n tab)
+              ++ "child {"
+              ++ (go (n + 1) l r tab x)
+              ++ (case x of
+                    Node _ [] -> ""
+                    _         -> "\n" ++ (concat $ replicate n tab)
+                )
+              ++ "}"
+          ) ts
 
 
 -- Extraction ----------------------------------------------------------------
