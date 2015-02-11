@@ -16,6 +16,7 @@ module Vanda.Algorithms.ExpectationMaximizationAcyclic (
   forestEM,
   forestEMlist,
   forestEMstep,
+  forestEMstepCounts,
   forestEMstepList,
   normalize
 ) where
@@ -109,7 +110,21 @@ forestEMstep
               -- ^ log-likelihood, initial weights and weight vector before...
   -> (w, (M.Map v w, M.Map i w))                   -- ^ ... and after the step
 forestEMstep part gs exId theta
-  = (l, (normalize [M.keys w0] w0, normalize part ws))
+  = case forestEMstepCounts gs exId theta of
+      (l, (w0, ws)) -> (l, (normalize [M.keys w0] w0, normalize part ws))
+
+
+forestEMstepCounts
+  :: (RealFloat w, Ord i, Ord v)
+  => [(AcyclicHypergraph v l j, w)]
+                          -- ^ a list of training-example derivation forests
+  -> (Hyperedge v l j -> i)
+                          -- ^ function extracting the id from a 'Hyperedge'
+  -> (w, (M.Map v w, M.Map i w))
+              -- ^ log-likelihood, initial weights and weight vector before...
+  -> (w, (M.Map v w, M.Map i w))                   -- ^ ... and after the step
+forestEMstepCounts gs exId theta
+  = (l, (w0, ws))
   where
     (l, w0, ws)
       = foldl'Special

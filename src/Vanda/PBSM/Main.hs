@@ -144,7 +144,7 @@ main = do
                :: IO [FileTreebank]
       let g = generalize
                 head
-                (intifyNonterminals $ forestToGrammar c1)
+                (fst $ intifyNonterminals $ forestToGrammar c1)
                 (traceForestTreesOnEvaluation c2)
       if null fileGrammar
         then print g
@@ -155,6 +155,8 @@ main = do
       c <- force . unify2 . concat
        <$> mapM decodeFile [fileTreebank1, fileTreebank2]
         :: IO FileTreebank
+      (concat <$> mapM decodeFile [fileTreebank1, fileTreebank2] :: IO FileTreebank)
+        >>= (\ l -> putStrLn $ "Corpus contains " ++ show l ++ " trees.") . length
       let hg :: EdgeList Int String Int
           hg   = toHypergraphStartSeparated initialNT initialT g
           part = M.elems $ M.fromListWith (++) $ map (\ e -> (to e, [ident e])) $ edges hg
@@ -163,7 +165,7 @@ main = do
           w0   = M.singleton initialNT (1 :: Double)
           ws   = M.fromList $ flip zip (repeat 1) $ map ident $ edges hg
       let worker update =
-            forM_ (zip [0 :: Int ..] $ forestEMlist part (zip hgs (repeat 1)) ident w0 ws)
+            forM_ (zip [0 :: Int ..] $ take 5 $ forestEMlist part (zip hgs (repeat 1)) ident w0 ws)
               $ \ (i, (lklhood, (_, ws'))) -> do
                 putStrLn $ "EM step " ++ show i ++ "; Likelihood: " ++ show lklhood
                 update (i, ws')

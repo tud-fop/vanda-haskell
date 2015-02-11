@@ -19,6 +19,7 @@ module Vanda.PBSM.Types
 , ruleM, rules, rulesRanked, ruleS, ruleSRanked
 , terminalS, terminalSRanked
 , nonterminalS, nonterminals
+, mapTerminals
 , mapNonterminals, mapNonterminals'
 , initialS, initials
 , intifyNonterminals
@@ -32,6 +33,7 @@ import Vanda.Hypergraph
 import qualified Data.Queue as Q
 
 import Control.Applicative ((<$>), (<*>))
+import Control.Arrow (first)
 import Control.DeepSeq (NFData (), rnf)
 import Control.Monad.State
 import Control.Seq
@@ -142,6 +144,12 @@ nonterminalS g
       >>= (\ (n, nsS) -> n : concat (S.toList nsS))
 
 
+mapTerminals :: (Ord n, Ord t') => (t -> t') -> RTG n t -> RTG n t'
+mapTerminals f (RTG inS rM)
+  = RTG inS
+  $ M.mapKeysWith (M.unionWith S.union) (first f) rM
+
+
 mapNonterminals :: (Ord m, Ord n, Ord t) => (m -> n) -> RTG m t -> RTG n t
 mapNonterminals f (RTG inS rM)
   = RTG (S.map f inS)
@@ -157,9 +165,9 @@ mapNonterminals' f g
       (seqMap r0 (seqMap rseq (seqFoldable (seqList rseq))))
 
 
-intifyNonterminals :: (Ord n, Ord t) => RTG n t -> RTG Int t
+intifyNonterminals :: (Ord n, Ord t) => RTG n t -> (RTG Int t, M.Map n Int)
 intifyNonterminals g
-  = mapNonterminals intify g
+  = (mapNonterminals intify g, mapping)
   where
     intify n = ML.findWithDefault
       (errorModule "intifyNonterminals: This must not happen.")
