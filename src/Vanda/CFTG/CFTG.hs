@@ -143,6 +143,7 @@ language' rs start
   = go [([], start)]
   where
     go :: [(Derivation, SF v'' n t)] -> [(Derivation, SF v' n' t)]
+    go []  = []
     go sfs = let complete'' (d, sf) = either (Left . (,) d) (Right . (,) d) (complete' sf)
                  (todo, done) = partitionEithers $ map complete'' sfs
              in done ++ go (todo >>= (\ (d, sf) -> fmap (first (d ++)) (dive sf)))
