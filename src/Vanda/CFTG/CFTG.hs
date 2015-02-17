@@ -16,7 +16,10 @@
 
 module Vanda.CFTG.CFTG
 ( SF(..)
+, variables
 , Rule(..)
+, isLinear
+, isNondeleting
 , substitute
 , applyAt
 , language
@@ -38,7 +41,7 @@ import           Vanda.Util.Tree
 import           Control.Arrow
 import           Data.Char (isUpper)
 import           Data.Either
-import           Data.List (findIndices, intercalate, mapAccumL)
+import           Data.List ((\\), findIndices, intercalate, mapAccumL)
 import qualified Data.Map.Lazy as M
 import           Data.Tree
 import           Text.Read (readMaybe)
@@ -51,13 +54,19 @@ errorHere = Control.Error.errorHere "Vanda.CFTG.CFTG"
 data SF v n t = V v
               | N n [SF v n t]
               | T t [SF v n t]
-              deriving (Show)
+              deriving (Eq, Show)
 
 
 children :: SF v n t -> [SF v n t]
 children (V _   ) = []
 children (N _ cs) = cs
 children (T _ cs) = cs
+
+
+variables :: SF v n t -> [v]
+variables (V v   ) = [v]
+variables (N _ cs) = concatMap variables cs
+variables (T _ cs) = concatMap variables cs
 
 
 toTree :: (v -> a) -> (n -> a) -> (t -> a) -> SF v n t -> Tree a
@@ -84,6 +93,14 @@ data Rule v n t = Rule
   , vars :: [v]
   , rhs  :: SF v n t
   }
+
+
+isLinear :: Eq a => Rule a t t1 -> Bool
+isLinear (Rule _ vs sf) = null (variables sf \\ vs)
+
+
+isNondeleting :: Eq a => Rule a t t1 -> Bool
+isNondeleting (Rule _ vs sf) = null (vs \\ variables sf)
 
 
 apply :: (Ord v, Eq n) => Rule v n t -> SF v' n t -> SF v' n t
