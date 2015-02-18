@@ -28,6 +28,7 @@ import           Vanda.Algorithms.EarleyMonadic
 import qualified Vanda.Algorithms.Earley.WSA as WSA
 import           Vanda.CBSM.CountBasedStateMerging
 import qualified Vanda.CBSM.Merge as Merge
+import           Vanda.Corpus.Penn.Text (treeToPenn)
 import           Vanda.Corpus.SExpression as SExp
 import qualified Vanda.Features as F
 import qualified Vanda.Hypergraph as H
@@ -44,6 +45,7 @@ import           Data.Map ((!))
 import qualified Data.Map as M
 import           Data.Ord
 import qualified Data.Set as S
+import qualified Data.Text.Lazy.IO as T
 import           Data.Tree
 import qualified Data.Vector as V
 import           Numeric.Log (Log(..))
@@ -94,11 +96,13 @@ data Args
     , argInfo :: FilePath
     }
   | Parse
-    { argGrammar :: FilePath
+    { flagPennOutput :: Bool
+    , argGrammar :: FilePath
     , argCount :: Int
     }
   | Bests
-    { argGrammar :: FilePath
+    { flagPennOutput :: Bool
+    , argGrammar :: FilePath
     , argCount :: Int
     }
   deriving Show
@@ -156,7 +160,7 @@ cmdArgs
         [ flagReqIntToTreeMap
         ]
     }
-  , (modeEmpty $ Parse "" 1)
+  , (modeEmpty $ Parse False "" 1)
     { modeNames = ["parse"]
     , modeHelp = "Parse newline-separated sentences from standard input."
     , modeArgs =
@@ -165,8 +169,11 @@ cmdArgs
           ]
         , Nothing
         )
+    , modeGroupFlags = toGroup
+        [ flagNonePennOutput
+        ]
     }
-  , (modeEmpty $ Bests "" 1)
+  , (modeEmpty $ Bests False "" 1)
     { modeNames = ["bests"]
     , modeHelp = "View best trees of a grammar."
     , modeArgs =
@@ -175,6 +182,9 @@ cmdArgs
           ]
         , Nothing
         )
+    , modeGroupFlags = toGroup
+        [ flagNonePennOutput
+        ]
     }
   ]
   where
@@ -187,6 +197,9 @@ cmdArgs
     flagNoneNormalize
       = flagNone ["normalize"] (\ x -> x{flagNormalize = True})
           "normalize likelihood deltas by number of merged states"
+    flagNonePennOutput
+      = flagNone ["penn-output"] (\ x -> x{flagPennOutput = True})
+          "use Penn Treebank format for output trees"
     flagReqBeamWidth
       = flagReq ["beam-width"]
                 (readUpdate $ \ a x -> x{flagBeamWidth = a})
@@ -329,14 +342,14 @@ mainArgs Parse{..} = do
   forM_ sents $ \ sent -> do
     let (hg', _) = earley' (asBackwardStar hg) comp (WSA.fromList 1 sent) (M.keys inis)
     let inis' = M.mapKeys (\ k -> (0, k, length sent)) inis
-    printWeightedDerivations
+    printWeightedDerivations flagPennOutput
       $ take argCount
       $ bestsIni hg' feature (V.singleton 1) inis'
 
 mainArgs Bests{..} = do
   (hg, inis) <- toHypergraph <$> (B.decodeFile argGrammar :: IO BinaryCRTG)
   let feature = F.Feature (\ _ i xs -> i * product xs) V.singleton
-  printWeightedDerivations
+  printWeightedDerivations flagPennOutput
     $ take argCount
     $ bestsIni (asBackwardStar hg) feature (V.singleton 1) inis
 
@@ -352,9 +365,14 @@ readCorpora asForests corpora
               =<< getContentsRecursive corpora
               )
 
+
 printWeightedDerivations
-  :: Show a => [(a, Tree (H.Hyperedge v String i))] -> IO ()
-printWeightedDerivations xs =
+  :: Show a => Bool -> [(a, Tree (H.Hyperedge v String i))] -> IO ()
+printWeightedDerivations True  [] = putStrLn "(())"
+printWeightedDerivations False [] = putStrLn "No Parse."
+printWeightedDerivations True  xs =
+  mapM_ (putStrLn . treeToPenn H.label . snd) xs
+printWeightedDerivations False xs =
   forM_ (zip [1 :: Int ..] xs) $ \ (i, (w, t)) -> do
     let t' = fmap H.label t
     putStrLn $ show i ++ ": " ++ show w
