@@ -20,6 +20,7 @@
 
 module Vanda.Corpus.Penn.Text
   ( PennFamily ( parsePenn, unparsePenn, yield )
+  , treeToPenn
   , parsePennMap
   ) where
 
