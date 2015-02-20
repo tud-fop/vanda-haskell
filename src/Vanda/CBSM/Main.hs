@@ -28,6 +28,7 @@ import           Vanda.Algorithms.EarleyMonadic
 import qualified Vanda.Algorithms.Earley.WSA as WSA
 import           Vanda.CBSM.CountBasedStateMerging
 import qualified Vanda.CBSM.Merge as Merge
+import           Vanda.Corpus.Penn.Filter
 import           Vanda.Corpus.Penn.Text (treeToPenn)
 import           Vanda.Corpus.SExpression as SExp
 import qualified Vanda.Features as F
@@ -43,6 +44,7 @@ import qualified Data.Binary as B
 import           Data.List (intercalate)
 import           Data.Map ((!))
 import qualified Data.Map as M
+import           Data.Maybe (mapMaybe)
 import           Data.Ord
 import qualified Data.Set as S
 import qualified Data.Text.Lazy.IO as T
@@ -74,12 +76,15 @@ data Args
   | PrintCorpora
     { flagAsForests :: Bool
     , flagDefoliate :: Bool
+    , flagPennFilter :: Bool
+    , flagPennOutput :: Bool
     , argCorpora :: [FilePath]
     }
   | CBSM
     { flagAsForests :: Bool
-    , flagBeamWidth :: Int
     , flagDefoliate :: Bool
+    , flagPennFilter :: Bool
+    , flagBeamWidth :: Int
     , flagNormalize :: Bool
     , flagIterations :: Int
     , flagDir :: FilePath
@@ -110,7 +115,7 @@ data Args
 cmdArgs :: Mode Args
 cmdArgs
   = modes "Main" (Help $ defaultHelp cmdArgs) "Count-Based State Merging"
-  [ (modeEmpty $ PrintCorpora False False [])
+  [ (modeEmpty $ PrintCorpora False False False False [])
     { modeNames = ["print-corpora"]
     , modeHelp =
         "Print trees from TREEBANKs. Can be used to check for parsing \
@@ -121,9 +126,11 @@ cmdArgs
     , modeGroupFlags = toGroup
         [ flagNoneAsForests
         , flagNoneDefoliate
+        , flagNonePennFilter
+        , flagNonePennOutput
         ]
     }
-  , (modeEmpty $ CBSM False 1000 False False (pred maxBound) "" [])
+  , (modeEmpty $ CBSM False False False 1000 False (pred maxBound) "" [])
     { modeNames = ["cbsm"]
     , modeHelp = "Read-off a grammar from TREEBANKs and generalize it. See \
         \printcorpora for further information about the TREEBANK arguments."
@@ -131,6 +138,7 @@ cmdArgs
     , modeGroupFlags = toGroup
         [ flagNoneAsForests
         , flagNoneDefoliate
+        , flagNonePennFilter
         , flagReqBeamWidth
         , flagNoneNormalize
         , flagReqIterations
@@ -197,6 +205,9 @@ cmdArgs
     flagNoneNormalize
       = flagNone ["normalize"] (\ x -> x{flagNormalize = True})
           "normalize likelihood deltas by number of merged states"
+    flagNonePennFilter
+      = flagNone ["penn-filter"] (\ x -> x{flagPennFilter = True})
+          "remove predicate argument structure annotations from TREEBANKs"
     flagNonePennOutput
       = flagNone ["penn-output"] (\ x -> x{flagPennOutput = True})
           "use Penn Treebank format for output trees"
@@ -255,12 +266,14 @@ mainArgs (Help cs) = putStr cs
 mainArgs PrintCorpora{..}
     = putStr
     . unlines
-    . concatMap (\ (i, t) -> [ show i ++ ":"
-                             , unwords (yield t)
-                             , drawTreeColored t])
-    . zip [1 :: Int ..]
-    . map (if flagDefoliate then T.defoliate else id)
-  =<< readCorpora flagAsForests argCorpora
+    . ( if flagPennOutput
+        then map (treeToPenn id)
+        else concatMap (\ (i, t) -> [ show i ++ ":"
+                                    , unwords (yield t)
+                                    , drawTreeColored t])
+           . zip [1 :: Int ..]
+      )
+  =<< readCorpora flagAsForests flagDefoliate flagPennFilter argCorpora
 
 mainArgs CBSM{..} = do
   exist <- fileExist (filePathIntToTreeMap flagDir)
@@ -271,8 +284,7 @@ mainArgs CBSM{..} = do
     exitFailure
   createDirectoryIfMissing True flagDir
   (g, tM) <- forestToGrammar
-         <$> map (if flagDefoliate then T.defoliate else id)
-         <$> readCorpora flagAsForests argCorpora
+         <$> readCorpora flagAsForests flagDefoliate flagPennFilter argCorpora
   B.encodeFile (filePathIntToTreeMap flagDir) (tM :: BinaryIntToTreeMap)
   withFile (filePathStatistics flagDir) AppendMode $ \ h -> do
     hPutStrLn h
@@ -354,9 +366,11 @@ mainArgs Bests{..} = do
     $ bestsIni (asBackwardStar hg) feature (V.singleton 1) inis
 
 
-readCorpora :: Bool -> [FilePath] -> IO (Forest String)
-readCorpora asForests corpora
-    = (if asForests then concatMap SExp.toForest else map SExp.toTree)
+readCorpora :: Bool -> Bool -> Bool -> [FilePath] -> IO (Forest String)
+readCorpora asForests doDefoliate doPennFilter corpora
+    = (if doDefoliate  then map T.defoliate         else id)
+  <$> (if doPennFilter then mapMaybe stripAll       else id)
+  <$> (if asForests    then concatMap SExp.toForest else map SExp.toTree)
   <$> if null corpora
         then SExp.parse SExp.pSExpressions "stdin"
           <$> getContents
