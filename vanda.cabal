@@ -73,6 +73,7 @@ library
     , Vanda.Corpus.Negra.Binary
     , Vanda.Corpus.Negra.NFData
     , Vanda.Corpus.Negra.Text
+    , Vanda.Corpus.Penn.Filter
     , Vanda.Corpus.Penn.Simple
     , Vanda.Corpus.Penn.Text
     , Vanda.Corpus.SExpression
