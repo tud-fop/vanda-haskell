@@ -77,7 +77,7 @@ data Args
     { flagAsForests :: Bool
     , flagDefoliate :: Bool
     , flagPennFilter :: Bool
-    , flagPennOutput :: Bool
+    , flagOutputFormat :: FlagOutputFormat
     , argCorpora :: [FilePath]
     }
   | CBSM
@@ -101,21 +101,25 @@ data Args
     , argInfo :: FilePath
     }
   | Parse
-    { flagPennOutput :: Bool
+    { flagOutputFormat :: FlagOutputFormat
     , argGrammar :: FilePath
     , argCount :: Int
     }
   | Bests
-    { flagPennOutput :: Bool
+    { flagOutputFormat :: FlagOutputFormat
     , argGrammar :: FilePath
     , argCount :: Int
     }
   deriving Show
 
+
+data FlagOutputFormat = FOFPretty | FOFPenn | FOFYield deriving (Eq, Show)
+
+
 cmdArgs :: Mode Args
 cmdArgs
   = modes "Main" (Help $ defaultHelp cmdArgs) "Count-Based State Merging"
-  [ (modeEmpty $ PrintCorpora False False False False [])
+  [ (modeEmpty $ PrintCorpora False False False FOFPretty [])
     { modeNames = ["print-corpora"]
     , modeHelp =
         "Print trees from TREEBANKs. Can be used to check for parsing \
@@ -127,7 +131,7 @@ cmdArgs
         [ flagNoneAsForests
         , flagNoneDefoliate
         , flagNonePennFilter
-        , flagNonePennOutput
+        , flagOutputFormat
         ]
     }
   , (modeEmpty $ CBSM False False False 1000 False (pred maxBound) "" [])
@@ -168,7 +172,7 @@ cmdArgs
         [ flagReqIntToTreeMap
         ]
     }
-  , (modeEmpty $ Parse False "" 1)
+  , (modeEmpty $ Parse FOFPretty "" 1)
     { modeNames = ["parse"]
     , modeHelp = "Parse newline-separated sentences from standard input."
     , modeArgs =
@@ -178,10 +182,10 @@ cmdArgs
         , Nothing
         )
     , modeGroupFlags = toGroup
-        [ flagNonePennOutput
+        [ flagOutputFormat
         ]
     }
-  , (modeEmpty $ Bests False "" 1)
+  , (modeEmpty $ Bests FOFPretty "" 1)
     { modeNames = ["bests"]
     , modeHelp = "View best trees of a grammar."
     , modeArgs =
@@ -191,7 +195,7 @@ cmdArgs
         , Nothing
         )
     , modeGroupFlags = toGroup
-        [ flagNonePennOutput
+        [ flagOutputFormat
         ]
     }
   ]
@@ -208,9 +212,15 @@ cmdArgs
     flagNonePennFilter
       = flagNone ["penn-filter"] (\ x -> x{flagPennFilter = True})
           "remove predicate argument structure annotations from TREEBANKs"
-    flagNonePennOutput
-      = flagNone ["penn-output"] (\ x -> x{flagPennOutput = True})
-          "use Penn Treebank format for output trees"
+    flagOutputFormat
+      = flagReq [flag] update "FORMAT" ("one of " ++ optsStr)
+      where
+        flag = "output-format"
+        err  = flag ++ " expects one of " ++ optsStr
+        optsStr = intercalate ", " (map fst opts)
+        opts = [("pretty", FOFPretty), ("penn", FOFPenn), ("yield", FOFYield)]
+        update y x = maybe (Left err) (\ z -> Right x{flagOutputFormat = z})
+                   $ lookup y opts
     flagReqBeamWidth
       = flagReq ["beam-width"]
                 (readUpdate $ \ a x -> x{flagBeamWidth = a})
@@ -266,13 +276,7 @@ mainArgs (Help cs) = putStr cs
 mainArgs PrintCorpora{..}
     = putStr
     . unlines
-    . ( if flagPennOutput
-        then map (treeToPenn id)
-        else concatMap (\ (i, t) -> [ show i ++ ":"
-                                    , unwords (yield t)
-                                    , drawTreeColored t])
-           . zip [1 :: Int ..]
-      )
+    . zipWith (drawTreeFormatted flagOutputFormat . show) [1 :: Int ..]
   =<< readCorpora flagAsForests flagDefoliate flagPennFilter argCorpora
 
 mainArgs CBSM{..} = do
@@ -354,14 +358,14 @@ mainArgs Parse{..} = do
   forM_ sents $ \ sent -> do
     let (hg', _) = earley' (asBackwardStar hg) comp (WSA.fromList 1 sent) (M.keys inis)
     let inis' = M.mapKeys (\ k -> (0, k, length sent)) inis
-    printWeightedDerivations flagPennOutput
+    printWeightedDerivations flagOutputFormat
       $ take argCount
       $ bestsIni hg' feature (V.singleton 1) inis'
 
 mainArgs Bests{..} = do
   (hg, inis) <- toHypergraph <$> (B.decodeFile argGrammar :: IO BinaryCRTG)
   let feature = F.Feature (\ _ i xs -> i * product xs) V.singleton
-  printWeightedDerivations flagPennOutput
+  printWeightedDerivations flagOutputFormat
     $ take argCount
     $ bestsIni (asBackwardStar hg) feature (V.singleton 1) inis
 
@@ -381,17 +385,22 @@ readCorpora asForests doDefoliate doPennFilter corpora
 
 
 printWeightedDerivations
-  :: Show a => Bool -> [(a, Tree (H.Hyperedge v String i))] -> IO ()
-printWeightedDerivations True  [] = putStrLn "(())"
-printWeightedDerivations False [] = putStrLn "No Parse."
-printWeightedDerivations True  xs =
-  mapM_ (putStrLn . treeToPenn H.label . snd) xs
-printWeightedDerivations False xs =
+  :: Show a
+  => FlagOutputFormat -> [(a, Tree (H.Hyperedge v String i))] -> IO ()
+printWeightedDerivations FOFPenn [] = putStrLn "(())"
+printWeightedDerivations _       [] = putStrLn "No Parse."
+printWeightedDerivations fmt xs =
   forM_ (zip [1 :: Int ..] xs) $ \ (i, (w, t)) -> do
-    let t' = fmap H.label t
-    putStrLn $ show i ++ ": " ++ show w
-    putStrLn $ unwords $ yield t'
-    putStrLn $ drawTreeColored t'
+    putStrLn
+      $ drawTreeFormatted fmt (show i ++ ": " ++ show w) (fmap H.label t)
+
+
+drawTreeFormatted :: FlagOutputFormat -> String -> Tree String -> String
+drawTreeFormatted FOFPretty cs t = cs ++ newline
+                                ++ unwords (yield t) ++ newline
+                                ++ drawTreeColored t
+drawTreeFormatted FOFPenn   cs t = treeToPenn id t
+drawTreeFormatted FOFYield  cs t = unwords (yield t)
 
 
 drawTreeColored :: Tree String -> String
@@ -403,6 +412,10 @@ drawTreeColored
 colorTTY :: [Int] -> String -> String
 colorTTY cols str
   = "\ESC[" ++ intercalate ";" (map show cols) ++ "m" ++ str ++ "\ESC[m"
+
+
+newline :: String
+newline = unlines [""]
 
 
 safeSaveLastGrammar :: FilePath -> Handle -> [(BinaryCRTG, Info Int)] -> IO ()
