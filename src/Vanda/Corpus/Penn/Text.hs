@@ -85,9 +85,9 @@ parsePennMap f ustate contents
 --   = lazyMany (many p_comment *> p_Sentence (p_tag f)) "penn tb"
 
 treeToPenn :: (t -> String) -> T.Tree t -> String
-treeToPenn f (T.Node t1 [T.Node t2 []]) = "(" ++ f t1 ++ " " ++ f t2 ++ ")"
-treeToPenn f (T.Node t1 ts)
-  = "(" ++ f t1 ++ " " ++ unwords (map (treeToPenn f) ts) ++ ")"
+treeToPenn f (T.Node x []) = f x
+treeToPenn f (T.Node x ts)
+  = '(' : unwords (f x : map (treeToPenn f) ts) ++ ")"
 
 treeToYield :: (t -> String) -> T.Tree t -> String
 treeToYield f (T.Node t1 []) = f t1
