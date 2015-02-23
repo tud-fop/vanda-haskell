@@ -361,6 +361,7 @@ mainArgs Parse{..} = do
     printWeightedDerivations flagOutputFormat
       $ take argCount
       $ bestsIni hg' feature (V.singleton 1) inis'
+    hFlush stdout
 
 mainArgs Bests{..} = do
   (hg, inis) <- toHypergraph <$> (B.decodeFile argGrammar :: IO BinaryCRTG)
