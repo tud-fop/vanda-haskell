@@ -349,7 +349,8 @@ initialInfo
 
 cbsm
   :: (Ord v, Ord l)
-  => ((Int, Int, Int) -> Log Double -> Log Double)
+  => [Set v]
+  -> ((Int, Int, Int) -> Log Double -> Log Double)
   -> Int
   ->  (CRTG v l, Info v)
   -> [(CRTG v l, Info v)]
@@ -359,11 +360,12 @@ cbsm = cbsmGo M.empty
 cbsmGo
   :: (Ord v, Ord l)
   => Map (v, v) (Merge v)
+  -> [Set v]
   -> ((Int, Int, Int) -> Log Double -> Log Double)
   -> Int
   ->  (CRTG v l, Info v)
   -> [(CRTG v l, Info v)]
-cbsmGo cache evaluate beamWidth prev@(g, info@Info{..})
+cbsmGo cache mergeGroups evaluate beamWidth prev@(g, info@Info{..})
   = (prev :)
   $ seq g
   $ seq info
@@ -386,8 +388,8 @@ cbsmGo cache evaluate beamWidth prev@(g, info@Info{..})
                       (v1, v2)
                       cache
                 )
-          $ let vs = sortBy (comparing snd) (M.toList (cntState g))
-            in sortedCartesianProductWith' ((+) `on` snd) vs (tail vs)
+          $ foldr1 (mergeSortedLists (comparing fst))
+          $ map (compileMergePairs $ cntState g) mergeGroups
         liftSat f (x, y, m) = case f m of
           Left  l -> Left  (x, y, l)
           Right r -> Right (x, y, r)
@@ -411,7 +413,8 @@ cbsmGo cache evaluate beamWidth prev@(g, info@Info{..})
           $ M.map (: []) infoMergeTreeMap
     in if null cands
        then []
-       else cbsmGo cache' evaluate beamWidth (mergeCRTG mrg g, info')
+       else cbsmGo cache' mergeGroups evaluate beamWidth
+                   (mergeCRTG mrg g, info')
 --   = g
 --   : ( g `seq` case refineRanking $ enrichRanking $ mergeRanking g of
 --         ((_, ((v1, _), (v2, _))), _) : _
@@ -420,6 +423,26 @@ cbsmGo cache evaluate beamWidth prev@(g, info@Info{..})
 --             in cbsm g'
 --         _ -> []
 --     )
+
+compileMergePairs
+  :: Ord v => Map v Int -> Set v -> [(Int, ((v, Int), (v, Int)))]
+compileMergePairs cntM grpS
+  = sortedCartesianProductWith' ((+) `on` snd) vs (tail vs)
+  where vs = sortBy (comparing snd)
+           $ M.toList
+           $ M.intersection cntM
+           $ M.fromSet (const ()) grpS
+
+
+mergeSortedLists :: (a -> a -> Ordering) -> [a] -> [a] -> [a]
+mergeSortedLists cmp = merge
+  where
+    merge xs@(x : xs') ys@(y : ys')
+      = case x `cmp` y of
+          GT -> y : merge xs  ys'
+          _  -> x : merge xs' ys
+    merge [] ys         = ys
+    merge xs []         = xs
 
 
 normalizeLklhdByMrgdStates :: (Int, Int, Int) -> Log Double -> Log Double

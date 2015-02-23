@@ -84,6 +84,7 @@ data Args
     { flagAsForests :: Bool
     , flagDefoliate :: Bool
     , flagPennFilter :: Bool
+    , flagRestrictMerge :: FlagRestrictMerge
     , flagBeamWidth :: Int
     , flagNormalize :: Bool
     , flagIterations :: Int
@@ -91,7 +92,8 @@ data Args
     , argCorpora :: [FilePath]
     }
   | CBSM_Continue
-    { flagBeamWidth :: Int
+    { flagRestrictMerge :: FlagRestrictMerge
+    , flagBeamWidth :: Int
     , flagNormalize :: Bool
     , flagIterations :: Int
     , flagDir :: FilePath
@@ -115,6 +117,8 @@ data Args
 
 data FlagOutputFormat = FOFPretty | FOFPenn | FOFYield deriving (Eq, Show)
 
+data FlagRestrictMerge = FRMNone | FRMLeafs deriving (Eq, Show)
+
 
 cmdArgs :: Mode Args
 cmdArgs
@@ -134,7 +138,7 @@ cmdArgs
         , flagOutputFormat
         ]
     }
-  , (modeEmpty $ CBSM False False False 1000 False (pred maxBound) "" [])
+  , (modeEmpty $ CBSM False False False FRMNone 1000 False (pred maxBound) "" [])
     { modeNames = ["cbsm"]
     , modeHelp = "Read-off a grammar from TREEBANKs and generalize it. See \
         \printcorpora for further information about the TREEBANK arguments."
@@ -143,17 +147,19 @@ cmdArgs
         [ flagNoneAsForests
         , flagNoneDefoliate
         , flagNonePennFilter
+        , flagReqRestrictMerge
         , flagReqBeamWidth
         , flagNoneNormalize
         , flagReqIterations
         , flagReqDir
         ]
     }
-  , (modeEmpty $ CBSM_Continue 1000 False (pred maxBound) "")
+  , (modeEmpty $ CBSM_Continue FRMNone 1000 False (pred maxBound) "")
     { modeNames = ["cbsm-continue"]
     , modeHelp = "Continue cbsm training with a grammar."
     , modeGroupFlags = toGroup
-        [ flagReqBeamWidth
+        [ flagReqRestrictMerge
+        , flagReqBeamWidth
         , flagNoneNormalize
         , flagReqIterations
         , flagReqDir
@@ -220,6 +226,17 @@ cmdArgs
         optsStr = intercalate ", " (map fst opts)
         opts = [("pretty", FOFPretty), ("penn", FOFPenn), ("yield", FOFYield)]
         update y x = maybe (Left err) (\ z -> Right x{flagOutputFormat = z})
+                   $ lookup y opts
+    flagReqRestrictMerge
+      = flagReq [flag] update "RESTRICTION"
+      $ "one of " ++ optsStr ++ ". The RESTRICTION leafs means, that states \
+        \ producing leafs are not merged with states producing inner nodes."
+      where
+        flag = "restrict-merge"
+        err  = flag ++ " expects one of " ++ optsStr
+        optsStr = intercalate ", " (map fst opts)
+        opts = [("none", FRMNone), ("leafs", FRMLeafs)]
+        update y x = maybe (Left err) (\ z -> Right x{flagRestrictMerge = z})
                    $ lookup y opts
     flagReqBeamWidth
       = flagReq ["beam-width"]
@@ -299,6 +316,7 @@ mainArgs CBSM{..} = do
     safeSaveLastGrammar flagDir h
       $ take (succ flagIterations)
       $ cbsm
+          (mergeGroups flagRestrictMerge tM)
           (if flagNormalize then normalizeLklhdByMrgdStates else flip const)
           flagBeamWidth
           (g, initialInfo (cntState g))
@@ -307,10 +325,13 @@ mainArgs CBSM_Continue{..} = do
   it   <- read <$> readFile (filePathLastIteration flagDir) :: IO Int
   g    <- B.decodeFile (filePathGrammar flagDir it) :: IO BinaryCRTG
   info <- B.decodeFile (filePathInfo    flagDir it) :: IO BinaryInfo
+  groups <- mergeGroups flagRestrictMerge
+    <$> (B.decodeFile (filePathIntToTreeMap flagDir) :: IO BinaryIntToTreeMap)
   withFile (filePathStatistics flagDir) AppendMode $ \ h -> do
     safeSaveLastGrammar flagDir h
       $ take (succ flagIterations)
       $ cbsm
+          groups
           (if flagNormalize then normalizeLklhdByMrgdStates else flip const)
           flagBeamWidth
           (g, info)
@@ -383,6 +404,15 @@ readCorpora asForests doDefoliate doPennFilter corpora
           <$> (   SExp.parseFromFiles SExp.pSExpressions
               =<< getContentsRecursive corpora
               )
+
+
+mergeGroups :: FlagRestrictMerge -> M.Map v (Tree a) -> [S.Set v]
+mergeGroups FRMNone
+  = (: []) . M.keysSet
+mergeGroups FRMLeafs
+  = map M.keysSet
+  . (\ (x, y) -> [x, y])
+  . M.partition (null . subForest)
 
 
 printWeightedDerivations
