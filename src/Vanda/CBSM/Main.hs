@@ -21,13 +21,10 @@ module Vanda.CBSM.Main
 ) where
 
 
-import qualified Control.Error
-import qualified Data.RevMap as RM
 import           System.Console.CmdArgs.Explicit.Misc
 import           Vanda.Algorithms.EarleyMonadic
 import qualified Vanda.Algorithms.Earley.WSA as WSA
 import           Vanda.CBSM.CountBasedStateMerging
-import qualified Vanda.CBSM.Merge as Merge
 import           Vanda.Corpus.Penn.Filter
 import           Vanda.Corpus.Penn.Text (treeToPenn)
 import           Vanda.Corpus.SExpression as SExp
@@ -38,7 +35,6 @@ import           Vanda.Util.Timestamps
 import           Vanda.Util.Tree as T
 
 import           Control.Applicative ((<$>))
-import           Control.Arrow ((***))
 import           Control.Monad
 import qualified Data.Binary as B
 import           Data.List (intercalate)
@@ -47,7 +43,6 @@ import qualified Data.Map as M
 import           Data.Maybe (mapMaybe)
 import           Data.Ord
 import qualified Data.Set as S
-import qualified Data.Text.Lazy.IO as T
 import           Data.Tree
 import qualified Data.Vector as V
 import           Numeric.Log (Log(..))
@@ -65,10 +60,6 @@ import           System.IO ( Handle
                            , stdout
                            , withFile )
 import           System.Posix.Files (fileExist)
-
-
-errorHere :: String -> String -> a
-errorHere = Control.Error.errorHere "Vanda.CBSM.Main"
 
 
 data Args
@@ -430,8 +421,8 @@ drawTreeFormatted :: FlagOutputFormat -> String -> Tree String -> String
 drawTreeFormatted FOFPretty cs t = cs ++ newline
                                 ++ unwords (yield t) ++ newline
                                 ++ drawTreeColored t
-drawTreeFormatted FOFPenn   cs t = treeToPenn id t
-drawTreeFormatted FOFYield  cs t = unwords (yield t)
+drawTreeFormatted FOFPenn   _  t = treeToPenn id t
+drawTreeFormatted FOFYield  _  t = unwords (yield t)
 
 
 drawTreeColored :: Tree String -> String
@@ -510,17 +501,6 @@ showFixedComma o = go
             r' = show r
 
 
-progress :: (Int -> String) -> Int -> [a] -> IO a
-progress msg n xs0 = go xs0 0
-  where
-    go [] _ = errorHere "progress" "list too short"
-    go (x : xs) i = do
-      putStrLn $ msg i
-      x `seq` if i >= n
-        then return x
-        else go xs $! i + 1
-
-
 bestsIni
   :: (H.Hypergraph h, Ord v, Eq l)
   => h v l i
@@ -567,55 +547,3 @@ ifM :: Monad m => m Bool -> m b -> m b -> m b
 ifM predicateM thn els = do
   b <- predicateM
   if b then thn else els
-
-
-test3 :: (Show l, Ord l) => Int -> [Tree l] -> IO ()
-test3 n
-  = putStr
-  . unlines
-  . concatMap (\ (w, d) -> [show w, drawTree' (drawstyleCompact2 0 "") $ fmap (show . H.label) d])
-  . bests
-  . (!! n)
-  . iterate cbsmStep2
-  . fst
-  . forestToGrammar
-
-
-test2 :: (Show l, Ord l) => Int -> [Tree l] -> IO ()
-test2 n
-  = putStr
-  . unlines
-  . map (unlines . map show . H.edges . asEdgeList . fst . toHypergraph)
-  . take n
-  . iterate cbsmStep2
-  . fst
-  . forestToGrammar
-
-
-test1 :: (Show l, Ord l) => Int -> [Tree l] -> IO ()
-test1 n
-  = putStr
-  . unlines
-  . map (uncurry (++) . ((unlines . map show . H.edges . asEdgeList . fst . toHypergraph) *** (unlines . map showStep1)))
-  . take n
-  . tail
-  . iterate step . (\ x -> (x, undefined))
-  . fst
-  . forestToGrammar
-  where
-    step (g, _) = (cbsmStep2 g, refineRanking $ enrichRanking $ mergeRanking g)
-
-    showStep1 ((s, ((v1, n1), (v2, n2))), (mrg, delta))
-      =  show s ++ "=" ++ show n1 ++ "+" ++ show n2 ++ ": "
-      ++ show delta ++ ": "
-      ++ show [v1, v2]
-      ++ if M.size (Merge.forward mrg) > 2
-         then " -> " ++ show (map S.toList $ M.elems $ Merge.backward mrg)
-         else " (saturated)"
-
-
-asEdgeList :: H.EdgeList v l i -> H.EdgeList v l i
-asEdgeList = id
-
--- asBackwardStar :: H.BackwardStar v l i -> H.BackwardStar v l i
--- asBackwardStar = id
