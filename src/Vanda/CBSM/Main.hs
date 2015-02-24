@@ -35,6 +35,7 @@ import           Vanda.Util.Timestamps
 import           Vanda.Util.Tree as T
 
 import           Control.Applicative ((<$>))
+import           Control.Arrow (second)
 import           Control.Monad
 import qualified Data.Binary as B
 import           Data.List (intercalate)
@@ -95,6 +96,7 @@ data Args
     }
   | Parse
     { flagUnknownWords :: FlagUnknownWords
+    , flagUnknownWordOutput :: FlagUnknownWordOutput
     , flagOutputFormat :: FlagOutputFormat
     , argGrammar :: FilePath
     , argCount :: Int
@@ -112,6 +114,9 @@ data FlagOutputFormat = FOFPretty | FOFPenn | FOFYield deriving (Eq, Show)
 data FlagRestrictMerge = FRMNone | FRMLeafs deriving (Eq, Show)
 
 data FlagUnknownWords = FUWStrict | FUWArbitrary deriving (Eq, Show)
+
+data FlagUnknownWordOutput
+       = FUWOOriginal | FUWOReplacement | FUWOBoth deriving (Eq, Show)
 
 
 cmdArgs :: Mode Args
@@ -172,7 +177,7 @@ cmdArgs
         [ flagReqIntToTreeMap
         ]
     }
-  , (modeEmpty $ Parse FUWStrict FOFPretty "" 1)
+  , (modeEmpty $ Parse FUWStrict FUWOOriginal FOFPretty "" 1)
     { modeNames = ["parse"]
     , modeHelp = "Parse newline-separated sentences from standard input."
     , modeArgs =
@@ -183,6 +188,7 @@ cmdArgs
         )
     , modeGroupFlags = toGroup
         [ flagReqUnknownWords
+        , flagReqUnknownWordOutput
         , flagOutputFormat
         ]
     }
@@ -244,6 +250,19 @@ cmdArgs
         optsStr = intercalate ", " (map fst opts)
         opts = [("strict", FUWStrict), ("arbitrary", FUWArbitrary)]
         update y x = maybe (Left err) (\ z -> Right x{flagUnknownWords = z})
+                   $ lookup y opts
+    flagReqUnknownWordOutput
+      = flagReq [flag] update "MODE"
+      $ "one of " ++ optsStr
+      where
+        flag = "unknown-word-output"
+        err  = flag ++ " expects one of " ++ optsStr
+        optsStr = intercalate ", " (map fst opts)
+        opts = [ ("original", FUWOOriginal)
+               , ("replacement", FUWOReplacement)
+               , ("both", FUWOBoth) ]
+        update y x = maybe (Left err)
+                           (\ z -> Right x{flagUnknownWordOutput = z})
                    $ lookup y opts
     flagReqBeamWidth
       = flagReq ["beam-width"]
@@ -387,16 +406,19 @@ mainArgs Parse{..} = do
     let wsa = createWSA flagUnknownWords hg sent
     let (hg', _) = earley' (asBackwardStar hg) comp wsa (M.keys inis)
     let inis' = M.mapKeys (\ k -> (0, k, length sent)) inis
-    printWeightedDerivations flagOutputFormat
+    printWeightedTrees flagOutputFormat
       $ take argCount
+      $ map (second $ unknownWordOutput flagUnknownWordOutput sent)
+      $ map (second $ fmap H.label)
       $ bestsIni hg' feature (V.singleton 1) inis'
     hFlush stdout
 
 mainArgs Bests{..} = do
   (hg, inis) <- toHypergraph <$> (B.decodeFile argGrammar :: IO BinaryCRTG)
   let feature = F.Feature (\ _ i xs -> i * product xs) V.singleton
-  printWeightedDerivations flagOutputFormat
+  printWeightedTrees flagOutputFormat
     $ take argCount
+      $ map (second $ fmap H.label)
     $ bestsIni (asBackwardStar hg) feature (V.singleton 1) inis
 
 
@@ -442,15 +464,24 @@ createWSA flag hg xs
         else map (\ w -> t{WSA.transTerminal = w}) $ S.toList knownWords
 
 
-printWeightedDerivations
+unknownWordOutput
+  :: FlagUnknownWordOutput -> [String] -> Tree String -> Tree String
+unknownWordOutput FUWOOriginal s t
+  = snd $ mapAccumLLeafs (\ (x : xs) _ -> (xs, x)) s t
+unknownWordOutput FUWOReplacement _ t = t
+unknownWordOutput FUWOBoth s t
+  = snd $ mapAccumLLeafs (\ (x : xs) y -> (xs, x ++ "/" ++ y)) s t
+
+
+printWeightedTrees
   :: Show a
-  => FlagOutputFormat -> [(a, Tree (H.Hyperedge v String i))] -> IO ()
-printWeightedDerivations FOFPenn [] = putStrLn "(())"
-printWeightedDerivations _       [] = putStrLn "No Parse."
-printWeightedDerivations fmt xs =
+  => FlagOutputFormat -> [(a, Tree String)] -> IO ()
+printWeightedTrees FOFPenn [] = putStrLn "(())"
+printWeightedTrees _       [] = putStrLn "No Parse."
+printWeightedTrees fmt xs =
   forM_ (zip [1 :: Int ..] xs) $ \ (i, (w, t)) -> do
     putStrLn
-      $ drawTreeFormatted fmt (show i ++ ": " ++ show w) (fmap H.label t)
+      $ drawTreeFormatted fmt (show i ++ ": " ++ show w) t
 
 
 drawTreeFormatted :: FlagOutputFormat -> String -> Tree String -> String
