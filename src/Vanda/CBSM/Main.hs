@@ -94,7 +94,8 @@ data Args
     , argInfo :: FilePath
     }
   | Parse
-    { flagOutputFormat :: FlagOutputFormat
+    { flagUnknownWords :: FlagUnknownWords
+    , flagOutputFormat :: FlagOutputFormat
     , argGrammar :: FilePath
     , argCount :: Int
     }
@@ -109,6 +110,8 @@ data Args
 data FlagOutputFormat = FOFPretty | FOFPenn | FOFYield deriving (Eq, Show)
 
 data FlagRestrictMerge = FRMNone | FRMLeafs deriving (Eq, Show)
+
+data FlagUnknownWords = FUWStrict | FUWArbitrary deriving (Eq, Show)
 
 
 cmdArgs :: Mode Args
@@ -169,7 +172,7 @@ cmdArgs
         [ flagReqIntToTreeMap
         ]
     }
-  , (modeEmpty $ Parse FOFPretty "" 1)
+  , (modeEmpty $ Parse FUWStrict FOFPretty "" 1)
     { modeNames = ["parse"]
     , modeHelp = "Parse newline-separated sentences from standard input."
     , modeArgs =
@@ -179,7 +182,8 @@ cmdArgs
         , Nothing
         )
     , modeGroupFlags = toGroup
-        [ flagOutputFormat
+        [ flagReqUnknownWords
+        , flagOutputFormat
         ]
     }
   , (modeEmpty $ Bests FOFPretty "" 1)
@@ -228,6 +232,18 @@ cmdArgs
         optsStr = intercalate ", " (map fst opts)
         opts = [("none", FRMNone), ("leafs", FRMLeafs)]
         update y x = maybe (Left err) (\ z -> Right x{flagRestrictMerge = z})
+                   $ lookup y opts
+    flagReqUnknownWords
+      = flagReq [flag] update "MODE"
+      $ "one of " ++ optsStr ++ ". The MODE strict accepts only known \
+        \words for parsing. The MODE arbitrary accepts any known word \
+        \as replacment for an unknown word."
+      where
+        flag = "unknown-words"
+        err  = flag ++ " expects one of " ++ optsStr
+        optsStr = intercalate ", " (map fst opts)
+        opts = [("strict", FUWStrict), ("arbitrary", FUWArbitrary)]
+        update y x = maybe (Left err) (\ z -> Right x{flagUnknownWords = z})
                    $ lookup y opts
     flagReqBeamWidth
       = flagReq ["beam-width"]
@@ -368,7 +384,8 @@ mainArgs Parse{..} = do
   let feature = F.Feature (\ _ (i, _) xs -> i * product xs) V.singleton
   sents <- map words . lines <$> getContents
   forM_ sents $ \ sent -> do
-    let (hg', _) = earley' (asBackwardStar hg) comp (WSA.fromList 1 sent) (M.keys inis)
+    let wsa = createWSA flagUnknownWords hg sent
+    let (hg', _) = earley' (asBackwardStar hg) comp wsa (M.keys inis)
     let inis' = M.mapKeys (\ k -> (0, k, length sent)) inis
     printWeightedDerivations flagOutputFormat
       $ take argCount
@@ -404,6 +421,25 @@ mergeGroups FRMLeafs
   = map M.keysSet
   . (\ (x, y) -> [x, y])
   . M.partition (null . subForest)
+
+
+createWSA
+  :: (H.Hypergraph h, Ord v, Ord l, Num w)
+  => FlagUnknownWords -> h v l i -> [l] -> WSA.WSA Int l w
+createWSA flag hg xs
+  = case flag of
+      FUWStrict    -> id
+      FUWArbitrary -> replaceUnknownsInWSA
+  $ WSA.fromList 1 xs
+  where
+    knownWords
+      = S.fromList $ map H.label $ filter ((0 ==) . H.arity) $ H.edges hg
+    replaceUnknownsInWSA x
+      = x{WSA.transitions = concatMap replaceUnknowns $ WSA.transitions x}
+    replaceUnknowns t
+      = if S.member (WSA.transTerminal t) knownWords
+        then [t]
+        else map (\ w -> t{WSA.transTerminal = w}) $ S.toList knownWords
 
 
 printWeightedDerivations
