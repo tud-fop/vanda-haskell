@@ -31,11 +31,13 @@ module Vanda.Util.Tree
 , -- * Manipulation
   defoliate
 , -- * Map
-  mapLeafs, mapInners, mapInnersAndLeafs
+  mapLeafs, mapInners, mapInnersAndLeafs, mapAccumLLeafs
 ) where
 
 
+import Control.Arrow (second)
 import Data.Functor
+import Data.List (mapAccumL)
 import Data.Tree
 
 
@@ -170,3 +172,11 @@ mapInnersAndLeafs
   -> Tree b
 mapInnersAndLeafs f g = go
   where go (Node x ts) = Node (if null ts then g x else f x) (map go ts)
+
+
+-- | Like 'mapAccumL', but on the leaves of a tree.
+mapAccumLLeafs :: (a -> b -> (a, b)) -> a -> Tree b -> (a, Tree b)
+mapAccumLLeafs f = go
+  where
+    go a (Node x []) = second (flip Node []) (f a x)
+    go a (Node x ts) = second (Node x) (mapAccumL go a ts)
