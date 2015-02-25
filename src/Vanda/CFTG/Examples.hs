@@ -20,7 +20,7 @@ import           Vanda.Corpus.TreeTerm (parseTrees)
 
 import           Control.Arrow
 import           Data.Function (on)
-import           Data.List
+import           Data.List (deleteFirstsBy, intercalate, nubBy)
 import           Data.Tree
 import           System.Environment (getArgs)
 
@@ -502,10 +502,30 @@ g4trans =
 
 g5 :: [Rule String String String]
 g5 =
-  [ rule {-    -} "S" 0 "δ(α) , A(α, α) , ε(α) , α"
-  , rule {-    -} "A" 3 "A(γ(_1), α) , A(α, γ(_2)) , _3"
-  , rule {-    -} "A" 3 "ε(_1) , δ(_2) , _3"
+  [ rule {- 1 -} "S" 0 "δ(α) , A(α, α) , ε(α) , α"
+  , rule {- 2 -} "A" 3 "A(γ(_1), α) , A(α, γ(_2)) , _3"
+  , rule {- 3 -} "A" 3 "ε(_1) , δ(_2) , _3"
   ]
+
+
+rtg5 :: [RTGRule String String]
+rtg5 =
+  [ RTGRule "S" "δ" ["A", "E"]
+  , RTGRule "G" "γ" ["A"]
+  , RTGRule "G" "γ" ["G"]
+  , RTGRule "A" "α" []
+  , RTGRule "E" "ε" ["G", "0"]
+  , RTGRule "0" "δ" ["A", "1"]
+  , RTGRule "1" "ε" ["A", "2"]
+  , RTGRule "2" "δ" ["G", "3"]
+  , RTGRule "3" "ε" ["G", "0"]
+  , RTGRule "3" "ε" ["G", "F"]
+  , RTGRule "F" "δ" ["A", "H"]
+  , RTGRule "H" "ε" ["A", "K"]
+  , RTGRule "K" "δ" ["G", "M"]
+  , RTGRule "M" "ε" ["A", "A"]
+  ]
+
 
 g6 :: [Rule String String String]
 g6 =
