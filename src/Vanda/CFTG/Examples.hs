@@ -507,6 +507,14 @@ g5 =
   , rule {-    -} "A" 3 "ε(_1) , δ(_2) , _3"
   ]
 
+g6 :: [Rule String String String]
+g6 =
+  [ rule {-    -} "S" 0 "δ₁(α) , A(α, α) , δ₂(α) , α"
+  , rule {-    -} "A" 3 "A({(_1), }(_2)) , _3"
+  , rule {-    -} "A" 3 "A(_1, α) , A(α, _2) , _3"
+  , rule {-    -} "A" 3 "δ₂(_1) , δ₁(_2) , _3"
+  ]
+
 
 
 {-
@@ -529,6 +537,7 @@ main = do
             , ("g4"      , g4      )
             , ("g4trans" , g4trans )
             , ("g5"      , g5      )
+            , ("g6"      , g6      )
             ]
   args <- getArgs
   case args of
