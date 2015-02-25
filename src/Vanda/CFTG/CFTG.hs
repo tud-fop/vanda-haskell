@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RecordWildCards, ScopedTypeVariables #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -16,8 +16,11 @@
 
 module Vanda.CFTG.CFTG
 ( SF(..)
+, mapSF
 , variables
 , Rule(..)
+, mapRule
+, isTerminal
 , isLinear
 , isNondeleting
 , substitute
@@ -31,6 +34,9 @@ module Vanda.CFTG.CFTG
 , treeToSF
 , -- * Miscellaneous
   drawTreeCompact
+, RTGRule (..)
+, intersect
+, reduce
 ) where
 
 
@@ -41,8 +47,10 @@ import           Vanda.Util.Tree
 import           Control.Arrow
 import           Data.Char (isUpper)
 import           Data.Either
-import           Data.List ((\\), findIndices, intercalate, mapAccumL)
+import           Data.List ( (\\), findIndices, intercalate, mapAccumL, nub
+                           , partition )
 import qualified Data.Map.Lazy as M
+import qualified Data.Set as S
 import           Data.Tree
 import           Text.Read (readMaybe)
 
@@ -55,6 +63,12 @@ data SF v n t = V v
               | N n [SF v n t]
               | T t [SF v n t]
               deriving (Eq, Show)
+
+
+mapSF :: (v -> v') -> (n -> n') -> (t -> t') -> SF v n t -> SF v' n' t'
+mapSF fv _  _  (V v   ) = V (fv v)
+mapSF fv fn ft (N n ts) = N (fn n) (map (mapSF fv fn ft) ts)
+mapSF fv fn ft (T t ts) = T (ft t) (map (mapSF fv fn ft) ts)
 
 
 children :: SF v n t -> [SF v n t]
@@ -95,12 +109,24 @@ data Rule v n t = Rule
   }
 
 
+mapRule :: (v -> v') -> (n -> n') -> (t -> t') -> Rule v n t -> Rule v' n' t'
+mapRule fv fn ft Rule{..} = Rule (fn lhs) (map fv vars) (mapSF fv fn ft rhs)
+
+
 isLinear :: Eq a => Rule a t t1 -> Bool
 isLinear (Rule _ vs sf) = null (variables sf \\ vs)
 
 
 isNondeleting :: Eq a => Rule a t t1 -> Bool
 isNondeleting (Rule _ vs sf) = null (vs \\ variables sf)
+
+
+isTerminal :: Rule v n t -> Bool
+isTerminal = go . rhs
+  where
+    go (V _   ) = True
+    go (N _ _ ) = False
+    go (T _ ts) = all go ts
 
 
 apply :: (Ord v, Eq n) => Rule v n t -> SF v' n t -> SF v' n t
@@ -253,3 +279,53 @@ mapAccumN f = go []
       where (acc', n') = f acc ps n
 
     step ps a (t, p) = go (ps ++ [p]) a t
+
+
+data RTGRule n t = RTGRule n t [n] deriving Show
+
+intersect
+  :: forall v n t n'
+   . (Eq v, Ord t, Ord n')
+  => [Rule v n t] -> [RTGRule n' t] -> [Rule v (n', n, [n']) t]
+intersect cftg rtg
+  = concatMap f cftg
+  where
+    nts = nub $ concatMap (\ (RTGRule n _ ns) -> n : ns) rtg
+
+    f :: Rule v n t -> [Rule v (n', n, [n']) t]
+    f Rule{..} = do ns' <- sequence (map (const nts) vars)
+                    (n', rhs') <- translate (zip vars ns') rhs
+                    return (Rule (n', lhs, ns') vars rhs')
+
+    translate :: [(v, n')] -> SF v n t -> [(n', SF v (n', n, [n']) t)]
+    translate ass (V v   ) = return (maybe (errorHere "intersect.translate" "") id $ lookup v ass, V v)
+    translate ass (N n ts) = do (ns', ts') <- unzip `fmap` sequence (map (translate ass) ts)
+                                n' <- nts
+                                return (n', N (n', n, ns') ts')
+    translate ass (T t ts) = do (ns', ts') <- unzip `fmap` sequence (map (translate ass) ts)
+                                n' <- lkp t ns'
+                                return (n', T t ts')
+
+    lkp t ns = M.findWithDefault [] (t, ns) m
+      where
+        m = M.fromListWith (++)
+          $ map (\ (RTGRule n' t' ns') -> ((t', ns'), [n'])) rtg
+
+
+reduce :: Ord n => [Rule v n t] -> [Rule v n t]
+reduce rs = filter (flip S.member productiveNs . lhs) rs
+  where
+    productiveNs = go $ S.fromList $ map lhs rts
+    (rts, rns) = partition isTerminal rs
+
+    go nS = if S.null (S.difference new nS)
+            then nS
+            else go (S.union nS new)
+      where new = S.fromList
+                    [ lhs
+                    | Rule{..} <- rns
+                    , isProductive nS rhs
+                    ]
+    isProductive _  (V _   ) = True
+    isProductive nS (N n ts) = S.member n nS && all (isProductive nS) ts
+    isProductive nS (T _ ts) = all (isProductive nS) ts
