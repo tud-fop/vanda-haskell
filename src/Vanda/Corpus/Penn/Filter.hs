@@ -88,7 +88,7 @@ stripFunctionalTags :: String -> Maybe String
 stripFunctionalTags
   = Just
   . intercalate "-"
-  . filter (`S.notMember` functionalTags)
+  . (\ (x : xs) -> x : filter (`S.notMember` functionalTags) xs)
   . unintercalate ('-' ==)
 
 
