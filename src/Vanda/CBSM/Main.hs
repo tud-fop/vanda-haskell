@@ -99,6 +99,7 @@ data Args
     { flagUnknownWords :: FlagUnknownWords
     , flagUnknownWordOutput :: FlagUnknownWordOutput
     , flagOutputFormat :: FlagOutputFormat
+    , flagMessageNoParse :: String
     , argGrammar :: FilePath
     , argCount :: Int
     }
@@ -181,7 +182,7 @@ cmdArgs
         [ flagReqIntToTreeMap
         ]
     }
-  , (modeEmpty $ Parse FUWStrict FUWOOriginal FOFPretty "" 1)
+  , (modeEmpty $ Parse FUWStrict FUWOOriginal FOFPretty "" "" 1)
     { modeNames = ["parse"]
     , modeHelp = "Parse newline-separated sentences from standard input."
     , modeArgs =
@@ -194,6 +195,7 @@ cmdArgs
         [ flagReqUnknownWords
         , flagReqUnknownWordOutput
         , flagOutputFormat
+        , flagReqMessageNoParse
         ]
     }
   , (modeEmpty $ Bests FOFPretty "" 1)
@@ -283,6 +285,11 @@ cmdArgs
                 (readUpdate $ \ a x -> x{flagIterations = a})
                 "ITERATIONS"
                 "limit number of iterations"
+    flagReqMessageNoParse
+      = flagReq ["message-no-parse"]
+          (\ a x -> Right x{flagMessageNoParse = a})
+          "MSG"
+          "print MSG if there is no parse"
     flagReqDir
       = flagReq ["dir"] (\ a x -> Right x{flagDir = a}) "DIRECTORY"
           "write output files to DIRECTORY instead of current"
@@ -416,7 +423,7 @@ mainArgs Parse{..} = do
     let wsa = createWSA flagUnknownWords hg sent
     let (hg', _) = earley' (asBackwardStar hg) comp wsa (M.keys inis)
     let inis' = M.mapKeys (\ k -> (0, k, length sent)) inis
-    printWeightedTrees flagOutputFormat
+    printWeightedTrees flagOutputFormat flagMessageNoParse
       $ take argCount
       $ map (second $ unknownWordOutput flagUnknownWordOutput sent)
       $ map (second $ fmap H.label)
@@ -426,7 +433,7 @@ mainArgs Parse{..} = do
 mainArgs Bests{..} = do
   (hg, inis) <- toHypergraph <$> (B.decodeFile argGrammar :: IO BinaryCRTG)
   let feature = F.Feature (\ _ i xs -> i * product xs) V.singleton
-  printWeightedTrees flagOutputFormat
+  printWeightedTrees flagOutputFormat "language empty"
     $ take argCount
       $ map (second $ fmap H.label)
     $ bestsIni (asBackwardStar hg) feature (V.singleton 1) inis
@@ -491,10 +498,9 @@ unknownWordOutput FUWOBoth s t
 
 printWeightedTrees
   :: Show a
-  => FlagOutputFormat -> [(a, Tree String)] -> IO ()
-printWeightedTrees FOFPenn [] = putStrLn "(())"
-printWeightedTrees _       [] = putStrLn "No Parse."
-printWeightedTrees fmt xs =
+  => FlagOutputFormat -> String -> [(a, Tree String)] -> IO ()
+printWeightedTrees _ msg [] = putStrLn msg
+printWeightedTrees fmt _ xs =
   forM_ (zip [1 :: Int ..] xs) $ \ (i, (w, t)) -> do
     putStrLn
       $ drawTreeFormatted fmt (show i ++ ": " ++ show w) t
