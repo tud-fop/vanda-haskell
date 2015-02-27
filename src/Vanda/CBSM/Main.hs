@@ -113,7 +113,9 @@ data Args
 
 data FlagOutputFormat = FOFPretty | FOFPenn | FOFYield deriving (Eq, Show)
 
-data FlagRestrictMerge = FRMNone | FRMLeafs deriving (Eq, Show)
+data FlagRestrictMerge
+  = FRMNone | FRMLeafs | FRMTerminals | FRMTerminalsAndLeafs
+  deriving (Eq, Show)
 
 data FlagUnknownWords = FUWStrict | FUWArbitrary deriving (Eq, Show)
 
@@ -240,13 +242,18 @@ cmdArgs
                    $ lookup y opts
     flagReqRestrictMerge
       = flagReq [flag] update "RESTRICTION"
-      $ "one of " ++ optsStr ++ ". The RESTRICTION leafs means, that states \
-        \ producing leafs are not merged with states producing inner nodes."
+      $ "one of " ++ optsStr ++ ". The RESTRICTION leafs means that states \
+        \producing leafs are not merged with states producing inner nodes. \
+        \The restriction terminals means that only states producing the same \
+        \terminal may be merged."
       where
         flag = "restrict-merge"
         err  = flag ++ " expects one of " ++ optsStr
         optsStr = intercalate ", " (map fst opts)
-        opts = [("none", FRMNone), ("leafs", FRMLeafs)]
+        opts = [ ("none"           , FRMNone     )
+               , ("leafs"          , FRMLeafs    )
+               , ("terimals"       , FRMTerminals)
+               , ("terminals+leafs", FRMTerminalsAndLeafs) ]
         update y x = maybe (Left err) (\ z -> Right x{flagRestrictMerge = z})
                    $ lookup y opts
     flagReqUnknownWords
@@ -459,13 +466,26 @@ filterByLeafs file ts = do
   return $ filter (all (`S.member` wordS) . yield) ts
 
 
-mergeGroups :: FlagRestrictMerge -> M.Map v (Tree a) -> [S.Set v]
+mergeGroups
+  :: (Ord v, Ord a) => FlagRestrictMerge -> M.Map v (Tree a) -> [S.Set v]
 mergeGroups FRMNone
   = (: []) . M.keysSet
 mergeGroups FRMLeafs
   = map M.keysSet
   . (\ (x, y) -> [x, y])
   . M.partition (null . subForest)
+mergeGroups FRMTerminals
+  = map S.fromList
+  . M.elems
+  . M.fromListWith (++)
+  . map (\ (v, t) -> (rootLabel t, [v]))
+  . M.toList
+mergeGroups FRMTerminalsAndLeafs
+  = map S.fromList
+  . M.elems
+  . M.fromListWith (++)
+  . map (\ (v, Node x ts) -> ((x, null ts), [v]))
+  . M.toList
 
 
 createWSA
