@@ -67,8 +67,9 @@ data Args
   = Help String
   | PrintCorpora
     { flagAsForests :: Bool
-    , flagDefoliate :: Bool
     , flagPennFilter :: Bool
+    , flagDefoliate :: Bool
+    , flagFilterByLeafs :: FilePath
     , flagOutputFormat :: FlagOutputFormat
     , argCorpora :: [FilePath]
     }
@@ -122,18 +123,21 @@ data FlagUnknownWordOutput
 cmdArgs :: Mode Args
 cmdArgs
   = modes "Main" (Help $ defaultHelp cmdArgs) "Count-Based State Merging"
-  [ (modeEmpty $ PrintCorpora False False False FOFPretty [])
+  [ (modeEmpty $ PrintCorpora False False False "" FOFPretty [])
     { modeNames = ["print-corpora"]
     , modeHelp =
         "Print trees from TREEBANKs. Can be used to check for parsing \
         \errors. Every TREEBANK can be a file or a directory. Directories \
         \are traversed recursively. If no TREEBANK is given, the trees are \
-        \read from standard input."
+        \read from standard input. \
+        \The filters (if used) apply in the order penn-filter, defoliate, \
+        \and filter-by-leafs."
     , modeArgs = ([], Just flagArgCorpora)
     , modeGroupFlags = toGroup
         [ flagNoneAsForests
-        , flagNoneDefoliate
         , flagNonePennFilter
+        , flagNoneDefoliate
+        , flagReqFilterByLeafs
         , flagOutputFormat
         ]
     }
@@ -219,6 +223,10 @@ cmdArgs
     flagNonePennFilter
       = flagNone ["penn-filter"] (\ x -> x{flagPennFilter = True})
           "remove predicate argument structure annotations from TREEBANKs"
+    flagReqFilterByLeafs
+      = flagReq ["filter-by-leafs"] (\ a x -> Right x{flagFilterByLeafs = a})
+          "FILE"
+          "only use trees whose leafs occur in FILE"
     flagOutputFormat
       = flagReq [flag] update "FORMAT" ("one of " ++ optsStr)
       where
@@ -320,6 +328,8 @@ mainArgs PrintCorpora{..}
     = putStr
     . unlines
     . zipWith (drawTreeFormatted flagOutputFormat . show) [1 :: Int ..]
+  =<< (if null flagFilterByLeafs then return
+                                 else filterByLeafs flagFilterByLeafs)
   =<< readCorpora flagAsForests flagDefoliate flagPennFilter argCorpora
 
 mainArgs CBSM{..} = do
@@ -434,6 +444,12 @@ readCorpora asForests doDefoliate doPennFilter corpora
           <$> (   SExp.parseFromFiles SExp.pSExpressions
               =<< getContentsRecursive corpora
               )
+
+
+filterByLeafs :: FilePath -> [Tree String] -> IO [Tree String]
+filterByLeafs file ts = do
+  wordS <- S.fromList <$> words <$> readFile file
+  return $ filter (all (`S.member` wordS) . yield) ts
 
 
 mergeGroups :: FlagRestrictMerge -> M.Map v (Tree a) -> [S.Set v]
