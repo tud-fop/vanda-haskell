@@ -318,11 +318,16 @@ filePathIntToTreeMap  :: FilePath        -> FilePath
 filePathInfo          :: FilePath -> Int -> FilePath
 filePathLastIteration :: FilePath        -> FilePath
 filePathStatistics    :: FilePath        -> FilePath
-filePathGrammar       dir i = dir </> "grammar-" ++ show i <.> "bin"
-filePathIntToTreeMap  dir   = dir </> "int2tree"           <.> "bin"
-filePathInfo          dir i = dir </> "info-"    ++ show i <.> "bin"
-filePathLastIteration dir   = dir </> "last-iteration"     <.> "txt"
-filePathStatistics    dir   = dir </> "statistics"         <.> "csv"
+filePathGrammar       dir i = dir </> "grammar-" ++ show0 9 i <.> "bin"
+filePathIntToTreeMap  dir   = dir </> "int2tree"              <.> "bin"
+filePathInfo          dir i = dir </> "info-"    ++ show0 9 i <.> "bin"
+filePathLastIteration dir   = dir </> "last-iteration"        <.> "txt"
+filePathStatistics    dir   = dir </> "statistics"            <.> "csv"
+
+
+show0 :: Show a => Int -> a -> String
+show0 l i = replicate (l - length cs) '0' ++ cs
+  where cs = show i
 
 
 type BinaryCRTG = CRTG Int String
