@@ -515,10 +515,10 @@ createWSA flag hg xs
 unknownWordOutput
   :: FlagUnknownWordOutput -> [String] -> Tree String -> Tree String
 unknownWordOutput FUWOOriginal s t
-  = snd $ mapAccumLLeafs (\ (x : xs) _ -> (xs, x)) s t
+  = zipLeafsWith const s t
 unknownWordOutput FUWOReplacement _ t = t
 unknownWordOutput FUWOBoth s t
-  = snd $ mapAccumLLeafs (\ (x : xs) y -> (xs, x ++ "/" ++ y)) s t
+  = zipLeafsWith (\ x y -> x ++ "/" ++ y) s t
 
 
 printWeightedTrees
