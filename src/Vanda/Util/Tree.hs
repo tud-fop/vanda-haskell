@@ -31,7 +31,7 @@ module Vanda.Util.Tree
 , -- * Manipulation
   defoliate
 , -- * Map
-  mapLeafs, mapInners, mapInnersAndLeafs, mapAccumLLeafs
+  mapLeafs, mapInners, mapInnersAndLeafs, mapAccumLLeafs, zipLeafsWith
 ) where
 
 
@@ -180,3 +180,15 @@ mapAccumLLeafs f = go
   where
     go a (Node x []) = second (flip Node []) (f a x)
     go a (Node x ts) = second (Node x) (mapAccumL go a ts)
+
+
+-- | Like 'zipWith', but on the leaves of a tree. If the list has less
+-- elements than the tree has leaves, the last leaves stay unchanged. If the
+-- list has more elements than the tree has leaves, the overhang of the list
+-- is discarded.
+zipLeafsWith :: (a -> b -> b) -> [a] -> Tree b -> Tree b
+zipLeafsWith f = (snd .) . go
+  where
+    go [] t = ([], t)
+    go (x : xs) (Node y []) = (xs, Node (f x y) [])
+    go      xs  (Node y ts) = second (Node y) (mapAccumL go xs ts)
