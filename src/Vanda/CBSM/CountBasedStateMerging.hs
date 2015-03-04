@@ -409,7 +409,7 @@ cbsmGo cache mergeGroups evaluate beamWidth prev@(g, info@Info{..})
         info'
           = Info n beamWidth indB indC mrg mrgR mrgS mrgI lklhdD evaluation
           $ M.map (\ case [x] -> x; xs -> Merge n xs)
-          $ M.mapKeysWith (++) apply
+          $ mergeKeysWith (++) mrg
           $ M.map (: []) infoMergeTreeMap
     in if null cands
        then []
@@ -696,10 +696,20 @@ mergeRule mrgs Rule{..} = Rule (mrg to) (map mrg from `using` evalList rseq) lab
   where mrg = Merge.apply mrgs
 
 
+mergeRuleMaybe :: Ord v => Merge v -> Rule v l -> Maybe (Rule v l)
+mergeRuleMaybe mrgs Rule{..}
+  = if any isJust (to' : from')
+    then Just (Rule (fromMaybe to to') (zipWith fromMaybe from from') label)
+    else Nothing
+  where mrg = Merge.applyMaybe mrgs
+        to' = mrg to
+        from' = map mrg from
+
+
 mergeCRTG :: (Ord l, Ord v) => Merge v -> CRTG v l -> CRTG v l
 mergeCRTG mrgs CRTG{..}
   = CRTG
-      (M.mapKeysWith (+) (mergeRule mrgs) cntRule)
+      (mapSomeKeysWith (+) (mergeRuleMaybe mrgs) cntRule)
       (mergeKeysWith (+) mrgs cntState)
       (mergeKeysWith (+) mrgs cntInit)
 
@@ -712,6 +722,21 @@ mergeKeysWith (?) mrgs
   = uncurry (M.unionWith (?))
   . first (M.mapKeysWith (?) (Merge.apply mrgs))
   . M.partitionWithKey (\ k _ -> Merge.member k mrgs)
+
+
+-- | Similar to 'M.mapKeysWith', but keys mapped to 'Nothing' are left
+-- unchanged. If every key is mapped to 'Nothing', runtime is in /O(n)/.
+mapSomeKeysWith
+  :: Ord k => (a -> a -> a) -> (k -> Maybe k) -> Map k a -> Map k a
+mapSomeKeysWith (?) f m
+  = M.unionWith (?) unchanged
+  $ M.mapKeysWith
+      (?)
+      (fromMaybe (errorHere "mapSomeKeysWith" "unexpected pattern") . f)
+      todo
+  where
+    p k _ = isNothing (f k)
+    (unchanged, todo) = M.partitionWithKey p m
 
 
 whileM :: Monad m => m Bool -> m a -> m ()
