@@ -27,6 +27,7 @@ module Vanda.CBSM.Merge
 , equivalenceClass
 , equivalenceClasses
 , apply
+, applyMaybe
 , applyMergeToMerge
 ) where
 
@@ -140,6 +141,10 @@ equivalenceClasses (Merge m) = RM.equivalenceClasses m
 
 apply :: Ord a => Merge a -> a -> a
 apply (Merge m) = \ k -> M.findWithDefault k k (RM.forward m)
+
+
+applyMaybe :: Ord a => Merge a -> a -> Maybe a
+applyMaybe (Merge m) = \ k -> M.lookup k (RM.forward m)
 
 
 applyMergeToMerge
