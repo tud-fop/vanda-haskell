@@ -4,6 +4,8 @@ module Vanda.CFTG.Foobar where
 import qualified Control.Error
 
 import           Control.Arrow (first)
+import           Control.Monad (guard)
+import           Data.List     (inits, (\\))
 
 
 errorHere :: String -> String -> a
@@ -76,3 +78,40 @@ pairUp :: [a] -> [(a, a)]
 pairUp (x : y : zs) = (x, y) : pairUp zs
 pairUp []           = []
 pairUp _            = errorHere "pairUp" "uneven list length"
+
+-- Test whether language `anyRule' is characterized by properties
+allModelling :: Int -> [[Int]]
+allModelling len =
+ if len `mod` 2 /= 0
+ then []
+ else do
+   w' <- sequence $ map (const [1..(len `div` 2)]) [1..(len `div` 2)]
+   w  <- fmap ((0:) . (++[0])) . map concat . mapM (\x -> [[0,-x], [x,0]]) $ w'
+   guard $ all ($w)
+     [ dyck'
+     , lengthsOK
+     , gammaVsLength
+     ]
+   return $ map abs w
+
+
+dyck' :: (Ord a, Num a) => [a] -> Bool
+dyck' w = let counts = map sum $ inits $ ((tail $ init $ w) \\ [0])
+          in all (>0) (init . tail $ counts) && last counts == 0
+--  all (>0) (init . tail $ counts) && last counts == 0
+
+lengthsOK :: [Int] -> Bool
+lengthsOK w = all (uncurry okay) $ zip w $ concatMap (\x -> [x,x]) [1..]
+  where
+    okay 0 _ = True
+    okay n j = if n > 0
+               then n < k - j
+               else -n < j - 1
+    k = length w `div` 2
+
+(-|-) :: Eq a => [a] -> [a] -> ([a],[a])
+xs -|- ys = (xs \\ ys, ys \\ xs)
+
+
+gammaVsLength :: [Int] -> Bool
+gammaVsLength w = length w == sum (map abs w) + 4
