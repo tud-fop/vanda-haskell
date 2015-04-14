@@ -507,6 +507,19 @@ g5 =
   , rule {- 3 -} "A" 3 "ε(_1) , δ(_2) , _3"
   ]
 
+g5' :: [Rule String String String]
+g5' =
+  [ rule {- 1 -} "S" 0 "δ(α) , A(α, α) , ε(α) , α"
+  , rule {- 2 -} "A" 3 "A({(_1), α) , A(α, }(_2)) , _3"
+  , rule {- 3 -} "A" 3 "ε(_1) , δ(_2) , _3"
+  ]
+
+g5'' :: [Rule String String String]
+g5'' =
+  [ rule {- 1 -} "S" 0 "δ₁(#b) , A(#a, #b) , δ₂(#a) , #"
+  , rule {- 2 -} "A" 3 "A(a(_1), #b) , A(#a, b(_2)) , _3"
+  , rule {- 3 -} "A" 3 "δ₂(_1) , δ₁(_2) , _3"
+  ]
 
 rtg5 :: [RTGRule String String]
 rtg5 =
@@ -557,6 +570,8 @@ main = do
             , ("g4"      , g4      )
             , ("g4trans" , g4trans )
             , ("g5"      , g5      )
+            , ("g5'"     , g5'     )
+            , ("g5''"    , g5''    )
             , ("g6"      , g6      )
             ]
   args <- getArgs
