@@ -33,7 +33,6 @@ import System.Environment ( getArgs )
 import Vanda.Algorithms.IntEarley
 import qualified Vanda.Algorithms.Earley.WSA as WSA
 -- import Vanda.Grammar.XRS.Functions
-import Vanda.Grammar.XRS.Binary ()
 import Vanda.Grammar.XRS.IRTG
 import Vanda.Grammar.XRS.Text
 import Vanda.Hypergraph.IntHypergraph

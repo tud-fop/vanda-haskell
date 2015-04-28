@@ -38,6 +38,7 @@ module Vanda.Hypergraph.Basic
   , nodesR
   ) where
 
+import Control.DeepSeq
 import qualified Data.List as L
 import qualified Data.Tree as T
 import qualified Data.Vector as V
@@ -72,6 +73,14 @@ data Hyperedge v l i
     , ident :: !i
     }
 
+
+instance (NFData v, NFData l, NFData i) => NFData (Hyperedge v l i) where
+  rnf (Nullary t l i) = rnf t `seq` rnf l `seq` rnf i
+  rnf (Unary t f1 l i) = rnf t `seq` rnf f1 `seq` rnf l `seq` rnf i
+  rnf (Binary t f1 f2 l i)
+    = rnf t `seq` rnf f1 `seq` rnf f2 `seq` rnf l `seq` rnf i
+  rnf (Hyperedge t f l i)
+    = rnf t `seq` rnf (V.toList f) `seq` rnf l `seq` rnf i
     
 instance (Show v, Show l, Show i) => Show (Hyperedge v l i) where
   show e
@@ -179,6 +188,9 @@ data EdgeList v l i
     , edgesEL :: [Hyperedge v l i] -- ^ List of 'Hyperedge's
     }
 
+instance (NFData v, NFData l, NFData i) => NFData (EdgeList v l i) where
+  rnf (EdgeList vs es) = rnf vs `seq` rnf es
+
 -- | Backward star representation of a hypergraph. The backward star of a
 -- node is defined as the set of all ingoing edges. In other words,
 -- Hyperedges are sorted according to the head node.
@@ -188,6 +200,9 @@ data BackwardStar v l i
     , backStar :: v -> [Hyperedge v l i] -- ^ Backward star
     , memoBS :: Bool  -- ^ Whether the backward star is memoized
     }
+
+instance (NFData v, NFData l, NFData i) => NFData (BackwardStar v l i) where
+  rnf (BackwardStar vs b _) = rnf [ b v | v <- S.toList vs ]
 
 -- | Forward star representation of a hypergraph. The forward star of a
 -- node is defined as the set of all outgoing edges. Note that the forward

@@ -244,6 +244,7 @@ combinations yss
             fillQueue prefix xss
             return $ prefix $ map head xss
 
+    fillQueue :: ([a] -> [a]) -> [[a]] -> State (Q.Queue ([a] -> [a], [[a]])) ()
     fillQueue _ [] = return ()
     fillQueue prefix ((x : xs) : xss) = do
       unless (null xs) $ modify $ Q.enq (prefix, xs : xss)

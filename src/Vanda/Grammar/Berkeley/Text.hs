@@ -21,7 +21,6 @@ import Text.Parsec hiding ( many, (<|>) )
 import Text.Parsec.Text.Lazy
 
 import Vanda.Hypergraph.Basic ( Hyperedge, mkHyperedge )
-import Vanda.Hypergraph.NFData ()
 
 parseBerkeleyMap
   :: (NFData v, NFData l, NFData ul, NFData uv)

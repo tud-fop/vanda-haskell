@@ -21,7 +21,6 @@ import System.Environment ( getArgs )
 
 import Vanda.Hypergraph.IntHypergraph ( nodes )
 import Vanda.Grammar.XRS.Binarize ( binarizeXRS )
-import Vanda.Grammar.XRS.Binary ()
 import Vanda.Grammar.XRS.IRTG
 import Vanda.Token
 import Vanda.Util

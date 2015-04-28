@@ -18,7 +18,6 @@ import qualified Data.Set as S
 import qualified Data.Tree as T
 import qualified Data.Vector as V
 
-import Vanda.Hypergraph.NFData ()
 import Vanda.Hypergraph hiding ( label )
 import Vanda.Util
 

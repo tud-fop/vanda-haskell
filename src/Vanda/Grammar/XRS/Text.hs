@@ -37,7 +37,6 @@ import Text.Parsec.Text.Lazy
 
 import Vanda.Grammar.XRS.IRTG
 import Vanda.Hypergraph.IntHypergraph
-import Vanda.Hypergraph.NFData ()
 import qualified Vanda.Hypergraph.Tree as T
 import Vanda.Token
 import Vanda.Util

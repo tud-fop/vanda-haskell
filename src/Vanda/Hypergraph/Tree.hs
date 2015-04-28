@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 module Vanda.Hypergraph.Tree where
 
+import qualified Data.Binary as B
 import Data.Hashable ( Hashable (..) )
 import Data.Traversable
 import Data.Foldable ( Foldable, foldMap )
@@ -15,6 +16,13 @@ data Tree l
   | Node { rootLabel :: l, _subForest :: [Tree l] }
   deriving (Eq, Ord)
 
+
+instance B.Binary l => B.Binary (Tree l) where
+  get = do
+          x1 <- B.get
+          x2 <- B.get
+          return $! node x1 x2
+  put t = B.put (rootLabel t) >> B.put (subForest t)
 
 instance Hashable l => Hashable (Tree l) where
   hashWithSalt salt Nullary{ .. } = hashWithSalt salt rootLabel

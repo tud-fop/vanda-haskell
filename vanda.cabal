@@ -61,11 +61,9 @@ library
     , Vanda.Corpus.Penn.Simple
     , Vanda.Corpus.Penn.Text
     , Vanda.Corpus.TreeTerm
-    , Vanda.Grammar.Berkeley.Binary
     , Vanda.Grammar.Berkeley.IRTG
     , Vanda.Grammar.Berkeley.Text
     , Vanda.Grammar.XRS.Binarize
-    , Vanda.Grammar.XRS.Binary
     , Vanda.Grammar.XRS.Functions
     , Vanda.Grammar.XRS.GHKM
     , Vanda.Grammar.XRS.IRTG
@@ -82,9 +80,7 @@ library
     , Vanda.Hypergraph.DotExport
     , Vanda.Hypergraph.EdgeList
     , Vanda.Hypergraph.ForwardStar
-    , Vanda.Hypergraph.IntBinary
     , Vanda.Hypergraph.IntHypergraph
-    , Vanda.Hypergraph.NFData
     , Vanda.Hypergraph.Text
     , Vanda.Hypergraph.Tree
     , Vanda.PBSM.PatternBasedStateMerging
@@ -92,7 +88,6 @@ library
     , Vanda.PBSM.Types
     , Data.Interner
     , Data.NTT
-    , Data.NTTBinary
     , Data.Queue
     , Data.WTA
   hs-source-dirs:  src

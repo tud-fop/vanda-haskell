@@ -25,7 +25,6 @@ import qualified Data.Binary as B
 import qualified Data.Set as S
 
 import Vanda.Hypergraph.Basic
-import Vanda.Hypergraph.NFData ()
 
 -- mkHyperedge' x1 x2 x3 x4 = mkHyperedge x1 (x2 `using` seqList rseq) x3 x4
 

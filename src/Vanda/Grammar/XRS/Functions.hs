@@ -17,7 +17,6 @@ import qualified Data.Vector as V
 
 import Vanda.Algorithms.IntEarley
 import qualified Vanda.Algorithms.Earley.WSA as WSA
-import Vanda.Grammar.XRS.Binary ()
 import Vanda.Grammar.XRS.IRTG
 import Vanda.Hypergraph.IntHypergraph
 import qualified Vanda.Hypergraph.Tree as T

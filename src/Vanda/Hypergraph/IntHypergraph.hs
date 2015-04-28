@@ -53,8 +53,10 @@ module Vanda.Hypergraph.IntHypergraph
 
 import Prelude hiding ( lookup )
 
+import Control.DeepSeq ( NFData, deepseq )
 import Control.Monad ( when, unless, forM_ )
 import Control.Monad.ST
+import qualified Data.Binary as B
 import Data.Heap ( Prio, Val )
 import qualified Data.Array as A
 import qualified Data.Array.Base as AB
@@ -101,6 +103,20 @@ data Hyperedge l i
     , ident :: !i
     }
 
+
+instance (NFData l, NFData i, B.Binary l, B.Binary i)
+  => B.Binary (Hyperedge l i) where
+  put e = do
+    B.put (to e)
+    B.put (from e)
+    B.put (label e)
+    B.put (ident e)
+  get = do
+    x1 <- B.get
+    x2 <- x1 `deepseq` B.get
+    x3 <- x2 `deepseq` B.get
+    x4 <- x3 `deepseq` B.get
+    x4 `deepseq` return $! mkHyperedge x1 x2 x3 x4
     
 instance (Show l, Show i) => Show (Hyperedge l i) where
   show e
@@ -212,6 +228,16 @@ data Hypergraph l i
     , edges :: [Hyperedge l i] -- ^ List of 'Hyperedge's
     }
     deriving Show
+
+instance (NFData l, NFData i, B.Binary l, B.Binary i)
+  => B.Binary (Hypergraph l i) where
+  put (Hypergraph vs es) = do
+    B.put (enumFromTo 0 $ vs - 1)
+    B.put es -- myPut es
+  get = do
+    vs <- fmap ((+ 1) . snd . nodesL) (B.get :: B.Get [Int])
+    es <- vs `seq` B.get
+    es `seq` return (Hypergraph vs es)
 
 -- | Extracts the nodes occurring in a list of edges. Does /not/ remove
 -- duplicates.
