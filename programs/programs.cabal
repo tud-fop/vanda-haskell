@@ -1,4 +1,23 @@
+name:           Vanda-Programs
+version:        0.1
+cabal-version:  >= 1.8
+license:        AllRightsReserved
+license-file:   LICENSE
+copyright:      (c) 2012 Vanda Team, Technische Universität Dresden
+author:         Vanda Team
+maintainer:     Toni.Dietze@tu-dresden.de
+stability:      alpha
+homepage:       http://www.inf.tu-dresden.de/index.php?node_id=1567
+bug-Reports:    mailto:Toni.Dietze@tu-dresden.de
+-- package-url:    http://www.cabal_source_package.com
+synopsis:       Haskell Machine Translation Tools
+-- description:    längere Beschreibung
+category:       NLP
+tested-with:    GHC
+Build-Type:     Simple
 
+
+{-
 executable Binarize
   build-depends:
       base
@@ -16,7 +35,6 @@ executable Binarize
     , parallel >= 3.2
     , Vanda
   Main-Is:  Binarize.hs
-  hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
   Extensions:
@@ -27,69 +45,24 @@ executable Binarize
     , TypeFamilies
     , FlexibleContexts
     , BangPatterns
+-}
 
 
 executable XRSToHypergraph
-  build-depends:
-      base
-    , containers
-    , array
-    , vector
-    , heap
-    , bytestring
-    , text
-    , parsec >= 3.1.2
-    , binary
-    , deepseq
-    , zlib
-    , mtl
-    , parallel >= 3.2
-    , Vanda
+  build-depends: Vanda
   Main-Is:  XRSToHypergraph.hs
-  hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
-  Extensions:
-      ScopedTypeVariables
-    , TypeSynonymInstances
-    , FlexibleInstances
-    , MultiParamTypeClasses
-    , TypeFamilies
-    , FlexibleContexts
-    , BangPatterns
 
 
 executable XRSTranslate
-  build-depends:
-      base
-    , containers
-    , array
-    , vector
-    , heap
-    , bytestring
-    , text
-    , parsec >= 3.1.2
-    , binary
-    , deepseq
-    , zlib
-    , mtl
-    , parallel >= 3.2
-    , Vanda
+  build-depends: Vanda
   Main-Is:  XRSTranslate.hs
-  hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
-  Extensions:
-      ScopedTypeVariables
-    , TypeSynonymInstances
-    , FlexibleInstances
-    , MultiParamTypeClasses
-    , TypeFamilies
-    , FlexibleContexts
-    , BangPatterns
 
 
-
+{-
 executable Train
   build-depends:
       base
@@ -106,7 +79,6 @@ executable Train
     , parallel >= 3.2
     , Vanda
   Main-Is:  Train.hs
-  hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -caf-all -auto-all
   Extensions:
@@ -117,7 +89,10 @@ executable Train
     , TypeFamilies
     , FlexibleContexts
     , BangPatterns
+-}
 
+
+{-
 executable TrainGHKM
   build-depends:
       base
@@ -134,7 +109,6 @@ executable TrainGHKM
     , parallel >= 3.2
     , Vanda
   Main-Is:  TrainGHKM.hs
-  hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -fprof-auto -fprof-cafs
   Extensions:
@@ -145,7 +119,10 @@ executable TrainGHKM
     , TypeFamilies
     , FlexibleContexts
     , BangPatterns
+-}
 
+
+{-
 executable Translate
   build-depends:
       base
@@ -162,7 +139,6 @@ executable Translate
     , parallel >= 3.2
     , Vanda
   Main-Is:  Translate.hs
-  hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -caf-all -auto-all
   Extensions:
@@ -173,7 +149,10 @@ executable Translate
     , TypeFamilies
     , FlexibleContexts
     , BangPatterns
+-}
 
+
+{-
 executable WriteHypergraph
   build-depends:
       base
@@ -191,7 +170,6 @@ executable WriteHypergraph
     , parallel >= 3.2
     , Vanda
   Main-Is:  WriteHypergraph.hs
-  hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -caf-all -auto-all
   Extensions:
@@ -202,7 +180,10 @@ executable WriteHypergraph
     , TypeFamilies
     , FlexibleContexts
     , BangPatterns
+-}
 
+
+{-
 executable TestHypergraph
   build-depends:
       base
@@ -220,7 +201,6 @@ executable TestHypergraph
     , parallel >= 3.2
     , Vanda
   Main-Is:  TestHypergraph.hs
-  hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
   Extensions:
@@ -231,7 +211,10 @@ executable TestHypergraph
     , TypeFamilies
     , FlexibleContexts
     , BangPatterns
+-}
 
+
+{-
 executable TestIntHypergraph
   build-depends:
       base
@@ -249,7 +232,6 @@ executable TestIntHypergraph
     , parallel >= 3.2
     , Vanda
   Main-Is:  TestIntHypergraph.hs
-  hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
   Extensions:
@@ -260,8 +242,10 @@ executable TestIntHypergraph
     , TypeFamilies
     , FlexibleContexts
     , BangPatterns
+-}
 
 
+{-
 executable GHKM
   build-depends:
       base
@@ -279,7 +263,6 @@ executable GHKM
     , parallel >= 3.2
     , Vanda
   Main-Is:  GHKM.hs
-  hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -fprof-auto -fprof-cafs
   Extensions:
@@ -291,7 +274,10 @@ executable GHKM
     , FlexibleContexts
     , BangPatterns
     , GeneralizedNewtypeDeriving
- 
+-}
+
+
+{-
 executable BerkeleyToHypergraph
   build-depends:
       base
@@ -309,7 +295,6 @@ executable BerkeleyToHypergraph
     , parallel >= 3.2
     , Vanda
   Main-Is:  BerkeleyToHypergraph.hs
-  hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -caf-all -auto-all
   Extensions:
@@ -320,7 +305,10 @@ executable BerkeleyToHypergraph
     , TypeFamilies
     , FlexibleContexts
     , BangPatterns
+-}
 
+
+{-
 executable NegraToPenn
   build-depends:
       base
@@ -338,7 +326,6 @@ executable NegraToPenn
     , parallel >= 3.2
     , Vanda
   Main-Is:  NegraToPenn.hs
-  hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts
   Extensions:
       ScopedTypeVariables
@@ -348,7 +335,10 @@ executable NegraToPenn
     , TypeFamilies
     , FlexibleContexts
     , BangPatterns
+-}
 
+
+{-
 executable PennToInt
   build-depends:
       base
@@ -366,7 +356,6 @@ executable PennToInt
     , parallel >= 3.2
     , Vanda
   Main-Is:  PennToInt.hs
-  hs-source-dirs:  programs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts
   ghc-prof-options: -fprof-auto -fprof-cafs
   Extensions:
@@ -377,4 +366,4 @@ executable PennToInt
     , TypeFamilies
     , FlexibleContexts
     , BangPatterns
-
+-}
