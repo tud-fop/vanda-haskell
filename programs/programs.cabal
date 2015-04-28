@@ -17,353 +17,65 @@ tested-with:    GHC
 Build-Type:     Simple
 
 
-{-
-executable Binarize
+executable NGrams
   build-depends:
       base
-    , containers
-    , array
-    , vector
-    , heap
-    , bytestring
     , text
-    , parsec >= 3.1.2
-    , binary
-    , deepseq
-    , zlib
-    , mtl
-    , parallel >= 3.2
     , Vanda
-  Main-Is:  Binarize.hs
+  Main-Is: NGrams.hs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
-  Extensions:
-      ScopedTypeVariables
-    , TypeSynonymInstances
-    , FlexibleInstances
-    , MultiParamTypeClasses
-    , TypeFamilies
-    , FlexibleContexts
-    , BangPatterns
--}
+
+
+executable PennToSentenceCorpus
+  build-depends:
+      base
+    , text
+    , Vanda
+  Main-Is: PennToSentenceCorpus.hs
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+  ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
+
+
+executable XRSNGrams
+  build-depends:
+      base
+    , binary
+    , bytestring
+    , containers
+    , text
+    , Vanda
+    , vector
+    , zlib
+  Main-Is: XRSNGrams.hs
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+  ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
 
 
 executable XRSToHypergraph
-  build-depends: Vanda
+  build-depends:
+      base
+    , binary
+    , bytestring
+    , containers
+    , deepseq
+    , directory
+    , text
+    , Vanda
+    , vector
+    , zlib
   Main-Is:  XRSToHypergraph.hs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
 
 
 executable XRSTranslate
-  build-depends: Vanda
+  build-depends:
+      base
+    , containers
+    , text
+    , Vanda
+    , vector
   Main-Is:  XRSTranslate.hs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
-
-
-{-
-executable Train
-  build-depends:
-      base
-    , containers
-    , array
-    , vector
-    , heap
-    , bytestring
-    , text
-    , parsec >= 3.1.2
-    , binary
-    , deepseq
-    , zlib
-    , parallel >= 3.2
-    , Vanda
-  Main-Is:  Train.hs
-  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-  ghc-prof-options: -caf-all -auto-all
-  Extensions:
-      ScopedTypeVariables
-    , TypeSynonymInstances
-    , FlexibleInstances
-    , MultiParamTypeClasses
-    , TypeFamilies
-    , FlexibleContexts
-    , BangPatterns
--}
-
-
-{-
-executable TrainGHKM
-  build-depends:
-      base
-    , containers
-    , array
-    , vector
-    , heap
-    , bytestring
-    , text
-    , parsec >= 3.1.2
-    , binary
-    , deepseq
-    , zlib
-    , parallel >= 3.2
-    , Vanda
-  Main-Is:  TrainGHKM.hs
-  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-  ghc-prof-options: -fprof-auto -fprof-cafs
-  Extensions:
-      ScopedTypeVariables
-    , TypeSynonymInstances
-    , FlexibleInstances
-    , MultiParamTypeClasses
-    , TypeFamilies
-    , FlexibleContexts
-    , BangPatterns
--}
-
-
-{-
-executable Translate
-  build-depends:
-      base
-    , containers
-    , array
-    , vector
-    , heap
-    , bytestring
-    , text
-    , parsec >= 3.1.2
-    , binary
-    , deepseq
-    , zlib
-    , parallel >= 3.2
-    , Vanda
-  Main-Is:  Translate.hs
-  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-  ghc-prof-options: -caf-all -auto-all
-  Extensions:
-      ScopedTypeVariables
-    , TypeSynonymInstances
-    , FlexibleInstances
-    , MultiParamTypeClasses
-    , TypeFamilies
-    , FlexibleContexts
-    , BangPatterns
--}
-
-
-{-
-executable WriteHypergraph
-  build-depends:
-      base
-    , containers
-    , array
-    , vector
-    , heap
-    , bytestring
-    , text
-    , parsec >= 3.1.2
-    , binary
-    , deepseq
-    , zlib
-    , mtl
-    , parallel >= 3.2
-    , Vanda
-  Main-Is:  WriteHypergraph.hs
-  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-  ghc-prof-options: -caf-all -auto-all
-  Extensions:
-      ScopedTypeVariables
-    , TypeSynonymInstances
-    , FlexibleInstances
-    , MultiParamTypeClasses
-    , TypeFamilies
-    , FlexibleContexts
-    , BangPatterns
--}
-
-
-{-
-executable TestHypergraph
-  build-depends:
-      base
-    , containers
-    , array
-    , vector
-    , heap
-    , bytestring
-    , text
-    , parsec >= 3.1.2
-    , binary
-    , deepseq
-    , zlib
-    , mtl
-    , parallel >= 3.2
-    , Vanda
-  Main-Is:  TestHypergraph.hs
-  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-  ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
-  Extensions:
-      ScopedTypeVariables
-    , TypeSynonymInstances
-    , FlexibleInstances
-    , MultiParamTypeClasses
-    , TypeFamilies
-    , FlexibleContexts
-    , BangPatterns
--}
-
-
-{-
-executable TestIntHypergraph
-  build-depends:
-      base
-    , containers
-    , array
-    , vector
-    , heap
-    , bytestring
-    , text
-    , parsec >= 3.1.2
-    , binary
-    , deepseq
-    , zlib
-    , mtl
-    , parallel >= 3.2
-    , Vanda
-  Main-Is:  TestIntHypergraph.hs
-  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-  ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
-  Extensions:
-      ScopedTypeVariables
-    , TypeSynonymInstances
-    , FlexibleInstances
-    , MultiParamTypeClasses
-    , TypeFamilies
-    , FlexibleContexts
-    , BangPatterns
--}
-
-
-{-
-executable GHKM
-  build-depends:
-      base
-    , containers
-    , array
-    , vector
-    , heap
-    , bytestring
-    , text
-    , parsec >= 3.1.2
-    , binary
-    , deepseq
-    , zlib
-    , mtl
-    , parallel >= 3.2
-    , Vanda
-  Main-Is:  GHKM.hs
-  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-  ghc-prof-options: -fprof-auto -fprof-cafs
-  Extensions:
-      ScopedTypeVariables
-    , TypeSynonymInstances
-    , FlexibleInstances
-    , MultiParamTypeClasses
-    , TypeFamilies
-    , FlexibleContexts
-    , BangPatterns
-    , GeneralizedNewtypeDeriving
--}
-
-
-{-
-executable BerkeleyToHypergraph
-  build-depends:
-      base
-    , containers
-    , array
-    , vector
-    , heap
-    , bytestring
-    , text
-    , parsec >= 3.1.2
-    , binary
-    , deepseq
-    , zlib
-    , mtl
-    , parallel >= 3.2
-    , Vanda
-  Main-Is:  BerkeleyToHypergraph.hs
-  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-  ghc-prof-options: -caf-all -auto-all
-  Extensions:
-      ScopedTypeVariables
-    , TypeSynonymInstances
-    , FlexibleInstances
-    , MultiParamTypeClasses
-    , TypeFamilies
-    , FlexibleContexts
-    , BangPatterns
--}
-
-
-{-
-executable NegraToPenn
-  build-depends:
-      base
-    , containers
-    , array
-    , vector
-    , heap
-    , bytestring
-    , text
-    , parsec >= 3.1.2
-    , binary
-    , deepseq
-    , zlib
-    , mtl
-    , parallel >= 3.2
-    , Vanda
-  Main-Is:  NegraToPenn.hs
-  GHC-Options:  -O2 -funbox-strict-fields -rtsopts
-  Extensions:
-      ScopedTypeVariables
-    , TypeSynonymInstances
-    , FlexibleInstances
-    , MultiParamTypeClasses
-    , TypeFamilies
-    , FlexibleContexts
-    , BangPatterns
--}
-
-
-{-
-executable PennToInt
-  build-depends:
-      base
-    , containers
-    , array
-    , vector
-    , heap
-    , bytestring
-    , text
-    , parsec >= 3.1.2
-    , binary
-    , deepseq
-    , zlib
-    , mtl
-    , parallel >= 3.2
-    , Vanda
-  Main-Is:  PennToInt.hs
-  GHC-Options:  -O2 -funbox-strict-fields -rtsopts
-  ghc-prof-options: -fprof-auto -fprof-cafs
-  Extensions:
-      ScopedTypeVariables
-    , TypeSynonymInstances
-    , FlexibleInstances
-    , MultiParamTypeClasses
-    , TypeFamilies
-    , FlexibleContexts
-    , BangPatterns
--}
