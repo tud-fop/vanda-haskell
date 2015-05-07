@@ -20,7 +20,9 @@ module Vanda.Corpus.Negra
   , SentenceData (..)
   , Edge (..)
   , negraToForest
+  , negraToCrossedTree
   , negraTreeToTree
+  , Span
   ) where
 
 import Control.Arrow ( first, second )
@@ -88,10 +90,16 @@ negraToForest
   -> T.Forest ((Maybe SentenceData, Span), Span)
 negraToForest
   = splitCrossedTree
-  . updateInnerSpans
+  . negraToCrossedTree
+
+-- | Converts a list of 'SentenceData' to a (crossing) 'T.Tree'.
+negraToCrossedTree
+  :: [SentenceData]
+  -> T.Tree (Maybe SentenceData, [Span])
+negraToCrossedTree
+  = updateInnerSpans
   . pointerTreeToCrossedTree
   . negraToPointerTree
-
 
 -- | Represents a tree by using 'Pointer's.
 --
