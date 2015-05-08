@@ -2,11 +2,15 @@ module Data.NTT (NTT (..), Var (..), tt, nt, var) where
 
 import qualified Data.Vector as V
 
+import Control.DeepSeq (NFData, rnf)
 import Control.Seq
 import qualified Data.Binary as B
 import Data.Hashable ( Hashable (..) )
 
-data NTT = NT !Int | T !Int deriving (Eq, Ord, Show)
+data NTT = NT !Int | T !Int deriving (Eq, Ord, Show, Read)
+
+instance NFData NTT where
+  rnf a = a `seq` ()
 
 instance B.Binary NTT where
   {- get = B.getWord8 >>= \ x ->
