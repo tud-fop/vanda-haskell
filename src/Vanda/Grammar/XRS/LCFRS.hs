@@ -3,11 +3,11 @@ module Vanda.Grammar.XRS.LCFRS where
 {-
 
 LCFRS look okay.
-Rule extraction begins to work.
-Nothing probabilistic yet.
+Rule extraction works and look pretty probabilistic to me.
 No Binarization yet.
 
 Ideas/TODOs: have NTs know their fanout. I'd need my own NTT-Type for that or I'd keep it in an extra map...
+             Although I still haven't reached the point where that is really necessary :O
 
 
 -}
@@ -15,15 +15,16 @@ import           Control.DeepSeq (deepseq)
 import           Control.Monad.State.Lazy hiding (mapM)
 import           Control.Parallel.Strategies
 import qualified Data.Array as A
+import qualified Data.Foldable as F
 import           Data.List (sortBy, findIndex)
-import qualified Data.Map as M
+import qualified Data.Map.Strict as M
 import           Data.Maybe (fromJust)
 import           Data.Ord (comparing)
-import qualified Data.Set as S
 import qualified Data.Traversable as TR
 import qualified Data.Tree as T
 import qualified Data.Vector as V
 import qualified Data.Text.Lazy.IO as TIO
+import           Text.Printf (printf)
 
 import           Data.NTT
 import           Vanda.Hypergraph.IntHypergraph
@@ -35,11 +36,13 @@ import           Vanda.Util.Memorysavers
 
 -- DATA STRUCTURES
 
--- Note: The ident type i should still be integral, since the weight vector seems to be adressed with i.
---       The label adresses the homomorphisms. Both refer to rules, obviously.
-data MIRTG i -- Mono-IRTG! I should not be allowed to name things.
+type Rule = ((Int, [Int]), [[NTT]])
+
+-- The weight vector seems to be adressed with i.
+-- The label adresses the homomorphisms. Both refer to rules, obviously.
+data MIRTG -- Mono-IRTG! I should not be allowed to name things.
   = MIRTG
-    { rtg :: Hypergraph Int i -- SIP divided by two gives us... Int I guess?
+    { rtg :: Hypergraph Int Int -- SIP divided by two gives us... Int I guess?
     , initial :: [Int] -- this one is probably a node of the hypergraph, so a NT
     , h :: V.Vector (V.Vector (V.Vector NTT))
         -- Outer vector lets me map rules (using their Int-label or one component of these if we use SIPs) to the
@@ -50,7 +53,7 @@ data MIRTG i -- Mono-IRTG! I should not be allowed to name things.
 
 data MXRS
   = MXRS
-    { irtg :: MIRTG Int
+    { irtg :: MIRTG
     , weights :: [Double]
     }
 
@@ -82,11 +85,10 @@ translateNTTString a_nt _ (NT i) = a_nt A.! i
 translateNTTString _ a_t (T i) = a_t A.! i
 
 sententialFront
-  :: (Integral i)
-  => MIRTG i
+  :: MIRTG
   -> (A.Array Int String) -- ^ NTs
   -> (A.Array Int String) -- ^ Ts
-  -> Derivation Int i
+  -> Derivation Int Int
   -> V.Vector String -- a sentence (terminal symbol sequence)
 sententialFront (MIRTG hg _ h') a_nt a_t dt
   -- TODO check first rules lhs for =init and check fan-out of this start symbol =1
@@ -112,131 +114,87 @@ getSpans h' dt = fmap (join . fmap evalNT) preResult
 
 main :: IO ()
 main = do
-       {-
-       putStrLn "\nExtracting a LCFRS from a real sentence:\n"
-       corpusText <- TIO.readFile "/home/sjm/programming/LCFRS/tiger_release_aug07_shorttest.export"
-       let firstSentenceTree = establishSpanBasedOrder
-                             $ negraToCrossedTree . sData
-                             $ head . sentences . parseNegra
-                             $ corpusText
-       putStrLn $ T.drawTree $ fmap getRep firstSentenceTree
+       corpusText' <- TIO.readFile "/home/sjm/programming/LCFRS/tiger_release_aug07.export"
        
-       let ([intifiedTree], (m_nt, m_t)) = dualIntifyNegra [firstSentenceTree]
-           a_nt = invertMap m_nt
-           a_t = invertMap m_t
-       
-       putStrLn $ T.drawTree $ fmap show $ intifiedTree
-       
-       let rules = flattenSeeing readoff intifiedTree
-       mapM_ print rules
-       mapM_ putStrLn $ map (retranslateRule a_nt a_t) rules
-       
-       let myRules = rules
-           myHyperedges = map (\(((lhs, rhs), _), i) -> mkHyperedge lhs rhs i i)
-                        $ zip myRules [0..]
-           myH = V.fromList $ map (V.fromList . map V.fromList . snd) myRules
-           myMIRTG = MIRTG (mkHypergraph myHyperedges) [iSQ1] myH
-           myLCFRS = MXRS myMIRTG (replicate (length myRules) 1.0)
-           
-           myDeriv = dn 1 [
-                         dn 2 [
-                             dn 3 [dn 4 []],
-                             dn 5 []
-                         ],
-                         dn 6 [],
-                         dn 7 [dn 8 []]
-                     ]
-               where dn i = VT.node (myHyperedges !! i)
-       
-       print $ sententialFront myMIRTG a_nt a_t myDeriv
-       
-       putStrLn $ replicate 20 '-'
-       
-       --}
-       
-       
-       putStrLn "\nExtracting a LCFRS from a few more sentences:\n"
-       
-       ---
-       
-       corpusText' <- TIO.readFile "/home/sjm/programming/LCFRS/tiger_release_aug07.export" -- 7000 sentences
-       let sentences' = sentences . parseNegra
+       let sentences' = take 3000
+                      $ sentences . parseNegra
                       $ corpusText'
        
-       --print $ length $ concatMap show $ sentences' -- deepseq
+       let sentenceTrees = map (establishSpanBasedOrderAndAnnotateFanOut . negraToCrossedTree . sData) sentences'
        
-       --print $ F.foldl' (+) (0::Integer) $ take 100000000 $ repeat 1 -- busy waiting
-       
-       ---
-       
-       let sentenceTrees = map (establishSpanBasedOrder . negraToCrossedTree . sData) sentences'
-       
-       --print $ length $ concatMap show $ sentenceTrees
-       
-       --print $ F.foldl' (+) (0::Integer) $ take 100000000 $ repeat 1
-       
-       ---
-       
-       let (intifiedTrees, (m_nt', m_t')) = dualIntifyNegra sentenceTrees
-       
-       --intifiedTrees `deepseq` return ()
-       
-       --print $ F.foldl' (+) (0::Integer) $ take 100000000 $ repeat 1
-       
-       ---
-       
-       let rules' = concatMap (flattenSeeing readoff) $ intifiedTrees
+       let (intifiedTrees, (m_nt, m_t)) = dualIntifyNegra sentenceTrees
        
        -- {-
-       let a_nt' = invertMap m_nt'
-       let a_t' = invertMap m_t'
-       rules' `deepseq` m_nt' `deepseq` m_t' `deepseq` return ()
+       let ruleMap = readoffAll intifiedTrees
+       
+       let a_nt = invertMap m_nt
+       let a_t = invertMap m_t
+       ruleMap `deepseq` m_nt `deepseq` m_t `deepseq` return ()
        putStrLn "all deepseqed"
-       print $ length rules'
        
-       let nubbedRules = ordNub rules'
-       
-       writeFile "/tmp/a_nt" (show a_nt')
-       writeFile "/tmp/a_t" (show a_t')
-       writeFile "/tmp/rules" (show nubbedRules)
+       writeFile "/tmp/a_nt" (show a_nt)
+       writeFile "/tmp/a_t" (show a_t)
+       writeFile "/tmp/rules" (show ruleMap)
        -- -}
        
        {-
-       a_nt' <- fmap read $ readFile "/tmp/a_nt" :: IO (A.Array Int String)
-       a_t' <- fmap read $ readFile "/tmp/a_t" :: IO (A.Array Int String)
-       nubbedRules <- fmap read $ readFile "/tmp/rules"
+       a_nt <- fmap read $ readFile "/tmp/a_nt" :: IO (A.Array Int String)
+       a_t <- fmap read $ readFile "/tmp/a_t" :: IO (A.Array Int String)
+       ruleMap <- fmap read $ readFile "/tmp/rules" :: IO (M.Map Int (M.Map Rule Int))
        putStrLn "opened files"
        -- -}
        
-       print $ length $ nubbedRules
+       putStrLn "\nOverall rule counts:\n"
        
-       let crossedRules = filter (any (\l -> all isNT l && sortBy (comparing getI) l /= l) . snd) nubbedRules
+       let flatRuleMap = M.foldl' M.union M.empty ruleMap
        
-       mapM_ (putStrLn . retranslateRule a_nt' a_t') $ take 10 crossedRules
-       print $ length crossedRules
+       print $ M.size flatRuleMap
+       print $ M.foldl' (+) 0 flatRuleMap
+       
+       putStrLn "\nFrequently extracted rules:\n"
+       
+       printBestIn a_nt a_t show flatRuleMap
+       
+       putStrLn "\nBest probabilities for epsilon = 0, np = 7:\n"
+       
+       let pRuleMap = M.map normalize ruleMap
+       
+       -- epsilon = 0, np = 7
+       printBestIn a_nt a_t (printf "%.4f") $ fromJust $ M.lookup 0 pRuleMap
+       printBestIn a_nt a_t (printf "%.4f") $ fromJust $ M.lookup 7 pRuleMap
   where
-    isNT (T _) = False
-    isNT (NT _) = True
-    getI (T i) = i
-    getI (NT i) = i
+    printBestIn a_nt a_t s = mapM_ (\(r, c) -> putStrLn $ cut 8 (s c) ++ retranslateRule a_nt a_t r)
+                           . take 20
+                           . reverse
+                           . sortBy (comparing snd)
+                           . M.assocs
     
-    -- https://github.com/nh2/haskell-ordnub
-    ordNub :: (Ord a) => [a] -> [a]
-    ordNub l = go S.empty l
-      where
-        go _ [] = []
-        go s (x:xs) = if x `S.member` s then go s xs
-                                        else x : go (S.insert x s) xs
+    normalize :: M.Map a Int -> M.Map a Double
+    normalize m = let gamma = fromIntegral $ M.foldl' (+) 0 m
+                  in M.map ((/gamma) . fromIntegral) m
     
     getNTName Nothing
       = "ε"
     getNTName (Just spart)
       = sdPostag spart
     
-    readoff
+    readoffAll
+      :: (F.Foldable f)
+      => f (T.Tree (Int, Maybe Int, [Span]))
+      -> M.Map Int (M.Map Rule Int) -- ^ Mapping NTs (Int) to rules and their counts
+    readoffAll ts = F.foldl' worker M.empty ts
+      where
+        worker :: M.Map Int (M.Map Rule Int) -> (T.Tree (Int, Maybe Int, [Span])) -> M.Map Int (M.Map Rule Int)
+        worker inmap root
+          = let newrule@((lhs, _), _) = readoffNode root
+                innerInserter _ oldmap = M.insertWith (+) newrule 1 oldmap
+                rootmap = M.insertWith innerInserter lhs (M.singleton newrule 1) inmap
+            in F.foldl' worker rootmap (T.subForest root)
+    
+    readoffNode
       :: (T.Tree (Int, Maybe Int, [Span])) -- ^ the first Int is the POS-tag, the second can be a terminal word
-      -> ((Int, [Int]), [[NTT]])
-    readoff (T.Node (tag, Nothing, rootspans) cs)
+      -> Rule
+    readoffNode (T.Node (tag, Nothing, rootspans) cs)
       = ( (tag, map ((\(x,_,_)->x) . T.rootLabel) cs)
         , map (map nt . solveSpanPuzzle allChildSpans) rootspans
         )
@@ -248,17 +206,13 @@ main = do
               then [] -- All done!
               else let index = fromJust $ findIndex (\(s,_) -> s == start) spans
                    in index : solveSpanPuzzle spans (1 + snd (spans !! index), end)
-    readoff (T.Node (tag, Just word, [(s1, s2)]) cs)
+    readoffNode (T.Node (tag, Just word, [(s1, s2)]) cs)
       = if not $ null cs then error "readoff: a word has children" else
         if s1 /= s2 then error "readoff: word has a wider span than 1" else
         ( (tag, [])
         , [[tt word]]
         )
-    readoff _ = error "readoff: malformed tree"
-    
-    flattenSeeing :: (T.Tree a -> b) -> T.Tree a -> [b]
-    flattenSeeing f n@(T.Node _ cs)
-      = f n : concatMap (flattenSeeing f) cs
+    readoffNode _ = error "readoff: malformed tree"
     
     -- Intify NTs (POS-tags in SentenceNodes) and Ts (taken from SentenceWords)
     -- simultaneously returning two separate maps.
@@ -272,7 +226,7 @@ main = do
     dualIntifyNegraAction
       :: T.Tree (Maybe SentenceData, [Span])
       -> State (M.Map String Int, M.Map String Int) (T.Tree (Int, Maybe Int, [Span]))
-    dualIntifyNegraAction t = TR.mapM worker t
+    dualIntifyNegraAction = TR.mapM worker
       where
         worker :: (Maybe SentenceData, [Span])
                -> State (M.Map String Int, M.Map String Int) (Int, Maybe Int, [Span])
@@ -299,27 +253,33 @@ main = do
                          in put (M.insert tag v m_nt, m_t) >> return (v, Nothing, spans)
     
     retranslateRule
-      :: (Show a, Show b)
-      => (A.Array Int a)
-      -> (A.Array Int b)
-      -> ((Int, [Int]), [[NTT]]) -- ^ a rule
+      :: (A.Array Int String)
+      -> (A.Array Int String)
+      -> Rule -- ^ a rule
       -> String
     retranslateRule a_nt a_t ((lhs, rhs), hom_f)
-      =  (cut 6 $ show $ (A.!) a_nt lhs)
+      =  (cut 6 $ (A.!) a_nt lhs)
       ++ " -> "
-      ++ (cut 25 $ show $ map ((A.!) a_nt) rhs)
+      ++ (cut 100 $ show $ map ((A.!) a_nt) rhs)
       ++ " // "
       ++ (show $ map (map retHomComponent) hom_f)
         where
-          retHomComponent (T t) = show $ (A.!) a_t t
+          retHomComponent (T t) = (A.!) a_t t
           retHomComponent (NT v) = show v -- Remember, these aren't real NTs, but variables for the reordering
     
-    establishSpanBasedOrder :: T.Tree (v, [Span]) -> T.Tree (v, [Span])
-    establishSpanBasedOrder (T.Node (v, spans) cs)
-      = T.Node (v, spans)
-      $ map establishSpanBasedOrder
+    establishSpanBasedOrderAndAnnotateFanOut
+      :: T.Tree (Maybe SentenceData, [Span])
+      -> T.Tree (Maybe SentenceData, [Span])
+    establishSpanBasedOrderAndAnnotateFanOut (T.Node (v, spans) cs)
+      = T.Node (giveFanOut (length spans) v, spans)
+      $ map establishSpanBasedOrderAndAnnotateFanOut
       $ sortBy (comparing earliestSpan) cs
         where earliestSpan = minimum -- earliest span start
                            . map fst -- span starts
                            . snd -- span list
                            . T.rootLabel
+    
+    giveFanOut :: Int -> Maybe SentenceData -> Maybe SentenceData
+    giveFanOut i (Just sd) = let oldTag = sdPostag sd
+                             in Just sd{sdPostag = oldTag ++ "_" ++ show i}
+    giveFanOut _ v = v -- epsilon super-root
