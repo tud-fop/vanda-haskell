@@ -68,6 +68,10 @@ library
     , Vanda.Grammar.XRS.GHKM
     , Vanda.Grammar.XRS.IRTG
     , Vanda.Grammar.XRS.Text
+    , Vanda.Grammar.XRS.LCFRS
+    , Vanda.Grammar.XRS.LCFRS.Binarize
+    , Vanda.Grammar.XRS.LCFRS.Extraction
+    , Vanda.Grammar.XRS.LCFRS.Evaluation
     , Vanda.Grammar.LM
     , Vanda.Grammar.NGrams.Functions
     , Vanda.Grammar.NGrams.Text
