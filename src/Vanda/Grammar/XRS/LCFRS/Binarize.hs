@@ -6,6 +6,7 @@ import           Data.List (intercalate)
 import qualified Data.Map.Strict as M
 import           Data.Maybe (fromJust)
 import qualified Data.Text.Lazy.IO as TIO
+import           Data.Tuple (swap)
 import qualified Data.Vector as V
 import           Text.Printf (printf)
 
@@ -42,19 +43,12 @@ intifyProtoRules m_in rs = runState (mapM intifyProtoAction rs) m_in
                                    Nothing -> let i = M.size oldmap
                                               in put (M.insert s i oldmap) >> return i
 
-data TriState = YesPlease | Perhaps | HellNo deriving Show
-binarizeNaively :: (ProtoRule, Double) -> [(ProtoRule, Double)]
-binarizeNaively r@(((lhs, rhs), h'), d)
+data TriState = Yes | Perhaps | No deriving Show
+binarizeNaively :: A.Array Int Int -> (ProtoRule, Double) -> [(ProtoRule, Double)]
+binarizeNaively fanouts r@(((lhs, rhs), h'), d)
   | getRk r <= 2 = [r]
-  | otherwise = trace (unlines $ map (\m -> show m ++ "    " ++ show (isExtractable m)) oldH ++ ["\n\n"])
-              $ trace (show offset ++ "\n\n")
-              $ trace ((\(r, i) -> unlines (map show r) ++ "\n---\n" ++ unlines (map show i)) $ splitH $ map transMe "oyyonpnyonppnynyy") -- only [o*y*o*] should come out
-              $ innerRule : binarizeNaively remainderRule
+  | otherwise = innerRule : binarizeNaively fanouts remainderRule
   where
-    transMe 'n' = Nothing
-    transMe 'y' = Just $ nt 100
-    transMe 'o' = Just $ tt 100
-    transMe 'p' = Just $ tt 0
     -- capital H homomorphisms are akin to the characteristic strings you can create from tuples by replacing the tuples commas with delimiters (Nothing)
     [b1, b2] = reverse . take 2 . reverse $ rhs
     outerNTs = init $ init rhs
@@ -63,43 +57,43 @@ binarizeNaively r@(((lhs, rhs), h'), d)
     newNT = Left $ show [b1, b2] ++ show innH
     oldH = intercalate [Nothing] $ map (map Just) h'
     (remH, innH) = splitH oldH
-    splitH someH = let (rs,is,_,_,_) = foldl inspect ([], [], [], HellNo, offset) (someH ++ [Nothing])
+    splitH someH = let (rs,is,_,_,_) = foldl inspect ([], [], [], No, offset) (someH ++ [Nothing])
                    in (reverse (tail rs), map readjustNT $ reverse (tail is)) -- tail rs removes the just added Nothing (so every extract ends), tail is remove the Nothing added at every extract end
     inspect (remH, innH, perhapsH, state, i) maybeNTT
       = let into xs = maybeNTT : xs
         in case (state, isExtractable maybeNTT) of -- state: YesPlease = were in a real extraction, Perhaps = might become an extraction, only read ts so far, HellNo = only reading Nothings or outer NTs
-             (YesPlease, YesPlease) -> (      remH,                   into innH,       []             , YesPlease, i)
-             (YesPlease, Perhaps)   -> (      remH,                   into innH,       []             , YesPlease, i)
-             (YesPlease, HellNo)    -> ( into ((Just $ NT i) : remH), Nothing : innH,  []             , HellNo, i + 1)
-             (Perhaps, YesPlease)   -> (      remH,        into (perhapsH++innH),      []             , YesPlease, i)
-             (Perhaps, Perhaps)     -> (      remH,                        innH,   maybeNTT : perhapsH, Perhaps, i)
-             (Perhaps, HellNo)      -> ( into (perhapsH++remH),            innH,       []             , HellNo, i)
-             (HellNo, YesPlease)    -> (      remH,                   into innH,       []             , YesPlease, i)
-             (HellNo, Perhaps)      -> (      remH,                        innH,   maybeNTT : perhapsH, Perhaps, i)
-             (HellNo, HellNo)       -> ( into remH,                        innH,       []             , HellNo, i)
+             (Yes, Yes)         -> (      remH,                   into innH,       []             , Yes,     i)
+             (Yes, Perhaps)     -> (      remH,                   into innH,       []             , Yes,     i)
+             (Yes, No)          -> ( into ((Just $ NT i) : remH), Nothing : innH,  []             , No,      i + 1)
+             (Perhaps, Yes)     -> (      remH,        into (perhapsH++innH),      []             , Yes,     i)
+             (Perhaps, Perhaps) -> (      remH,                        innH,   maybeNTT : perhapsH, Perhaps, i)
+             (Perhaps, No)      -> ( into (perhapsH++remH),            innH,       []             , No,      i)
+             (No, Yes)          -> (      remH,                   into innH,       []             , Yes,     i )
+             (No, Perhaps)      -> (      remH,                        innH,   maybeNTT : perhapsH, Perhaps, i)
+             (No, No)           -> ( into remH,                        innH,       []             , No,      i)
     resplit [] = []
     resplit s = let (xs, ys) = span (/= Nothing) s
                 in (map fromJust xs) : resplit (drop 1 ys)
-    isExtractable Nothing = HellNo
+    isExtractable Nothing = No
     isExtractable (Just (T _)) = Perhaps
-    isExtractable (Just (NT i)) = if i >= offset then YesPlease else HellNo
+    isExtractable (Just (NT i)) = if i >= offset then Yes else No
     offset = sum $ map getFoNT $ outerNTs
     readjustNT (Just (NT i)) = Just (NT  $ i - offset)
     readjustNT x = x
-    -- TODO take from *once* generated list
-    getFoNT (Right 2) = 1
-    getFoNT (Right 30) = 1
-    getFoNT (Right 42) = 2
-    getFoNT (Right 7) = 1
-    getFoNT (Left "S") = 2
-    getFoNT (Left "A") = 2
-    getFoNT (Left "B") = 1
-    getFoNT (Left "C") = 2
+    getFoNT (Right i) = fanouts A.! i
+    getFoNT (Left s) = error "A non-intified NT wanted to stay in the remainder... nope!"
 
 getRk, getFo :: (((a, [a]), [b]), c) -> Int
 getRk (((_, rhs),  _), _) = length rhs
 getFo (((_, _  ), h'), _) = length h'
 
+getFoNTArrayFromRules :: [(Rule, Double)] -> A.Array Int Int -- ^ from NTs into fanouts
+getFoNTArrayFromRules = toArray . foldl worker M.empty
+  where
+    toArray m = A.array (0, M.size m) $ M.assocs m
+    worker m (((lhs, rhs), h'), _) = case M.lookup lhs m of
+                                       Nothing -> M.insert lhs (length h') m
+                                       Just _  -> m
 
 -- This is what I'm currently working on so this is where the main function stays.
 
@@ -117,16 +111,6 @@ main = do
            rulesAndProbs = M.assocs flatPRuleMap
            myLCFRS = getMXRSFromProbabilisticRules rulesAndProbs [0] -- assumptions, assumptions...
        
-       -- possibly expensive binarizations
-       -- print (length $ filter (\r -> getFo r > 2 && getRk r > 2) rulesAndProbs)
-       
-       -- NTs gathered so far
-       -- print (A.bounds a_nt)
-       
-       -- writeFile "/tmp/nt_dict" (unlines $ map (\(i, s) -> printf "%3d %s" i s) $ A.assocs a_nt)
-       -- writeFile "/tmp/t_dict" (unlines $ map (\(i, s) -> printf "%5d %s" i s) $ A.assocs a_t)
-       -- writeFile "/tmp/rules" (unlines $ map (\(r, d) -> printf "%1.4f %s" d (retranslateRule a_nt a_t r)) rulesAndProbs)
-
        -- picking some rules
        let e1__s2_xy1 = 709 - 1 -- [["0","2","1"]]
            xy1__eqsign = 139961 - 1 -- [["="]]
@@ -163,18 +147,23 @@ main = do
        let makeRealRuleTree rs = fmap (\i -> mkHyperedge (fst . fst $ rs !! i) (snd . fst $ rs !! i) i i)
        let dTree = makeRealRuleTree ruleList intDTree
        
-       -- print $ getDerivProbability myLCFRS dTree
-       -- print $ sententialFront (irtg myLCFRS) a_nt a_t dTree
+       print $ getDerivProbability myLCFRS dTree
+       print $ sententialFront (irtg myLCFRS) a_nt a_t dTree
        
-       let binNr = binarizeNaively
+       let binNr = binarizeNaively (getFoNTArrayFromRules rulesAndProbs)
                  . ruleToProto
                  . (rulesAndProbs !!)
        
-       -- print $ binNr s2__s1_vmfin1_vp2_np1
+       let invertArray = M.fromList . map swap . A.assocs
+       let (binFatRules, new_fat_m_nt) = intifyProtoRules (invertArray a_nt) $ binNr s2__s1_vmfin1_vp2_np1
+       mapM_ (putStrLn . retranslateRule (invertMap new_fat_m_nt) a_t) $ map fst $ binFatRules
+       
+       -- Smaller Test:
+       
        let my_a_t = A.array (0,5) [(0,"a"), (1,"A"), (2, "B"), (3, "C"), (4,"AA"), (5, "CC")]
            myProtoRules = [(((Left "S", [Left "A", Left "B", Left "C"]), [[nt 0, tt 0, nt 2, nt 1], [nt 3, nt 4]]), 0.5), (((Left "A", []), [[tt 1], [tt 4]]), 0.5), (((Left "B", []), [[tt 2]]), 0.5), (((Left "C", []), [[tt 3], [tt 5]]), 0.5)]
            (myCleanRules, my_m_nt) = intifyProtoRules M.empty myProtoRules
-           newRules = binarizeNaively $ head myProtoRules
+           newRules = binarizeNaively (getFoNTArrayFromRules myCleanRules) $ ruleToProto $ head myCleanRules
            (cleanNewRules, my_new_m_nt) = intifyProtoRules my_m_nt newRules
            
            uMXRS = getMXRSFromProbabilisticRules myCleanRules [0]
