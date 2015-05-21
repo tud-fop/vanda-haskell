@@ -9,7 +9,8 @@ import           Vanda.Hypergraph.IntHypergraph
 import qualified Vanda.Hypergraph.Tree as VT
 
 import           Vanda.Grammar.XRS.LCFRS
-import Debug.Trace
+
+-- (crisp) RETRANSLATION from rules and derivations
 
 translateNTTString
   :: (A.Array Int String) -- ^ NTs
@@ -64,3 +65,15 @@ retranslateRule a_nt a_t ((lhs, rhs), hom_f)
     where
       retHomComponent (T t) = (A.!) a_t t
       retHomComponent (NT v) = show v -- Remember, these aren't real NTs, but variables for the reordering
+
+-- PROBABILISTIC foo
+
+-- getSentenceProbability :: [Stri... Wait, this is a gonna be a parser. Nope. Nopenopenope.
+
+getDerivProbability
+  :: MXRS
+  -> Derivation Int Int
+  -> Double
+getDerivProbability (MXRS (MIRTG hg _ _) w)
+  = product . flatten . fmap ((V.!) w . ident)
+  where flatten = foldMap (:[])

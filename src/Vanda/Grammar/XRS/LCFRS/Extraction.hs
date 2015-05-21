@@ -18,12 +18,6 @@ import           Vanda.Util.Memorysavers
 
 import           Vanda.Grammar.XRS.LCFRS
 
-import Debug.Trace
-
-normalize :: M.Map a Int -> M.Map a Double
-normalize m = let gamma = fromIntegral $ M.foldl' (+) 0 m
-              in M.map ((/gamma) . fromIntegral) m
-
 getNTName :: Maybe SentenceData -> String
 getNTName Nothing
   = "ε"
@@ -122,10 +116,10 @@ giveFanOut i (Just sd) = let oldTag = sdPostag sd
 giveFanOut _ v = v -- epsilon super-root
 
 
-extractRulesFromNegra
+extractCountedRulesFromNegra
   :: Negra
-  -> (M.Map Int (M.Map Rule Double), (A.Array Int String, A.Array Int String)) -- ^ map from each NT to a list of possible (intified) productions and their probability and a NT and T dictionary
-extractRulesFromNegra negra =
+  -> (M.Map Int (M.Map Rule Int), (A.Array Int String, A.Array Int String)) -- ^ map from each NT to a list of possible (intified) productions and their counts and a NT and T dictionary
+extractCountedRulesFromNegra negra =
   let (intifiedTrees, (m_nt, m_t)) = dualIntifyNegra
                                    $ map ( establishSpanBasedOrderAndAnnotateFanOut
                                          . negraToCrossedTree
@@ -133,9 +127,16 @@ extractRulesFromNegra negra =
                                    -- $ take 10
                                    $ sentences
                                    $ negra
-      pRuleMap = M.map normalize $ readoffAll intifiedTrees
+      countRuleMap = readoffAll intifiedTrees
       a_nt = invertMap m_nt
       a_t = invertMap m_t
-  in pRuleMap `deepseq` a_nt `deepseq` a_t `deepseq` (pRuleMap, (a_nt, a_t))
+  in countRuleMap `deepseq` a_nt `deepseq` a_t `deepseq` (countRuleMap, (a_nt, a_t))
      -- to test whether epsilon really only apperas once per sentence (as root):
      -- trace (show $ M.foldl' (+) (0::Int) $ fromJust $ M.lookup 0 (readoffAll intifiedTrees))
+
+normalize :: M.Map a Int -> M.Map a Double
+normalize m = let gamma = fromIntegral $ M.foldl' (+) 0 m
+              in M.map ((/gamma) . fromIntegral) m
+
+normalizeRuleProbs :: M.Map b (M.Map a Int) -> M.Map b (M.Map a Double)
+normalizeRuleProbs = M.map normalize
