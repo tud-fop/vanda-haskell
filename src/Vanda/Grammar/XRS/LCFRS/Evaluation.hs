@@ -74,6 +74,6 @@ getDerivProbability
   :: MXRS
   -> Derivation Int Int
   -> Double
-getDerivProbability (MXRS (MIRTG hg _ _) w)
+getDerivProbability (MXRS (MIRTG _ _ _) w)
   = product . flatten . fmap ((V.!) w . ident)
   where flatten = foldMap (:[])

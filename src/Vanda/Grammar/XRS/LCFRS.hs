@@ -1,26 +1,11 @@
 module Vanda.Grammar.XRS.LCFRS where
 
-import           Control.DeepSeq (deepseq)
-import           Control.Monad.State.Lazy hiding (mapM)
-import           Control.Parallel.Strategies
-import qualified Data.Array as A
-import qualified Data.Foldable as F
-import           Data.List (sortBy, findIndex)
-import qualified Data.Map.Strict as M
-import           Data.Maybe (fromJust)
-import           Data.Ord (comparing)
-import qualified Data.Traversable as TR
-import qualified Data.Tree as T
 import qualified Data.Vector as V
-import qualified Data.Text.Lazy.IO as TIO
-import           Text.Printf (printf)
 
 import           Data.NTT
 import           Vanda.Hypergraph.IntHypergraph
-import qualified Vanda.Hypergraph.Tree as VT
-import           Vanda.Corpus.Negra
-import           Vanda.Corpus.Negra.Text (parseNegra)
-import           Vanda.Util.Memorysavers
+
+-- Assumption for everything: the date comes from the Tiger Corpus and is extracted using this software.
 
 -- DATA STRUCTURES
 
@@ -77,3 +62,11 @@ getMXRSFromProbabilisticRules
   -> MXRS
 getMXRSFromProbabilisticRules rs initials =
   MXRS (getMIRTGFromRules (map fst rs) initials) (V.fromList $ map snd rs)
+
+toProbabilisticRules
+  :: MXRS
+  -> [(Rule, Double)]
+toProbabilisticRules (MXRS (MIRTG hg _ h') ws)
+  = map worker $ zip3 (edges hg) (V.toList ws) (V.toList $ fmap (V.toList . fmap V.toList) h') -- assuming edges are sorted by ident
+  where
+    worker (he, d, h'') = (((to he, from he), h''), d)
