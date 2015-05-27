@@ -3,10 +3,12 @@ module Vanda.Grammar.XRS.LCFRS.Binarize where
 import           Control.Exception.Base (assert)
 import           Control.Monad.State.Strict
 import qualified Data.Array as A
-import           Data.List (intercalate, elemIndex)
+import           Data.List (intercalate, intersperse, elemIndex)
 import qualified Data.Map.Strict as M
-import           Data.Maybe (fromJust)
+import           Data.Maybe (fromJust, catMaybes, listToMaybe)
+import qualified Data.Set as S
 import qualified Data.Text.Lazy.IO as TIO
+import qualified Data.Tree as T
 import           Data.Tuple (swap)
 import           Text.Printf
 
@@ -86,8 +88,9 @@ extractFromRule
   -> ((ProtoRule, Double), (ProtoRule, Double)) -- ^ extracted rule, remainder rule
 extractFromRule fanouts (((lhs, rhs), h'), d) (posBa, posBb) = (innerRule, remainderRule)
   where
-    posB1 = min posBa posBb
-    posB2 = max posBa posBb
+    minmax :: Ord a => a -> a -> (a, a)
+    minmax a b = (min a b, max a b)
+    (posB1, posB2) = minmax posBa posBb
     -- Conventions I would like to adhere to: 'v' for variables in the homomorphisms, 'n' for NT positions, 'b[i]' for NTs and no more ambiguous 'i's
     -- capital H homomorphisms are akin to the characteristic strings you can create from tuples by replacing the tuples commas with delimiters (Nothing)
     [b1, b2] = [rhs !! posB1, rhs !! posB2]
@@ -163,12 +166,15 @@ getFoNTArrayFromRules = toArray . foldl worker M.empty
 -- Naive Binarization (always extracts last two NTs) --
 -------------------------------------------------------
 
-binarizeNaively :: A.Array Int Int -> (ProtoRule, Double) -> [(ProtoRule, Double)]
-binarizeNaively fanouts r@(((_, rhs), _), _)
-  | getRk r <= 2 = [r]
-  | otherwise = innerRule : binarizeNaively fanouts remainderRule
+binarizeNaively :: A.Array Int Int -> (Rule, Double) -> [(ProtoRule, Double)]
+binarizeNaively fanouts r = binWorker (ruleToProto r)
   where
-    (innerRule, remainderRule) = extractFromRule fanouts r (length rhs - 2, length rhs - 1)
+    binWorker :: (ProtoRule, Double) -> [(ProtoRule, Double)]
+    binWorker r@(((_, rhs), _), _)
+      | getRk r <= 2 = [r]
+      | otherwise = let (innerRule, remainderRule) = extractFromRule fanouts r (length rhs - 2, length rhs - 1)
+                    in innerRule : binWorker remainderRule
+    
 
 
 -----------------------------------------------------------------
@@ -206,8 +212,37 @@ tryMerge fo eps1 eps2 = let merged = merge eps1 eps2
                            then Just merged
                            else Nothing
 
-data NTTree = NTTreeInner ([(ProtoIndexedRule, Double)] -> ([(ProtoIndexedRule, Double)], Int)) -- massive WAT: inner nodes contain the binarized rule... sort-of. They only need the actual rule from above to actually start computing. order of lists is still (outer : manyinners), but this binarizer also returns the consistent-index of the newly created NT.
-            | NTTreeLeaf Int -- leaves contain 'RealNT's (consistent index!)
+data NTTree = NTTreeLeaf Int -- leaves contain 'RealNT's (consistent index!)
+            | NTTreeInner ([(ProtoIndexedRule, Double)] -> ([(ProtoIndexedRule, Double)], Int)) (T.Tree Int) -- massive WAT: inner nodes contain the binarized rule... sort-of. They only need the actual rule from above to actually start computing. order of lists is still (outer : manyinners), but this binarizer also returns the consistent-index of the newly created NT. The Int-Tree at the end is just a sort of history of the extraction process with which the Eq and Ord instances will be defined. Seems stupid and wasteful, I know.
+
+-- We need these instances to use nice sets.
+instance Eq NTTree where
+  (NTTreeLeaf i1) == (NTTreeLeaf i2) = i1 == i2
+  (NTTreeInner _ h1) == (NTTreeInner _ h2) = h1 == h2
+  _ == _ = False
+
+instance Ord NTTree where
+  compare (NTTreeLeaf i1) (NTTreeLeaf i2) = compare i1 i2
+  compare (NTTreeInner _ h1) (NTTreeInner _ h2) = compare h1 h2
+  compare (NTTreeLeaf _) (NTTreeInner _ _) = LT
+  compare (NTTreeInner _ _) (NTTreeLeaf _) = GT
+
+-- To compare history trees... you guessed it: another Ord instance. Again we don't really care about the contents as long as it works.
+instance Ord a => Ord (T.Tree a) where
+  compare (T.Node i1 cs1) (T.Node i2 cs2)
+    | i1 == i2 = compare cs1 cs2
+    | otherwise = compare i1 i2
+
+-- Why not.
+instance Show NTTree where
+  show (NTTreeLeaf i) = show i
+  show (NTTreeInner _ h) = showHistTree h
+    where showHistTree (T.Node i cs)
+            = if null cs
+              then show i
+              else "("++(concat $ intersperse "," $ map showHistTree cs)++")"
+
+
 type CandidateEndpoints = (NTTree, Endpoints) -- NT extractions (to be) performed in this tree and its endpoints for extension
 
 -- We need to index the rhs or our rules to keep adresses consistent in this whole data flow mess:
@@ -218,38 +253,90 @@ deIndexRule (((lhs, rhs), h'), d) = (((lhs, map snd rhs), h'), d)
 getIndices (((_, rhs), _), _) = map fst rhs
 getCurPosFromIndex rhs i = fromJust $ elemIndex i $ map fst rhs
 
-binarizeByAdjacence :: A.Array Int Int -> (Rule, Double) -> [(ProtoRule, Double)]
-binarizeByAdjacence fanouts r@(((_, rhs), h'), _)
+binarizeByAdjacency :: A.Array Int Int -> (Rule, Double) -> [(ProtoRule, Double)]
+binarizeByAdjacency fanouts r@(((_, rhs), h'), _)
   | getRk r <= 2 = [ruleToProto r]
-  | otherwise = crunchRule sometesttree
+  | otherwise = traceShow r $ crunchRule $ tryAdjacenciesFrom $ getFo r
   where
-    -- the working set shall not consist of mere endpoint sets, instead store trees representing the final extraction process (alongside the endpoints, we still need these for the algorithm)! Initially the set consists of leaves only which will be annotated with the NTs and their endpoints.
-    candidates = map getEndpointCandidatesForNT $ zip [0..] rhs
+    -- This will try all adjacencies to... some bound. All rules are binarizable, I promise.
+    tryAdjacenciesFrom :: Int -> NTTree
+    tryAdjacenciesFrom f = case traceShow f chooseGoodTree (computeAll f) of
+                             Just t -> t
+                             Nothing -> tryAdjacenciesFrom (f + 1)
+    
+    -- the working set shall not consist of mere endpoint sets, instead store trees representing the final extraction process (alongside the endpoints, we still need these for the algorithm)! Initially the set consists of leaves only which will be represented as the NT and its endpoints.
+    candidates :: S.Set CandidateEndpoints
+    cList_ = map getEndpointCandidatesForNT $ zip [0..] rhs
+    candidates = S.fromList cList_
     indexedH = zip [0..] $ getNTOnlyH h'
+    globalEndpoints :: Endpoints
+    globalEndpoints = foldl1 merge $ map snd cList_
+    
     getEndpointCandidatesForNT (n, b)
       = (,) (NTTreeLeaf n)
       $ foldl1 merge -- looks pretty stupid, consider a one-pass-fold
       $ map (\(i, _) -> [i-1, i])
-      $ filter (\(i, m) -> case m of Just i -> getNTPosOfVar' i == n; _ -> False)
+      $ filter (\(_, m) -> case m of Just i -> getNTPosOfVar' i == n; _ -> False)
       $ indexedH
-    getNTPosOfVar' = getNTPosOfVar (map (fanouts A.!) rhs)
-    -- ooooh, the Maybe monad!
-    mergeCandidates fo (t1, es1) (t2, es2)
-      = tryMerge fo es1 es2 >>= \merged -> case (t1, t2) of
+    getNTPosOfVar' = getNTPosOfVar $ map (fanouts A.!) rhs
+    
+    -- This functions generates all new trees from one tree and a working set. fo: target maximum fanout
+    pairWith :: Int -> CandidateEndpoints -> S.Set CandidateEndpoints -> S.Set CandidateEndpoints
+    pairWith fo c = S.map fromJust . S.delete Nothing . S.map (mergeCandidates fo c)
+    
+    -- We have to generate all trees from these leaves and choose one (see below) which has endpoints containing all NTs.
+    -- All newly generated candidates (using pairWith) are inserted into a fringe from which the first argument for the pairWith-method is taken until the fringe is empty.
+    -- This is acceptable for computing the closure because the merging process is symmetric!
+    -- Also, we can easily compute all trees, since the number must be finite: each new element contains larger endpoint-intervals than both its children, and since the number of endpoints possible is very bounded - everything is awesome!
+    computeAll :: Int -> [CandidateEndpoints]
+    computeAll fo = computeAllWorker fo candidates (S.toList candidates)
+      where
+        computeAllWorker :: Int -> S.Set CandidateEndpoints -> [CandidateEndpoints] -> [CandidateEndpoints]
+        computeAllWorker _ workingSet []
+          = S.toList workingSet
+        computeAllWorker fo workingSet (todo:fringe)
+          = let new = pairWith fo todo workingSet
+            in traceShow (length fringe) computeAllWorker fo (S.union workingSet new) (fringe ++ S.toList new)
+    
+    -- TODO: choose the best rather than the first!
+    chooseGoodTree :: [CandidateEndpoints] -> Maybe NTTree
+    chooseGoodTree = fmap fst . listToMaybe . take 1 . filter ((==globalEndpoints) . snd)
+    
+    -- Looks like there is a bidirectional dataflow: the initial rule goes top-down through the tree and is dismantled more and more the farther to the right it goes, but the true extractions happen from the leaves to towards the root. Once all nodes are evaluated the rule flows upwards through the recursive calls and all binarization-extractions are actually performed.
+    -- tl;dr: trees of half applied binarization functions.
+    mergeCandidates :: Int -> CandidateEndpoints -> CandidateEndpoints -> Maybe CandidateEndpoints
+    mergeCandidates fo (t1', es1') (t2', es2')
+      = -- Equality here stays ambigous, but merging equal trees results in Nothing anyway.
+        let ((t1, es1), (t2, es2)) = if t1' < t2'
+                                     then ((t1', es1'), (t2', es2'))
+                                     else ((t2', es2'), (t1', es1'))
+        in tryMerge fo es1 es2 >>= \mergedEps -> case (t1, t2) of
           (NTTreeLeaf i1, NTTreeLeaf i2)
-            -> return (NTTreeInner (binarizer i1 i2), merged)
-          (NTTreeInner bin1, NTTreeLeaf i2)
+            -> return (NTTreeInner (binarizer i1 i2)
+                                   (T.Node 0 [T.Node i1 [], T.Node i2 []])
+                      , mergedEps)
+          (NTTreeInner bin1 h1, NTTreeLeaf i2)
             -> return (NTTreeInner (\rs -> let (binneds, i1) = bin1 rs
-                                           in binarizer i1 i2 binneds), merged)
-          (NTTreeLeaf i1, NTTreeInner bin2)
+                                           in binarizer i1 i2 binneds)
+                                   (T.Node 0 [h1, T.Node i2 []])
+                      , mergedEps)
+          (NTTreeLeaf i1, NTTreeInner bin2 h2)
             -> return (NTTreeInner (\rs -> let (binneds, i2) = bin2 rs
-                                           in binarizer i1 i2 binneds), merged)
-          (NTTreeInner bin1, NTTreeInner bin2)
+                                           in binarizer i1 i2 binneds)
+                                   (T.Node 0 [T.Node i1 [], h2])
+                      , mergedEps)
+          (NTTreeInner bin1 h1, NTTreeInner bin2 h2)
             -> return (NTTreeInner (\rs -> let (rs', i1) = bin1 rs
                                                (binneds, i2) = bin2 rs'
-                                           in binarizer i1 i2 binneds), merged)
-          
+                                           in binarizer i1 i2 binneds)
+                                   (T.Node 0 [h1, h2])
+                      , mergedEps)
       where
+        
+        minmaxFst :: Ord a => (a, b) -> (a, b) -> ((a, b), (a, b))
+        minmaxFst (a1, b1) (a2, b2) = if a1 < a2
+                                      then ((a1, b1), (a2, b2))
+                                      else ((a2, b2), (a1, b1))
         binarizer i1 i2 (outer:oldInners)
           = let (newInn, newRem) = extractFromRule fanouts (deIndexRule outer)
                                                    ( (getCurPosFromIndex (getRhs outer) i1)
@@ -259,20 +346,18 @@ binarizeByAdjacence fanouts r@(((_, rhs), h'), _)
                 newIndices = filter (\i -> i /= i1 && i /= i2) oldIndices ++ [newlyCreatedNTIndex]
                 
             in (indexRule newIndices newRem : indexRule (repeat undefined) newInn : oldInners, newlyCreatedNTIndex)
-    -- some sort of function i guess or something like that
-    -- looks like there is a bidirectional dataflow:
-    -- the initial rule goes top-down through the function calls and is dismantled more and more the farther to the right it goes
-    -- once all nodes are evaluated the rule flows upwards trhoug the recursive calls and all binarization-extractions are performed
-    -- ready lets go
+    
+    -- Now use the rule to evaluate the root - it's time to fully evaluate all these functions in the inner nodes!
     crunchRule :: NTTree -> [(ProtoRule, Double)]
-    crunchRule (NTTreeInner binarizer)
+    crunchRule (NTTreeInner binarizer _)
       = let (binned, _) = binarizer [indexRule [0..] $ ruleToProto r]
             (uselessRule@(((lhs, _), _), d) : firstRule@(((_, rhs), h'), _) : rules) = map deIndexRule binned
             newFirstRule = (((lhs, rhs), h'), d)
         in assert (getRk uselessRule == 1 && getFo uselessRule == getFo firstRule) $ newFirstRule : rules
     
     -- sometesttree
-    sometesttree = fst $ fromJust $ mergeCandidates 2 (fromJust $ mergeCandidates 3 (candidates !! 0) (candidates !! 2)) (candidates !! 1)
+    sometesttree = let cs = S.toList candidates
+                   in fst $ fromJust $ mergeCandidates 2 (fromJust $ mergeCandidates 3 (cs !! 0) (cs !! 2)) (cs !! 1)
 
 -------------------------------------------------------------------------------------
 -- This is what I'm currently working on so this is where the main function stays. --
@@ -293,19 +378,20 @@ main = do
                                 [[tt 3], [tt 5]]), 0.5)
                           ]
            (myCleanRules, my_m_nt) = intifyProtoRules M.empty myProtoRules
-           newRules = binarizeByAdjacence (getFoNTArrayFromRules myCleanRules) $ head myCleanRules
+           newRules = binarizeByAdjacency (getFoNTArrayFromRules myCleanRules) $ head myCleanRules
            (cleanNewRules, my_new_m_nt) = intifyProtoRules my_m_nt newRules
            
            uMXRS = getMXRSFromProbabilisticRules myCleanRules [0]
            bMXRS = getMXRSFromProbabilisticRules (cleanNewRules ++ tail myCleanRules) [0]
            uDeriv = makeRealRuleTree (map fst myCleanRules) $ VT.node 0 [VT.node 1 [], VT.node 2 [], VT.node 3 []]
+           -- Since the algorithm is deterministic I know which rules should be created and can guess their ids.
+           bInner = [3,4] -- 2:A, 3:B, 4:C
+           bOuter = 2
            bDeriv = makeRealRuleTree (map fst $ cleanNewRules ++ tail myCleanRules)
                   $ VT.node 0 [
-                        VT.node 3 [],
-                        VT.node 1 [
-                            VT.node 2 [], VT.node 4 []
-                        ]
-                    ] -- 1 and 0 come from the S-Rule, 2,3,4 are for the others
+                        VT.node bOuter [],
+                        VT.node 1 (map (\i -> VT.node i []) bInner)
+                    ] -- 0 and 1 come from the binarized S-Rule, 2,3,4 are for the others
        
        putStrLn "\nNew rules look like this:"
        mapM_ (putStrLn . retranslateRule (invertMap my_new_m_nt) my_a_t) $ map fst cleanNewRules
@@ -319,12 +405,14 @@ main = do
        print $ getDerivProbability bMXRS bDeriv
        
        
+       putStrLn "\n\nLook at how insanely long this takes:"
        
+       let bigRule = (((40,[19,18,19,7,12,51]),[[NT 0,NT 1,NT 2,NT 3],[NT 4,NT 5]]),0.5)
+           itsFoArray = A.array (7,52) $ zip [7..52] $ repeat 1
+       print $ binarizeByAdjacency itsFoArray bigRule
        
-       
-       
-        {-
-       corpusText' <- TIO.readFile "/home/sjm/programming/LCFRS/tiger_release_aug07_semi.export"
+       {-
+       corpusText' <- TIO.readFile "/home/sjm/programming/LCFRS/tiger_release_aug07_shorttest.export"
        
        let (countRuleMap, (a_nt, a_t)) = extractCountedRulesFromNegra $ parseNegra corpusText'
            
@@ -353,11 +441,29 @@ main = do
        -- print $ F.foldl' (+) (0::Integer) $ take 10000000 $ repeat 1 -- busy waiting
        
        putStrLn $ printf "%d NTs have become %d NTs." (snd $ A.bounds a_nt) (M.size binned_m_nt)
+       
        -- -}
+       
+       {-
+       Results: binarizeNaively
+       loading original corpus... 205
+       after binarization I expect this many rules: 279
+       binarizing some thousand rules leads to... 279
+       52 NTs have become 117 NTs.
+       
+       Results: binarizeByAdjacence
+       binarizing some thousand rules leads to... 279
+       52 NTs have become 114 NTs.
+       
+       
+       ... wait this is absolutely uninteresting.
+       I should write a nice getStatistics function.
+       Next commit. Maybe.
+       -}
 
 binarizeMXRS :: M.Map String Int -> MXRS -> (MXRS, M.Map String Int)
-binarizeMXRS m_nt inLCFRS = error "binarizeMXRS todo" -- (getMXRSFromProbabilisticRules newRules [0], newMap)
+binarizeMXRS m_nt inLCFRS = (getMXRSFromProbabilisticRules newRules [0], newMap)
   where
-    (newRules, newMap) = intifyProtoRules m_nt $ concatMap (binarizeNaively fanouts . ruleToProto) oldRules
+    (newRules, newMap) = intifyProtoRules m_nt $ concatMap (binarizeNaively fanouts) oldRules
     oldRules = toProbabilisticRules inLCFRS
     fanouts = getFoNTArrayFromRules oldRules
