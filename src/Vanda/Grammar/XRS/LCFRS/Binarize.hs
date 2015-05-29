@@ -28,11 +28,20 @@ import Debug.Trace
 -- ProtoRules are necessary to check for duplicates when binarizing many rules --
 ---------------------------------------------------------------------------------
 
-type ProtoNT = Either (String, Int) Int -- unintified ProtoNTs have to carry their fanout
+-- The new NTs should be "named" with what they produce to eliminate duplicates.
+-- Saving "what they produce" in a tree containing the extraction history:
+data NTRepTree = NTRepLeaf Int -- original NTs at the leaves
+               | NTRepInner [[NTT]] NTRepTree NTRepTree -- correspond to newly created NTs, labeled with the h of their rule
+               deriving (Show, Eq, Ord)
+-- Saving the "unfinished" NTs with their complete history/meaning allows us to later maybe join even more NTs when intifying them, because given the right homomorphisms, AB and BA for example are absolutely equivalent! TODO.
+type ProtoNT = (NTRepTree, Int) -- unintified ProtoNTs have to carry their fanout!
 type ProtoRule = ((ProtoNT, [ProtoNT]), [[NTT]])
 
-ruleToProto :: (Rule, Double) -> (ProtoRule, Double)
-ruleToProto (((lhs, rhs), h'), d) = (((Right lhs, map Right rhs), h'), d)
+ruleToProto :: A.Array Int Int -> (Rule, Double) -> (ProtoRule, Double)
+ruleToProto fanouts (((lhs, rhs), h'), d)
+  = ((( (NTRepLeaf lhs, fanouts A.! lhs)
+      , map (\r -> (NTRepLeaf r, fanouts A.! r)) rhs
+    ), h'), d)
 
 intifyProtoRules :: M.Map String Int -> [(ProtoRule, Double)] -> ([(Rule, Double)], M.Map String Int)
 intifyProtoRules m_in rs = runState (mapM intifyProtoAction rs) m_in
@@ -43,12 +52,13 @@ intifyProtoRules m_in rs = runState (mapM intifyProtoAction rs) m_in
            newRhs <- mapM intifyProtoNT rhs
            return (((newLhs, newRhs), h'), d)
     intifyProtoNT :: ProtoNT -> State (M.Map String Int) Int
-    intifyProtoNT (Right i) = return i
-    intifyProtoNT (Left (s, _))  = do oldmap <- get
-                                      case M.lookup s oldmap of
-                                        Just i  -> return i
-                                        Nothing -> let i = M.size oldmap
-                                                   in put (M.insert s i oldmap) >> return i
+    intifyProtoNT (NTRepLeaf i, _) = return i
+    intifyProtoNT (t, _) = do oldmap <- get
+                              let s = show t -- yayforstrings... TODO... but I will have to change the Map for that
+                              case M.lookup s oldmap of
+                                Just i  -> return i
+                                Nothing -> let i = M.size oldmap
+                                           in put (M.insert s i oldmap) >> return i
 
 
 ------------------------------------------------------------------------------------------
@@ -82,11 +92,10 @@ getNTPosOfVar fanoutAnnotatedRHS v
 data TriState = Yes | Perhaps | No deriving Show
 
 extractFromRule
-  :: A.Array Int Int -- ^ fanouts
-  -> (ProtoRule, Double) -- ^ rule
+  :: (ProtoRule, Double) -- ^ rule
   -> (Int, Int) -- ^ indices of the NTs that are to be extracted (ascending order unnecessary, makes calling this function easier)
   -> ((ProtoRule, Double), (ProtoRule, Double)) -- ^ extracted rule, remainder rule
-extractFromRule fanouts (((lhs, rhs), h'), d) (posBa, posBb) = (innerRule, remainderRule)
+extractFromRule (((lhs, rhs), h'), d) (posBa, posBb) = (innerRule, remainderRule)
   where
     minmax :: Ord a => a -> a -> (a, a)
     minmax a b = (min a b, max a b)
@@ -102,7 +111,7 @@ extractFromRule fanouts (((lhs, rhs), h'), d) (posBa, posBb) = (innerRule, remai
     remainderRule = (((lhs, concat outerNTs ++ [newNT]), resplit finRemH), d) -- Arbitrary definition: new NTs come at the end of a rule, to make the 'offset' at which the new variables start easily computable
     innerRule = (((newNT, [b1, b2]), inn_h'), 1.0)
     inn_h' = resplit finInnH
-    newNT = Left (show [b1, b2] ++ show inn_h', length inn_h') :: ProtoNT -- any good hash would do, but even these fat strings will be intified away anyway
+    newNT = (NTRepInner inn_h' (fst b1) (fst b2), length inn_h') :: ProtoNT
     oldH = getH h'
     (finRemH, finInnH) = let (rs,is,_,_,_) = foldl inspect ([], [], ([], []), No, 0) (oldH ++ [Nothing])
                          in (reverse (tail rs), reverse (tail is)) -- tail rs removes the just added Nothing (so every extract ends), tail is removes the final Nothing (one is added at every extract end)
@@ -147,8 +156,7 @@ extractFromRule fanouts (((lhs, rhs), h'), d) (posBa, posBb) = (innerRule, remai
     isExtractable (Just (T _)) = Perhaps
     isExtractable (Just (NT v)) = if getNTPosOfVar' v `elem` [posB1, posB2] then Yes else No
     getNTPosOfVar' = getNTPosOfVar (map getFoNT rhs)
-    getFoNT (Right b) = fanouts A.! b
-    getFoNT (Left (_, f)) = f
+    getFoNT = snd
 
 invertArray :: (Ord x) => A.Array Int x -> M.Map x Int
 invertArray = M.fromList . map swap . A.assocs
@@ -167,12 +175,12 @@ getFoNTArrayFromRules = toArray . foldl worker M.empty
 -------------------------------------------------------
 
 binarizeNaively :: A.Array Int Int -> (Rule, Double) -> [(ProtoRule, Double)]
-binarizeNaively fanouts r = binWorker (ruleToProto r)
+binarizeNaively fanouts r = binWorker (ruleToProto fanouts r)
   where
     binWorker :: (ProtoRule, Double) -> [(ProtoRule, Double)]
     binWorker r@(((_, rhs), _), _)
       | getRk r <= 2 = [r]
-      | otherwise = let (innerRule, remainderRule) = extractFromRule fanouts r (length rhs - 2, length rhs - 1)
+      | otherwise = let (innerRule, remainderRule) = extractFromRule r (length rhs - 2, length rhs - 1)
                     in innerRule : binWorker remainderRule
     
 
@@ -255,12 +263,12 @@ getCurPosFromIndex rhs i = fromJust $ elemIndex i $ map fst rhs
 
 binarizeByAdjacency :: A.Array Int Int -> (Rule, Double) -> [(ProtoRule, Double)]
 binarizeByAdjacency fanouts r@(((_, rhs), h'), _)
-  | getRk r <= 2 = [ruleToProto r]
-  | otherwise = traceShow r $ crunchRule $ tryAdjacenciesFrom $ getFo r
+  | getRk r <= 2 = [ruleToProto fanouts r]
+  | otherwise = crunchRule $ tryAdjacenciesFrom $ getFo r
   where
     -- This will try all adjacencies to... some bound. All rules are binarizable, I promise.
     tryAdjacenciesFrom :: Int -> NTTree
-    tryAdjacenciesFrom f = case traceShow f chooseGoodTree (computeAll f) of
+    tryAdjacenciesFrom f = case chooseGoodTree (computeAll f) of
                              Just t -> t
                              Nothing -> tryAdjacenciesFrom (f + 1)
     
@@ -296,7 +304,7 @@ binarizeByAdjacency fanouts r@(((_, rhs), h'), _)
           = S.toList workingSet
         computeAllWorker fo workingSet (todo:fringe)
           = let new = pairWith fo todo workingSet
-            in traceShow (length fringe) computeAllWorker fo (S.union workingSet new) (fringe ++ S.toList new)
+            in computeAllWorker fo (S.union workingSet new) (fringe ++ S.toList new)
     
     -- TODO: choose the best rather than the first!
     chooseGoodTree :: [CandidateEndpoints] -> Maybe NTTree
@@ -338,7 +346,7 @@ binarizeByAdjacency fanouts r@(((_, rhs), h'), _)
                                       then ((a1, b1), (a2, b2))
                                       else ((a2, b2), (a1, b1))
         binarizer i1 i2 (outer:oldInners)
-          = let (newInn, newRem) = extractFromRule fanouts (deIndexRule outer)
+          = let (newInn, newRem) = extractFromRule (deIndexRule outer)
                                                    ( (getCurPosFromIndex (getRhs outer) i1)
                                                    , (getCurPosFromIndex (getRhs outer) i2))
                 oldIndices = getIndices outer
@@ -350,7 +358,7 @@ binarizeByAdjacency fanouts r@(((_, rhs), h'), _)
     -- Now use the rule to evaluate the root - it's time to fully evaluate all these functions in the inner nodes!
     crunchRule :: NTTree -> [(ProtoRule, Double)]
     crunchRule (NTTreeInner binarizer _)
-      = let (binned, _) = binarizer [indexRule [0..] $ ruleToProto r]
+      = let (binned, _) = binarizer [indexRule [0..] $ ruleToProto fanouts r]
             (uselessRule@(((lhs, _), _), d) : firstRule@(((_, rhs), h'), _) : rules) = map deIndexRule binned
             newFirstRule = (((lhs, rhs), h'), d)
         in assert (getRk uselessRule == 1 && getFo uselessRule == getFo firstRule) $ newFirstRule : rules
@@ -368,18 +376,18 @@ main = do
        
        let makeRealRuleTree rs = fmap (\i -> mkHyperedge (fst . fst $ rs !! i) (snd . fst $ rs !! i) i i)
        let my_a_t = A.array (0,5) [(0,"a"), (1,"A"), (2, "B"), (3, "C"), (4,"AA"), (5, "CC")]
-           myProtoRules = [ (((Left ("S", 2), [Left ("A", 2), Left ("B", 1), Left ("C", 2)]),
+           initNTmap = M.fromList [("S", 0), ("A", 1), ("B", 2), ("C", 3)]
+           myCleanRules = [ (((0, [1, 2, 3]),
                                 [[nt 0, tt 0, nt 2, nt 1], [nt 3, nt 4]]), 0.5)
-                          , (((Left ("A", 2), []),
+                          , (((1, []),
                                 [[tt 1], [tt 4]]), 0.5)
-                          , (((Left ("B", 1), []),
+                          , (((2, []),
                                 [[tt 2]]), 0.5)
-                          , (((Left ("C", 2), []),
+                          , (((3, []),
                                 [[tt 3], [tt 5]]), 0.5)
                           ]
-           (myCleanRules, my_m_nt) = intifyProtoRules M.empty myProtoRules
            newRules = binarizeByAdjacency (getFoNTArrayFromRules myCleanRules) $ head myCleanRules
-           (cleanNewRules, my_new_m_nt) = intifyProtoRules my_m_nt newRules
+           (cleanNewRules, my_new_m_nt) = intifyProtoRules initNTmap newRules
            
            uMXRS = getMXRSFromProbabilisticRules myCleanRules [0]
            bMXRS = getMXRSFromProbabilisticRules (cleanNewRules ++ tail myCleanRules) [0]
@@ -397,21 +405,23 @@ main = do
        mapM_ (putStrLn . retranslateRule (invertMap my_new_m_nt) my_a_t) $ map fst cleanNewRules
        
        putStrLn "\nThe old rule yields:"
-       print $ sententialFront (irtg uMXRS) (invertMap my_m_nt) my_a_t uDeriv
+       print $ sententialFront (irtg uMXRS) (invertMap initNTmap) my_a_t uDeriv
        print $ getDerivProbability uMXRS uDeriv
        
        putStrLn "\nThe new rules yield:"
        print $ sententialFront (irtg bMXRS) (invertMap my_new_m_nt) my_a_t bDeriv
        print $ getDerivProbability bMXRS bDeriv
        
-       
+       {-
        putStrLn "\n\nLook at how insanely long this takes:"
        
        let bigRule = (((40,[19,18,19,7,12,51]),[[NT 0,NT 1,NT 2,NT 3],[NT 4,NT 5]]),0.5)
            itsFoArray = A.array (7,52) $ zip [7..52] $ repeat 1
        print $ binarizeByAdjacency itsFoArray bigRule
+       -- -}
        
-       {-
+       
+       -- {-
        corpusText' <- TIO.readFile "/home/sjm/programming/LCFRS/tiger_release_aug07_shorttest.export"
        
        let (countRuleMap, (a_nt, a_t)) = extractCountedRulesFromNegra $ parseNegra corpusText'
@@ -451,7 +461,7 @@ main = do
        binarizing some thousand rules leads to... 279
        52 NTs have become 117 NTs.
        
-       Results: binarizeByAdjacence
+       Results: binarizeByAdjacency
        binarizing some thousand rules leads to... 279
        52 NTs have become 114 NTs.
        
@@ -464,6 +474,6 @@ main = do
 binarizeMXRS :: M.Map String Int -> MXRS -> (MXRS, M.Map String Int)
 binarizeMXRS m_nt inLCFRS = (getMXRSFromProbabilisticRules newRules [0], newMap)
   where
-    (newRules, newMap) = intifyProtoRules m_nt $ concatMap (binarizeNaively fanouts) oldRules
+    (newRules, newMap) = intifyProtoRules m_nt $ concatMap (binarizeByAdjacency fanouts) oldRules
     oldRules = toProbabilisticRules inLCFRS
     fanouts = getFoNTArrayFromRules oldRules
