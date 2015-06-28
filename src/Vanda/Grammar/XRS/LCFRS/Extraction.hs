@@ -30,15 +30,19 @@ readoffAll
   -> M.Map Int (M.Map Rule Int) -- ^ Mapping NTs (Int) to rules and their counts
 readoffAll ts = F.foldl' worker M.empty ts
   where
-    worker :: M.Map Int (M.Map Rule Int) -> (T.Tree (Int, Maybe Int, [Span])) -> M.Map Int (M.Map Rule Int)
-    worker inmap root
+    worker
+      :: M.Map Int (M.Map Rule Int)
+      -> (T.Tree (Int, Maybe Int, [Span]))
+      -> M.Map Int (M.Map Rule Int)
+    worker m root
       = let newrule@((lhs, _), _) = readoffNode root
             innerInserter _ oldmap = M.insertWith (+) newrule 1 oldmap
-            rootmap = M.insertWith innerInserter lhs (M.singleton newrule 1) inmap
+            rootmap = M.insertWith innerInserter lhs (M.singleton newrule 1) m
         in F.foldl' worker rootmap (T.subForest root)
 
 readoffNode
-  :: (T.Tree (Int, Maybe Int, [Span])) -- ^ the first Int is the POS-tag, the second can be a terminal word
+  :: (T.Tree (Int, Maybe Int, [Span]))
+  -- ^ the first Int is the POS-tag, the second can be a terminal word
   -> Rule
 readoffNode (T.Node (tag, Nothing, rootspans) cs)
   = ( (tag, map ((\(x,_,_)->x) . T.rootLabel) cs)
@@ -111,28 +115,33 @@ establishSpanBasedOrderAndAnnotateFanOut (T.Node (v, spans) cs)
                        . T.rootLabel
 
 giveFanOut :: Int -> Maybe SentenceData -> Maybe SentenceData
-giveFanOut i (Just sd) = let oldTag = sdPostag sd
-                         in Just sd{sdPostag = oldTag ++ "_" ++ show i}
+giveFanOut i (Just sd)
+  = let oldTag = sdPostag sd
+    in Just sd{sdPostag = oldTag ++ "_" ++ show i}
 giveFanOut _ v = v -- epsilon super-root
 
 
+-- | Returns a map from each NT to a list of possible (intified) productions
+-- and their counts and a NT and T dictionary.
 extractCountedRulesFromNegra
   :: Negra
-  -> (M.Map Int (M.Map Rule Int), (A.Array Int String, A.Array Int String)) -- ^ map from each NT to a list of possible (intified) productions and their counts and a NT and T dictionary
-extractCountedRulesFromNegra negra =
-  let (intifiedTrees, (m_nt, m_t)) = dualIntifyNegra
-                                   $ map ( establishSpanBasedOrderAndAnnotateFanOut
-                                         . negraToCrossedTree
-                                         . sData)
-                                   -- $ take 10
-                                   $ sentences
-                                   $ negra
-      countRuleMap = readoffAll intifiedTrees
-      a_nt = invertMap m_nt
-      a_t = invertMap m_t
-  in countRuleMap `deepseq` a_nt `deepseq` a_t `deepseq` (countRuleMap, (a_nt, a_t))
-     -- to test whether epsilon really only apperas once per sentence (as root):
-     -- trace (show $ M.foldl' (+) (0::Int) $ fromJust $ M.lookup 0 (readoffAll intifiedTrees))
+  -> (M.Map Int (M.Map Rule Int), (A.Array Int String, A.Array Int String))
+extractCountedRulesFromNegra negra
+  = let (intifiedTrees, (m_nt, m_t))
+          = dualIntifyNegra
+          $ map ( establishSpanBasedOrderAndAnnotateFanOut
+                . negraToCrossedTree
+                . sData)
+          -- $ take 10
+          $ sentences
+          $ negra
+        countRuleMap = readoffAll intifiedTrees
+        a_nt = invertMap m_nt
+        a_t = invertMap m_t
+    in countRuleMap `deepseq` a_nt `deepseq` a_t `deepseq`
+       (countRuleMap, (a_nt, a_t))
+       -- to test whether epsilon really only apperas once per sentence (as root):
+       -- trace (show $ M.foldl' (+) (0::Int) $ fromJust $ M.lookup 0 (readoffAll intifiedTrees))
 
 normalize :: M.Map a Int -> M.Map a Double
 normalize m = let gamma = fromIntegral $ M.foldl' (+) 0 m

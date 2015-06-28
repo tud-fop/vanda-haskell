@@ -5,13 +5,9 @@ import qualified Data.Vector as V
 import           Data.NTT
 import           Vanda.Hypergraph.IntHypergraph
 
--- Assumption for everything: the date comes from the Tiger Corpus and is extracted using this software.
-
--- DATA STRUCTURES
 
 type Rule = ((Int, [Int]), [[NTT]])
 
--- The label adresses the homomorphisms. Both refer to rules, obviously.
 data MIRTG -- Mono-IRTG! I should not be allowed to name things.
   = MIRTG
     { rtg :: Hypergraph Int Int -- Int as identification for the homomorphism (label) and for the rule weights (ident)

@@ -108,16 +108,17 @@ extractFromRule (((lhs, rhs), h'), d) (posBa, posBb) = (innerRule, remainderRule
                 in [preB1, drop 1 preB2, drop 1 postB2] -- drop 1 because the NTs we split at are still in the second lists
     [offset1, offset2, offset3] = map (sum . map getFoNT) outerNTs
     outerFanoutSum = sum [offset1, offset2, offset3]
-    remainderRule = (((lhs, concat outerNTs ++ [newNT]), resplit finRemH), d) -- Arbitrary definition: new NTs come at the end of a rule, to make the 'offset' at which the new variables start easily computable
+    remainderRule = (((lhs, newNT : (concat outerNTs)), resplit finRemH), d) -- Arbitrary definition: new NTs come at the end of a rule, to make the 'offset' at which the new variables start easily computable
     innerRule = (((newNT, [b1, b2]), inn_h'), 1.0)
     inn_h' = resplit finInnH
     newNT = (NTRepInner inn_h' (fst b1) (fst b2), length inn_h') :: ProtoNT
     oldH = getH h'
     (finRemH, finInnH) = let (rs,is,_,_,_) = foldl inspect ([], [], ([], []), No, 0) (oldH ++ [Nothing])
                          in (reverse (tail rs), reverse (tail is)) -- tail rs removes the just added Nothing (so every extract ends), tail is removes the final Nothing (one is added at every extract end)
+    newVariables = length inn_h' -- We only know this after all extractions are performed, but thanks to lazy evalation we can use it when folding inspect over the old H to create the new Hs!
     inspect (remH, innH, (perhapsRemH, perhapsInnH), extractionState, e) maybeNTT -- 'e' will count the number of extractions already performed; we need two 'Perhaps'-lists to account for the different readjusting strategies taking place, see below
-      = let -- since we said that the new NT always comes last in the rule its variables start at 'outerFanSum'
-            extractionTrace = intoRemain ((Just $ NT $ outerFanoutSum + e) : remH)
+      = let -- since we said that the new NT always comes first in the rule its variables start at 0
+            extractionTrace = intoRemain ((Just $ NT e) : remH)
             -- here's how the two 'Perhaps'-Lists pay off
             isActuallyExtraction = intoInner (perhapsInnH ++ innH)
             isActuallyNoExtraction = intoRemain (perhapsRemH ++ remH)
@@ -128,7 +129,7 @@ extractFromRule (((lhs, rhs), h'), d) (posBa, posBb) = (innerRule, remainderRule
               | getNTPosOfVar' v < posB2 = getFoNT b1
               | otherwise                = getFoNT b1 + getFoNT b2
             intoRemain xs = case maybeNTT of
-                              (Just (NT v)) -> (Just $ NT $ v - offsetAtTheRemainingNT v) : xs
+                              (Just (NT v)) -> (Just $ NT $ newVariables + v - offsetAtTheRemainingNT v) : xs
                               x -> x : xs
             -- the extraced rule should have variables start at 0, so shift it back w.r.t. where it started
             -- Again, same idea as above.
@@ -386,7 +387,7 @@ main = do
                           , (((3, []),
                                 [[tt 3], [tt 5]]), 0.5)
                           ]
-           newRules = binarizeByAdjacency (getFoNTArrayFromRules myCleanRules) $ head myCleanRules
+           newRules = binarizeNaively (getFoNTArrayFromRules myCleanRules) $ head myCleanRules
            (cleanNewRules, my_new_m_nt) = intifyProtoRules initNTmap newRules
            
            uMXRS = getMXRSFromProbabilisticRules myCleanRules [0]
@@ -396,9 +397,9 @@ main = do
            bInner = [3,4] -- 2:A, 3:B, 4:C
            bOuter = 2
            bDeriv = makeRealRuleTree (map fst $ cleanNewRules ++ tail myCleanRules)
-                  $ VT.node 0 [
-                        VT.node bOuter [],
-                        VT.node 1 (map (\i -> VT.node i []) bInner)
+                  $ VT.node 1 [
+                        VT.node 0 (map (\i -> VT.node i []) bInner),
+                        VT.node bOuter []
                     ] -- 0 and 1 come from the binarized S-Rule, 2,3,4 are for the others
        
        putStrLn "\nNew rules look like this:"
@@ -421,7 +422,7 @@ main = do
        -- -}
        
        
-       -- {-
+        {-
        corpusText' <- TIO.readFile "/home/sjm/programming/LCFRS/tiger_release_aug07_shorttest.export"
        
        let (countRuleMap, (a_nt, a_t)) = extractCountedRulesFromNegra $ parseNegra corpusText'
