@@ -475,126 +475,30 @@ binarizeByAdjacency fanouts r@(((_, rhs), h'), _)
                    && getFo uselessRule == getFo firstRule) $
            newFirstRule : rules
 
--------------------------------------------------------------------------------------
--- This is what I'm currently working on so this is where the main function stays. --
--------------------------------------------------------------------------------------
-
-main :: IO ()
-main = do
-       
-       let makeRealRuleTree rs = fmap (\i -> mkHyperedge (fst . fst $ rs !! i) (snd . fst $ rs !! i) i i)
-       let my_a_t = A.array (0,5) [(0,"a"), (1,"A"), (2, "B"), (3, "C"), (4,"AA"), (5, "CC")]
-           initNTmap = M.fromList [("S", 0), ("A", 1), ("B", 2), ("C", 3)]
-           myCleanRules = [ (((0, [1, 2, 3]),
-                                [[nt 0, tt 0, nt 2, nt 1], [nt 3, nt 4]]), 0.5)
-                          , (((1, []),
-                                [[tt 1], [tt 4]]), 0.5)
-                          , (((2, []),
-                                [[tt 2]]), 0.5)
-                          , (((3, []),
-                                [[tt 3], [tt 5]]), 0.5)
-                          ]
-           newRules = binarizeNaively (getFoNTArrayFromRules myCleanRules) $ head myCleanRules
-           (cleanNewRules, my_new_m_nt) = intifyProtoRules initNTmap newRules
-           
-           uMXRS = getMXRSFromProbabilisticRules [0] myCleanRules
-           bMXRS = getMXRSFromProbabilisticRules [0] (cleanNewRules ++ tail myCleanRules)
-           uDeriv = makeRealRuleTree (map fst myCleanRules) $ VT.node 0 [VT.node 1 [], VT.node 2 [], VT.node 3 []]
-           -- Since the algorithm is deterministic I know which rules should be created and can guess their ids.
-           bInner = [3,4] -- 2:A, 3:B, 4:C
-           bOuter = 2
-           bDeriv = makeRealRuleTree (map fst $ cleanNewRules ++ tail myCleanRules)
-                  $ VT.node 1 [
-                        VT.node 0 (map (\i -> VT.node i []) bInner),
-                        VT.node bOuter []
-                    ] -- 0 and 1 come from the binarized S-Rule, 2,3,4 are for the others
-       
-       putStrLn "\nNew rules look like this:"
-       mapM_ (putStrLn . retranslateRule (invertMap my_new_m_nt) my_a_t) $ map fst cleanNewRules
-       
-       putStrLn "\nThe old rule yields:"
-       print $ sententialFront (irtg uMXRS) (invertMap initNTmap) my_a_t uDeriv
-       print $ getDerivProbability uMXRS uDeriv
-       
-       putStrLn "\nThe new rules yield:"
-       print $ sententialFront (irtg bMXRS) (invertMap my_new_m_nt) my_a_t bDeriv
-       print $ getDerivProbability bMXRS bDeriv
-       
-       {-
-       putStrLn "\n\nLook at how insanely long this takes:"
-       
-       let bigRule = (((40,[19,18,19,7,12,51]),[[NT 0,NT 1,NT 2,NT 3],[NT 4,NT 5]]),0.5)
-           itsFoArray = A.array (7,52) $ zip [7..52] $ repeat 1
-       print $ binarizeByAdjacency itsFoArray bigRule
-       -- -}
-       
-       
-        {-
-       corpusText' <- TIO.readFile "/home/sjm/programming/LCFRS/tiger_release_aug07_shorttest.export"
-       
-       let (countRuleMap, (a_nt, a_t)) = extractCountedRulesFromNegra $ parseNegra corpusText'
-           
-           pRuleMap = normalizeRuleProbs countRuleMap
-           flatCountRuleMap = M.foldl' M.union M.empty countRuleMap
-           flatPRuleMap = M.foldl' M.union M.empty pRuleMap
-           
-           rulesAndCounts = M.assocs flatCountRuleMap
-           rulesAndProbs = M.assocs flatPRuleMap
-           myLCFRS = getMXRSFromProbabilisticRules rulesAndProbs [0] -- assumptions, assumptions...
-       
-       -- And now for the total memory devastation:
-       
-       putStr "loading original corpus... "
-       print $ length $ edges $ rtg $ irtg myLCFRS
-       putStr "after binarization I expect this many rules: "
-       print $ (sum $ map (\r -> if getRk r > 2 then getRk r - 1 else 1) $ toProbabilisticRules myLCFRS)
-       
-       -- print $ F.foldl' (+) (0::Integer) $ take 10000000 $ repeat 1 -- busy waiting
-       
-       let (binnedMXRS, binned_m_nt) = binarizeMXRS (invertArray a_nt) myLCFRS
-       
-       putStr "binarizing some thousand rules leads to... "
-       print $ length $ edges $ rtg $ irtg binnedMXRS
-       
-       -- print $ F.foldl' (+) (0::Integer) $ take 10000000 $ repeat 1 -- busy waiting
-       
-       putStrLn $ printf "%d NTs have become %d NTs." (snd $ A.bounds a_nt) (M.size binned_m_nt)
-       
-       -- -}
-       
-       {-
-       Results: binarizeNaively
-       loading original corpus... 205
-       after binarization I expect this many rules: 279
-       binarizing some thousand rules leads to... 279
-       52 NTs have become 117 NTs.
-       
-       Results: binarizeByAdjacency
-       binarizing some thousand rules leads to... 279
-       52 NTs have become 114 NTs.
-       
-       
-       ... wait this is absolutely uninteresting.
-       I should write a nice getStatistics function.
-       Next commit. Maybe.
-       -}
-
 binarizeUsing
   :: (A.Array Int Int -> (Rule, Double) -> [(ProtoRule, Double)])
   -> ([Int], [(Rule, Double)], (A.Array Int String, A.Array Int String))
   -> ([Int], [(Rule, Double)], (A.Array Int String, A.Array Int String))
 binarizeUsing binarizer (initials, oldRules, (a_nt, a_t))
-  = (initials, newRules, (invertMap newMap, a_t))
+  = (initials, ordNub newRules, (invertMap newMap, a_t))
   where
     (newRules, newMap) = intifyProtoRules m_nt
                        $ concatMap (binarizer fanouts) oldRules
     m_nt = invertArray a_nt
     fanouts = getFoNTArrayFromRules oldRules
 
+-- https://github.com/nh2/haskell-ordnub
+ordNub :: (Ord a) => [a] -> [a]
+ordNub l = go S.empty l
+  where
+    go _ [] = []
+    go s (x:xs) = if x `S.member` s then go s xs
+                                    else x : go (S.insert x s) xs
+
 {-
 binarizeMXRS :: M.Map String Int -> MXRS -> (MXRS, M.Map String Int)
 binarizeMXRS m_nt inLCFRS
-  = (getMXRSFromProbabilisticRules initials newRules, newMap)
+  = (getMXRSFromProbabilisticRules initials (ordNub newRules), newMap)
   where
     (newRules, newMap) = intifyProtoRules m_nt
                        $ concatMap (binarizeByAdjacency fanouts) oldRules

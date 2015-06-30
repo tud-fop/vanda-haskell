@@ -99,7 +99,7 @@ toProbabilisticRules (MXRS (MIRTG hg inits h') ws)
 niceStatictics
   :: ([Int], [(Rule, Double)], (A.Array Int String, A.Array Int String))
   -> String
-niceStatictics (initials, rulesAndProbs, (a_nt, a_t)) =
+niceStatictics (initials, rulesAndProbs, (a_nt, _)) =
   "\n"
   ++ (printf "%7d initial NTs\n" $ length initials)
   ++ (printf "%7d NTs total\n" $ length (A.indices a_nt))
