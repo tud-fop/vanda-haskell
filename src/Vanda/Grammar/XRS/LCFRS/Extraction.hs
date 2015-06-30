@@ -75,11 +75,13 @@ dualIntifyNegra t = withStrategy (evalTuple2 rdeepseq r0) $
 
 dualIntifyNegraAction
   :: T.Tree (Maybe SentenceData, [Span])
-  -> State (M.Map String Int, M.Map String Int) (T.Tree (Int, Maybe Int, [Span]))
+  -> State (M.Map String Int, M.Map String Int)
+           (T.Tree (Int, Maybe Int, [Span]))
 dualIntifyNegraAction = TR.mapM worker
   where
     worker :: (Maybe SentenceData, [Span])
-           -> State (M.Map String Int, M.Map String Int) (Int, Maybe Int, [Span])
+           -> State (M.Map String Int, M.Map String Int)
+                    (Int, Maybe Int, [Span])
     worker (Just SentenceWord{sdPostag = tag, sdWord = word}, spans)
       = do
         (m_nt, m_t) <- get
@@ -100,7 +102,8 @@ dualIntifyNegraAction = TR.mapM worker
         case M.lookup tag m_nt of
           Just v  -> return (v, Nothing, spans)
           Nothing -> let v = M.size m_nt
-                     in put (M.insert tag v m_nt, m_t) >> return (v, Nothing, spans)
+                     in do put (M.insert tag v m_nt, m_t)
+                           return (v, Nothing, spans)
 
 establishSpanBasedOrderAndAnnotateFanOut
   :: T.Tree (Maybe SentenceData, [Span])
@@ -140,7 +143,7 @@ extractCountedRulesFromNegra negra
         a_t = invertMap m_t
     in countRuleMap `deepseq` a_nt `deepseq` a_t `deepseq`
        (countRuleMap, (a_nt, a_t))
-       -- to test whether epsilon really only apperas once per sentence (as root):
+       -- test whether epsilon really only appears once per sentence (as root):
        -- trace (show $ M.foldl' (+) (0::Int) $ fromJust $ M.lookup 0 (readoffAll intifiedTrees))
 
 normalize :: M.Map a Int -> M.Map a Double
