@@ -1,12 +1,34 @@
-module Vanda.Grammar.XRS.LCFRS where
+module Vanda.Grammar.XRS.LCFRS
+( Rule
+, getRk
+, getFo
+, getRhs
+, MIRTG(..)
+, MXRS(..)
+, getMXRSFromProbabilisticRules
+, toProbabilisticRules
+, niceStatictics
+) where
 
+import qualified Data.Array as A
+import           Data.Foldable (foldl')
+import qualified Data.Map.Strict as M
 import qualified Data.Vector as V
+import           Text.Printf (printf)
 
 import           Data.NTT
 import           Vanda.Hypergraph.IntHypergraph
 
 
 type Rule = ((Int, [Int]), [[NTT]])
+
+-- These are kept vague to allow ProtoRules in Binarize!
+getRk, getFo :: (((l, [a]), [[NTT]]), Double) -> Int
+getRk (((_, rhs),  _), _) = length rhs
+getFo (((_, _  ), h'), _) = length h'
+
+getRhs :: (((l, [a]), [[NTT]]), Double) -> [a]
+getRhs (((_, rhs), _), _) = rhs
 
 data MIRTG -- Mono-IRTG! I should not be allowed to name things.
   = MIRTG
@@ -43,34 +65,56 @@ instance Show MXRS where
           )
     . edges
     $ hg
-
-cut :: Int -> [Char] -> [Char]
-cut n = take n . (++ repeat ' ')
+    where cut n = take n . (++ repeat ' ')
 
 getMIRTGFromRules
-  :: [Rule]
-  -> [Int] -- ^ initials
+  :: [Int] -- ^ initials
+  -> [Rule]
   -> MIRTG
-getMIRTGFromRules rules initials =
+getMIRTGFromRules initials rules =
   let myHyperedges = map (\(((lhs, rhs), _), i) -> mkHyperedge lhs rhs i i)
                    $ zip rules [0..]
       myH = V.fromList $ map (V.fromList . map V.fromList . snd) rules
   in MIRTG (mkHypergraph myHyperedges) initials myH
 
 getMXRSFromProbabilisticRules
-  :: [(Rule, Double)] -- ^ rules and their probabilities
-  -> [Int] -- ^ initial NTs
+  :: [Int] -- ^ initial NTs
+  -> [(Rule, Double)] -- ^ rules and their probabilities
   -> MXRS
-getMXRSFromProbabilisticRules rs initials =
-  MXRS (getMIRTGFromRules (map fst rs) initials) (V.fromList $ map snd rs)
+getMXRSFromProbabilisticRules initials rs =
+  MXRS (getMIRTGFromRules initials (map fst rs)) (V.fromList $ map snd rs)
 
 toProbabilisticRules
   :: MXRS
-  -> [(Rule, Double)]
-toProbabilisticRules (MXRS (MIRTG hg _ h') ws)
-  = map worker
-  $ zip3 (edges hg) -- assuming edges are sorted by ident!
-         (V.toList ws)
-         (V.toList $ fmap (V.toList . fmap V.toList) h')
+  -> ([Int], [(Rule, Double)])
+toProbabilisticRules (MXRS (MIRTG hg inits h') ws)
+  = (,) inits
+  $ map worker
+  $ zip3 (edges hg) -- assuming edges are sorted by ident...
+         (V.toList ws) -- so that we can just zip this...
+         (V.toList $ fmap (V.toList . fmap V.toList) h') -- ...and this.
   where
     worker (he, d, h'') = (((to he, from he), h''), d)
+
+niceStatictics
+  :: ([Int], [(Rule, Double)], (A.Array Int String, A.Array Int String))
+  -> String
+niceStatictics (initials, rulesAndProbs, (a_nt, a_t)) =
+  "\n"
+  ++ (printf "%7d initial NTs\n" $ length initials)
+  ++ (printf "%7d NTs total\n" $ length (A.indices a_nt))
+  ++ (printf "%7d rules\n" $ length rulesAndProbs)
+  ++ "\n"
+  ++ "Ranks:\n"
+  ++ (unlines (map (uncurry (printf "%2d: %7d")) rkCounts))
+  ++ "Fanouts:\n"
+  ++ (unlines (map (uncurry (printf "%2d: %7d")) foCounts))
+  where
+    counter f = foldl' (\m r -> M.insertWith (+) (f r) 1 m)
+                       (M.empty :: M.Map Int Int)
+                       rulesAndProbs
+    populateHoles m = foldl' (\m k -> M.insertWith (+) k 0 m)
+                             m
+                             [0.. (fst $ M.findMax m)]
+    rkCounts = M.assocs $ populateHoles $ counter getRk
+    foCounts = M.assocs $ populateHoles $ counter getFo

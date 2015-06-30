@@ -1,4 +1,8 @@
-module Vanda.Grammar.XRS.LCFRS.Evaluation where
+module Vanda.Grammar.XRS.LCFRS.Evaluation
+( sententialFront
+, retranslateRule
+, getDerivProbability
+) where
 
 import           Control.Monad.State.Lazy hiding (mapM)
 import qualified Data.Array as A
@@ -67,6 +71,7 @@ retranslateRule a_nt a_t ((lhs, rhs), hom_f)
     where
       retHomComponent (T t) = (A.!) a_t t
       retHomComponent (NT v) = show v
+      cut n = take n . (++ repeat ' ')
 
 -- PROBABILISTIC foo
 

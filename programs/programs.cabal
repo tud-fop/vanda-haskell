@@ -2,7 +2,7 @@ name:           Vanda-Programs
 version:        0.1
 cabal-version:  >= 1.8
 license:        AllRightsReserved
-license-file:   LICENSE
+license-file:   ../LICENSE
 copyright:      (c) 2012 Vanda Team, Technische Universität Dresden
 author:         Vanda Team
 maintainer:     Toni.Dietze@tu-dresden.de
@@ -15,6 +15,38 @@ synopsis:       Haskell Machine Translation Tools
 category:       NLP
 tested-with:    GHC
 Build-Type:     Simple
+
+executable BinarizeLCFRS
+  build-depends:
+      base
+    , array
+    , binary
+    , bytestring
+    , containers
+    , deepseq
+    , text
+    , Vanda
+    , vector
+    , zlib
+  Main-Is:  BinarizeLCFRS.hs
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+  ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
+
+executable NegraToLCFRS
+  build-depends:
+      base
+    , array
+    , binary
+    , bytestring
+    , containers
+    , deepseq
+    , text
+    , Vanda
+    , vector
+    , zlib
+  Main-Is:  NegraToLCFRS.hs
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+  ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
 
 
 executable NGrams
@@ -30,6 +62,7 @@ executable NGrams
 executable PennToSentenceCorpus
   build-depends:
       base
+    , containers
     , text
     , Vanda
   Main-Is: PennToSentenceCorpus.hs
@@ -40,6 +73,7 @@ executable PennToSentenceCorpus
 executable XRSNGrams
   build-depends:
       base
+    , array
     , binary
     , bytestring
     , containers
@@ -55,6 +89,7 @@ executable XRSNGrams
 executable XRSToHypergraph
   build-depends:
       base
+    , array
     , binary
     , bytestring
     , containers
@@ -72,6 +107,7 @@ executable XRSToHypergraph
 executable XRSTranslate
   build-depends:
       base
+    , array
     , containers
     , text
     , Vanda

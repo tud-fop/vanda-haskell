@@ -1,4 +1,8 @@
-module Vanda.Grammar.XRS.LCFRS.Binarize where
+module Vanda.Grammar.XRS.LCFRS.Binarize
+( binarizeNaively
+, binarizeByAdjacency
+, binarizeUsing
+) where
 
 import           Control.Exception.Base (assert)
 import           Control.Monad.State.Strict
@@ -72,19 +76,12 @@ intifyProtoRules m_in rs = runState (mapM intifyProtoAction rs) m_in
 - Fusion of two NTs into a new rule leaving a remaining rule -
 -------------------------------------------------------------}
 
-getRk, getFo :: (((a, [a]), [[NTT]]), Double) -> Int
-getRk (((_, rhs),  _), _) = length rhs
-getFo (((_, _  ), h'), _) = length h'
-
 getH :: [[NTT]] -> [Maybe NTT]
 getH = intercalate [Nothing] . map (map Just)
 getNTOnlyH :: [[NTT]] -> [Maybe Int]
 getNTOnlyH = map (fmap (\(NT b) -> b))
            . filter (\m -> case m of Just (T _) -> False; _ -> True)
            . getH
-
-getRhs :: (((l, [a]), [[NTT]]), Double) -> [a]
-getRhs (((_, rhs), _), _) = rhs
 
 getNTPosOfVar
   :: [Int] -- ^ fanout "annotated" rhs containing only the fanouts
@@ -500,8 +497,8 @@ main = do
            newRules = binarizeNaively (getFoNTArrayFromRules myCleanRules) $ head myCleanRules
            (cleanNewRules, my_new_m_nt) = intifyProtoRules initNTmap newRules
            
-           uMXRS = getMXRSFromProbabilisticRules myCleanRules [0]
-           bMXRS = getMXRSFromProbabilisticRules (cleanNewRules ++ tail myCleanRules) [0]
+           uMXRS = getMXRSFromProbabilisticRules [0] myCleanRules
+           bMXRS = getMXRSFromProbabilisticRules [0] (cleanNewRules ++ tail myCleanRules)
            uDeriv = makeRealRuleTree (map fst myCleanRules) $ VT.node 0 [VT.node 1 [], VT.node 2 [], VT.node 3 []]
            -- Since the algorithm is deterministic I know which rules should be created and can guess their ids.
            bInner = [3,4] -- 2:A, 3:B, 4:C
@@ -582,10 +579,25 @@ main = do
        Next commit. Maybe.
        -}
 
+binarizeUsing
+  :: (A.Array Int Int -> (Rule, Double) -> [(ProtoRule, Double)])
+  -> ([Int], [(Rule, Double)], (A.Array Int String, A.Array Int String))
+  -> ([Int], [(Rule, Double)], (A.Array Int String, A.Array Int String))
+binarizeUsing binarizer (initials, oldRules, (a_nt, a_t))
+  = (initials, newRules, (invertMap newMap, a_t))
+  where
+    (newRules, newMap) = intifyProtoRules m_nt
+                       $ concatMap (binarizer fanouts) oldRules
+    m_nt = invertArray a_nt
+    fanouts = getFoNTArrayFromRules oldRules
+
+{-
 binarizeMXRS :: M.Map String Int -> MXRS -> (MXRS, M.Map String Int)
-binarizeMXRS m_nt inLCFRS = (getMXRSFromProbabilisticRules newRules [0], newMap)
+binarizeMXRS m_nt inLCFRS
+  = (getMXRSFromProbabilisticRules initials newRules, newMap)
   where
     (newRules, newMap) = intifyProtoRules m_nt
                        $ concatMap (binarizeByAdjacency fanouts) oldRules
-    oldRules = toProbabilisticRules inLCFRS
+    (initials, oldRules) = toProbabilisticRules inLCFRS
     fanouts = getFoNTArrayFromRules oldRules
+-}

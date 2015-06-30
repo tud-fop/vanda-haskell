@@ -1,4 +1,7 @@
-module Vanda.Grammar.XRS.LCFRS.Extraction where
+module Vanda.Grammar.XRS.LCFRS.Extraction
+( extractCountedRulesFromNegra
+, normalizeRuleProbs
+) where
 
 import           Control.DeepSeq (deepseq)
 import           Control.Monad.State.Lazy hiding (mapM)
@@ -9,6 +12,7 @@ import           Data.List (sortBy, findIndex)
 import qualified Data.Map.Strict as M
 import           Data.Maybe (fromJust)
 import           Data.Ord (comparing)
+import qualified Data.Set as S
 import qualified Data.Traversable as TR
 import qualified Data.Tree as T
 
@@ -27,9 +31,16 @@ getNTName (Just spart)
 readoffAll
   :: (F.Foldable f)
   => f (T.Tree (Int, Maybe Int, [Span]))
-  -> M.Map Int (M.Map Rule Int) -- ^ Mapping NTs (Int) to rules and their counts
-readoffAll ts = F.foldl' worker M.empty ts
+  -> (S.Set Int, M.Map Int (M.Map Rule Int))
+  -- ^ Set of initial NTs and map from NTs to rules and their counts
+readoffAll ts = F.foldl' rootworker (S.empty, M.empty) ts
   where
+    rootworker
+      :: (S.Set Int, M.Map Int (M.Map Rule Int))
+      -> (T.Tree (Int, Maybe Int, [Span]))
+      -> (S.Set Int, M.Map Int (M.Map Rule Int))
+    rootworker (s, m) root
+      = (S.insert ((\(x,_,_) -> x) $ T.rootLabel root) s, worker m root)
     worker
       :: M.Map Int (M.Map Rule Int)
       -> (T.Tree (Int, Maybe Int, [Span]))
@@ -128,7 +139,9 @@ giveFanOut _ v = v -- epsilon super-root
 -- and their counts and a NT and T dictionary.
 extractCountedRulesFromNegra
   :: Negra
-  -> (M.Map Int (M.Map Rule Int), (A.Array Int String, A.Array Int String))
+  -> ( [Int]
+     , M.Map Int (M.Map Rule Int)
+     , (A.Array Int String, A.Array Int String))
 extractCountedRulesFromNegra negra
   = let (intifiedTrees, (m_nt, m_t))
           = dualIntifyNegra
@@ -138,11 +151,11 @@ extractCountedRulesFromNegra negra
           -- $ take 10
           $ sentences
           $ negra
-        countRuleMap = readoffAll intifiedTrees
+        (initialsSet, countRuleMap) = readoffAll intifiedTrees
         a_nt = invertMap m_nt
         a_t = invertMap m_t
     in countRuleMap `deepseq` a_nt `deepseq` a_t `deepseq`
-       (countRuleMap, (a_nt, a_t))
+       (S.toList initialsSet, countRuleMap, (a_nt, a_t))
        -- test whether epsilon really only appears once per sentence (as root):
        -- trace (show $ M.foldl' (+) (0::Int) $ fromJust $ M.lookup 0 (readoffAll intifiedTrees))
 
