@@ -2,6 +2,7 @@ module Vanda.Grammar.XRS.LCFRS.Binarize
 ( binarizeNaively
 , binarizeByAdjacency
 , binarizeUsing
+, binarizeRuleSubset
 ) where
 
 import           Control.Exception.Base (assert)
@@ -476,7 +477,7 @@ binarizeByAdjacency fanouts r@(((_, rhs), h'), _)
            newFirstRule : rules
 
 binarizeUsing
-  :: (A.Array Int Int -> (Rule, Double) -> [(ProtoRule, Double)])
+  :: (A.Array Int Int -> (Rule, Double) -> [(ProtoRule, Double)]) -- ^ binarizer
   -> ([Int], [(Rule, Double)], (A.Array Int String, A.Array Int String))
   -> ([Int], [(Rule, Double)], (A.Array Int String, A.Array Int String))
 binarizeUsing binarizer (initials, oldRules, (a_nt, a_t))
@@ -486,6 +487,20 @@ binarizeUsing binarizer (initials, oldRules, (a_nt, a_t))
                        $ concatMap (binarizer fanouts) oldRules
     m_nt = invertArray a_nt
     fanouts = getFoNTArrayFromRules oldRules
+
+binarizeRuleSubset
+  :: (A.Array Int Int -> (Rule, Double) -> [(ProtoRule, Double)]) -- ^ binarizer
+  -> ((Rule, Double) -> Bool) -- ^ predicate for which rules to binarize
+  -> A.Array Int String -- ^ NT array
+  -> [(Rule, Double)] -- ^ all rules
+  -> [(Rule, Double)] -- ^ binarized subset of rules
+binarizeRuleSubset binarizer pred a_nt fullRules = ordNub newRules
+  where
+    (newRules, newMap) = intifyProtoRules m_nt
+                       $ concatMap (binarizer fanouts)
+                       $ filter pred fullRules
+    m_nt = invertArray a_nt
+    fanouts = getFoNTArrayFromRules fullRules
 
 -- https://github.com/nh2/haskell-ordnub
 ordNub :: (Ord a) => [a] -> [a]
