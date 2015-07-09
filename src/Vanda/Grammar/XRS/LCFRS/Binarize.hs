@@ -16,9 +16,6 @@ import qualified Data.Tree as T
 import           Data.Tuple (swap)
 
 import           Data.NTT
-import           Vanda.Hypergraph.IntHypergraph
-import qualified Vanda.Hypergraph.Tree as VT
-import           Vanda.Corpus.Negra.Text (parseNegra)
 import           Vanda.Util.Memorysavers (invertMap)
 
 import           Vanda.Grammar.XRS.LCFRS
@@ -289,8 +286,8 @@ instance Eq NTTree where
 instance Ord NTTree where
   compare (NTTreeLeaf i1) (NTTreeLeaf i2) = compare i1 i2
   compare (NTTreeInner _ h1) (NTTreeInner _ h2) = compare h1 h2
-  compare (NTTreeLeaf _) (NTTreeInner _ _) = LT
-  compare (NTTreeInner _ _) (NTTreeLeaf _) = GT
+  compare (NTTreeLeaf _) (NTTreeInner _ _) = GT
+  compare (NTTreeInner _ _) (NTTreeLeaf _) = LT
 
 -- To compare history trees... you guessed it: another Ord instance.
 -- Again we don't really care about the contents as long as it works.
@@ -478,8 +475,8 @@ binarizeByAdjacency fanouts r@(((_, rhs), h'), _)
 
 binarizeUsing
   :: (A.Array Int Int -> (Rule, Double) -> [(ProtoRule, Double)]) -- ^ binarizer
-  -> ([Int], [(Rule, Double)], (A.Array Int String, A.Array Int String))
-  -> ([Int], [(Rule, Double)], (A.Array Int String, A.Array Int String))
+  -> PLCFRS
+  -> PLCFRS
 binarizeUsing binarizer (initials, oldRules, (a_nt, a_t))
   = (initials, ordNub newRules, (invertMap newMap, a_t))
   where

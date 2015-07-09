@@ -3,10 +3,13 @@ module Vanda.Grammar.XRS.LCFRS
 , getRk
 , getFo
 , getRhs
+, PLCFRS
+-- The following instances are just there to integrate with other vanda things,
+-- for example the stuff in LCFRS.Evaluation
 , MIRTG(..)
 , MXRS(..)
-, getMXRSFromProbabilisticRules
-, toProbabilisticRules
+-- , getMXRSFromProbabilisticRules
+-- , toProbabilisticRules
 , niceStatictics
 ) where
 
@@ -29,6 +32,10 @@ getFo (((_, _  ), h'), _) = length h'
 
 getRhs :: (((l, [a]), [[NTT]]), Double) -> [a]
 getRhs (((_, rhs), _), _) = rhs
+
+-- | Intial NTs, a map from each NT to a list of possible (intified)
+-- rules with their probabilities and a NT and T dictionary.
+type PLCFRS = ([Int], [(Rule, Double)], (A.Array Int String, A.Array Int String))
 
 data MIRTG -- Mono-IRTG! I should not be allowed to name things.
   = MIRTG
@@ -97,7 +104,7 @@ toProbabilisticRules (MXRS (MIRTG hg inits h') ws)
     worker (he, d, h'') = (((to he, from he), h''), d)
 
 niceStatictics
-  :: ([Int], [(Rule, Double)], (A.Array Int String, A.Array Int String))
+  :: PLCFRS
   -> String
 niceStatictics (initials, rulesAndProbs, (a_nt, _)) =
   "\n"

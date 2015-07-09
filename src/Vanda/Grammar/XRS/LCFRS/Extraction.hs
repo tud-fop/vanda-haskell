@@ -1,6 +1,5 @@
 module Vanda.Grammar.XRS.LCFRS.Extraction
-( extractCountedRulesFromNegra
-, normalizeRuleProbs
+( extractPLCFRSFromNegra
 ) where
 
 import           Control.DeepSeq (deepseq)
@@ -134,15 +133,8 @@ giveFanOut i (Just sd)
     in Just sd{sdPostag = oldTag ++ "_" ++ show i}
 giveFanOut _ v = v -- epsilon super-root
 
-
--- | Returns a map from each NT to a list of possible (intified) productions
--- and their counts and a NT and T dictionary.
-extractCountedRulesFromNegra
-  :: Negra
-  -> ( [Int]
-     , M.Map Int (M.Map Rule Int)
-     , (A.Array Int String, A.Array Int String))
-extractCountedRulesFromNegra negra
+extractPLCFRSFromNegra :: Negra -> PLCFRS
+extractPLCFRSFromNegra negra
   = let (intifiedTrees, (m_nt, m_t))
           = dualIntifyNegra
           $ map ( establishSpanBasedOrderAndAnnotateFanOut
@@ -154,8 +146,11 @@ extractCountedRulesFromNegra negra
         (initialsSet, countRuleMap) = readoffAll intifiedTrees
         a_nt = invertMap m_nt
         a_t = invertMap m_t
-    in countRuleMap `deepseq` a_nt `deepseq` a_t `deepseq`
-       (S.toList initialsSet, countRuleMap, (a_nt, a_t))
+        rulesAndProbs = M.assocs
+                      $ M.foldl' M.union M.empty
+                      $ normalizeRuleProbs countRuleMap
+    in rulesAndProbs `deepseq` a_nt `deepseq` a_t `deepseq`
+       (S.toList initialsSet, rulesAndProbs, (a_nt, a_t))
        -- test whether epsilon really only appears once per sentence (as root):
        -- trace (show $ M.foldl' (+) (0::Int) $ fromJust $ M.lookup 0 (readoffAll intifiedTrees))
 
