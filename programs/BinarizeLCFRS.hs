@@ -1,3 +1,14 @@
+-- (c) 2015 Sebastian Mielke <sebastian.mielke@tu-dresden.de>
+--
+-- Technische Universität Dresden / Faculty of Computer Science / Institute
+-- of Theoretical Computer Science / Chair of Foundations of Programming
+--
+-- Redistribution and use in source and binary forms, with or without
+-- modification, is ONLY permitted for teaching purposes at Technische
+-- Universität Dresden AND IN COORDINATION with the Chair of Foundations
+-- of Programming.
+-- ---------------------------------------------------------------------------
+
 module Main where
 
 import           Codec.Compression.GZip (compress, decompress)
@@ -18,18 +29,21 @@ main = do
   progName <- getProgName
   args <- getArgs
   case args of
-    ("-i" : infile : "-o" : outfile : subset) -> do
+    (strategy : "-i" : infile : "-o" : outfile : subset) -> do
       plcfrs <- fmap (B.decode . decompress . BS.fromChunks . (:[]))
-              $ SBS.readFile (infile ++ ".lcfrs.gz")
-        :: IO PLCFRS
+              $ SBS.readFile infile :: IO PLCFRS
       
-      -- naive binarization
-      let newPlcfrs = binarizeUsing binarizeNaively plcfrs
-      BS.writeFile (outfile ++ ".bin.lcfrs.gz")
-                   (compress $ B.encode newPlcfrs)
-      putStrLn $ "Binarized PLCFRS:" ++ niceStatictics newPlcfrs
+      -- full binarization
+      let binarizer = case strategy of
+                        "naive" -> binarizeNaively
+                        "lowmaxfo" -> binarizeByAdjacency
+                        _ -> error $ strategy ++ " is no valid strategy!"
+          newPlcfrs = binarizeUsing binarizer plcfrs
+      BS.writeFile outfile (compress $ B.encode newPlcfrs)
+      putStrLn $ "Binarized PLCFRS (" ++ strategy ++ "):"
+                 ++ niceStatictics newPlcfrs
       
-      when (subset == ["-plusoptimal"]) $ do -- partial bounded binarization
+      when (subset == ["-plussmall"]) $ do -- partial bounded binarization
           putStrLn $ "The following small subset binarizations are computed, "
                      ++ "but not stored anywhere (they are useless).\n\n"
           let (_, rules, (a_nt, _)) = plcfrs
@@ -45,4 +59,6 @@ main = do
                      ++ (niceStatictics . printableFromRules)
                         (binarizeRuleSubset binarizeByAdjacency pred a_nt rules)
       
-    _ -> print $ "Usage: " ++ progName ++ " -i infile -o outfile [-plusoptimal]"
+    _ -> putStrLn $ "Usage: " ++ progName ++ " (naive|optimal) -i infile"
+                    ++ "-o outfile [-plussmall]"
+                    ++ "\ninfile and outfile are an gzipped plcfrs files"

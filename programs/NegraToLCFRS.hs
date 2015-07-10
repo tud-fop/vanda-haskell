@@ -1,3 +1,14 @@
+-- (c) 2015 Sebastian Mielke <sebastian.mielke@tu-dresden.de>
+--
+-- Technische Universität Dresden / Faculty of Computer Science / Institute
+-- of Theoretical Computer Science / Chair of Foundations of Programming
+--
+-- Redistribution and use in source and binary forms, with or without
+-- modification, is ONLY permitted for teaching purposes at Technische
+-- Universität Dresden AND IN COORDINATION with the Chair of Foundations
+-- of Programming.
+-- ---------------------------------------------------------------------------
+
 module Main where
 
 import           Codec.Compression.GZip (compress)
@@ -21,6 +32,8 @@ main = do
     ["-n", negrafile, "-o", outfile] -> do
       plcfrs <- fmap (extractPLCFRSFromNegra . parseNegra)
               $ TIO.readFile negrafile
-      BS.writeFile (outfile ++ ".lcfrs.gz") (compress $ B.encode plcfrs)
+      BS.writeFile outfile (compress $ B.encode plcfrs)
       putStrLn $ "Extracted PLCFRS:" ++ niceStatictics plcfrs
-    _ -> print $ "Usage: " ++ progName ++ " -n negrafile -o outfile"
+    _ -> putStrLn $ "Usage: " ++ progName ++ " -n negrafile -o outfile"
+                    ++ "\nnegrafile is an export format corpus file"
+                    ++ ", outfile will be a gzipped plcfrs file"
