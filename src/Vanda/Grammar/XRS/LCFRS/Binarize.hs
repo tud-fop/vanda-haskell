@@ -44,35 +44,35 @@ errorHere = Control.Error.errorHere "Vanda.Grammar.XRS.LCFRS.Binarize"
 -- The new NTs should be "named" with what they produce to eliminate duplicates.
 -- Saving "what they produce" in a tree containing the fusion history,
 -- where the inner node contain the comp.f. of their fusion rule
-data NTRepTree = NTRepLeaf Int -- original NTs at the leaves
-               | NTRepInner [[NTT]] NTRepTree NTRepTree
+data NTRepTree = NTRepLeaf NTIdent -- original NTs at the leaves
+               | NTRepInner [[CompFuncEntry]] NTRepTree NTRepTree
                deriving (Show, Eq, Ord)
 -- Saving the "unfinished" NTs with their complete history/meaning allows us to
 -- later maybe join even more NTs when intifying them, because given the right
 -- homomorphisms, AB and BA for example are absolutely equivalent! TODO.
-type ProtoNT = (NTRepTree, Int) -- unintified ProtoNTs need their fanout!
-type ProtoRule = ((ProtoNT, [ProtoNT]), [[NTT]])
+type ProtoNT = (NTRepTree, Fanout) -- unintified ProtoNTs need their fanout!
+type ProtoRule = ((ProtoNT, [ProtoNT]), [[CompFuncEntry]])
 
-ruleToProto :: A.Array Int Int -> (Rule, Double) -> (ProtoRule, Double)
+ruleToProto :: A.Array NTIdent Fanout -> (Rule, Double) -> (ProtoRule, Double)
 ruleToProto fanouts (((lhs, rhs), h'), d)
   = ((( (NTRepLeaf lhs, fanouts A.! lhs)
       , map (\r -> (NTRepLeaf r, fanouts A.! r)) rhs
     ), h'), d)
 
 intifyProtoRules
-  :: M.Map String Int
+  :: M.Map String NTIdent
   -> [(ProtoRule, Double)]
-  -> ([(Rule, Double)], M.Map String Int)
+  -> ([(Rule, Double)], M.Map String NTIdent)
 intifyProtoRules m_in rs = runState (mapM intifyProtoAction rs) m_in
   where
     intifyProtoAction
       :: (ProtoRule, Double)
-      -> State (M.Map String Int) (Rule, Double)
+      -> State (M.Map String NTIdent) (Rule, Double)
     intifyProtoAction (((lhs, rhs), h'), d)
       = do newLhs <- intifyProtoNT lhs
            newRhs <- mapM intifyProtoNT rhs
            return (((newLhs, newRhs), h'), d)
-    intifyProtoNT :: ProtoNT -> State (M.Map String Int) Int
+    intifyProtoNT :: ProtoNT -> State (M.Map String NTIdent) NTIdent
     intifyProtoNT (NTRepLeaf i, _) = return i
     intifyProtoNT (t, _)
       = do oldmap <- get
@@ -87,15 +87,15 @@ intifyProtoRules m_in rs = runState (mapM intifyProtoAction rs) m_in
 - Fusion of two NTs into a new rule leaving a remaining rule -
 -------------------------------------------------------------}
 
-getH :: [[NTT]] -> [Maybe NTT]
+getH :: [[CompFuncEntry]] -> [Maybe CompFuncEntry]
 getH = intercalate [Nothing] . map (map Just)
-getNTOnlyH :: [[NTT]] -> [Maybe Int]
+getNTOnlyH :: [[CompFuncEntry]] -> [Maybe Int]
 getNTOnlyH = map (fmap (\(NT b) -> b))
            . filter (\m -> case m of Just (T _) -> False; _ -> True)
            . getH
 
 getNTPosOfVar
-  :: [Int] -- ^ fanout "annotated" rhs containing only the fanouts
+  :: [Fanout] -- ^ fanout "annotated" rhs containing only the fanouts
   -> Int -- ^ variable at which we search
   -> Int -- ^ position of NT in rhs
 getNTPosOfVar fanoutAnnotatedRHS v
@@ -210,13 +210,13 @@ fuseInRule (((lhs, rhs), h'), d) (posBa, posBb) = (fusionRule, remRule)
     getNTPosOfVar' = getNTPosOfVar (map getFoNT rhs)
     getFoNT = snd
 
-invertArray :: (Ord x) => A.Array Int x -> M.Map x Int
+invertArray :: (Ord x, A.Ix y) => A.Array y x -> M.Map x y
 invertArray = M.fromList . map swap . A.assocs
 
 -- FoNT = fanout of NT
 getFoNTArrayFromRules
   :: [(Rule, Double)]
-  -> A.Array Int Int -- ^ from NTs into fanouts
+  -> A.Array NTIdent Fanout -- ^ from NTs into fanouts
 getFoNTArrayFromRules = toArray . foldl worker M.empty
   where
     toArray m = A.array (0, M.size m) $ M.assocs m
@@ -229,7 +229,7 @@ getFoNTArrayFromRules = toArray . foldl worker M.empty
 - Naive Binarization (always fuses last two NTs) -
 -------------------------------------------------}
 
-binarizeNaively :: A.Array Int Int -> (Rule, Double) -> [(ProtoRule, Double)]
+binarizeNaively :: A.Array NTIdent Fanout -> (Rule, Double) -> [(ProtoRule, Double)]
 binarizeNaively fanouts r = binWorker (ruleToProto fanouts r)
   where
     binWorker :: (ProtoRule, Double) -> [(ProtoRule, Double)]
@@ -250,7 +250,7 @@ binarizeNaively fanouts r = binWorker (ruleToProto fanouts r)
 -- end point the index of the last.
 type Endpoints = [Int]
 
-getFoEps :: Endpoints -> Int
+getFoEps :: Endpoints -> Fanout
 getFoEps = (`div` 2) . length
 
 overlaps :: Endpoints -> Endpoints -> Bool
@@ -273,7 +273,7 @@ merge (e1:eps1) (e2:eps2)
   | otherwise = e2 : merge (e1:eps1) eps2
 
 -- merges if sets are fo-adjacent, otherwise returns 'Nothing'
-tryMerge :: Int -> Endpoints -> Endpoints -> Maybe Endpoints
+tryMerge :: Fanout -> Endpoints -> Endpoints -> Maybe Endpoints
 tryMerge fo eps1 eps2
   = let merged = merge eps1 eps2
     in if (not $ overlaps eps1 eps2) && (getFoEps merged <= fo)
@@ -287,11 +287,11 @@ tryMerge fo eps1 eps2
 -- returns the consistent-index of the newly created NT. The Int-Tree at the end
 -- is just a sort of history of the fusion process with which the Eq and Ord
 -- instances will be defined. Seems stupid and wasteful, I know.
-data NTTree = NTTreeLeaf Int -- leaves contain 'RealNT's (consistent index!)
+data NTTree = NTTreeLeaf CInd -- leaves contain 'RealNT's (consistent index!)
             | NTTreeInner
               (   [(ProtoIndexedRule, Double)]
-               -> ([(ProtoIndexedRule, Double)], Int) )
-              (T.Tree Int)
+               -> ([(ProtoIndexedRule, Double)], CInd) )
+              (T.Tree CInd)
 
 -- We need these instances to use nice sets.
 instance Eq NTTree where
@@ -326,7 +326,8 @@ type CandidateEndpoints = (NTTree, Endpoints)
 
 -- We need to index the rhs of our rules to keep adresses consistent
 -- in this whole data flow mess: This "consistent index" should be called 'i'
-type ProtoIndexedRule = ((ProtoNT, [(Int, ProtoNT)]), [[NTT]])
+type CInd = Int
+type ProtoIndexedRule = ((ProtoNT, [(CInd, ProtoNT)]), [[CompFuncEntry]])
 
 indexRule :: [Int] -> (ProtoRule, Double) -> (ProtoIndexedRule, Double)
 indexRule indices (((lhs, rhs), h'), d) = (((lhs, zip indices rhs), h'), d)
@@ -334,18 +335,18 @@ indexRule indices (((lhs, rhs), h'), d) = (((lhs, zip indices rhs), h'), d)
 deIndexRule :: (ProtoIndexedRule, Double) -> (ProtoRule, Double)
 deIndexRule (((lhs, rhs), h'), d) = (((lhs, map snd rhs), h'), d)
 
-getIndices :: (ProtoIndexedRule, Double) -> [Int]
+getIndices :: (ProtoIndexedRule, Double) -> [CInd]
 getIndices (((_, rhs), _), _) = map fst rhs
 
 getCurPosFromIndex
-  :: [(Int, ProtoNT)] -- ^ a rhs
-  -> Int -- ^ consistent index
+  :: [(CInd, ProtoNT)] -- ^ a rhs
+  -> CInd -- ^ consistent index
   -> Int -- ^ actual current index
 getCurPosFromIndex rhs i = fromJust $ elemIndex i $ map fst rhs
 
 binarizeHybrid
   :: Int -- ^ bound for the rank up to which we binarize optimally
-  -> A.Array Int Int
+  -> A.Array NTIdent Fanout
   -> (Rule, Double)
   -> [(ProtoRule, Double)]
 binarizeHybrid b a r@(((_, nts), _), _)
@@ -353,7 +354,7 @@ binarizeHybrid b a r@(((_, nts), _), _)
 
 
 binarizeByAdjacency
-  :: A.Array Int Int
+  :: A.Array NTIdent Fanout
   -> (Rule, Double)
   -> [(ProtoRule, Double)]
 binarizeByAdjacency fanouts r@(((_, rhs), h'), _)
@@ -362,7 +363,7 @@ binarizeByAdjacency fanouts r@(((_, rhs), h'), _)
   where
     -- This will try all adjacencies to... some bound.
     -- All rules are binarizable, I promise.
-    tryAdjacenciesFrom :: Int -> NTTree
+    tryAdjacenciesFrom :: Fanout -> NTTree
     tryAdjacenciesFrom f = case chooseGoodTree (computeAll f) of
                              Just t -> t
                              Nothing -> tryAdjacenciesFrom (f + 1)
@@ -385,7 +386,7 @@ binarizeByAdjacency fanouts r@(((_, rhs), h'), _)
     getNTPosOfVar' = getNTPosOfVar $ map (fanouts A.!) rhs
     -- This functions generates all new trees from one tree and a working set.
     pairWith
-      :: Int -- ^ target maximum fanout
+      :: Fanout -- ^ target maximum fanout
       -> CandidateEndpoints
       -> S.Set CandidateEndpoints
       -> S.Set CandidateEndpoints
@@ -403,11 +404,11 @@ binarizeByAdjacency fanouts r@(((_, rhs), h'), _)
     -- both its children, and since the number of endpoints possible is very
     -- bounded.
     -- Complexity is still insane.
-    computeAll :: Int -> [CandidateEndpoints]
+    computeAll :: Fanout -> [CandidateEndpoints]
     computeAll fo = computeAllWorker fo candidates (S.toList candidates)
       where
         computeAllWorker
-          :: Int
+          :: Fanout
           -> S.Set CandidateEndpoints
           -> [CandidateEndpoints]
           -> [CandidateEndpoints]
@@ -432,7 +433,7 @@ binarizeByAdjacency fanouts r@(((_, rhs), h'), _)
     -- performed.
     -- tl;dr: trees of half applied binarization functions.
     mergeCandidates
-      :: Int
+      :: Fanout
       -> CandidateEndpoints
       -> CandidateEndpoints
       -> Maybe CandidateEndpoints
@@ -494,7 +495,7 @@ binarizeByAdjacency fanouts r@(((_, rhs), h'), _)
       = errorHere "binarizeByAdjacency.crunchRule" "argument must not be NTTreeLeaf"
 
 binarizeUsing
-  :: (A.Array Int Int -> (Rule, Double) -> [(ProtoRule, Double)]) -- ^ binarizer
+  :: (A.Array NTIdent Fanout -> (Rule, Double) -> [(ProtoRule, Double)]) -- ^ binarizer
   -> PLCFRS
   -> PLCFRS
 binarizeUsing binarizer (initials, oldRules, (a_nt, a_t))
@@ -506,9 +507,9 @@ binarizeUsing binarizer (initials, oldRules, (a_nt, a_t))
     fanouts = getFoNTArrayFromRules oldRules
 
 binarizeRuleSubset
-  :: (A.Array Int Int -> (Rule, Double) -> [(ProtoRule, Double)]) -- ^ binarizer
+  :: (A.Array NTIdent Fanout -> (Rule, Double) -> [(ProtoRule, Double)]) -- ^ binarizer
   -> ((Rule, Double) -> Bool) -- ^ predicate for which rules to binarize
-  -> A.Array Int String -- ^ NT array
+  -> A.Array NTIdent String -- ^ NT array
   -> [(Rule, Double)] -- ^ all rules
   -> [(Rule, Double)] -- ^ binarized subset of rules
 binarizeRuleSubset binarizer pred a_nt fullRules = ordNub newRules
@@ -528,7 +529,7 @@ ordNub l = go S.empty l
                                     else x : go (S.insert x s) xs
 
 {-
-binarizeMXRS :: M.Map String Int -> MXRS -> (MXRS, M.Map String Int)
+binarizeMXRS :: M.Map String NTIdent -> MXRS -> (MXRS, M.Map String NTIdent)
 binarizeMXRS m_nt inLCFRS
   = (getMXRSFromProbabilisticRules initials (ordNub newRules), newMap)
   where

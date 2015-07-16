@@ -39,21 +39,21 @@ getNTName (Just spart)
 
 readoffAll
   :: (F.Foldable f)
-  => f (T.Tree (Int, Maybe Int, [Span]))
-  -> (S.Set Int, M.Map Int (M.Map Rule Int))
+  => f (T.Tree (NTIdent, Maybe TIdent, [Span]))
+  -> (S.Set NTIdent, M.Map NTIdent (M.Map Rule Int))
   -- ^ Set of initial NTs and map from NTs to rules and their counts
 readoffAll ts = F.foldl' rootworker (S.empty, M.empty) ts
   where
     rootworker
-      :: (S.Set Int, M.Map Int (M.Map Rule Int))
-      -> (T.Tree (Int, Maybe Int, [Span]))
-      -> (S.Set Int, M.Map Int (M.Map Rule Int))
+      :: (S.Set NTIdent, M.Map NTIdent (M.Map Rule Int))
+      -> (T.Tree (NTIdent, Maybe TIdent, [Span]))
+      -> (S.Set NTIdent, M.Map NTIdent (M.Map Rule Int))
     rootworker (s, m) root
       = (S.insert ((\(x,_,_) -> x) $ T.rootLabel root) s, worker m root)
     worker
-      :: M.Map Int (M.Map Rule Int)
-      -> (T.Tree (Int, Maybe Int, [Span]))
-      -> M.Map Int (M.Map Rule Int)
+      :: M.Map NTIdent (M.Map Rule Int)
+      -> (T.Tree (NTIdent, Maybe TIdent, [Span]))
+      -> M.Map NTIdent (M.Map Rule Int)
     worker m root
       = let newrule@((lhs, _), _) = readoffNode root
             innerInserter _ oldmap = M.insertWith (+) newrule 1 oldmap
@@ -61,7 +61,7 @@ readoffAll ts = F.foldl' rootworker (S.empty, M.empty) ts
         in F.foldl' worker rootmap (T.subForest root)
 
 readoffNode
-  :: (T.Tree (Int, Maybe Int, [Span]))
+  :: (T.Tree (NTIdent, Maybe TIdent, [Span]))
   -- ^ the first Int is the POS-tag, the second can be a terminal word
   -> Rule
 readoffNode (T.Node (tag, Nothing, rootspans) cs)
@@ -89,19 +89,19 @@ readoffNode _ = error "readoff: malformed tree"
 -- Largely taken from from Memorysavers.hs
 dualIntifyNegra
   :: [T.Tree (Maybe SentenceData, [Span])]
-  -> ([T.Tree (Int, Maybe Int, [Span])], (M.Map String Int, M.Map String Int))
+  -> ([T.Tree (NTIdent, Maybe TIdent, [Span])], (M.Map String NTIdent, M.Map String TIdent))
 dualIntifyNegra t = withStrategy (evalTuple2 rdeepseq r0) $
                     runState (mapM dualIntifyNegraAction t) (M.empty, M.empty)
 
 dualIntifyNegraAction
   :: T.Tree (Maybe SentenceData, [Span])
-  -> State (M.Map String Int, M.Map String Int)
-           (T.Tree (Int, Maybe Int, [Span]))
+  -> State (M.Map String NTIdent, M.Map String TIdent)
+           (T.Tree (NTIdent, Maybe TIdent, [Span]))
 dualIntifyNegraAction = TR.mapM worker
   where
     worker :: (Maybe SentenceData, [Span])
-           -> State (M.Map String Int, M.Map String Int)
-                    (Int, Maybe Int, [Span])
+           -> State (M.Map String NTIdent, M.Map String TIdent)
+                    (NTIdent, Maybe TIdent, [Span])
     worker (Just SentenceWord{sdPostag = tag, sdWord = word}, spans)
       = do
         (m_nt, m_t) <- get
