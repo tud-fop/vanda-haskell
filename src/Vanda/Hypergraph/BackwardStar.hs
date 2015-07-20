@@ -295,7 +295,7 @@ topCCL feat wV e lists
 -- then the best derivations for v_1, ..., v_k are
 -- d_1, ..., d_k, respectively!
 bests
-  :: forall v l i x. (Eq v, Eq l, Ord v)
+  :: forall v l i x. (Ord v, Eq l)
   => BackwardStar v l i
   -> Feature l i x
   -> V.Vector Double

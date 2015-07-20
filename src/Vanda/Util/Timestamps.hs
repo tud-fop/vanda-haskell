@@ -1,4 +1,4 @@
-module Tools.Timestamps
+module Vanda.Util.Timestamps
 ( printTimestamp
 , putStrLnTimestamped
 , putStrLnTimestamped'
@@ -6,20 +6,21 @@ module Tools.Timestamps
 
 
 import Control.DeepSeq
-import Data.Time.Clock
-import Data.Time.LocalTime ()
-import System.CPUTime
-import Text.Printf
+import Data.Time.Format (formatTime)
+import Data.Time.LocalTime (getZonedTime)
+import System.CPUTime (cpuTimePrecision, getCPUTime)
+import System.Locale (defaultTimeLocale)
+import Text.Printf (printf)
 
 
 
 printTimestamp :: IO ()
 printTimestamp = do
   cpuTime <- getCPUTime
-  wallclockTime <- getCurrentTime
+  wallclockTime <- getZonedTime
   printf format
     (1e-12 * fromIntegral cpuTime :: Double)
-    (show wallclockTime)
+    (formatTime defaultTimeLocale "%F %T %Z" wallclockTime)
 
 
 putStrLnTimestamped :: String -> IO ()
@@ -31,7 +32,7 @@ putStrLnTimestamped' cs = cs `deepseq` printTimestamp >> putStrLn cs
 
 
 format :: String
-format = "[%" ++ show (8 + precision) ++ "." ++ show precision ++ "f | %s] "
+format = "[%" ++ show (9 + precision) ++ "." ++ show precision ++ "f | %s] "
 
 
 precision :: Integer

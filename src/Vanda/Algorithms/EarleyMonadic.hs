@@ -17,7 +17,7 @@
 -- Left : nonterminals
 -- Right: terminals
 
-module Vanda.Algorithms.EarleyMonadic ( earley ) where
+module Vanda.Algorithms.EarleyMonadic ( earley, earley' ) where
 
 import Control.Arrow ( first )
 import Control.Monad ( unless, liftM2 )
@@ -93,9 +93,19 @@ earley
   -> WSA.WSA p t Double
   -> v            -- an initial node of the Hypergraph
   -> (EdgeList (p, v, p) l (i, Int), V.Vector Double)
-earley hg comp wsa v0
+earley hg comp wsa v0 = earley' hg (comp . label) wsa [v0]
+
+
+earley'
+  :: (Ord p, Ord v, Ord i, Ord t, Show p, Show v, Show i, Show t, Hypergraph h)
+  => h v l i
+  -> (Hyperedge v l i -> [Either Int t])
+  -> WSA.WSA p t Double
+  -> [v]          -- initial nodes of the Hypergraph
+  -> (EdgeList (p, v, p) l (i, Int), V.Vector Double)
+earley' hg comp wsa vs0
   = first mkHypergraph
-  $ iter (backStar $ toBackwardStar hg) (comp . label) wsa v0 extract
+  $ iter (backStar $ toBackwardStar hg) comp wsa vs0 extract
   {- = (mkHypergraph $ map doIt trans, V.fromList theList)
   where
     trans = iter (backStar $ toBackwardStar hg) (comp . label) wsa v0 extract
@@ -154,10 +164,10 @@ iter
   => (v -> [Hyperedge v l i]) 
   -> (Hyperedge v l i -> [Either Int t])
   -> WSA.WSA p t Double
-  -> v            -- an initial node of the Hypergraph
+  -> [v]          -- initial nodes of the Hypergraph
   -> ((Hyperedge v l i -> [Either Int t]) -> Item v l i t p -> Maybe a)
   -> ([Hyperedge (p, v, p) l (i, Int)], V.Vector Double) -- a
-iter back comp wsa v0 _
+iter back comp wsa vs0 _
   = runST $ do
       iq <- newSTRef Q.empty
       pvs <- newSTRef (S.fromList pv0)
@@ -224,7 +234,7 @@ iter back comp wsa v0 _
       mapM_ (enqueue . predItem) pv0
       go2
   where
-    pv0 = [ (p, v0) | (p, _) <- WSA.initialWeights wsa ]
+    pv0 = [ (p, v0) | (p, _) <- WSA.initialWeights wsa, v0 <- vs0 ]
     predItem (p, v) = [ Item v (comp e) e [p] p 1 | e <- back v ]
     scanItem it@Item{ bRight = _ : bs, stateList = ps, weight = w } pt
       = [ it{ bRight = bs, stateList = p : ps, weight = w' * w }

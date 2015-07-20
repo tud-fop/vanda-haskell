@@ -1,10 +1,11 @@
-dist
+*.hi
+*.nobackup
+*.o
+*~
 /.cabal-sandbox/
-/cabal.sandbox.config
-/.kateproject
 /.kateproject.d/
 /.project
-*~
+/cabal.sandbox.config
+build/
+dist/
 report.html
-*.o
-*.hi

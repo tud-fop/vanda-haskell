@@ -20,6 +20,7 @@
 
 module Vanda.Corpus.Penn.Text
   ( PennFamily ( parsePenn, unparsePenn, yield )
+  , treeToPenn
   , parsePennMap
   ) where
 
@@ -31,6 +32,11 @@ import qualified Data.Tree as T
 import Data.Int ( Int32 )
 import Text.Parsec hiding ( many, (<|>) )
 import Text.Parsec.Text.Lazy
+
+
+moduleName :: String
+moduleName = "Vanda.Corpus.Penn.Text"
+
 
 class PennFamily t where
   -- | Used in the parsing process to map identifiers to 'String' (via 'id')
@@ -62,11 +68,12 @@ instance PennFamily Int32 where
 -- 'Vanda.Token.updateToken'.
 parsePennMap :: (u -> String -> (u, b)) -> u -> T.Text -> (u, [T.Tree b])
 parsePennMap f ustate contents
-  = go ustate $ zip [(0 :: Int)..] (T.lines contents)
+  = go ustate $ zip [(1 :: Int)..] (T.lines contents)
   where
     go u [] = (u, [])
     go u ((i, x):xs) =
-      let Right (u', x') = runParser p u ("line " ++ show i) x
+      let (u', x') = either (error . show) id
+            $ runParser p u (moduleName ++ ".parsePennMap: line " ++ show i) x
           (u'', xs') = go u' xs
       in (u'', x':xs')
     p = do
@@ -78,9 +85,9 @@ parsePennMap f ustate contents
 --   = lazyMany (many p_comment *> p_Sentence (p_tag f)) "penn tb"
 
 treeToPenn :: (t -> String) -> T.Tree t -> String
-treeToPenn f (T.Node t1 [T.Node t2 []]) = "(" ++ f t1 ++ " " ++ f t2 ++ ")"
-treeToPenn f (T.Node t1 ts)
-  = "(" ++ f t1 ++ " " ++ unwords (map (treeToPenn f) ts) ++ ")"
+treeToPenn f (T.Node x []) = f x
+treeToPenn f (T.Node x ts)
+  = '(' : unwords (f x : map (treeToPenn f) ts) ++ ")"
 
 treeToYield :: (t -> String) -> T.Tree t -> String
 treeToYield f (T.Node t1 []) = f t1

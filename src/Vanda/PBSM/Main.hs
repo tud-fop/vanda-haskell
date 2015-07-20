@@ -12,7 +12,7 @@
 -- Portability :  portable
 -----------------------------------------------------------------------------
 
-{-# LANGUAGE DeriveDataTypeable, RecordWildCards, ScopedTypeVariables #-}
+{-# LANGUAGE DeriveDataTypeable, RecordWildCards #-}
 {-# OPTIONS_GHC -fno-warn-missing-fields #-}
 
 module Vanda.PBSM.Main where
@@ -28,12 +28,11 @@ import Vanda.Hypergraph
 import Vanda.PBSM.PatternBasedStateMerging
 import Vanda.PBSM.Types
 import Vanda.Util.Memorysavers
+import Vanda.Util.IO
 import qualified Vanda.Util.Tree as T
 
 import Control.Applicative ((<$>))
-import Control.Concurrent.MVar
 import Control.DeepSeq
-import Control.Exception (catch, SomeException)
 import Control.Monad
 import Data.Binary (decodeFile, encodeFile)
 import Data.List
@@ -45,7 +44,6 @@ import qualified Data.Vector as V
 import System.Console.CmdArgs
 import System.Directory
 import System.FilePath ((</>), (<.>))
-import System.Posix.Signals
 
 import Debug.Trace
 
@@ -232,30 +230,6 @@ drawTree :: T.Tree String -> String
 drawTree = T.drawTree' (T.drawstyleCompact1 "─╴") . T.mapLeafs colorVividYellow
   where colorVividYellow :: String -> String
         colorVividYellow cs = "\ESC[93m" ++ cs ++ "\ESC[m"
-
-
--- | Calls worker with an action to fix/update a (partial) result.
--- Calls handler on completion of worker, 'sigUSR1', or any exception in
--- worker, including 'sigINT', if the worker fixed a result. A result is
--- removed after it was passed to handler. It is guaranteed, that there is only
--- one thread in handler.
-handleInterrupt
-  :: ((a -> IO ()) -> IO ())  -- ^ worker
-  -> (a -> IO ())             -- ^ handler
-  -> IO ()
-handleInterrupt worker handler = do
-  varResult <- newEmptyMVar
-  mutex <- newMVar ()
-  let handler' = do
-        maybeResult <- tryTakeMVar varResult
-        case maybeResult of
-          Nothing -> putStrLn "There is currently no (new) result."
-          Just result -> withMVar mutex (const (handler result))
-  let update result = tryTakeMVar varResult >> putMVar varResult result
-  _ <- installHandler sigUSR1 (Catch handler') Nothing
-  catch (worker update) $ \ (e :: SomeException) ->
-    putStr "Worker: " >> print e
-  handler'
 
 
 errorModule :: String -> a

@@ -28,15 +28,18 @@ module Vanda.Util.Tree
   toTikZ
 , -- * Extraction
   flattenRanked
+, subTrees
 , yield
 , -- * Manipulation
   defoliate
 , -- * Map
-  mapLeafs, mapInners, mapInnersAndLeafs
+  mapLeafs, mapInners, mapInnersAndLeafs, mapAccumLLeafs, zipLeafsWith
 ) where
 
 
+import Control.Arrow (second)
 import Data.Functor
+import Data.List (mapAccumL)
 import Data.Tree
 
 
@@ -157,6 +160,11 @@ flattenRanked :: Tree a -> [(a, Int)]
 flattenRanked (Node x ts) = (x, length ts) : concatMap flattenRanked ts
 
 
+-- | List of all subtrees in pre-order.
+subTrees :: Tree a -> Forest a
+subTrees t = t : concatMap subTrees (subForest t)
+
+
 -- | List of leaves from left to right.
 yield :: Tree a -> [a]
 yield (Node x []) = [x]
@@ -192,3 +200,23 @@ mapInnersAndLeafs
   -> Tree b
 mapInnersAndLeafs f g = go
   where go (Node x ts) = Node (if null ts then g x else f x) (map go ts)
+
+
+-- | Like 'mapAccumL', but on the leaves of a tree.
+mapAccumLLeafs :: (a -> b -> (a, b)) -> a -> Tree b -> (a, Tree b)
+mapAccumLLeafs f = go
+  where
+    go a (Node x []) = second (flip Node []) (f a x)
+    go a (Node x ts) = second (Node x) (mapAccumL go a ts)
+
+
+-- | Like 'zipWith', but on the leaves of a tree. If the list has less
+-- elements than the tree has leaves, the last leaves stay unchanged. If the
+-- list has more elements than the tree has leaves, the overhang of the list
+-- is discarded.
+zipLeafsWith :: (a -> b -> b) -> [a] -> Tree b -> Tree b
+zipLeafsWith f = (snd .) . go
+  where
+    go [] t = ([], t)
+    go (x : xs) (Node y []) = (xs, Node (f x y) [])
+    go      xs  (Node y ts) = second (Node y) (mapAccumL go xs ts)

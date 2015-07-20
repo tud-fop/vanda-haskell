@@ -39,11 +39,19 @@ library
     , parallel >= 3.2
     , pretty
     , QuickCheck
+    , log-domain
+    , cmdargs
+    , directory
+    , filepath
+    , unix
+    , old-locale
+    , time
   exposed-modules:
       Vanda.Features
     , Vanda.Hypergraph
     , Vanda.Token
     , Vanda.Util
+    , Vanda.Util.IO
     , Vanda.Util.Memorysavers
     , Vanda.Util.Tree
     , Vanda.Algorithms.Earley
@@ -57,12 +65,21 @@ library
     , Vanda.Algorithms.IntEarley
     , Vanda.Algorithms.IntersectWithNGram
     , Vanda.Algorithms.IntersectWithNGramUtil
+    , Vanda.CBSM.CountBasedStateMerging
+    , Vanda.CBSM.Dovetailing
+    , Vanda.CBSM.Main
+    , Vanda.CBSM.Merge
+    , Vanda.CBSM.ProductOrder
+    , Vanda.CFTG.CFTG
+    , Vanda.CFTG.Examples
     , Vanda.Corpus.Negra
     , Vanda.Corpus.Negra.Binary
     , Vanda.Corpus.Negra.NFData
     , Vanda.Corpus.Negra.Text
+    , Vanda.Corpus.Penn.Filter
     , Vanda.Corpus.Penn.Simple
     , Vanda.Corpus.Penn.Text
+    , Vanda.Corpus.SExpression
     , Vanda.Corpus.TreeTerm
     , Vanda.Dyck.DyckLanguages
     , Vanda.Dyck.MultipleDyckLanguages
@@ -92,10 +109,22 @@ library
     , Vanda.PBSM.PatternBasedStateMerging
     , Vanda.PBSM.PrettyPrint
     , Vanda.PBSM.Types
+    , Control.Error
     , Data.Interner
+    , Data.MultiMap
     , Data.NTT
     , Data.Queue
+    , Data.RevMap
     , Data.WTA
   hs-source-dirs:  src
   GHC-Options: -O -funbox-strict-fields -optc-O3 -fexcess-precision -optc-ffast-math -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -O -funbox-strict-fields -optc-O3 -fexcess-precision -optc-ffast-math -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind -fprof-auto -fprof-cafs -fprof-auto-calls
+
+
+-- Test-Suite HUnitTests
+--   type: exitcode-stdio-1.0
+--   main-is: HUnitTests.hs
+-- --  type: detailed-0.9
+-- --  test-module: HUnitTests
+--   hs-source-dirs: testsuite/tests
+--   build-depends: base, Vanda, HUnit
