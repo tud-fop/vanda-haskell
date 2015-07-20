@@ -20,13 +20,16 @@ Build-Type:     Simple
 library
   build-depends:
       base
+    , bimap
     , containers >= 0.5.0
     , hashable
     , unordered-containers
     , array
     , vector
     , heap
+    , MissingH
     , bytestring
+    , split
     , text
     , parsec >= 3.1.2
     , binary >= 0.6.4
@@ -61,6 +64,9 @@ library
     , Vanda.Corpus.Penn.Simple
     , Vanda.Corpus.Penn.Text
     , Vanda.Corpus.TreeTerm
+    , Vanda.Dyck.DyckLanguages
+    , Vanda.Dyck.MultipleDyckLanguages
+    , Vanda.Grammar.AutomataStorage
     , Vanda.Grammar.Berkeley.IRTG
     , Vanda.Grammar.Berkeley.Text
     , Vanda.Grammar.XRS.Binarize
