@@ -6,10 +6,9 @@ module Vanda.Util.Timestamps
 
 
 import Control.DeepSeq
-import Data.Time.Format (formatTime)
+import Data.Time.Format (defaultTimeLocale, formatTime)
 import Data.Time.LocalTime (getZonedTime)
 import System.CPUTime (cpuTimePrecision, getCPUTime)
-import System.Locale (defaultTimeLocale)
 import Text.Printf (printf)
 
 
