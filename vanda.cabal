@@ -44,15 +44,16 @@ library
     , directory
     , filepath
     , unix
-    , old-locale
     , time
   exposed-modules:
       Vanda.Features
     , Vanda.Hypergraph
     , Vanda.Token
     , Vanda.Util
+    , Vanda.Util.Histogram
     , Vanda.Util.IO
     , Vanda.Util.Memorysavers
+    , Vanda.Util.Timestamps
     , Vanda.Util.Tree
     , Vanda.Algorithms.Earley
     , Vanda.Algorithms.EarleyMonadic
@@ -116,6 +117,7 @@ library
     , Data.Queue
     , Data.RevMap
     , Data.WTA
+    , System.Console.CmdArgs.Explicit.Misc
   hs-source-dirs:  src
   GHC-Options: -O -funbox-strict-fields -optc-O3 -fexcess-precision -optc-ffast-math -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -O -funbox-strict-fields -optc-O3 -fexcess-precision -optc-ffast-math -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind -fprof-auto -fprof-cafs -fprof-auto-calls
