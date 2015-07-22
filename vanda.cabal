@@ -19,46 +19,45 @@ Build-Type:     Simple
 
 library
   build-depends:
-      base
+      array
+    , base
     , bimap
-    , containers >= 0.5.0
-    , hashable
-    , unordered-containers
-    , array
-    , vector
-    , heap
-    , MissingH
-    , bytestring
-    , split
-    , text
-    , parsec >= 3.1.2
     , binary >= 0.6.4
-    , deepseq
-    , zlib
-    , mtl
-    , parallel >= 3.2
-    , pretty
-    , QuickCheck
-    , log-domain
+    , bytestring
     , cmdargs
+    , containers >= 0.5.0
+    , deepseq
     , directory
     , filepath
-    , unix
+    , hashable
+    , heap
+    , log-domain
+    , MissingH
+    , mtl
+    , parallel >= 3.2
+    , parsec >= 3.1.2
+    , pretty
+    , QuickCheck
+    , split
+    , text
     , time
+    , unix
+    , unordered-containers
+    , vector
+    , zlib
   exposed-modules:
-      Vanda.Features
-    , Vanda.Hypergraph
-    , Vanda.Token
-    , Vanda.Util
-    , Vanda.Util.Histogram
-    , Vanda.Util.IO
-    , Vanda.Util.Memorysavers
-    , Vanda.Util.Timestamps
-    , Vanda.Util.Tree
+      Control.Error
+    , Data.Interner
+    , Data.MultiMap
+    , Data.NTT
+    , Data.Queue
+    , Data.RevMap
+    , Data.WTA
+    , System.Console.CmdArgs.Explicit.Misc
     , Vanda.Algorithms.Earley
-    , Vanda.Algorithms.EarleyMonadic
     , Vanda.Algorithms.Earley.FastNub
     , Vanda.Algorithms.Earley.WSA
+    , Vanda.Algorithms.EarleyMonadic
     , Vanda.Algorithms.ExpectationMaximization
     , Vanda.Algorithms.ExpectationMaximizationAcyclic
     , Vanda.Algorithms.InsideOutsideWeights
@@ -84,23 +83,25 @@ library
     , Vanda.Corpus.TreeTerm
     , Vanda.Dyck.DyckLanguages
     , Vanda.Dyck.MultipleDyckLanguages
+    , Vanda.Features
     , Vanda.Grammar.AutomataStorage
     , Vanda.Grammar.Berkeley.IRTG
     , Vanda.Grammar.Berkeley.Text
-    , Vanda.Grammar.XRS.Binarize
-    , Vanda.Grammar.XRS.Functions
-    , Vanda.Grammar.XRS.GHKM
-    , Vanda.Grammar.XRS.IRTG
-    , Vanda.Grammar.XRS.Text
     , Vanda.Grammar.LM
     , Vanda.Grammar.NGrams.Functions
     , Vanda.Grammar.NGrams.Text
     , Vanda.Grammar.NGrams.VandaNGrams
     , Vanda.Grammar.NGrams.WTA
     , Vanda.Grammar.NGrams.WTA_BHPS
-    , Vanda.Hypergraph.Binary
+    , Vanda.Grammar.XRS.Binarize
+    , Vanda.Grammar.XRS.Functions
+    , Vanda.Grammar.XRS.GHKM
+    , Vanda.Grammar.XRS.IRTG
+    , Vanda.Grammar.XRS.Text
+    , Vanda.Hypergraph
     , Vanda.Hypergraph.BackwardStar
     , Vanda.Hypergraph.Basic
+    , Vanda.Hypergraph.Binary
     , Vanda.Hypergraph.DotExport
     , Vanda.Hypergraph.EdgeList
     , Vanda.Hypergraph.ForwardStar
@@ -110,14 +111,13 @@ library
     , Vanda.PBSM.PatternBasedStateMerging
     , Vanda.PBSM.PrettyPrint
     , Vanda.PBSM.Types
-    , Control.Error
-    , Data.Interner
-    , Data.MultiMap
-    , Data.NTT
-    , Data.Queue
-    , Data.RevMap
-    , Data.WTA
-    , System.Console.CmdArgs.Explicit.Misc
+    , Vanda.Token
+    , Vanda.Util
+    , Vanda.Util.Histogram
+    , Vanda.Util.IO
+    , Vanda.Util.Memorysavers
+    , Vanda.Util.Timestamps
+    , Vanda.Util.Tree
   hs-source-dirs:  src
   GHC-Options: -O -funbox-strict-fields -optc-O3 -fexcess-precision -optc-ffast-math -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -O -funbox-strict-fields -optc-O3 -fexcess-precision -optc-ffast-math -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind -fprof-auto -fprof-cafs -fprof-auto-calls
