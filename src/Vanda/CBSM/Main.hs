@@ -18,6 +18,7 @@ module Vanda.CBSM.Main
 ( main
 , mainArgs
 , cmdArgs
+, Args()
 ) where
 
 
@@ -125,7 +126,7 @@ data FlagUnknownWordOutput
 
 cmdArgs :: Mode Args
 cmdArgs
-  = modes "Main" (Help $ defaultHelp cmdArgs) "Count-Based State Merging"
+  = modes "cbsm" (Help $ defaultHelp cmdArgs) "Count-Based State Merging"
   [ (modeEmpty $ PrintCorpora False False False "" FOFPretty [])
     { modeNames = ["print-corpora"]
     , modeHelp =
