@@ -1,5 +1,6 @@
 {-# LANGUAGE BangPatterns, DeriveDataTypeable, RecordWildCards #-}
-
+-- for convenient cmdargs definitions:
+{-# OPTIONS_GHC -fno-warn-incomplete-record-updates #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Vanda.CBSM.Main
