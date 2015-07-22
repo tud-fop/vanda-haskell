@@ -36,7 +36,6 @@ import           Vanda.Util.IO
 import           Vanda.Util.Timestamps
 import           Vanda.Util.Tree as T
 
-import           Control.Applicative ((<$>))
 import           Control.Arrow (second)
 import           Control.Monad
 import qualified Data.Binary as B
