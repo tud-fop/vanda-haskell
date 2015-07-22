@@ -108,6 +108,7 @@ library
     , Vanda.Hypergraph.IntHypergraph
     , Vanda.Hypergraph.Text
     , Vanda.Hypergraph.Tree
+    , Vanda.Main
     , Vanda.PBSM.PatternBasedStateMerging
     , Vanda.PBSM.PrettyPrint
     , Vanda.PBSM.Types
