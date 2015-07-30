@@ -19,11 +19,11 @@ module Vanda.Dyck.MultipleDyckLanguages
   , createTreeStack
 -- ** predicates
   , checkTreeStack
-  , isOnlyRootTree
+  , bottomTreeStack
 -- ** functions
   , pushTreeStack
-  , mvDownTreeStack
-  , mvUpTreeStack
+  , downTreeStack
+  , upTreeStack
   , stayTreeStack
 -- * plumbing
   , clipList
@@ -84,14 +84,14 @@ multipleDyckTreeStackAutomaton ass bij = (((), c₀), τs, (== c₀) . snd)
                          (((== Just b) . fst. fromJust)
                           &&& (not . S.null . snd . fromJust))
              , let f = stayTreeStack (\ x -> case x of {(Just (_, s)) -> [Just (Nothing, s)]; Nothing -> []})
-                         >=> mvDownTreeStack
+                         >=> downTreeStack
              ]
           ++ [ ((), a, const True, f, ())
              | a <- as
              , let {p (Just (Nothing, s)) = a `S.member` s; p _ = False}
              , let f = stayTreeStack (\ (Just (Nothing, s)) -> [Just (Just (bij a), S.delete a s)])
                          <=< filter (checkTreeStack p)
-                         . mvUpTreeStack
+                         . upTreeStack
              ]
           ++ [ ((), a, const True, f, ())
              | a <- as
@@ -137,9 +137,9 @@ checkTreeStack :: (a -> Bool) -> TreeStack a -> Bool
 checkTreeStack f (TreeStack ξ ρ) = f $ symbolAt ρ ξ
 
 -- | Checks whether the tree only has a root node.
-isOnlyRootTree :: TreeStack a -> Bool
-isOnlyRootTree (TreeStack (Node _ []) _) = True
-isOnlyRootTree _ = False
+bottomTreeStack :: TreeStack a -> Bool
+bottomTreeStack (TreeStack (Node _ []) _) = True
+bottomTreeStack _ = False
 
 -- | Adds the given stack symbol above the current stack pointer.
 pushTreeStack :: a -> TreeStack a -> [TreeStack a]
@@ -165,13 +165,13 @@ popTreeStack (TreeStack ξ ρ) = [TreeStack ξ₁ $ take (length ρ - 1) ρ]
           = Node δ $ take i ts ++ deleteAt (ts !! i) is : drop (i + 1) ts
 
 -- | Moves the stack pointer to the parent node of its current position.
-mvDownTreeStack :: TreeStack a -> [TreeStack a]
-mvDownTreeStack (TreeStack _ []) = []
-mvDownTreeStack (TreeStack ξ ρ ) = [TreeStack ξ $ take (length ρ - 1) ρ]
+downTreeStack :: TreeStack a -> [TreeStack a]
+downTreeStack (TreeStack _ []) = []
+downTreeStack (TreeStack ξ ρ ) = [TreeStack ξ $ take (length ρ - 1) ρ]
 
 -- | (Nondeterministically) moves the stack pointer to the child nodes.
-mvUpTreeStack :: TreeStack a -> [TreeStack a]
-mvUpTreeStack (TreeStack ξ ρ) = [TreeStack ξ (ρ ++ [i]) | i <- [0 .. rank ξ ρ - 1]]
+upTreeStack :: TreeStack a -> [TreeStack a]
+upTreeStack (TreeStack ξ ρ) = [TreeStack ξ (ρ ++ [i]) | i <- [0 .. rank ξ ρ - 1]]
   where rank (Node _ ξs) [] = length ξs
         rank (Node _ ξs) (i:is) = rank (ξs !! i) is
 
