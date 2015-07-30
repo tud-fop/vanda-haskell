@@ -101,6 +101,7 @@ library
     , Vanda.Grammar.XRS.LCFRS.Binarize
     , Vanda.Grammar.XRS.LCFRS.Evaluation
     , Vanda.Grammar.XRS.LCFRS.Extraction
+    , Vanda.Grammar.XRS.LCFRS.Main
     , Vanda.Grammar.XRS.Text
     , Vanda.Hypergraph
     , Vanda.Hypergraph.BackwardStar
