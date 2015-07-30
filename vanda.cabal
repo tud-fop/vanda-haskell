@@ -82,6 +82,7 @@ library
     , Vanda.Corpus.SExpression
     , Vanda.Corpus.TreeTerm
     , Vanda.Dyck.DyckLanguages
+    , Vanda.Dyck.Main
     , Vanda.Dyck.MultipleDyckLanguages
     , Vanda.Features
     , Vanda.Grammar.AutomataStorage
