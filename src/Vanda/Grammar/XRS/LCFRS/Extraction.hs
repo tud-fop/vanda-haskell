@@ -150,8 +150,8 @@ extractPLCFRSFromNegra negra
           = dualIntifyNegra
           $ map ( establishSpanBasedOrderAndAnnotateFanOut
                 . negraToCrossedTree
-                . sData)
-          -- $ take 10
+                . sData
+                )
           $ sentences
           $ negra
         (initialsSet, countRuleMap) = readoffAll intifiedTrees

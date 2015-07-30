@@ -32,7 +32,6 @@ main = do
     (strategy : "-i" : infile : "-o" : outfile : subset) -> do
       plcfrs <- fmap (B.decode . decompress . BS.fromChunks . (:[]))
               $ SBS.readFile infile :: IO PLCFRS
-      
       -- full binarization
       let binarizer = case strategy of
                         "naive" -> binarizeNaively
@@ -42,7 +41,6 @@ main = do
       BS.writeFile outfile (compress $ B.encode newPlcfrs)
       putStrLn $ "Binarized PLCFRS (" ++ strategy ++ "):"
                  ++ niceStatictics newPlcfrs
-      
       when (subset == ["-plussmall"]) $ do -- partial bounded binarization
           putStrLn $ "The following small subset binarizations are computed, "
                      ++ "but not stored anywhere (they are useless).\n\n"
@@ -58,7 +56,6 @@ main = do
           putStrLn $ "Boundedly binarized small PLCFRS:"
                      ++ (niceStatictics . printableFromRules)
                         (binarizeRuleSubset binarizeByAdjacency pred a_nt rules)
-      
     _ -> putStrLn $ "Usage: " ++ progName ++ " (naive|optimal) -i infile"
                     ++ "-o outfile [-plussmall]"
                     ++ "\ninfile and outfile are an gzipped plcfrs files"
