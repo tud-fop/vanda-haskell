@@ -157,18 +157,21 @@ toTikZ = go 1 where
 -- | The elements of a 'Tree' and the 'length' of their 'subForest's,
 -- respectively, in pre-order.
 flattenRanked :: Tree a -> [(a, Int)]
-flattenRanked (Node x ts) = (x, length ts) : concatMap flattenRanked ts
+flattenRanked t = go t []                       -- idea from Data.Tree.flatten
+  where go (Node x ts) xs = (x, length ts) : foldr go xs ts
 
 
 -- | List of all subtrees in pre-order.
 subTrees :: Tree a -> Forest a
-subTrees t = t : concatMap subTrees (subForest t)
+subTrees t0 = go t0 []                          -- idea from Data.Tree.flatten
+  where go t@(Node _ ts) xs = t : foldr go xs ts
 
 
 -- | List of leaves from left to right.
 yield :: Tree a -> [a]
-yield (Node x []) = [x]
-yield (Node _ xs) = concatMap yield xs
+yield t = go t []                               -- idea from Data.Tree.flatten
+  where go (Node x []) xs = x : xs
+        go (Node _ ts) xs = foldr go xs ts
 
 
 -- Manipulation --------------------------------------------------------------
