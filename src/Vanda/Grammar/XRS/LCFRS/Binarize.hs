@@ -12,6 +12,7 @@
 module Vanda.Grammar.XRS.LCFRS.Binarize
 ( binarizeNaively
 , binarizeByAdjacency
+, binarizeHybrid
 , binarizeUsing
 , binarizeRuleSubset
 ) where
@@ -338,6 +339,15 @@ getCurPosFromIndex
   -> Int -- ^ actual current index
 getCurPosFromIndex rhs i = fromJust $ elemIndex i $ map fst rhs
 
+binarizeHybrid
+  :: Int -- ^ bound for the rank up to which we binarize optimally
+  -> A.Array Int Int
+  -> (Rule, Double)
+  -> [(ProtoRule, Double)]
+binarizeHybrid b a r@(((_, nts), _), _)
+  = (if length nts <= b then binarizeByAdjacency else binarizeNaively) a r
+
+
 binarizeByAdjacency
   :: A.Array Int Int
   -> (Rule, Double)
@@ -352,7 +362,6 @@ binarizeByAdjacency fanouts r@(((_, rhs), h'), _)
     tryAdjacenciesFrom f = case chooseGoodTree (computeAll f) of
                              Just t -> t
                              Nothing -> tryAdjacenciesFrom (f + 1)
-    
     -- the working set shall not consist of mere endpoint sets, instead store
     -- trees representing the final fusion process (alongside the endpoints,
     -- we still need these for the algorithm)! Initially the set consists of
@@ -363,7 +372,6 @@ binarizeByAdjacency fanouts r@(((_, rhs), h'), _)
     indexedH = zip [0..] $ getNTOnlyH h'
     globalEndpoints :: Endpoints
     globalEndpoints = foldl1 merge $ map snd cList_
-    
     getEndpointCandidatesForNT (n, _)
       = (,) (NTTreeLeaf n)
       $ foldl1 merge -- looks pretty stupid, consider a one-pass-fold
@@ -371,7 +379,6 @@ binarizeByAdjacency fanouts r@(((_, rhs), h'), _)
       $ filter (maybe False (\i -> getNTPosOfVar' i == n) . snd)
       $ indexedH
     getNTPosOfVar' = getNTPosOfVar $ map (fanouts A.!) rhs
-    
     -- This functions generates all new trees from one tree and a working set.
     pairWith
       :: Int -- ^ target maximum fanout
@@ -381,7 +388,6 @@ binarizeByAdjacency fanouts r@(((_, rhs), h'), _)
     pairWith fo c = S.map fromJust
                   . S.delete Nothing
                   . S.map (mergeCandidates fo c)
-    
     -- We have to generate all trees from these leaves and choose one (see
     -- below) which has endpoints containing all NTs.
     -- All newly generated candidates (using pairWith) are inserted into a
@@ -408,14 +414,12 @@ binarizeByAdjacency fanouts r@(((_, rhs), h'), _)
             in computeAllWorker fo
                                 (S.union workingSet new)
                                 (fringe ++ S.toList new)
-    
     -- TODO: choose the best rather than the first!
     chooseGoodTree :: [CandidateEndpoints] -> Maybe NTTree
     chooseGoodTree = fmap fst
                    . listToMaybe
                    . take 1
                    . filter ((==globalEndpoints) . snd)
-    
     -- Looks like there is a bidirectional dataflow: the initial rule goes
     -- top-down through the tree and is dismantled more and more the farther to
     -- the right it goes, but the true fusions happen from the leaves 
@@ -464,12 +468,10 @@ binarizeByAdjacency fanouts r@(((_, rhs), h'), _)
                 newlyCreatedNTIndex = maximum oldIndices + 1
                 newIndices = filter (\i -> i /= i1 && i /= i2)
                                     oldIndices ++ [newlyCreatedNTIndex]
-                
             in (  indexRule newIndices newRem
                 : indexRule (repeat undefined) newInn
                 : oldInners
                , newlyCreatedNTIndex)
-    
     -- Now use the rule to evaluate the root - it's time to fully evaluate
     -- all these functions in the inner nodes!
     crunchRule :: NTTree -> [(ProtoRule, Double)]
