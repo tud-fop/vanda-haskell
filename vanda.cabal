@@ -113,7 +113,6 @@ library
     , Vanda.Hypergraph.IntHypergraph
     , Vanda.Hypergraph.Text
     , Vanda.Hypergraph.Tree
-    , Vanda.Main
     , Vanda.PBSM.PatternBasedStateMerging
     , Vanda.PBSM.PrettyPrint
     , Vanda.PBSM.Types
@@ -128,6 +127,38 @@ library
   GHC-Options: -O -funbox-strict-fields -optc-O3 -fexcess-precision -optc-ffast-math -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -O -funbox-strict-fields -optc-O3 -fexcess-precision -optc-ffast-math -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind -fprof-auto -fprof-cafs -fprof-auto-calls
 
+executable Vanda
+  build-depends:
+      array
+    , base
+    , bimap
+    , binary >= 0.6.4
+    , bytestring
+    , cmdargs
+    , containers >= 0.5.0
+    , deepseq
+    , directory
+    , filepath
+    , hashable
+    , heap
+    , log-domain
+    , MissingH
+    , mtl
+    , parallel >= 3.2
+    , parsec >= 3.1.2
+    , pretty
+    , QuickCheck
+    , split
+    , text
+    , time
+    , unix
+    , unordered-containers
+    , vector
+    , zlib
+  hs-source-dirs:  src
+  main-is: Main.hs
+  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
+  ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
 
 -- Test-Suite HUnitTests
 --   type: exitcode-stdio-1.0

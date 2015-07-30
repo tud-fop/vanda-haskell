@@ -20,7 +20,7 @@
 -- In this module, the local command line definitions are 'remap'ped to provide the unified command line interface. Note that the 'modeNames' of the local 'Mode's are thereby used as names for the sub-commands.
 -----------------------------------------------------------------------------
 
-module Vanda.Main
+module Main
 ( main
 , mainArgs
 , cmdArgs
@@ -30,6 +30,7 @@ module Vanda.Main
 
 import           System.Console.CmdArgs.Explicit.Misc
 import qualified Vanda.CBSM.Main
+import qualified Vanda.Grammar.XRS.LCFRS.Main
 
 import           System.Console.CmdArgs.Explicit
 
@@ -37,6 +38,7 @@ import           System.Console.CmdArgs.Explicit
 data Args
   = Help String
   | CBSM Vanda.CBSM.Main.Args
+  | LCFRS Vanda.Grammar.XRS.LCFRS.Main.Args
   deriving Show
 
 
@@ -44,6 +46,7 @@ cmdArgs :: Mode Args
 cmdArgs
   = modes "vanda" (Help $ defaultHelp cmdArgs) "Vanda"
   [ remap2 CBSM (\ (CBSM x) -> x) Vanda.CBSM.Main.cmdArgs
+  , remap2 LCFRS (\ (LCFRS x) -> x) Vanda.Grammar.XRS.LCFRS.Main.cmdArgs
   ]
 
 
@@ -54,3 +57,4 @@ main = processArgs (populateHelpMode Help cmdArgs) >>= mainArgs
 mainArgs :: Args -> IO ()
 mainArgs (Help cs) = putStrLn cs
 mainArgs (CBSM x ) = Vanda.CBSM.Main.mainArgs x
+mainArgs (LCFRS x ) = Vanda.Grammar.XRS.LCFRS.Main.mainArgs x
