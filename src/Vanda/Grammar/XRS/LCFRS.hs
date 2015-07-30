@@ -119,20 +119,18 @@ niceStatictics
   -> String
 niceStatictics (initials, rulesAndProbs, (a_nt, _)) =
   "\n"
-  ++ (printf "%7d initial NTs\n" $ length initials)
-  ++ (printf "%7d NTs total\n" $ length (A.indices a_nt))
+  ++ (printf "%7d initial non-terminals\n" $ length initials)
+  ++ (printf "%7d non-terminals\n" $ length (A.indices a_nt))
   ++ (printf "%7d rules\n" $ length rulesAndProbs)
   ++ "\n"
-  ++ "Ranks:\n"
-  ++ (unlines (map (uncurry (printf "%2d: %7d")) rkCounts))
-  ++ "Fanouts:\n"
-  ++ (unlines (map (uncurry (printf "%2d: %7d")) foCounts))
+  ++ "Histograms:\n"
+  ++ "  Ranks:\n"
+  ++ (unlines (map (uncurry (printf "    %2d: %7d")) rkCounts))
+  ++ "  Fanouts:\n"
+  ++ (unlines (map (uncurry (printf "    %2d: %7d")) foCounts))
   where
     counter f = foldl' (\m r -> M.insertWith (+) (f r) 1 m)
                        (M.empty :: M.Map Int Int)
                        rulesAndProbs
-    populateHoles m = foldl' (\m k -> M.insertWith (+) k 0 m)
-                             m
-                             [0.. (fst $ M.findMax m)]
-    rkCounts = M.assocs $ populateHoles $ counter getRk
-    foCounts = M.assocs $ populateHoles $ counter getFo
+    rkCounts = M.assocs $ counter getRk
+    foCounts = M.assocs $ counter getFo
