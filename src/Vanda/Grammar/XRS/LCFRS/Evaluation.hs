@@ -41,7 +41,7 @@ sententialFront
   -> (A.Array Int String) -- ^ Ts
   -> Derivation Int Int
   -> V.Vector String -- a sentence (terminal symbol sequence)
-sententialFront (MIRTG hg initials h') a_nt a_t dt
+sententialFront (MIRTG hg _ h') a_nt a_t dt
   | not $ and $ fmap (`elem` (edges hg)) dt
     = error "Not all rules are in the IRTG!"
   {- For testing: print other symbols, too. See hint below.

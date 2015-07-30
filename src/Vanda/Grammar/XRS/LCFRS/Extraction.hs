@@ -16,7 +16,6 @@ module Vanda.Grammar.XRS.LCFRS.Extraction
 import           Control.DeepSeq (deepseq)
 import           Control.Monad.State.Lazy hiding (mapM)
 import           Control.Parallel.Strategies
-import qualified Data.Array as A
 import qualified Data.Foldable as F
 import           Data.List (sortBy, findIndex)
 import qualified Data.Map.Strict as M

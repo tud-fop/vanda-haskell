@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -fno-warn-incomplete-record-updates #-}
+
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Vanda.Grammar.XRS.LCFRS.Main
@@ -24,24 +26,20 @@ module Vanda.Grammar.XRS.LCFRS.Main
 
 import           Codec.Compression.GZip (compress, decompress)
 
-import qualified Data.Array as A
 import qualified Data.Binary as B
 import qualified Data.ByteString as SBS
 import qualified Data.ByteString.Lazy as BS
-import qualified Data.Map.Strict as M
 import qualified Data.Text.Lazy.IO as TIO
 
-import           System.Environment (getArgs, getProgName)
 import           System.IO (hPutStrLn, stderr)
 
 import           Vanda.Corpus.Negra.Text (parseNegra)
-import           Vanda.Grammar.XRS.LCFRS (getRk, niceStatictics, PLCFRS)
+import           Vanda.Grammar.XRS.LCFRS (niceStatictics, PLCFRS)
 import           Vanda.Grammar.XRS.LCFRS.Binarize (binarizeNaively, binarizeByAdjacency, binarizeHybrid, binarizeUsing)
 import           Vanda.Grammar.XRS.LCFRS.Extraction (extractPLCFRSFromNegra)
 
 import           System.Console.CmdArgs.Explicit
 import           System.Console.CmdArgs.Explicit.Misc
-import           System.Environment (getArgs, getProgName)
 
 
 data Args

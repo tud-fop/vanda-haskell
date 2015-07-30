@@ -19,8 +19,8 @@ module Vanda.Grammar.XRS.LCFRS
 -- for example the stuff in LCFRS.Evaluation
 , MIRTG(..)
 , MXRS(..)
--- , getMXRSFromProbabilisticRules
--- , toProbabilisticRules
+, fromProbabilisticRules
+, toProbabilisticRules
 , niceStatictics
 ) where
 
@@ -85,22 +85,22 @@ instance Show MXRS where
     $ hg
     where cut n = take n . (++ repeat ' ')
 
-getMIRTGFromRules
+fromRules
   :: [Int] -- ^ initials
   -> [Rule]
   -> MIRTG
-getMIRTGFromRules initials rules =
+fromRules initials rules =
   let myHyperedges = map (\(((lhs, rhs), _), i) -> mkHyperedge lhs rhs i i)
                    $ zip rules [0..]
       myH = V.fromList $ map (V.fromList . map V.fromList . snd) rules
   in MIRTG (mkHypergraph myHyperedges) initials myH
 
-getMXRSFromProbabilisticRules
+fromProbabilisticRules
   :: [Int] -- ^ initial NTs
   -> [(Rule, Double)] -- ^ rules and their probabilities
   -> MXRS
-getMXRSFromProbabilisticRules initials rs =
-  MXRS (getMIRTGFromRules initials (map fst rs)) (V.fromList $ map snd rs)
+fromProbabilisticRules initials rs =
+  MXRS (fromRules initials (map fst rs)) (V.fromList $ map snd rs)
 
 toProbabilisticRules
   :: MXRS

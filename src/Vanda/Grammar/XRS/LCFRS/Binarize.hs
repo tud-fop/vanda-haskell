@@ -31,10 +31,7 @@ import           Data.NTT
 import           Vanda.Util.Memorysavers (invertMap)
 
 import           Vanda.Grammar.XRS.LCFRS
-import           Vanda.Grammar.XRS.LCFRS.Extraction
-import           Vanda.Grammar.XRS.LCFRS.Evaluation
 
-import Debug.Trace
 
 {------------------------------------------------------------------------------
 - ProtoRules are necessary to check for duplicates when binarizing many rules -
@@ -506,9 +503,9 @@ binarizeRuleSubset
   -> [(Rule, Double)] -- ^ binarized subset of rules
 binarizeRuleSubset binarizer pred a_nt fullRules = ordNub newRules
   where
-    (newRules, newMap) = intifyProtoRules m_nt
-                       $ concatMap (binarizer fanouts)
-                       $ filter pred fullRules
+    (newRules, _) = intifyProtoRules m_nt
+                  $ concatMap (binarizer fanouts)
+                  $ filter pred fullRules
     m_nt = invertArray a_nt
     fanouts = getFoNTArrayFromRules fullRules
 
