@@ -16,38 +16,6 @@ category:       NLP
 tested-with:    GHC
 Build-Type:     Simple
 
-executable BinarizeLCFRS
-  build-depends:
-      base
-    , array
-    , binary
-    , bytestring
-    , containers
-    , deepseq
-    , text
-    , Vanda
-    , vector
-    , zlib
-  Main-Is:  BinarizeLCFRS.hs
-  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-  ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
-
-executable NegraToLCFRS
-  build-depends:
-      base
-    , array
-    , binary
-    , bytestring
-    , containers
-    , deepseq
-    , text
-    , Vanda
-    , vector
-    , zlib
-  Main-Is:  NegraToLCFRS.hs
-  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-  ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
-
 
 executable NGrams
   build-depends:
