@@ -64,6 +64,7 @@ library
     , Vanda.Algorithms.InsideOutsideWeightsAcyclic
     , Vanda.Algorithms.IntEarley
     , Vanda.Algorithms.IntersectWithNGram
+    , Vanda.Algorithms.IntersectWithNGrams.Main
     , Vanda.Algorithms.IntersectWithNGramUtil
     , Vanda.CBSM.CountBasedStateMerging
     , Vanda.CBSM.Dovetailing

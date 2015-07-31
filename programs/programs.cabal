@@ -17,16 +17,6 @@ tested-with:    GHC
 Build-Type:     Simple
 
 
-executable NGrams
-  build-depends:
-      base
-    , text
-    , Vanda
-  Main-Is: NGrams.hs
-  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-  ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
-
-
 executable PennToSentenceCorpus
   build-depends:
       base
@@ -34,22 +24,6 @@ executable PennToSentenceCorpus
     , text
     , Vanda
   Main-Is: PennToSentenceCorpus.hs
-  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-  ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
-
-
-executable XRSNGrams
-  build-depends:
-      base
-    , array
-    , binary
-    , bytestring
-    , containers
-    , text
-    , Vanda
-    , vector
-    , zlib
-  Main-Is: XRSNGrams.hs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
 

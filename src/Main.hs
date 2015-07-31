@@ -33,6 +33,7 @@ import qualified Vanda.CBSM.Main
 import qualified Vanda.Dyck.Main
 import qualified Vanda.Grammar.XRS.LCFRS.Main
 import qualified Vanda.Grammar.NGrams.Main
+import qualified Vanda.Algorithms.IntersectWithNGrams.Main
 
 import           System.Console.CmdArgs.Explicit
 
@@ -43,6 +44,7 @@ data Args
   | Dyck Vanda.Dyck.Main.Args
   | LCFRS Vanda.Grammar.XRS.LCFRS.Main.Args
   | NGrams Vanda.Grammar.NGrams.Main.Args
+  | XRSNGrams Vanda.Algorithms.IntersectWithNGrams.Main.Args
   deriving Show
 
 
@@ -53,6 +55,7 @@ cmdArgs
   , remap2 CBSM (\ (CBSM x) -> x) Vanda.CBSM.Main.cmdArgs
   , remap2 LCFRS (\ (LCFRS x) -> x) Vanda.Grammar.XRS.LCFRS.Main.cmdArgs
   , remap2 NGrams (\ (NGrams x) -> x) Vanda.Grammar.NGrams.Main.cmdArgs
+  , remap2 XRSNGrams (\ (XRSNGrams x) -> x) Vanda.Algorithms.IntersectWithNGrams.Main.cmdArgs
   ]
 
 
@@ -61,8 +64,9 @@ main = processArgs (populateHelpMode Help cmdArgs) >>= mainArgs
 
 
 mainArgs :: Args -> IO ()
-mainArgs (Help   cs) = putStrLn cs
-mainArgs (CBSM   x ) = Vanda.CBSM.Main.mainArgs x
-mainArgs (Dyck   x ) = Vanda.Dyck.Main.mainArgs x
-mainArgs (LCFRS  x ) = Vanda.Grammar.XRS.LCFRS.Main.mainArgs x
-mainArgs (NGrams x ) = Vanda.Grammar.NGrams.Main.mainArgs x
+mainArgs (Help      cs) = putStrLn cs
+mainArgs (CBSM      x ) = Vanda.CBSM.Main.mainArgs x
+mainArgs (Dyck      x ) = Vanda.Dyck.Main.mainArgs x
+mainArgs (LCFRS     x ) = Vanda.Grammar.XRS.LCFRS.Main.mainArgs x
+mainArgs (NGrams    x ) = Vanda.Grammar.NGrams.Main.mainArgs x
+mainArgs (XRSNGrams x ) = Vanda.Algorithms.IntersectWithNGrams.Main.mainArgs x
