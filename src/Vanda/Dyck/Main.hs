@@ -39,7 +39,7 @@ data Args
 
 cmdArgs :: Mode Args
 cmdArgs
-  = modes "brackets" (Help $ defaultHelp cmdArgs) "Algorithms working with Dyck and multiple Dyck languages."
+  = modes "brackets" (Help $ defaultHelp cmdArgs) "algorithms for Dyck and multiple Dyck languages"
   [ (modeEmpty $ MemberDyck undefined undefined undefined)
     { modeNames = ["dyck", "Dyck"]
     , modeHelp = "checks whether WORD is member of the Dyck language given by LEFT_PARENTHESES and RIGHT_PARENTHESES."

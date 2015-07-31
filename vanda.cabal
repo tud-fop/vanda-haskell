@@ -90,6 +90,7 @@ library
     , Vanda.Grammar.Berkeley.Text
     , Vanda.Grammar.LM
     , Vanda.Grammar.NGrams.Functions
+    , Vanda.Grammar.NGrams.Main
     , Vanda.Grammar.NGrams.Text
     , Vanda.Grammar.NGrams.VandaNGrams
     , Vanda.Grammar.NGrams.WTA

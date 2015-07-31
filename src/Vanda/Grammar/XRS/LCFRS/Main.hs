@@ -59,7 +59,7 @@ data BinarizationStrategy = Naive | Optimal | Hybrid Int deriving (Eq, Show)
 
 cmdArgs :: Mode Args
 cmdArgs
-  = modes "lcfrs" (Help $ defaultHelp cmdArgs) "Algorithms for probabilistic linear context-free rewriting systems"
+  = modes "lcfrs" (Help $ defaultHelp cmdArgs) "algorithms for probabilistic LCFRS"
   [ (modeEmpty $ Extract undefined)
     { modeNames = ["extract"]
     , modeHelp = "Reads of a PLCFRS from a NeGra corpus."
