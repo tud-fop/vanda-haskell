@@ -21,11 +21,13 @@ module Vanda.Grammar.XRS.LCFRS
 , MXRS(..)
 , fromProbabilisticRules
 , toProbabilisticRules
+, showPLCFRS
 , niceStatictics
 ) where
 
 import qualified Data.Array as A
 import           Data.Foldable (foldl')
+import           Data.List (intercalate)
 import qualified Data.Map.Strict as M
 import qualified Data.Vector as V
 import           Text.Printf (printf)
@@ -113,6 +115,36 @@ toProbabilisticRules (MXRS (MIRTG hg inits h') ws)
          (V.toList $ fmap (V.toList . fmap V.toList) h') -- ...and this.
   where
     worker (he, d, h'') = (((to he, from he), h''), d)
+
+-- pretty printing
+
+retranslateProbRule
+  :: (A.Array Int String)
+  -> (A.Array Int String)
+  -> (Rule, Double)
+  -> String
+retranslateProbRule a_nt a_t (((lhs, rhs), hom_f), p)
+  =  (A.!) a_nt lhs
+  ++ " -> ⟨"
+  ++ ( intercalate (',':thinspace)
+     $ map (intercalate thinspace . map retHomComponent)
+     $ hom_f
+     )
+  ++ "⟩( "
+  ++ (intercalate " " $ map ((A.!) a_nt) rhs)
+  ++ " ) "
+  ++ show p
+    where
+      retHomComponent (T t) = (A.!) a_t t
+      retHomComponent (NT v) = show v
+      thinspace = [' ']
+
+showPLCFRS :: PLCFRS -> String
+showPLCFRS (initials, rules, (a_nt, a_t))
+  =  "Initial NTs:\n"
+  ++ (intercalate ", " $ map ((A.!) a_nt) initials)
+  ++ "\n\nRules (LHS -> ⟨comp.fct.⟩( RHS ) probability):\n"
+  ++ unlines (map (retranslateProbRule a_nt a_t) rules)
 
 niceStatictics
   :: PLCFRS

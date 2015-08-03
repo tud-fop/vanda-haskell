@@ -34,7 +34,7 @@ import qualified Data.Text.Lazy.IO as TIO
 import           System.IO (hPutStrLn, stderr)
 
 import           Vanda.Corpus.Negra.Text (parseNegra)
-import           Vanda.Grammar.XRS.LCFRS (niceStatictics, PLCFRS)
+import           Vanda.Grammar.XRS.LCFRS (showPLCFRS, niceStatictics, PLCFRS)
 import           Vanda.Grammar.XRS.LCFRS.Binarize (binarizeNaively, binarizeByAdjacency, binarizeHybrid, binarizeUsing)
 import           Vanda.Grammar.XRS.LCFRS.Extraction (extractPLCFRSFromNegra)
 
@@ -100,6 +100,7 @@ mainArgs (Extract outfile)
       corpus <- TIO.getContents
       let plcfrs = extractPLCFRSFromNegra $ parseNegra corpus
       BS.writeFile outfile . compress $ B.encode plcfrs
+      writeFile (outfile ++ ".readable") $ showPLCFRS plcfrs
       hPutStrLn stderr $ "Extracted PLCFRS:" ++ niceStatictics plcfrs
 mainArgs (Binarize strategy infile outfile)
   = do
@@ -110,7 +111,8 @@ mainArgs (Binarize strategy infile outfile)
                         Optimal -> binarizeByAdjacency
                         Hybrid b -> binarizeHybrid b
           newPlcfrs = binarizeUsing binarizer plcfrs
-      BS.writeFile outfile (compress $ B.encode newPlcfrs)
+      BS.writeFile outfile . compress $ B.encode newPlcfrs
+      writeFile (outfile ++ ".readable") $ showPLCFRS newPlcfrs
       putStrLn $ show strategy ++ " binarization yielded:" ++ niceStatictics newPlcfrs
 --       when (subset == ["-plussmall"]) $ do -- partial bounded binarization
 --           putStrLn $ "The following small subset binarizations are computed, "
