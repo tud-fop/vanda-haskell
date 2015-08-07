@@ -42,7 +42,6 @@ import Data.Tree
 
 import Vanda.Grammar.AutomataStorage
 
-
 -- | Checks whether a string is in the multiple Dyck language given by the
 --   given partitioning of parentheses using an 'Automaton' with 'TreeStack'-
 --   storage.
@@ -120,7 +119,7 @@ createTreeStack ξ ρ
   | otherwise       = error $ "position does not occur in tree"
   where addressIn [] _ = True
         addressIn (i:is) (Node _ ξs)
-          = i <= length ξs  &&  is `addressIn` (ξs !! i)
+          = i < length ξs  &&  is `addressIn` (ξs !! i)
 
 exampleTreeStack1 :: TreeStack Char
 exampleTreeStack1
@@ -148,7 +147,7 @@ pushTreeStack σ (TreeStack ξ ρ) = [TreeStack ξ₁ (ρ ++ [i])]
         trav (Node δ ξs) [] σ₁
           = (Node δ (ξs ++ [Node σ₁ []]), length ξs)
         trav (Node δ ξs) (j:js) σ₁
-          = (Node δ (take i ξs ++ ξi : drop (j + 1) ξs), i')
+          = (Node δ (take j ξs ++ ξi : drop (j + 1) ξs), i')
               where (ξi, i') = trav (ξs !! j) js σ₁
 
 -- | Removes the node of the tree currently under the stack pointer and moves
