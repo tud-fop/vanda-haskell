@@ -5,7 +5,7 @@
 {-|
 Module:      Vanda.Dyck.MultipleDyckLanguages
 Description: functions to work with /congruence multiple Dyck languages/
-Copyright:   Ⓒ Tobias Denkinger and Toni Dietze (clipList, clipTree), 2015
+Copyright:   Ⓒ Toni Dietze and Tobias Denkinger, 2015
 Maintainer:  Tobias.Denkinger@tu-dresden.de
 Stability:   experimental
 
@@ -16,7 +16,7 @@ module Vanda.Dyck.MultipleDyckLanguages
   , multipleDyckTreeStackAutomaton
 -- * stack tree storage
   , TreeStack
-  , createTreeStack
+  , emptyTreeStack
 -- ** predicates
   , checkTreeStack
   , bottomTreeStack
@@ -25,11 +25,6 @@ module Vanda.Dyck.MultipleDyckLanguages
   , downTreeStack
   , upTreeStack
   , stayTreeStack
--- * plumbing
-  , clipList
-  , clipTree
--- * examples
-  , exampleTreeStack1
   ) where
 
 import Control.Monad.State
@@ -67,9 +62,8 @@ multipleDyckTreeStackAutomaton
   => [[a]]                                  -- ^ partition of left parentheses
   -> (a -> a)                                   -- ^ right parentheses mapping
   -> Automaton () a (TreeStack (Maybe (Maybe a, S.Set a)))
-multipleDyckTreeStackAutomaton ass bij = (((), c₀), τs, bottomTreeStack . snd)
-  where c₀ = createTreeStack (Node Nothing []) []
-        as = concat ass
+multipleDyckTreeStackAutomaton ass bij = (((), emptyTreeStack Nothing), τs, bottomTreeStack . snd)
+  where as = concat ass
         bs = map bij as
         τs = [ ((), b, p, popTreeStack, ())
              | b <- bs
@@ -102,103 +96,71 @@ multipleDyckTreeStackAutomaton ass bij = (((), c₀), τs, bottomTreeStack . snd
         (f &&& g) x = f x && g x
 
 
--- | 'Tree' plus stack pointer.
---   Children are numbered starting from 0 and, intuitively, the 'TreeStack'
---   has its root at the bottom.
-data TreeStack a = TreeStack (Tree a) [Int] deriving (Eq, Show)
+-- | 'Tree' plus stack pointer; the bottom of the stack is the root of the tree.
+--   The data structure has the form [(cₙ, tₙ), …, (c₁, t₁)] where cᵢ are, intuitively,
+--   contexts and tᵢ are trees. The tree stack can be obtaines from that data structure
+--   as follows: the tree is cₙ . … . c₂ $ c₁ t₁ and the pointer points to the root of
+--   t₁. The data structure optimises the expensive operation of "going to a specific
+--   position in the tree".
+newtype TreeStack a = TreeStack [(Tree a -> Tree a, Tree a)]
 
--- | Returns the symbol of the given tree at the given position.
-symbolAt :: [Int] -> Tree a -> a
-symbolAt ρ = snd . clipTree ρ
 
--- | Wrapper for the value constructor 'TreeStack' that checks whether the
---   given stack pointer is valid within the given 'Tree'.
-createTreeStack :: Tree a -> [Int] -> TreeStack a
-createTreeStack ξ ρ
-  | ρ `addressIn` ξ = TreeStack ξ ρ
-  | otherwise       = error $ "position does not occur in tree"
-  where addressIn [] _ = True
-        addressIn (i:is) (Node _ ξs)
-          = i < length ξs  &&  is `addressIn` (ξs !! i)
+emptyTreeStack :: a -> TreeStack a
+emptyTreeStack x = TreeStack [(id, Node x [])]
 
-exampleTreeStack1 :: TreeStack Char
-exampleTreeStack1
-  = createTreeStack
-    (Node 'a' [
-      Node 'b' [
-        Node 'c' []
-      ]
-      , Node 'd' []
-    ]) [0, 0]
 
 -- | Checks whether the node at the stack pointer fulfills a certain predicate.
 checkTreeStack :: (a -> Bool) -> TreeStack a -> Bool
-checkTreeStack f (TreeStack ξ ρ) = f $ symbolAt ρ ξ
+checkTreeStack _ (TreeStack []) = error "checkTreeStack: the stack should never be empty"
+checkTreeStack p (TreeStack ((_, Node x _) : _)) = p x
+
 
 -- | Checks whether the tree only has a root node.
 bottomTreeStack :: TreeStack a -> Bool
-bottomTreeStack (TreeStack (Node _ []) _) = True
-bottomTreeStack _ = False
+bottomTreeStack (TreeStack [(f, ξ)])
+  | L.null . subForest $ f ξ = True
+  | otherwise                = False
+bottomTreeStack _            = False
 
-rankAt :: Tree a -> [Int] -> Int
-rankAt (Node _ ξs) []     = length ξs
-rankAt (Node _ ξs) (i:is) = rankAt (ξs !! i) is
 
 -- | Adds the given stack symbol above the current stack pointer.
 pushTreeStack :: a -> TreeStack a -> [TreeStack a]
-pushTreeStack σ (TreeStack ξ ρ) = [TreeStack ξ₁ (ρ ++ [i])]
-  where (ξ₁, i) = trav ξ ρ σ
-        trav (Node δ ξs) [] σ₁
-          = (Node δ (ξs ++ [Node σ₁ []]), length ξs)
-        trav (Node δ ξs) (j:js) σ₁
-          = (Node δ (take j ξs ++ ξi : drop (j + 1) ξs), i')
-              where (ξi, i') = trav (ξs !! j) js σ₁
+pushTreeStack _ (TreeStack []) = error "pushTreeStack: the stack should never be empty"
+pushTreeStack x (TreeStack cs@((_, Node a ts) : _))
+  = [ TreeStack $ (\ t' -> Node a (t' : ts), Node x []) : cs ]
 
--- | Removes the node of the tree currently under the stack pointer and moves
---   the stack pointer to the parent of its previous position.
+
+-- | Removes the node of the tree currently under the stack pointer (if that tree is a
+--   leaf) and moves the stack pointer to the parent of its previous position.
 popTreeStack :: TreeStack a -> [TreeStack a]
-popTreeStack (TreeStack _ []) = []
-popTreeStack (TreeStack ξ ρ)
-  | rankAt ξ ρ == 0 = [TreeStack ξ₁ $ take (length ρ - 1) ρ]
-  | otherwise       = []
-  where ξ₁ = ξ `deleteAt` ρ
-        deleteAt _ []
-          = error "can not delete root node"
-        deleteAt (Node δ ts) [i]
-          = Node δ $ take i ts ++ drop (i + 1) ts
-        deleteAt (Node δ ts) (i:is)
-          = Node δ $ take i ts ++ deleteAt (ts !! i) is : drop (i + 1) ts
+popTreeStack (TreeStack []) = error "popTreeStack: the stack should never be empty"
+popTreeStack (TreeStack ((_, Node _ []) : cs)) = [TreeStack cs]
+popTreeStack _ = []
+
 
 -- | Moves the stack pointer to the parent node of its current position.
 downTreeStack :: TreeStack a -> [TreeStack a]
-downTreeStack (TreeStack _ []) = []
-downTreeStack (TreeStack ξ ρ ) = [TreeStack ξ $ take (length ρ - 1) ρ]
+downTreeStack (TreeStack []) = error "downTreeStack: the stack should never be empty"
+downTreeStack (TreeStack [_]) = []
+downTreeStack (TreeStack ((f0, t0) : (f1, _) : ts))
+  = [ TreeStack $ (f1, f0 t0) : ts ]
+
 
 -- | (Nondeterministically) moves the stack pointer to the child nodes.
 upTreeStack :: TreeStack a -> [TreeStack a]
-upTreeStack (TreeStack ξ ρ) = [TreeStack ξ (ρ ++ [i]) | i <- [0 .. rank ξ ρ - 1]]
-  where rank (Node _ ξs) [] = length ξs
-        rank (Node _ ξs) (i:is) = rank (ξs !! i) is
+upTreeStack (TreeStack []) = error "upTreeStack: the stack should never be empty"
+upTreeStack (TreeStack ((f, Node a ts) : cs))
+  = [ TreeStack $ (Node a . g, t) : (f, Node a ts') : cs | (g, t, ts') <- contexts ts ]
+
+
+contexts :: [a] -> [(a -> [a], a, [a])]
+contexts [] = []
+contexts [x] = return (return, x, [])
+contexts (x : xs) = ((: xs), x, xs) : map (\ (f, y, ys) -> ((x :) . f, y, x:ys)) (contexts xs)
+
 
 -- | Applies a function at the node below the stack pointer.
 stayTreeStack :: (a -> [a]) -> TreeStack a -> [TreeStack a]
-stayTreeStack f (TreeStack ξ ρ)
-  = [TreeStack (t' a') ρ | let (t', a) = clipTree ρ ξ, a' <- f a]
-
--- | Removes the symbol at the given position from the given 'Tree' and
---   returns a tuple containing a 'Tree' with a "hole" at the given position
---   and the label that has been removed.
-clipTree :: [Int] -> Tree a -> (a -> Tree a, a)
-clipTree [] (Node a ξs) = (flip Node ξs, a)
-clipTree (i:is) (Node a ξs) = let (lf, ξ₁) = clipList i ξs
-                                  (ξf, a₁) = clipTree is ξ₁
-                              in  (Node a . lf . ξf, a₁)
-
--- | Removes the symbol at the given position from the given 'List' and
---   returns a tuple containing a 'List' with a "hole" at the given position
---   and the label that has been removed.
-clipList :: Int -> [a] -> (a -> [a], a)
-clipList 0 (a:as) = ((: as), a)
-clipList i (a:as) = let (f, a') = clipList (i - 1) as
-                    in  ((a :) . f, a')
-clipList _ _      = error "the index exceeds the length of the list"
+stayTreeStack _ (TreeStack []) = error "stayTreeStack: the stack should never be empty"
+stayTreeStack g (TreeStack ((f, Node a ts) : cs))
+  = [ TreeStack $ (f, Node a' ts) : cs | a' <- g a ]
