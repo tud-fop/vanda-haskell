@@ -67,7 +67,7 @@ multipleDyckTreeStackAutomaton
   => [[a]]                                  -- ^ partition of left parentheses
   -> (a -> a)                                   -- ^ right parentheses mapping
   -> Automaton () a (TreeStack (Maybe (Maybe a, S.Set a)))
-multipleDyckTreeStackAutomaton ass bij = (((), c₀), τs, (== c₀) . snd)
+multipleDyckTreeStackAutomaton ass bij = (((), c₀), τs, bottomTreeStack . snd)
   where c₀ = createTreeStack (Node Nothing []) []
         as = concat ass
         bs = map bij as
@@ -140,6 +140,10 @@ bottomTreeStack :: TreeStack a -> Bool
 bottomTreeStack (TreeStack (Node _ []) _) = True
 bottomTreeStack _ = False
 
+rankAt :: Tree a -> [Int] -> Int
+rankAt (Node _ ξs) []     = length ξs
+rankAt (Node _ ξs) (i:is) = rankAt (ξs !! i) is
+
 -- | Adds the given stack symbol above the current stack pointer.
 pushTreeStack :: a -> TreeStack a -> [TreeStack a]
 pushTreeStack σ (TreeStack ξ ρ) = [TreeStack ξ₁ (ρ ++ [i])]
@@ -154,7 +158,9 @@ pushTreeStack σ (TreeStack ξ ρ) = [TreeStack ξ₁ (ρ ++ [i])]
 --   the stack pointer to the parent of its previous position.
 popTreeStack :: TreeStack a -> [TreeStack a]
 popTreeStack (TreeStack _ []) = []
-popTreeStack (TreeStack ξ ρ) = [TreeStack ξ₁ $ take (length ρ - 1) ρ]
+popTreeStack (TreeStack ξ ρ)
+  | rankAt ξ ρ == 0 = [TreeStack ξ₁ $ take (length ρ - 1) ρ]
+  | otherwise       = []
   where ξ₁ = ξ `deleteAt` ρ
         deleteAt _ []
           = error "can not delete root node"
