@@ -68,14 +68,14 @@ multipleDyckTreeStackAutomaton ass bij = (((), emptyTreeStack Nothing), τs, bot
         τs = [ ((), b, p, popTreeStack, ())
              | b <- bs
              , let p = checkTreeStack
-                         (((== Just b) . fst . fromJust)
-                          &&& (S.null . snd . fromJust))
+                         ((&&) <$> ((== Just b) . fst . fromJust)
+                               <*> (S.null . snd . fromJust))
              ]
           ++ [ ((), b, p, f, ())
              | b <- bs
              , let p = checkTreeStack
-                         (((== Just b) . fst. fromJust)
-                          &&& (not . S.null . snd . fromJust))
+                         ((&&) <$> ((== Just b) . fst. fromJust)
+                               <*> (not . S.null . snd . fromJust))
              , let f = stayTreeStack (\ x -> case x of {(Just (_, s)) -> [Just (Nothing, s)]; Nothing -> []})
                          >=> downTreeStack
              ]
@@ -93,7 +93,6 @@ multipleDyckTreeStackAutomaton ass bij = (((), emptyTreeStack Nothing), τs, bot
                         , S.fromList $ head [L.delete a as' | as' <- ass, a `elem` as'])
                         )
              ]
-        (f &&& g) x = f x && g x
 
 
 -- | 'Tree' plus stack pointer; the bottom of the stack is the root of the tree.
