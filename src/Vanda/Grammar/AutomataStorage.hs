@@ -38,14 +38,15 @@ exampleTrivAutomaton = ((0, ()), τs, flip S.member final . fst)
 -- | Runs a given 'Automaton' on a given word and returns the 'L.List' of
 --   accepting 'Configuration's.
 runAutomaton
-  :: (Eq q, Eq σ, Ord σ)
+  :: (Eq q, Eq σ, Ord q, Ord σ)
   => Automaton q σ s
   -> [σ]
   -> [Configuration q s]
 runAutomaton (c, τs, f) = filter f
                         . runTransitions
-                            ((M.!) . M.fromListWith (++)
-                                   $ map (\ τ@(_, σ, _, _, _) -> (σ, [τ])) τs
+                            (flip (M.findWithDefault [])
+                               . M.fromListWith (++)
+                               $ map (\ τ@(p, σ, _, _, _) -> ((p,σ), [τ])) τs
                             ) c
 
 -- | A 'Transition' contains a source state, a symbol, a (unary) predicate (on
@@ -70,12 +71,12 @@ apply (q, s) (q₀, _, p, f, q₁)
 --   the given 'Configuration'.
 runTransitions
   :: (Eq q, Eq σ)
-  => (σ -> [Transition q σ s])
+  => ((q, σ) -> [Transition q σ s])
                        -- ^ 'L.List' of 'Transition's for some terminal symbol
   -> Configuration q s                            -- ^ initial 'Configuration'
   -> [σ]                                                  -- ^ word to be read
   -> [Configuration q s]               -- ^ 'L.List' of final 'Configuration's
 runTransitions τs = foldl step . return
-  where step cs σ = do c <- cs
-                       τ <- τs σ
+  where step cs σ = do c@(q, _) <- cs
+                       τ <- τs (q, σ)
                        apply c τ
