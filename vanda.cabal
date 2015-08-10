@@ -87,6 +87,7 @@ library
     , Vanda.Dyck.MultipleDyckLanguages
     , Vanda.Features
     , Vanda.Grammar.AutomataStorage
+    , Vanda.Grammar.AutomataStorage.TreeStackStorage
     , Vanda.Grammar.Berkeley.IRTG
     , Vanda.Grammar.Berkeley.Text
     , Vanda.Grammar.LM

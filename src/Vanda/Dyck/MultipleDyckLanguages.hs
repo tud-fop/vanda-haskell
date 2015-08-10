@@ -1,7 +1,3 @@
-#!/usr/bin/env runhaskell
-
-{-# LANGUAGE RecordWildCards #-}
-
 {-|
 Module:      Vanda.Dyck.MultipleDyckLanguages
 Description: functions to work with /congruence multiple Dyck languages/
@@ -14,28 +10,16 @@ This module contains functions to work with /congruence multiple Dyck languages/
 module Vanda.Dyck.MultipleDyckLanguages
   ( isMultipleDyck
   , multipleDyckTreeStackAutomaton
--- * stack tree storage
-  , TreeStack
-  , emptyTreeStack
--- ** predicates
-  , checkTreeStack
-  , bottomTreeStack
--- ** functions
-  , pushTreeStack
-  , downTreeStack
-  , upTreeStack
-  , stayTreeStack
   ) where
 
-import Control.Monad.State
-import qualified Data.List.Split as LS
-import qualified Data.List as L
-import qualified Data.Map as M
-import Data.Maybe
-import qualified Data.Set as S
-import Data.Tree
+import Control.Arrow ((***))
+import Control.Monad.State ((>=>), (<=<))
+import Data.List.Split (splitOneOf)
+import Data.Map ((!), fromList)
+import qualified Data.Set as S (Set, delete, fromList, member, null)
 
 import Vanda.Grammar.AutomataStorage
+import Vanda.Grammar.AutomataStorage.TreeStackStorage
 
 -- | Checks whether a string is in the multiple Dyck language given by the
 --   given partitioning of parentheses using an 'Automaton' with 'TreeStack'-
@@ -48,11 +32,11 @@ isMultipleDyck
   -> [a]                             -- ^ word whose membership is in question
   -> Bool
 isMultipleDyck sep l r
-  = let b = (M.!) ( M.fromList
+  = let b = (!) ( fromList
                   $ zip (filter (not . (`elem` sep)) l)
                         (filter (not . (`elem` sep)) r)
                   )
-        ass = LS.splitOneOf sep l
+        ass = splitOneOf sep l
     in  not . null . runAutomaton (multipleDyckTreeStackAutomaton ass b)
 
 -- | An automaton with 'TreeStack'-storage for the recognition of multiple
@@ -61,105 +45,44 @@ multipleDyckTreeStackAutomaton
   :: (Eq a, Ord a)
   => [[a]]                                  -- ^ partition of left parentheses
   -> (a -> a)                                   -- ^ right parentheses mapping
-  -> Automaton () a (TreeStack (Maybe (Maybe a, S.Set a)))
-multipleDyckTreeStackAutomaton ass bij = (((), emptyTreeStack Nothing), τs, bottomTreeStack . snd)
+  -> Automaton () a (TreeStack (Maybe a, S.Set a))
+multipleDyckTreeStackAutomaton ass bij
+  = ( ((), emptyTreeStack (error "You must not read the root symbol!"))
+    , τs
+    , bottomTreeStack . snd
+    )
   where as = concat ass
         bs = map bij as
         τs = [ ((), b, p, popTreeStack, ())
              | b <- bs
              , let p = checkTreeStack
-                         ((&&) <$> ((== Just b) . fst . fromJust)
-                               <*> (S.null . snd . fromJust))
+                     $ uncurry (&&)
+                       . ((== Just b) *** S.null)
              ]
           ++ [ ((), b, p, f, ())
              | b <- bs
              , let p = checkTreeStack
-                         ((&&) <$> ((== Just b) . fst. fromJust)
-                               <*> (not . S.null . snd . fromJust))
-             , let f = stayTreeStack (\ x -> case x of {(Just (_, s)) -> [Just (Nothing, s)]; Nothing -> []})
+                     $ uncurry (&&)
+                       . ((== Just b) *** (not . S.null))
+             , let f = stayTreeStack
+                         (\ (_, s) -> [(Nothing, s)] )
                          >=> downTreeStack
              ]
           ++ [ ((), a, const True, f, ())
              | a <- as
-             , let {p (Just (Nothing, s)) = a `S.member` s; p _ = False}
-             , let f = stayTreeStack (\ (Just (Nothing, s)) -> [Just (Just (bij a), S.delete a s)])
+             , let p (Nothing, s) = a `S.member` s
+                   p _            = False
+             , let f = stayTreeStack (\ (Nothing, s) -> [(Just (bij a), S.delete a s)])
                          <=< filter (checkTreeStack p)
                          . upTreeStack
              ]
           ++ [ ((), a, const True, f, ())
              | a <- as
-             , let f = pushTreeStack (Just
-                        ( Just (bij a)
-                        , S.fromList $ head [L.delete a as' | as' <- ass, a `elem` as'])
-                        )
+             , let f = pushTreeStack
+                     $ ( Just (bij a)
+                       , S.delete a
+                         . S.fromList
+                         $ head [ as' | as' <- ass, a `elem` as']
+                       )
              ]
 
-
--- | 'Tree' plus stack pointer; the bottom of the stack is the root of the tree.
---   The data structure has the form [(cₙ, tₙ), …, (c₁, t₁)] where cᵢ are, intuitively,
---   contexts and tᵢ are trees. The tree stack can be obtaines from that data structure
---   as follows: the tree is cₙ . … . c₂ $ c₁ t₁ and the pointer points to the root of
---   t₁. The data structure optimises the expensive operation of "going to a specific
---   position in the tree".
-newtype TreeStack a = TreeStack [(Tree a -> Tree a, Tree a)]
-
-
-emptyTreeStack :: a -> TreeStack a
-emptyTreeStack x = TreeStack [(id, Node x [])]
-
-
--- | Checks whether the node at the stack pointer fulfills a certain predicate.
-checkTreeStack :: (a -> Bool) -> TreeStack a -> Bool
-checkTreeStack _ (TreeStack []) = error "checkTreeStack: the stack should never be empty"
-checkTreeStack p (TreeStack ((_, Node x _) : _)) = p x
-
-
--- | Checks whether the tree only has a root node.
-bottomTreeStack :: TreeStack a -> Bool
-bottomTreeStack (TreeStack [(f, ξ)])
-  | L.null . subForest $ f ξ = True
-  | otherwise                = False
-bottomTreeStack _            = False
-
-
--- | Adds the given stack symbol above the current stack pointer.
-pushTreeStack :: a -> TreeStack a -> [TreeStack a]
-pushTreeStack _ (TreeStack []) = error "pushTreeStack: the stack should never be empty"
-pushTreeStack x (TreeStack cs@((_, Node a ts) : _))
-  = [ TreeStack $ (\ t' -> Node a (t' : ts), Node x []) : cs ]
-
-
--- | Removes the node of the tree currently under the stack pointer (if that tree is a
---   leaf) and moves the stack pointer to the parent of its previous position.
-popTreeStack :: TreeStack a -> [TreeStack a]
-popTreeStack (TreeStack []) = error "popTreeStack: the stack should never be empty"
-popTreeStack (TreeStack ((_, Node _ []) : cs)) = [TreeStack cs]
-popTreeStack _ = []
-
-
--- | Moves the stack pointer to the parent node of its current position.
-downTreeStack :: TreeStack a -> [TreeStack a]
-downTreeStack (TreeStack []) = error "downTreeStack: the stack should never be empty"
-downTreeStack (TreeStack [_]) = []
-downTreeStack (TreeStack ((f0, t0) : (f1, _) : ts))
-  = [ TreeStack $ (f1, f0 t0) : ts ]
-
-
--- | (Nondeterministically) moves the stack pointer to the child nodes.
-upTreeStack :: TreeStack a -> [TreeStack a]
-upTreeStack (TreeStack []) = error "upTreeStack: the stack should never be empty"
-upTreeStack (TreeStack ((f, Node a ts) : cs))
-  = [ TreeStack $ (Node a . g, t) : (f, Node a ts') : cs | (g, t, ts') <- contexts ts ]
-
-
-contexts :: [a] -> [(a -> [a], a, [a])]
-contexts [] = []
-contexts [x] = return (return, x, [])
-contexts (x : xs) = ((: xs), x, xs) : map (\ (f, y, ys) -> ((x :) . f, y, x:ys)) (contexts xs)
-
-
--- | Applies a function at the node below the stack pointer.
-stayTreeStack :: (a -> [a]) -> TreeStack a -> [TreeStack a]
-stayTreeStack _ (TreeStack []) = error "stayTreeStack: the stack should never be empty"
-stayTreeStack g (TreeStack ((f, Node a ts) : cs))
-  = [ TreeStack $ (f, Node a' ts) : cs | a' <- g a ]
