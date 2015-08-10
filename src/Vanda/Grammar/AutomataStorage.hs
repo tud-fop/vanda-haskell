@@ -64,8 +64,8 @@ apply
   => Configuration q s            -- ^ 'Configuration' before the 'Transition'
   -> Transition q σ s                  -- ^ 'Transition' that is being applied
   -> [Configuration q s]           -- ^ 'Configuration' after the 'Transition'
-apply (q, s) (q₀, _, p, f, q₁)
-  = [(q₁, s') | q == q₀, p s, s' <- f s]
+apply (_, s) (_, _, p, f, q)
+  = [ (q, s') | p s, s' <- f s ]
 
 -- | Reads the given word applying a 'L.List' of 'Transition's starting from
 --   the given 'Configuration'.
