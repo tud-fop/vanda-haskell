@@ -43,7 +43,7 @@ emptyTreeStack x = TreeStack [(id, Node x [])]
 -- | Checks whether the node at the stack pointer fulfills a certain predicate.
 checkTreeStack :: (a -> Bool) -> TreeStack a -> Bool
 checkTreeStack _ (TreeStack [])
-  = error "checkTreeStack: the stack should never be empty"
+  = error "checkTreeStack: the stack backlog must not be empty"
 checkTreeStack p (TreeStack ((_, Node x _) : _))
   = p x
 
@@ -59,7 +59,7 @@ bottomTreeStack _          = False
 -- | Adds the given stack symbol above the current stack pointer.
 pushTreeStack :: a -> TreeStack a -> [TreeStack a]
 pushTreeStack _ (TreeStack [])
-  = error "pushTreeStack: the stack should never be empty"
+  = error "pushTreeStack: the stack backlog must not be empty"
 pushTreeStack x (TreeStack cs@((_, Node a ts) : _))
   = [ TreeStack $ (\ t' -> Node a (t' : ts), Node x []) : cs ]
 
@@ -68,7 +68,7 @@ pushTreeStack x (TreeStack cs@((_, Node a ts) : _))
 --   leaf) and moves the stack pointer to the parent of its previous position.
 popTreeStack :: TreeStack a -> [TreeStack a]
 popTreeStack (TreeStack [])
-  = error "popTreeStack: the stack should never be empty"
+  = error "popTreeStack: the stack backlog must not be empty"
 popTreeStack (TreeStack ((_, Node _ []) : cs))
   = [TreeStack cs]
 popTreeStack _
@@ -78,7 +78,7 @@ popTreeStack _
 -- | Moves the stack pointer to the parent node of its current position.
 downTreeStack :: TreeStack a -> [TreeStack a]
 downTreeStack (TreeStack [])
-  = error "downTreeStack: the stack should never be empty"
+  = error "downTreeStack: the stack backlog must not be empty"
 downTreeStack (TreeStack [_])
   = []
 downTreeStack (TreeStack ((f0, t0) : (f1, _) : ts))
@@ -88,7 +88,7 @@ downTreeStack (TreeStack ((f0, t0) : (f1, _) : ts))
 -- | (Nondeterministically) moves the stack pointer to the child nodes.
 upTreeStack :: TreeStack a -> [TreeStack a]
 upTreeStack (TreeStack [])
-  = error "upTreeStack: the stack should never be empty"
+  = error "upTreeStack: the stack backlog must not be empty"
 upTreeStack (TreeStack ((f, Node a ts) : cs))
   = [ TreeStack $ (Node a . g, t) : (f, Node a ts') : cs | (g, t, ts') <- contexts ts ]
 
@@ -104,6 +104,6 @@ contexts (x : xs)
 -- | Applies a function to the node below the stack pointer.
 stayTreeStack :: (a -> [a]) -> TreeStack a -> [TreeStack a]
 stayTreeStack _ (TreeStack [])
-  = error "stayTreeStack: the stack should never be empty"
+  = error "stayTreeStack: the stack backlog must not be empty"
 stayTreeStack g (TreeStack ((f, Node a ts) : cs))
   = [ TreeStack $ (f, Node a' ts) : cs | a' <- g a ]

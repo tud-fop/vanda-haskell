@@ -1,7 +1,7 @@
 {-|
 Module:      Vanda.Dyck.MultipleDyckLanguages
 Description: functions to work with /congruence multiple Dyck languages/
-Copyright:   Ⓒ Toni Dietze and Tobias Denkinger, 2015
+Copyright:   Ⓒ Tobias Denkinger, 2015
 Maintainer:  Tobias.Denkinger@tu-dresden.de
 Stability:   experimental
 
@@ -28,7 +28,7 @@ isMultipleDyck
   :: (Eq a, Ord a)
   => [a]                                        -- ^ list of separator symbols
   -> [a]               -- ^ list of left parentheses partitioned by separators
-  -> [a]                                -- ^ list of right parentheses symbols
+  -> [a]       -- ^ list of right parentheses symbols (separators are ignored)
   -> [a]                             -- ^ word whose membership is in question
   -> Bool
 isMultipleDyck sep l r
@@ -44,7 +44,7 @@ isMultipleDyck sep l r
 multipleDyckTreeStackAutomaton
   :: (Eq a, Ord a)
   => [[a]]                                  -- ^ partition of left parentheses
-  -> (a -> a)                                   -- ^ right parentheses mapping
+  -> (a -> a)                    -- ^ bijection from left to right parentheses
   -> Automaton () a (TreeStack (Maybe a, S.Set a))
 multipleDyckTreeStackAutomaton ass bij
   = ( ((), emptyTreeStack (error "You must not read the root symbol!"))

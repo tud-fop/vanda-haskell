@@ -139,11 +139,11 @@ fuseInRule (((lhs, rhs), h'), d) (posBa, posBb) = (fusionRule, remRule)
                          -- (so every extract ends), tail is removes the final
                          -- Nothing (one is added at every extract end)
     newVariables = length inn_h'
-    -- ^ We only know this after all extractions are performed, but thanks to
+    -- We only know this after all extractions are performed, but thanks to
     -- lazy evaluation we can use it when folding inspect over the old H to
     -- create the new Hs!
     inspect (remH, innH, (perhapsRemH,perhapsInnH), extractionState, e) maybeNTT
-    -- ^ 'e' will count the number of extractions already performed;
+    -- 'e' will count the number of extractions already performed;
     -- we need two 'Perhaps'-lists to account for the different readjusting
     -- strategies taking place, see below
       = let -- since we said that the new NT always comes first in the rule

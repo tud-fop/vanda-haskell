@@ -2,12 +2,12 @@
 
 {-|
 Module:      Vanda.Dyck.Main
-Description: functions to work with /Dyck languages/ and /congruence multiple Dyck languages/
-Copyright:   Ⓒ Tobias Denkinger and Toni Dietze (clipList, clipTree), 2015
+Description: membership in /Dyck languages/ and /congruence multiple Dyck languages/
+Copyright:   Ⓒ Tobias Denkinger, 2015
 Maintainer:  Tobias.Denkinger@tu-dresden.de
 Stability:   experimental
 
-This module contains functions to work with /Dyck languages/ and /congruence multiple Dyck languages/ [cf. <http://fsmnlp2015.phil.hhu.de/wp-content/uploads/2015/06/denkinger-chomsky-schuetzenberger.pdf Tobias Denkinger: A Chomsky-Schützenberger result for weighted multiple context-free languages, 2015>].
+This program decides the membership of /Dyck languages/ and /congruence multiple Dyck languages/ [cf. <http://fsmnlp2015.phil.hhu.de/wp-content/uploads/2015/06/denkinger-chomsky-schuetzenberger.pdf Tobias Denkinger: A Chomsky-Schützenberger result for weighted multiple context-free languages, 2015>].
 -}
 module Vanda.Dyck.Main
 ( main
