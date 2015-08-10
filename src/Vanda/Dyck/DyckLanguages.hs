@@ -1,5 +1,3 @@
-#!/usr/bin/env runhaskell
-
 {-|
 Module:      Vanda.Dyck.DyckLanguages
 Description: functions to work with /Dyck languages/ languages
@@ -25,6 +23,7 @@ import qualified Data.List.Utils as LU
 import qualified Data.Map as M
 
 import Vanda.Grammar.AutomataStorage
+import Vanda.Grammar.AutomataStorage.PushdownStorage
 
 
 -- | Checks whether a string is well-bracketed.
@@ -61,11 +60,10 @@ dyckPushdownAutomaton
   :: Eq a
   => [a]                                                 -- ^ left parentheses
   -> (a -> a)                                   -- ^ right parentheses mapping
-  -> Automaton () a [a]
-dyckPushdownAutomaton lps b = (((), []), τs, null . snd)
-  where τs = [((), l, const True, (: []) . (b l :), ()) | l <- lps]
-          ++ [((), b l, (not . null) &&& ((b l ==) . head), (: []) . drop 1, ()) | l <- lps]
-        (f &&& g) x = f x && g x
+  -> Automaton () a (Pushdown a)
+dyckPushdownAutomaton lps b = (((), emptyPushdown), τs, isEmptyPushdown . snd)
+  where τs = [ ((), l  , const True            , pushPushdown (b l), ()) | l <- lps ]
+          ++ [ ((), b l, checkPushdown (b l ==), popPushdown       , ()) | l <- lps ]
 
 
 -- | Compares the lengths of two 'L.List's.
