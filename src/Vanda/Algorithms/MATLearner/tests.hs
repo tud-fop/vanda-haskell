@@ -1,12 +1,12 @@
-import MATLearner 
-import TreeAutomaton
+import Vanda.Algorithms.MATLearner.MATLearner 
+import Vanda.Algorithms.MATLearner.TreeAutomaton
 import Data.Tree
 import Data.Map hiding (foldr,foldl,map)
 import Control.Monad.State
 import qualified Data.Set as S
 import qualified Data.Vector as V
 import Vanda.Hypergraph.Basic
-import TreesContexts
+import Vanda.Algorithms.MATLearner.TreesContexts
 
 
 --testClosify :: 

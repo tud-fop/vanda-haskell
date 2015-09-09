@@ -1,4 +1,4 @@
-module TreesContexts where
+module Vanda.Algorithms.MATLearner.TreesContexts where
 
 import Data.Tree
 

@@ -1,9 +1,9 @@
-module TreeAutomaton where
+module Vanda.Algorithms.MATLearner.TreeAutomaton where
 import Vanda.Hypergraph
 import qualified Data.Set as S
 import qualified Data.Vector as V
 import Data.Tree
-import TreesContexts
+import Vanda.Algorithms.MATLearner.TreesContexts
 
 
 data Automaton a = 

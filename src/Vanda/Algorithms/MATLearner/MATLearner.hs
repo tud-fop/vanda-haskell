@@ -5,12 +5,12 @@ import Control.Monad.State
 import Vanda.Hypergraph.Basic
 import qualified Data.Set as S
 import qualified Data.Vector as V
-import TreeAutomaton
+import Vanda.Algorithms.MATLearner.TreeAutomaton
 import Data.Map hiding (foldr,foldl,map,filter,findIndex)
 import Data.List (nub,elemIndex,find,findIndex)
 import Data.Maybe
 import Debug.Trace
-import TreesContexts
+import Vanda.Algorithms.MATLearner.TreesContexts
 
 
 newtype Corpus = Corpus [Tree Int]
