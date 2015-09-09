@@ -32,14 +32,19 @@ instance Teacher (Corpus) where
         
         conjecture (Corpus []) automaton = return Nothing
         conjecture (Corpus (x:xs)) automaton
-          | accepts automaton x = return $ conjecture (Corpus xs) automaton
+          | accepts automaton x = conjecture (Corpus xs) automaton
           | otherwise = return $ Just x
         
         getSigma (Corpus []) = return $ []
-        getSigma (Corpus (tree : corpus)) = return $ makeSet (extractSymbols tree ++ getSigma (Corpus corpus))
+        getSigma (Corpus (tree : corpus)) = do
+          l1 <- extractSymbols tree
+          l2 <- getSigma (Corpus corpus)
+          return $ makeSet (l1 ++ l2)
               where
-                extractSymbols :: Tree Int -> [(Int,Int)]
-                extractSymbols (Node x list) = (x, length list) : getSigma (Corpus list)
+                extractSymbols :: Tree Int -> IO [(Int,Int)]
+                extractSymbols (Node x list) = do
+                  l <- getSigma (Corpus list)
+                  return $ (x, length list) : l
                 makeSet :: Eq a => [a] -> [a]
                 makeSet [] = []
                 makeSet (x : xs)
@@ -64,7 +69,7 @@ main = do
   putStrLn $ show a
     
 main' :: Teacher t => t -> IO (Automaton Int)
-main' teacher = evalState (learn teacher) (initialObs teacher)
+main' teacher = return $ evalState (learn teacher) (initialObs teacher)
 
 -- | create and fill initial observation table 
 initialObs :: Teacher t => t -> IO ObservationTable
