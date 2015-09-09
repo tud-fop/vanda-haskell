@@ -68,26 +68,29 @@ main = do
   a <- main' (Corpus [])
   putStrLn $ show a
     
-main' :: Teacher t => t -> IO (Automaton Int)
-main' teacher = return $ evalState (learn teacher) (initialObs teacher)
+--main' :: Teacher t => t -> IO (Automaton Int)
+main' teacher = do
+                initState <- initialObs teacher
+                evalStateT (learn teacher) initState
 
 -- | create and fill initial observation table 
 initialObs :: Teacher t => t -> IO ObservationTable
-initialObs teacher = (OT (s,[X],mapping))
-    where
-        sigma = getSigma teacher 
-        s = take 1 (getAllTrees [] sigma [X])
-        mapping = updateMapping teacher empty (getAllTrees s sigma [X])
+initialObs teacher = do
+                        sigma <- getSigma teacher
+                        let s = take 1 (getAllTrees [] sigma [X]) in do
+                            mapping <- updateMapping teacher empty (getAllTrees s sigma [X])
+                            return (OT (s,[X],mapping))
 
 -- | check whether obs is consistent and return consitified version (or old version if the table already was consistent)
-consistify :: Teacher t => [[Tree Int]] -> t -> IO (State (ObservationTable) Bool)
-consistify []            _       = return True
+consistify :: Teacher t => [[Tree Int]] -> t -> StateT ObservationTable IO Bool
+consistify []           _       = return True
 consistify ([s1,s2]:xs) teacher = do
     (OT (s,contexts,mapping)) <- get
     if ((obst s1 contexts mapping) == (obst s2 contexts mapping)) -- ^ both trees represent the same state
         then
             do
-                consistent <- checkConsistencyContexts teacher s1 s2 (getContexts s (getSigma teacher))
+                sigma <- lift $ getSigma teacher
+                consistent <- checkConsistencyContexts teacher s1 s2 (getContexts s sigma)
                 if (consistent)
                     then
                         consistify xs teacher
@@ -105,7 +108,7 @@ checkConsistencyContexts
     -> Tree Int -- ^ first tree
     -> Tree Int -- ^ second tree
     -> [Context Int] -- ^ contexts for which consistency of s1 and s2 has to be checked
-    -> IO (State (ObservationTable) Bool)
+    -> StateT ObservationTable IO Bool
 checkConsistencyContexts _       _  _   []     = return True
 checkConsistencyContexts teacher s1 s2 (c:cs) = do
     (OT (_,contexts,mapping)) <- get
@@ -125,20 +128,20 @@ checkConsistencyOneContext
     -> [Bool] -- ^ row of s2 inserted into c
     -> Context Int -- ^ context to determine the new context in case the table is inconsistent
     -> [Context Int] -- ^ contexts to determine the new context in case the table is inconsistent
-    -> IO (State (ObservationTable) Bool)
+    -> StateT ObservationTable IO Bool
 checkConsistencyOneContext _ [] [] _ _ = return True
 checkConsistencyOneContext teacher (x:xs) (y:ys) context (c:cs)
     |x==y = checkConsistencyOneContext teacher xs ys context cs
     |True = do -- ^ inconsistent!
         (OT (s,contexts,mapping)) <- get
-        let contexts' = contexts ++ [concatContext context c] in 
-            put (OT (s,contexts', 
-            updateMapping teacher mapping (getAllTrees s (getSigma teacher) [concatContext context c]) -- we only need to ask for memberships for trees inserted into the new context
-            ))
+        sigma <- lift $ getSigma teacher
+        mapping' <- lift $ updateMapping teacher mapping (getAllTrees s sigma [concatContext context c]) -- we only need to ask for memberships for trees inserted into the new context
+        let contexts' = contexts ++ [concatContext context c] in
+            put (OT (s,contexts', mapping'))
         return False
 
 -- | check whether Observation Table is closed and return a closed Observation Table
-closify :: Teacher t => [Tree Int] ->  t -> IO (State (ObservationTable) Bool)
+closify :: Teacher t => [Tree Int] ->  t -> StateT ObservationTable IO Bool
 closify []     _       = return True
 closify (x:xs) teacher = do
     (OT (s,contexts,mapping)) <- get
@@ -147,47 +150,51 @@ closify (x:xs) teacher = do
             closify xs teacher
         else
             do
-                let s' = s ++ [x] in 
-                    put (OT (s',contexts,
-                        updateMapping teacher
+                sigma <- lift $ getSigma teacher
+                mapping' <- lift $ updateMapping teacher
                                       mapping
                                       (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
-                                                 (map (concatTree x) (getContexts s' (getSigma teacher)))) -- we only need to consider trees in which the new tree occurs
-                    ))
+                                                 (map (concatTree x) (getContexts (s ++ [x]) sigma))) -- we only need to consider trees in which the new tree occurs
+                put (OT (s ++ [x],contexts,mapping'))
                 return False
 
 
 
 -- | check whether the current ObservationTable represents the correct Automaton and process counterexample
-correctify :: Teacher t => t -> IO (State (ObservationTable) Bool)
+correctify :: Teacher t => t -> StateT ObservationTable IO Bool
 correctify teacher = do
                     obs@(OT (s,contexts,mapping)) <- get
-                    let counterexample = conjecture teacher (generateAutomaton obs (getSigma teacher)) in
-                        if counterexample == Nothing
-                            then
-                                return True
-                            else
-                                do
-                                    let x = extract teacher
-                                                    (getTable s contexts mapping) 
-                                                    (getTable (listMinus (getSigmaS s (getSigma teacher)) s) contexts mapping) -- ^ Simga(S)/S
-                                                    (fromJust counterexample)
-                                        s' = s ++ [x] in 
-                                        put (OT (s',contexts,
-                                            updateMapping teacher
-                                                          mapping 
-                                                          (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
-                                                                     (map (concatTree x) (getContexts s' (getSigma teacher))))-- we only need to consider trees in which the new tree occurs
-                                        ))
-                                    return False
+                    sigma <- lift $ getSigma teacher
+                    counterexample <- lift $ conjecture teacher (generateAutomaton obs sigma)
+                    if counterexample == Nothing
+                        then
+                            return True
+                        else
+                            do
+                                x <- lift $ extract teacher
+                                                (getTable s contexts mapping) 
+                                                (getTable (listMinus (getSigmaS s sigma) s) contexts mapping) -- ^ Simga(S)/S
+                                                (fromJust counterexample)
+                                mapping' <- lift $ updateMapping teacher
+                                                      mapping 
+                                                      (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
+                                                                 (map (concatTree x) (getContexts (s ++ [x]) sigma)))-- we only need to consider trees in which the new tree occurs
+                                put (OT (s ++ [x],contexts,mapping'))
+                                return False
 
 
 -- | extract subtree that has to be added to the observation table
 extract :: Teacher t => t -> [(Tree Int,[Bool])] -> [(Tree Int,[Bool])] -> Tree Int -> IO (Tree Int)
 extract teacher s sigmaS counterexample
-    |newcounterexample == Nothing                                                     = replacedSubtree -- no new counterexample found
-    |isMember teacher counterexample /= isMember teacher (fromJust newcounterexample) = replacedSubtree -- new counterexample is no longer a counterexample
-    |True                                                                             = trace (show (newcounterexample, replacedSubtree)) (extract teacher s sigmaS (fromJust newcounterexample))
+    |newcounterexample == Nothing                                                     = return replacedSubtree -- no new counterexample found
+    |True                         = do
+                                    isMemberOld <- isMember teacher counterexample
+                                    isMemberNew <- isMember teacher (fromJust newcounterexample)
+                                    if isMemberOld /= isMemberNew
+                                        then
+                                            return replacedSubtree -- new counterexample is no longer a counterexample
+                                        else
+                                            extract teacher s sigmaS (fromJust newcounterexample)
     where 
         Just (newcounterexample, replacedSubtree) = tryReduce counterexample
 
@@ -217,7 +224,7 @@ extract teacher s sigmaS counterexample
                 where maybeRowOfs = find (\(stree,_) -> tree == stree) sigmaS
 
 -- | generate an Automaton from a given Observation Table and an ranked alphabet
-generateAutomaton :: ObservationTable -> [(Int,Int)] -> IO (Automaton Int)
+generateAutomaton :: ObservationTable -> [(Int,Int)] -> (Automaton Int)
 generateAutomaton (OT (s,contexts,mapping)) sigma = Automaton 
                                                       (EdgeList 
                                                         (S.fromList [0..length rows]) -- ^ all occunring states
@@ -238,19 +245,20 @@ generateAutomaton (OT (s,contexts,mapping)) sigma = Automaton
 
 
 -- | main loop in which consistency, closedness and correctness are checked
-learn :: Teacher t => t -> IO (State (ObservationTable) (Automaton Int))
+learn :: Teacher t => t -> StateT ObservationTable IO (Automaton Int)
 learn teacher = do 
     obs@(OT (s,contexts,mapping)) <- get
     consistent <- consistify (choose 2 s) teacher
-    closed <- closify (getSigmaS s (getSigma teacher)) teacher
-    if (trace (show obs) (not consistent || not closed))
+    sigma <- lift $ getSigma teacher
+    closed <- closify (getSigmaS s sigma) teacher
+    if (not consistent || not closed)
         then learn teacher
         else do
           correct <- correctify teacher
           if correct
             then do
               obs <- get
-              return (generateAutomaton obs (getSigma teacher))
+              return (generateAutomaton obs sigma)
             else do
               learn teacher
 
@@ -258,26 +266,26 @@ learn teacher = do
 
 --use for testing : obst (Node 1 []) [X,(CNode 2 [X])] (fromList [((Node 1 []),True),((Node 2 [Node 1 []]), False)])
 -- | get row of tree in observation table
-obst :: Tree Int -> [Context Int] -> Map (Tree Int) Bool -> IO ([Bool])
+obst :: Tree Int -> [Context Int] -> Map (Tree Int) Bool -> ([Bool])
 obst tree cs mapping = map (\c -> mapping ! (concatTree tree c)) cs
 
 -- | get the filled out table
-getTable :: [Tree Int] -> [Context Int] -> Map (Tree Int) Bool -> IO ([(Tree Int,[Bool])])
+getTable :: [Tree Int] -> [Context Int] -> Map (Tree Int) Bool -> ([(Tree Int,[Bool])])
 getTable s contexts mapping = zip s (map (\x -> obst x contexts mapping) s)
 
 
 -- | inserts unknown memberships of given trees  into mapping
 updateMapping :: Teacher a => a -> Map (Tree Int) Bool -> [Tree Int] -> IO (Map (Tree Int) Bool)
-updateMapping teacher mapping trees = foldr 
-                -- | insert unknown memberships to mapping
-                (\t mapping' -> 
-                    if (notMember t mapping') 
-                        then
-                            insert t (isMember teacher t) mapping'
-                        else
-                            mapping')
-                mapping
-                trees
+updateMapping teacher mapping []     = return mapping 
+updateMapping teacher mapping (t:ts) = do
+                                        if  notMember t mapping
+                                            then
+                                                do
+                                                    member <- isMember teacher t
+                                                    updateMapping teacher (insert t member mapping) ts
+                                            else
+                                                updateMapping teacher mapping ts
+
 
 -- * other funtions
 
