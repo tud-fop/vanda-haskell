@@ -34,6 +34,7 @@ import qualified Vanda.Dyck.Main
 import qualified Vanda.Grammar.XRS.LCFRS.Main
 import qualified Vanda.Grammar.NGrams.Main
 import qualified Vanda.Algorithms.IntersectWithNGrams.Main
+import qualified Vanda.Algorithms.MATLearner.Main
 
 import           System.Console.CmdArgs.Explicit
 
@@ -45,6 +46,7 @@ data Args
   | LCFRS Vanda.Grammar.XRS.LCFRS.Main.Args
   | NGrams Vanda.Grammar.NGrams.Main.Args
   | XRSNGrams Vanda.Algorithms.IntersectWithNGrams.Main.Args
+  | MATLearner Vanda.Algorithms.MATLearner.Main.Args
   deriving Show
 
 
@@ -56,6 +58,7 @@ cmdArgs
   , remap2 LCFRS (\ (LCFRS x) -> x) Vanda.Grammar.XRS.LCFRS.Main.cmdArgs
   , remap2 NGrams (\ (NGrams x) -> x) Vanda.Grammar.NGrams.Main.cmdArgs
   , remap2 XRSNGrams (\ (XRSNGrams x) -> x) Vanda.Algorithms.IntersectWithNGrams.Main.cmdArgs
+  , remap2 MATLearner (\ (MATLearner x) -> x) Vanda.Algorithms.MATLearner.Main.cmdArgs
   ]
 
 
@@ -70,3 +73,4 @@ mainArgs (Dyck      x ) = Vanda.Dyck.Main.mainArgs x
 mainArgs (LCFRS     x ) = Vanda.Grammar.XRS.LCFRS.Main.mainArgs x
 mainArgs (NGrams    x ) = Vanda.Grammar.NGrams.Main.mainArgs x
 mainArgs (XRSNGrams x ) = Vanda.Algorithms.IntersectWithNGrams.Main.mainArgs x
+mainArgs (MATLearner x ) = Vanda.Algorithms.MATLearner.Main.mainArgs x
