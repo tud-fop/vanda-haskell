@@ -7,7 +7,7 @@ module Vanda.Algorithms.MATLearner.Main
 , Args()
 ) where
 
-import Vanda.Alforithms.MATLearner.MATLearner
+import Vanda.Algorithms.MATLearner.MATLearner
 import System.Console.CmdArgs.Explicit
 import System.Console.CmdArgs.Explicit.Misc
 
