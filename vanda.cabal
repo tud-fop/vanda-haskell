@@ -146,7 +146,7 @@ executable Vanda
     , filepath
     , hashable
     , heap
-    , log-domain
+    , log-domain == 0.10.2
     , MissingH
     , mtl
     , parallel >= 3.2

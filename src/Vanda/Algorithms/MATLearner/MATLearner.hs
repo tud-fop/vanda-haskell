@@ -1,4 +1,4 @@
-module MATLearner where
+module Vanda.Algorithms.MATLearner.MATLearner where
 
 import Data.Tree
 import Control.Monad.State
@@ -68,7 +68,7 @@ main = do
   a <- main' (Corpus [])
   putStrLn $ show a
     
---main' :: Teacher t => t -> IO (Automaton Int)
+main' :: Teacher t => t -> IO (Automaton Int)
 main' teacher = do
                 initState <- initialObs teacher
                 evalStateT (learn teacher) initState

@@ -8,7 +8,7 @@ import qualified Data.Vector as V
 import Vanda.Hypergraph.Basic
 import Vanda.Algorithms.MATLearner.TreesContexts
 
-
+{-
 --testClosify :: 
 testClosify = evalState (closify (getSigmaS s [(1,0),(2,0),(3,2)]) (Corpus [(Node 1 [])])) (OT (s,contexts,mapping)) 
 --member (Node 3 [(Node 1 []),(Node 1 [])]) mapping--(obst (Node 1 []) contexts mapping)--(getTable s contexts mapping)--
@@ -22,7 +22,7 @@ testClosify = evalState (closify (getSigmaS s [(1,0),(2,0),(3,2)]) (Corpus [(Nod
 
 
 testGenerateAutomaton = generateAutomaton (OT ([(Node 1 [])] ,[X] , fromList [((Node 1 []),True),((Node 2 [(Node 1 [])]),True)])) [(1,0),(2,1)]
-{-
+
 
 testGetTable = (any ((obst (Node 1 []) contexts mapping)==) (getTable s contexts mapping)) --getTable s contexts mapping
     where 
