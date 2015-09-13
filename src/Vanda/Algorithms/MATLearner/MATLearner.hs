@@ -9,7 +9,6 @@ import Vanda.Algorithms.MATLearner.TreeAutomaton
 import Data.Map hiding (foldr,foldl,map,filter,findIndex)
 import Data.List (nub,elemIndex,find,findIndex)
 import Data.Maybe
-import Debug.Trace
 import Vanda.Algorithms.MATLearner.TreesContexts
 
 
@@ -30,7 +29,7 @@ instance (Ord a) => Teacher (Automaton a) where
 instance Teacher (Corpus) where
         isMember (Corpus corpus) tree = return $ elem tree corpus
         
-        conjecture (Corpus []) automaton = return Nothing
+        conjecture (Corpus []) _ = return Nothing
         conjecture (Corpus (x:xs)) automaton
           | accepts automaton x = conjecture (Corpus xs) automaton
           | otherwise = return $ Just x

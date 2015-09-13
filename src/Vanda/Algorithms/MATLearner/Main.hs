@@ -7,10 +7,10 @@ module Vanda.Algorithms.MATLearner.Main
 , Args()
 ) where
 
-import Vanda.Algorithms.MATLearner.MATLearner
 import System.Console.CmdArgs.Explicit
 import System.Console.CmdArgs.Explicit.Misc
-
+import Vanda.Algorithms.MATLearner.MATLearner (main')
+import Vanda.Algorithms.MATLearner.Util
 
 data Args
   = Help String
@@ -74,7 +74,7 @@ mainArgs (Interactive v)
               
 mainArgs (Corpus v filepath)
   = case v of True      -> putStrLn $ "Doing verbose Learn stuff with the corpus located at " ++ filepath
-              False     -> putStrLn $ "Doing NONverbose Learn stuff with the corpus located at " ++ filepath
+              False     -> nonVerboseCorpus filepath
 mainArgs (Automaton v filepath)
   = case v of True      -> putStrLn $ "Doing verbose Learn stuff with the automaton located at " ++ filepath
               False     -> putStrLn $ "Doing NONverbose Learn stuff with the automaton located at " ++ filepath
