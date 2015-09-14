@@ -61,7 +61,7 @@ concatTree t (CNode l ts) = Node l (map (concatTree t) ts)
 
 
 -- | insert the context into another context
-concatContext :: Context Int -> Context Int -> Context Int
+concatContext :: Context a -> Context a -> Context a
 concatContext t X            = t
 concatContext t (CNode l ts) = CNode l (map (concatContext t) ts)
 

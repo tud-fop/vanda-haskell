@@ -7,19 +7,40 @@ import qualified Data.Set as S
 import qualified Data.Vector as V
 import Vanda.Algorithms.MATLearner.TreeAutomaton
 import Data.Map hiding (foldr,foldl,map,filter,findIndex)
-import Data.List (nub,elemIndex,find,findIndex)
+import Data.List (nub,elemIndex,find,findIndex,intercalate)
 import Data.Maybe
 import Vanda.Algorithms.MATLearner.TreesContexts
+import Vanda.Algorithms.MATLearner.Util
 
 
-newtype Corpus = Corpus [Tree Int]
-
-data Params = AutomatonParams | CorpusParams
+newtype Corpus = Corpus [Tree String]
+data Interactive = Interactive
 
 class Teacher a where 
-        isMember :: a -> Tree Int -> IO Bool
-        conjecture :: (Ord b) => a -> Automaton b -> IO (Maybe (Tree Int))
-        getSigma :: a -> IO [(Int,Int)]
+        isMember :: a -> Tree String -> IO Bool
+        conjecture :: (Ord b, Show b) => a -> Automaton b -> IO (Maybe (Tree String))
+        getSigma :: a -> IO [(String,Int)]
+        
+instance Teacher Interactive where
+        isMember Interactive baum = do
+          putStrLn "Is this tree part of the language?"
+          putStrLn $ show' baum
+          putStrLn "y/n?"
+          answer <- getLine
+          return $ answer == "y"
+        
+        conjecture Interactive automat = do
+          putStrLn "Is this Automaton correct?"
+          putStrLn $ show automat
+          putStrLn "y/n?"
+          answer <- getLine
+          if answer == "y" then return Nothing
+                           else do
+                             putStrLn "Please enter a counterexample:" 
+                             tree <- getLine
+                             return $ Just (parseTree (filter (/= ' ') tree,0))
+                             
+        getSigma Interactive = return [("sigma",2),("gamma",1),("alpha",0)]
         
 instance (Ord a) => Teacher (Automaton a) where
         isMember automat baum = return $ accepts automat baum
@@ -40,7 +61,7 @@ instance Teacher (Corpus) where
           l2 <- getSigma (Corpus corpus)
           return $ makeSet (l1 ++ l2)
               where
-                extractSymbols :: Tree Int -> IO [(Int,Int)]
+                extractSymbols :: Tree String -> IO [(String,Int)]
                 extractSymbols (Node x list) = do
                   l <- getSigma (Corpus list)
                   return $ (x, length list) : l
@@ -53,19 +74,17 @@ instance Teacher (Corpus) where
 
 instance Ord a => Ord (Tree a) where
     (<=) t1 t2 = (collapsewlr t1) <= (collapsewlr t2)--(a <= b) || (foldl (\le (t1,t2) -> le || t1 <= t2) False (zip t1s t2s))
-
-
-data ObservationTable = OT ([Tree Int], -- ^ S
-    [Context Int], -- ^ C
-    (Map (Tree Int) Bool)) -- ^ mapping
+    
+show' :: (Show a) => (Tree a) -> String
+show' (Node a list) = show a ++ " [ " ++ (intercalate " , " $ map show' list) ++ " ]"
+      
+    
+data ObservationTable = OT ([Tree String], -- ^ S
+    [Context String], -- ^ C
+    (Map (Tree String) Bool)) -- ^ mapping
 
 instance Show ObservationTable where
     show (OT (s,contexts,mapping)) = "OT (" ++ (show $ map contextify s) ++ "," ++ (show contexts) ++ "," ++ (show $ map (\(k,v) -> (contextify k,v)) $ toList mapping) ++ ")"
-
-main :: IO ()
-main = do
-  a <- main' (Corpus [])
-  putStrLn $ show a
     
 main' :: Teacher t => t -> IO (Automaton Int)
 main' teacher = do
@@ -81,7 +100,7 @@ initialObs teacher = do
                             return (OT (s,[X],mapping))
 
 -- | check whether obs is consistent and return consitified version (or old version if the table already was consistent)
-consistify :: Teacher t => [[Tree Int]] -> t -> StateT ObservationTable IO Bool
+consistify :: Teacher t => [[Tree String]] -> t -> StateT ObservationTable IO Bool
 consistify []           _       = return True
 consistify ([s1,s2]:xs) teacher = do
     (OT (s,contexts,mapping)) <- get
@@ -104,9 +123,9 @@ consistify ([s1,s2]:xs) teacher = do
 checkConsistencyContexts
     :: Teacher t 
     => t -- ^ teacher 
-    -> Tree Int -- ^ first tree
-    -> Tree Int -- ^ second tree
-    -> [Context Int] -- ^ contexts for which consistency of s1 and s2 has to be checked
+    -> Tree String -- ^ first tree
+    -> Tree String -- ^ second tree
+    -> [Context String] -- ^ contexts for which consistency of s1 and s2 has to be checked
     -> StateT ObservationTable IO Bool
 checkConsistencyContexts _       _  _   []     = return True
 checkConsistencyContexts teacher s1 s2 (c:cs) = do
@@ -125,8 +144,8 @@ checkConsistencyOneContext
     => t -- ^ teacher 
     -> [Bool] -- ^ row of s1 inserted into c
     -> [Bool] -- ^ row of s2 inserted into c
-    -> Context Int -- ^ context to determine the new context in case the table is inconsistent
-    -> [Context Int] -- ^ contexts to determine the new context in case the table is inconsistent
+    -> Context String -- ^ context to determine the new context in case the table is inconsistent
+    -> [Context String] -- ^ contexts to determine the new context in case the table is inconsistent
     -> StateT ObservationTable IO Bool
 checkConsistencyOneContext _ [] [] _ _ = return True
 checkConsistencyOneContext teacher (x:xs) (y:ys) context (c:cs)
@@ -140,7 +159,7 @@ checkConsistencyOneContext teacher (x:xs) (y:ys) context (c:cs)
         return False
 
 -- | check whether Observation Table is closed and return a closed Observation Table
-closify :: Teacher t => [Tree Int] ->  t -> StateT ObservationTable IO Bool
+closify :: Teacher t => [Tree String] ->  t -> StateT ObservationTable IO Bool
 closify []     _       = return True
 closify (x:xs) teacher = do
     (OT (s,contexts,mapping)) <- get
@@ -183,7 +202,7 @@ correctify teacher = do
 
 
 -- | extract subtree that has to be added to the observation table
-extract :: Teacher t => t -> [(Tree Int,[Bool])] -> [(Tree Int,[Bool])] -> Tree Int -> IO (Tree Int)
+extract :: Teacher t => t -> [(Tree String,[Bool])] -> [(Tree String,[Bool])] -> Tree String -> IO (Tree String)
 extract teacher s sigmaS counterexample
     |newcounterexample == Nothing                                                     = return replacedSubtree -- no new counterexample found
     |True                         = do
@@ -197,8 +216,8 @@ extract teacher s sigmaS counterexample
     where 
         Just (newcounterexample, replacedSubtree) = tryReduce counterexample
 
-        tryReduce :: Tree Int -> Maybe (Maybe (Tree Int),Tree Int)
-        tryReduce tree@(Node symbol ts)
+        tryReduce :: Tree String -> Maybe (Maybe (Tree String),Tree String)
+        tryReduce tree@(Node symbol t
             |maybeRowOfs == Nothing = let replacedTs = (map tryReduce ts) -- the current subtree is not in Sigma(S)/S
                                           maybeIndexOfSybtree = findIndex (Nothing /=) replacedTs
                                       in
@@ -223,7 +242,7 @@ extract teacher s sigmaS counterexample
                 where maybeRowOfs = find (\(stree,_) -> tree == stree) sigmaS
 
 -- | generate an Automaton from a given Observation Table and an ranked alphabet
-generateAutomaton :: ObservationTable -> [(Int,Int)] -> (Automaton Int)
+generateAutomaton :: ObservationTable -> [(String,Int)] -> (Automaton Int)
 generateAutomaton (OT (s,contexts,mapping)) sigma = Automaton 
                                                       (EdgeList 
                                                         (S.fromList [0..length rows]) -- ^ all occunring states
@@ -236,7 +255,7 @@ generateAutomaton (OT (s,contexts,mapping)) sigma = Automaton
         boolTransitions = concatMap (\(symbol,arity) -> map (getTransition symbol) (chooseWithDuplicates arity rows)) sigma
 
 
-        getTransition :: Int -> [(Tree Int,[Bool])] -> ([[Bool]],[Bool],Int)
+        getTransition :: String -> [(Tree String,[Bool])] -> ([[Bool]],[Bool],String)
         getTransition symbol rows = (map snd rows, obst (Node symbol (map fst rows)) contexts mapping, symbol)
         -- | get the number corresponding to the state
         getIndex :: [Bool] -> Int
@@ -265,16 +284,16 @@ learn teacher = do
 
 --use for testing : obst (Node 1 []) [X,(CNode 2 [X])] (fromList [((Node 1 []),True),((Node 2 [Node 1 []]), False)])
 -- | get row of tree in observation table
-obst :: Tree Int -> [Context Int] -> Map (Tree Int) Bool -> ([Bool])
+obst :: Tree String -> [Context String] -> Map (Tree String) Bool -> ([Bool])
 obst tree cs mapping = map (\c -> mapping ! (concatTree tree c)) cs
 
 -- | get the filled out table
-getTable :: [Tree Int] -> [Context Int] -> Map (Tree Int) Bool -> ([(Tree Int,[Bool])])
+getTable :: [Tree String] -> [Context String] -> Map (Tree String) Bool -> ([(Tree String,[Bool])])
 getTable s contexts mapping = zip s (map (\x -> obst x contexts mapping) s)
 
 
 -- | inserts unknown memberships of given trees  into mapping
-updateMapping :: Teacher a => a -> Map (Tree Int) Bool -> [Tree Int] -> IO (Map (Tree Int) Bool)
+updateMapping :: Teacher a => a -> Map (Tree String) Bool -> [Tree String] -> IO (Map (Tree String) Bool)
 updateMapping teacher mapping []     = return mapping 
 updateMapping teacher mapping (t:ts) = do
                                         if  notMember t mapping
