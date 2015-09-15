@@ -217,7 +217,7 @@ extract teacher s sigmaS counterexample
         Just (newcounterexample, replacedSubtree) = tryReduce counterexample
 
         tryReduce :: Tree String -> Maybe (Maybe (Tree String),Tree String)
-        tryReduce tree@(Node symbol t
+        tryReduce tree@(Node symbol ts)
             |maybeRowOfs == Nothing = let replacedTs = (map tryReduce ts) -- the current subtree is not in Sigma(S)/S
                                           maybeIndexOfSybtree = findIndex (Nothing /=) replacedTs
                                       in
