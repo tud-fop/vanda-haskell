@@ -1,5 +1,5 @@
 module Vanda.Algorithms.MATLearner.Util where
-
+ 
 import Data.Tree
 
 
@@ -13,18 +13,18 @@ parseCorpus :: String -> Forest String
 parseCorpus s = (map parseTree $ zip (lines s) [1..])
 
 parseTree :: (String,Int) -> Tree String
-parseTree ([],l) = parsingError l "No empty Lines allowed."
-parseTree (string,l)
-  | symbol == "" = parsingError l "Tree Nodes can't be empty."
-  | otherwise    = Node symbol (parseSubTree (subTrees,l))
-  where (symbol,subTrees) = parseSymbol string l
+parseTree ([],line) = parsingError line "No empty Lines allowed."
+parseTree (string,line)
+  | symbol == "" = parsingError line "Tree Nodes can't be empty."
+  | otherwise    = Node symbol (parseSubTree (subTrees,line))
+  where (symbol,subTrees) = parseSymbol string line
         parseSymbol :: String -> Int -> (String,String)
-        parseSymbol ('"' : string) l = parseSymbol' string l
+        parseSymbol ('"' : s) l = parseSymbol' s l
         parseSymbol _ l = parsingError l "'\"' missing."
         
         parseSymbol' :: String -> Int -> (String, String)
-        parseSymbol' ('"': string) _ = ("",string)
-        parseSymbol' (c : string) l = let (restSymbol,restString) = parseSymbol' string l in (c: restSymbol,restString)
+        parseSymbol' ('"': s) _ = ("",s)
+        parseSymbol' (c : s) l = let (restSymbol,restString) = parseSymbol' s l in (c: restSymbol,restString)
         parseSymbol' [] l = parsingError l "'\"' missing."
         
         parseSubTree :: (String,Int) -> [Tree String]
@@ -34,12 +34,10 @@ parseTree (string,l)
                                                    else map parseTree $ (zip (separateTrees $ take ((length rest) - 1) rest) [l,l..])
           | otherwise = parsingError l "']' missing."
         parseSubTree (_,l) = parsingError l "'[' missing."
-        
-        read' :: String -> Int -> Int
-        read' string line = case reads string of
-                                 [(x, "")] -> x
-                                 _ -> parsingError l ": Symbols have to be integers."
  
+parseStringToTree :: (String,String) -> Tree String
+parseStringToTree ([],end) = Node end []
+parseStringToTree ((a:rest),end) = Node [a] [parseStringToTree (rest,end)]
 
 separateTrees :: String -> [String]
 separateTrees s = separateTrees' 0 "" s

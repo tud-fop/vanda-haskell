@@ -6,7 +6,7 @@ import Vanda.Hypergraph.Basic
 import qualified Data.Set as S
 import qualified Data.Vector as V
 import Vanda.Algorithms.MATLearner.TreeAutomaton
-import Data.Map hiding (foldr,foldl,map,filter,findIndex)
+import Data.Map hiding (foldr,foldl,map,filter,findIndex,lookup)
 import Data.List (nub,elemIndex,find,findIndex,intercalate)
 import Data.Maybe
 import Vanda.Algorithms.MATLearner.TreesContexts
@@ -15,6 +15,7 @@ import Vanda.Algorithms.MATLearner.Util
 
 newtype Corpus = Corpus [Tree String]
 data Interactive = Interactive
+data InteractiveString = InteractiveString
 
 class Teacher a where 
         isMember :: a -> Tree String -> IO Bool
@@ -38,9 +39,31 @@ instance Teacher Interactive where
                            else do
                              putStrLn "Please enter a counterexample:" 
                              tree <- getLine
-                             return $ Just (parseTree (filter (/= ' ') tree,0))
+                             return $ Just (parseTree (filter (/= ' ') tree,0))                                          
                              
         getSigma Interactive = return [("sigma",2),("gamma",1),("alpha",0)]
+        
+        
+instance Teacher InteractiveString where
+        isMember InteractiveString baum = do
+          putStrLn "Is this word part of the language?"
+          putStrLn $ showAsString baum
+          putStrLn "y/n?"
+          answer <- getLine
+          return $ answer == "y"
+        
+        conjecture InteractiveString automat = do
+          putStrLn "Is this Automaton correct?"
+          putStrLn $ show automat
+          putStrLn "y/n?"
+          answer <- getLine
+          if answer == "y" then return Nothing
+                           else do
+                             putStrLn "Please enter a counterexample:"
+                             tree <- getLine
+                             return $ Just (parseStringToTree (tree,"0"))
+                             
+        getSigma InteractiveString = return [("a",1),("b",1),("0",0)]
         
 instance (Ord a) => Teacher (Automaton a) where
         isMember automat baum = return $ accepts automat baum
@@ -77,6 +100,10 @@ instance Ord a => Ord (Tree a) where
     
 show' :: (Show a) => (Tree a) -> String
 show' (Node a list) = show a ++ " [ " ++ (intercalate " , " $ map show' list) ++ " ]"
+
+showAsString :: Tree String -> String
+showAsString (Node a (t:_)) = a ++ showAsString t
+showAsString (Node a []) = ""
       
     
 data ObservationTable = OT ([Tree String], -- ^ S

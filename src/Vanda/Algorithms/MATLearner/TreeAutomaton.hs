@@ -1,5 +1,5 @@
 module Vanda.Algorithms.MATLearner.TreeAutomaton where
-import Vanda.Hypergraph
+import Vanda.Hypergraph hiding (to,from,label, edges, from1, from2)
 import qualified Data.Set as S
 import qualified Data.Vector as V
 import Data.Tree
@@ -7,16 +7,16 @@ import Vanda.Algorithms.MATLearner.TreesContexts
 
 
 data Automaton a = 
-  Automaton 
-  { graph :: EdgeList a String Int 
-  , finalStates :: S.Set a
-  }
+  Automaton (EdgeList a String Int) (S.Set a)
   
 instance (Show a) => Show (Automaton a) where
   show (Automaton (EdgeList _ edgelist) finalStates) = "Edges:\n" ++ showEdges edgelist ++ "Final States: " ++ show (S.toAscList finalStates)
     where showEdges :: (Show a) => [Hyperedge a String Int] -> String
           showEdges [] = ""
           showEdges ((Hyperedge to from label _) :xs) = show (V.toList from) ++ " -> " ++ show label ++ " " ++ show to ++ "\n" ++ showEdges xs
+          showEdges ((Nullary _ _ _ ) : _) = undefined
+          showEdges ((Unary _ _ _ _ ) : _) = undefined
+          showEdges ((Binary _ _ _ _ _ ) : _) = undefined
 
  
 -- | Computes the state of the automaton after running over the tree. Only works if the automaton is bottom up deterministic and total!
@@ -29,7 +29,10 @@ computeState :: (Eq a) => [a] -> String -> [Hyperedge a String Int] -> a
 computeState _ _ [] = error "Automaton has to be total" -- only happens if the automaton is partial
 computeState childrenStates nodeLabel ((Hyperedge to from label _):edges)
   | nodeLabel == label && (V.toList from) == childrenStates = to
-  | otherwise = computeState childrenStates nodeLabel edges
+  | otherwise = computeState childrenStates nodeLabel edges 
+computeState _ _ ((Nullary _ _ _ ) : _) = undefined
+computeState _ _ ((Unary _ _ _ _ ) : _) = undefined
+computeState _ _ ((Binary _ _ _ _ _ ) : _) = undefined
 
 -- | Computes whether the Automaton accepts a Tree or not
 accepts :: (Ord a) => Automaton a -> Tree String -> Bool
@@ -81,4 +84,4 @@ isEmpty automaton@(Automaton (EdgeList _ edges) finalStates) = go initTrees init
             |True                       = go (xs ++ newStates) (ys ++ newStates)
                 where
                     newTrees = map (\t -> (t,run edges t)) (map (concatTree tree) (getContexts (map fst ys) sigma))
-                    newStates = filter (\(ntree,nstate) -> not $ any (\(_,oldstate) -> oldstate == nstate) ys) newTrees
+                    newStates = filter (\(_,nstate) -> not $ any (\(_,oldstate) -> oldstate == nstate) ys) newTrees
