@@ -183,32 +183,40 @@ correctify :: Teacher t => t -> StateT ObservationTable IO Bool
 correctify teacher = do
                     obs@(OT (s,contexts,mapping)) <- get
                     sigma <- lift $ getSigma teacher
-                    counterexample <- lift $ conjecture teacher (generateAutomaton obs sigma)
-                    if counterexample == Nothing
-                        then
-                            return True
-                        else
-                            do
-                                x <- lift $ extract teacher
-                                                (getTable s contexts mapping) 
-                                                (getTable (listMinus (getSigmaS s sigma) s) contexts mapping) -- ^ Simga(S)/S
-                                                (fromJust counterexample)
-                                mapping' <- lift $ updateMapping teacher
-                                                      mapping 
-                                                      (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
-                                                                 (map (concatTree x) (getContexts (s ++ [x]) sigma)))-- we only need to consider trees in which the new tree occurs
-                                put (OT (s ++ [x],contexts,mapping'))
-                                return False
+                    let automaton = generateAutomaton obs sigma in
+                        do
+                            maybeCounterexample <- lift $ conjecture teacher automaton
+                            if maybeCounterexample == Nothing
+                                then
+                                    return True
+                                else
+                                    let counterexample = (fromJust maybeCounterexample)
+                                        mapping' = insert counterexample (not (accepts automaton counterexample)) mapping -- insert membership for counterexample
+                                    in
+                                        do
+                                            put(OT(s,contexts,mapping'))
+                                            x <- extract teacher
+                                                        (getTable s contexts mapping') 
+                                                        (getTable (listMinus (getSigmaS s sigma) s) contexts mapping') -- ^ Simga(S)/S
+                                                        counterexample
+                                            mapping'' <- lift $ updateMapping teacher
+                                                                  mapping' 
+                                                                  (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
+                                                                             (map (concatTree x) (getContexts (s ++ [x]) sigma)))-- we only need to consider trees in which the new tree occurs
+                                            put (OT (s ++ [x],contexts,mapping''))
+                                            return False
 
 
 -- | extract subtree that has to be added to the observation table
-extract :: Teacher t => t -> [(Tree String,[Bool])] -> [(Tree String,[Bool])] -> Tree String -> IO (Tree String)
+extract :: Teacher t => t -> [(Tree String,[Bool])] -> [(Tree String,[Bool])] -> Tree String -> StateT ObservationTable IO (Tree String)
 extract teacher s sigmaS counterexample
-    |newcounterexample == Nothing                                                     = return replacedSubtree -- no new counterexample found
+    |newcounterexample == Nothing = return replacedSubtree -- no new counterexample found
     |True                         = do
-                                    isMemberOld <- isMember teacher counterexample
-                                    isMemberNew <- isMember teacher (fromJust newcounterexample)
-                                    if isMemberOld /= isMemberNew
+                                    (OT (s',contexts,mapping)) <- get
+                                    mapping' <- lift $ updateMapping teacher mapping [fromJust newcounterexample]
+                                    put(OT(s',contexts,mapping')) -- store membership of new tree in mapping
+                                    lift $ putStrLn (show ((mapping' ! counterexample),(mapping' ! (fromJust newcounterexample))))
+                                    if (mapping' ! counterexample) /= (mapping' ! (fromJust newcounterexample)) -- isMemberOldCounterexample not eqal isMemberNewCounterexample
                                         then
                                             return replacedSubtree -- new counterexample is no longer a counterexample
                                         else
@@ -223,7 +231,7 @@ extract teacher s sigmaS counterexample
                                       in
                                         if (maybeIndexOfSybtree == Nothing)
                                             then
-                                                Nothing -- no substree could be reduced
+                                                Nothing -- no substree could be reduced, this should not happen
                                             else
                                                 let indexOfSybtree = fromJust maybeIndexOfSybtree
                                                     Just (newSubtree,replacedSubtree) = replacedTs !! indexOfSybtree
@@ -231,7 +239,7 @@ extract teacher s sigmaS counterexample
                                                     if (newSubtree == Nothing) -- no s' found so return s 
                                                         then
                                                             Just (Nothing,replacedSubtree)
-                                                        else -- TODO check with teacher whether its still a counterexample 
+                                                        else
                                                             Just (Just (Node symbol ((take indexOfSybtree ts) ++ [fromJust newSubtree] ++ (drop (indexOfSybtree+1) ts))),replacedSubtree) -- replace subtree
             |True                   = let rowOfs' = find (\(_,q) -> (snd (fromJust maybeRowOfs) == q)) s in -- the current subtree is in Sigma(S)/S now try to replace it by s'
                                         if (rowOfs' == Nothing)
