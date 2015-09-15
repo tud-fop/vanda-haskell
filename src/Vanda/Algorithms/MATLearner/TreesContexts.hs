@@ -2,14 +2,16 @@ module Vanda.Algorithms.MATLearner.TreesContexts where
 
 import Data.Tree
 
+import Data.List (intercalate)
 
 data Context a = X | CNode a [Context a]
 
 
 instance Show a => Show (Context a) where
     show X            = "X"
-    show (CNode l []) = "(Node " ++ (show l) ++ ")"
-    show (CNode l ts) = "(Node " ++ (show l) ++ " [" ++ (concatMap show ts) ++ "])"
+    show (CNode l [] ) = show l
+    show (CNode l [t]) = show l ++ show t
+    show (CNode l ts ) = show l ++ "(" ++ (intercalate "," $ map show ts) ++ ")"
 
 
 

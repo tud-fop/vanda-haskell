@@ -76,9 +76,37 @@ instance Ord a => Ord (Tree a) where
     (<=) t1 t2 = (collapsewlr t1) <= (collapsewlr t2)--(a <= b) || (foldl (\le (t1,t2) -> le || t1 <= t2) False (zip t1s t2s))
     
 show' :: (Show a) => (Tree a) -> String
-show' (Node a list) = show a ++ " [ " ++ (intercalate " , " $ map show' list) ++ " ]"
-      
-    
+show' (Node a []  ) = show a 
+show' (Node a [t] ) = show a ++ show' t
+show' (Node a list) = show a ++ "(" ++ (intercalate "," $ map show' list) ++ ")"
+
+
+showContexts :: [String] -> [String] -> [String] -> String
+showContexts [] contexts output
+  |allEmpty contexts  = intercalate "\n" $ reverse $ map reverse output
+  |True               = showContexts [] (map tail' contexts) (appendChar contexts output)
+showContexts (c:cs) contexts output = let newContexts = contexts ++ [c] in showContexts cs (map tail' newContexts) (appendChar newContexts output)
+
+
+allEmpty :: [[a]] -> Bool
+allEmpty []      = True
+allEmpty ([]:xs) = allEmpty xs
+allEmpty _       = False
+
+
+tail' :: [a] -> [a]
+tail' []     = []
+tail' (_:xs) = xs
+
+
+appendChar :: [String] -> [String] -> [String]
+appendChar []         []     = []
+appendChar []         (x:xs) = (' ':x):(appendChar [] xs)
+appendChar ([]:cs)    (x:xs) = (' ':x):(appendChar cs xs)
+appendChar ((c:_):cs) (x:xs) = (c  :x):(appendChar cs xs)
+
+
+
 data ObservationTable = OT ([Tree String], -- ^ S
     [Context String], -- ^ C
     (Map (Tree String) Bool)) -- ^ mapping
@@ -190,7 +218,7 @@ correctify teacher = do
                                 then
                                     return True
                                 else
-                                    let counterexample = (fromJust maybeCounterexample)
+                                    let counterexample = (fromJust maybeCounterexample) -- TODO check CE for correctness
                                         mapping' = insert counterexample (not (accepts automaton counterexample)) mapping -- insert membership for counterexample
                                     in
                                         do
