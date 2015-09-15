@@ -16,6 +16,7 @@ data Args
   = Help String
   | InteractiveArg
     { verbose :: Bool
+    , string :: Bool
     }
   | CorpusArg
     { verbose :: Bool
@@ -32,11 +33,11 @@ data Args
 cmdArgs :: Mode Args
 cmdArgs
   = modes "matlearner" (Help $ defaultHelp cmdArgs) "MAT-Learner algorithm for different types of teachers"
-  [ (modeEmpty $ InteractiveArg False)
+  [ (modeEmpty $ InteractiveArg False False)
     { modeNames = ["interactive"]
-    , modeHelp = "MAT-Learner algorithm with an interactive teacher"
+    , modeHelp = "MAT-Learner algorithm with an interactive teacher, using a default ranked alphabet"
     , modeArgs = ( [], Nothing )
-    , modeGroupFlags = toGroup [flagNoneVerbose]
+    , modeGroupFlags = toGroup [flagNoneVerbose, flagNoneStringAlphabet]
     }
   , (modeEmpty $ CorpusArg False undefined)
     { modeNames = ["corpus"]
@@ -60,6 +61,11 @@ cmdArgs
       = flagNone ["v"]
                  (\ x -> x{verbose = True})
                  "regularly output the observation table"
+    flagNoneStringAlphabet
+      = flagNone ["s"]
+                 (\ x -> x{string = True})
+                 "use a string alphabet and a string automaton"
+      
 main :: IO ()
 main = processArgs (populateHelpMode Help cmdArgs) >>= mainArgs
 
@@ -68,9 +74,9 @@ mainArgs :: Args -> IO ()
 
 mainArgs (Help cs) = putStr $ cs
 
-mainArgs (InteractiveArg v)
-  = case v of True      -> putStrLn "Doing verbose Interactive Learn stuff"
-              False     -> nonVerboseInteractive
+mainArgs (InteractiveArg v s)
+  =  case v of True      -> putStrLn "Doing verbose Interactive Learn stuff"
+               False     -> nonVerboseInteractive s
               
 mainArgs (CorpusArg v filepath)
   = case v of True      -> putStrLn $ "Doing verbose Learn stuff with the corpus located at " ++ filepath
@@ -80,13 +86,20 @@ mainArgs (AutomatonArg v filepath)
               False     -> putStrLn $ "Doing NONverbose Learn stuff with the automaton located at " ++ filepath
               
               
-nonVerboseInteractive :: IO ()
-nonVerboseInteractive = do
-  putStrLn "Your Tree-Language consists of the following alphabet:"
-  alphabet <- getSigma Interactive
-  putStrLn $ show alphabet ++ "\n"
-  automat <- main' Interactive
-  putStrLn $ show automat
+nonVerboseInteractive :: Bool -> IO ()
+nonVerboseInteractive stringAlphabet = if stringAlphabet
+  then do
+    putStrLn "Your Language consists of the following alphabet:"
+    alphabet <- getSigma InteractiveString
+    putStrLn $ (show $ (fst $ unzip (take ((length alphabet) - 1) alphabet))) ++ "\n"
+    automat <- main' InteractiveString
+    putStrLn $ show automat
+  else do
+    putStrLn "Your Tree-Language consists of the following alphabet:"
+    alphabet <- getSigma Interactive
+    putStrLn $ show alphabet ++ "\n"
+    automat <- main' Interactive
+    putStrLn $ show automat
   
 nonVerboseCorpus :: FilePath -> IO ()
 nonVerboseCorpus filepath = do
