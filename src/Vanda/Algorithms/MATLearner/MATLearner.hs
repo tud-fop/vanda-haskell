@@ -47,7 +47,7 @@ instance Teacher Interactive where
 instance Teacher InteractiveString where
         isMember InteractiveString baum = do
           putStrLn "Is this word part of the language?"
-          putStrLn $ showAsString baum
+          putStrLn . reverse $ showAsString baum
           putStrLn "y/n?"
           answer <- getLine
           return $ answer == "y"

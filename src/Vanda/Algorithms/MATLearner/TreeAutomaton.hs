@@ -17,7 +17,6 @@ instance (Show a) => Show (Automaton a) where
           showEdges ((Nullary _ _ _ ) : _) = undefined
           showEdges ((Unary _ _ _ _ ) : _) = undefined
           showEdges ((Binary _ _ _ _ _ ) : _) = undefined
-
  
 -- | Computes the state of the automaton after running over the tree. Only works if the automaton is bottom up deterministic and total!
 run :: (Eq a) => [Hyperedge a String Int] -> Tree String -> a

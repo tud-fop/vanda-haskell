@@ -75,15 +75,15 @@ mainArgs :: Args -> IO ()
 mainArgs (Help cs) = putStr $ cs
 
 mainArgs (InteractiveArg v s)
-  =  case v of True      -> putStrLn "Doing verbose Interactive Learn stuff"
-               False     -> nonVerboseInteractive s
+  =  case v of True     -> putStrLn "Doing verbose Interactive Learn stuff"
+               False    -> nonVerboseInteractive s
               
 mainArgs (CorpusArg v filepath)
   = case v of True      -> putStrLn $ "Doing verbose Learn stuff with the corpus located at " ++ filepath
               False     -> nonVerboseCorpus filepath
 mainArgs (AutomatonArg v filepath)
   = case v of True      -> putStrLn $ "Doing verbose Learn stuff with the automaton located at " ++ filepath
-              False     -> putStrLn $ "Doing NONverbose Learn stuff with the automaton located at " ++ filepath
+              False     -> nonVerboseAutomaton filepath
               
               
 nonVerboseInteractive :: Bool -> IO ()
@@ -106,3 +106,10 @@ nonVerboseCorpus filepath = do
   forest <- parseFile filepath parseCorpus
   automat <- main' $ Corpus forest
   putStrLn $ show automat
+  
+    
+nonVerboseAutomaton :: FilePath -> IO ()
+nonVerboseAutomaton filepath = do
+  automat <- parseFile filepath parseAutomaton
+  automat' <- main' $ automat
+  putStrLn $ show automat'
