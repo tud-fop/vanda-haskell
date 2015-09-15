@@ -245,21 +245,30 @@ correctify teacher = do
                                 then
                                     return True
                                 else
-                                    let counterexample = (fromJust maybeCounterexample) -- TODO check CE for correctness
-                                        mapping' = insert counterexample (not (accepts automaton counterexample)) mapping -- insert membership for counterexample
+                                    let counterexample = (fromJust maybeCounterexample)
+                                        isMemberCounterexample = not (accepts automaton counterexample)
                                     in
-                                        do
-                                            put(OT(s,contexts,mapping'))
-                                            x <- extract teacher
-                                                        (getTable s contexts mapping') 
-                                                        (getTable (listMinus (getSigmaS s sigma) s) contexts mapping') -- ^ Simga(S)/S
-                                                        counterexample
-                                            mapping'' <- lift $ updateMapping teacher
-                                                                  mapping' 
-                                                                  (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
-                                                                             (map (concatTree x) (getContexts (s ++ [x]) sigma)))-- we only need to consider trees in which the new tree occurs
-                                            put (OT (s ++ [x],contexts,mapping''))
-                                            return False
+                                      if (checkValidity counterexample sigma) /= Nothing
+                                          then
+                                              error "Counterexample is not a valid tree."
+                                          else
+                                              if (member counterexample mapping) && (mapping ! counterexample /= isMemberCounterexample)
+                                                  then
+                                                      error "Membership is already known and this tree is not a counterexample!"
+                                                  else
+                                                      let mapping' = insert counterexample isMemberCounterexample mapping in -- insert membership for counterexample
+                                                        do
+                                                            put(OT(s,contexts,mapping'))
+                                                            x <- extract teacher
+                                                                        (getTable s contexts mapping') 
+                                                                        (getTable (listMinus (getSigmaS s sigma) s) contexts mapping') -- ^ Simga(S)/S
+                                                                        counterexample
+                                                            mapping'' <- lift $ updateMapping teacher
+                                                                                  mapping' 
+                                                                                  (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
+                                                                                             (map (concatTree x) (getContexts (s ++ [x]) sigma)))-- we only need to consider trees in which the new tree occurs
+                                                            put (OT (s ++ [x],contexts,mapping''))
+                                                            return False
 
 
 -- | extract subtree that has to be added to the observation table
