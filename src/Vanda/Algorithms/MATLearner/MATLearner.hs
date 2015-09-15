@@ -134,6 +134,24 @@ showAsString (Node a (t:_)) = a ++ showAsString t
 showAsString (Node a []) = ""
    
 
+showObservationtable :: ObservationTable -> String
+showObservationtable (OT (s,contexts,mapping)) = contextsPart ++ "\n" ++ sigmaPart
+                    where   table = getTable s contexts mapping
+                            trees = map (show' . fst) table
+                            rows = map (showBool . snd) table
+                            maxTreeLength = maximum $ map length trees -- length of longest tree in sigma TODO longest Tree in sigmaS
+                            contextsPart = showContexts (map show contexts) [] (map (\_ -> replicate maxTreeLength ' ') contexts)
+                            sigmaPart = intercalate "\n" $ zipWith (++) (map (fillWithSpaces maxTreeLength) trees) rows
+
+                            showBool :: [Bool] -> String
+                            showBool []         = ""
+                            showBool (True:xs)  = '1':(showBool xs)
+                            showBool (False:xs) = '0':(showBool xs) 
+
+-- | fill the string with spaces until it has the given length
+fillWithSpaces :: Int -> String -> String
+fillWithSpaces n str = str ++ (replicate (n - length str) ' ')
+
 data ObservationTable = OT ([Tree String], -- ^ S
     [Context String], -- ^ C
     (Map (Tree String) Bool)) -- ^ mapping
@@ -338,6 +356,7 @@ generateAutomaton (OT (s,contexts,mapping)) sigma = Automaton
 learn :: Teacher t => t -> StateT ObservationTable IO (Automaton Int)
 learn teacher = do 
     obs@(OT (s,contexts,mapping)) <- get
+    lift $ putStrLn $ showObservationtable obs
     consistent <- consistify (choose 2 s) teacher
     sigma <- lift $ getSigma teacher
     closed <- closify (getSigmaS s sigma) teacher
