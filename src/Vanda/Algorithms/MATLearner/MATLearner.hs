@@ -103,12 +103,33 @@ show' (Node a []  ) = show a
 show' (Node a [t] ) = show a ++ show' t
 show' (Node a list) = show a ++ "(" ++ (intercalate "," $ map show' list) ++ ")"
 
-
+-- | this function will present strings in the following way:
+-- | every cell a new string begins in the line above or some lines below if there is enougth space
+-- |     **        
+-- |    **         
+-- |   **  **      
+-- |  **  **       
+-- | *********
+-- | 123456789
 showContexts :: [String] -> [String] -> [String] -> String
 showContexts [] contexts output
-  |allEmpty contexts  = intercalate "\n" $ reverse $ map reverse output
+  |allEmpty contexts  = intercalate "\n" $ reverse $ map reverse $ filter (any (' '/=)) output -- filter to remove uneccessary empty lines at the top
   |True               = showContexts [] (map tail' contexts) (appendChar contexts output)
-showContexts (c:cs) contexts output = let newContexts = contexts ++ [c] in showContexts cs (map tail' newContexts) (appendChar newContexts output)
+showContexts (c:cs) contexts output = showContexts cs (map tail' newContexts) (appendChar newContexts output)
+                                    where
+                                        newContexts = appendContext contexts (c ++ "  ") -- at least two spaces after each word
+
+                                        appendContext :: [String] -> String -> [String]
+                                        appendContext [] c = [c]
+                                        appendContext (x:xs) c 
+                                            | appendable 0 (x:xs) = (x ++ c):xs
+                                            | True              = x:(appendContext xs c)
+
+                                        appendable :: Int -> [String] -> Bool
+                                        appendable _ [] = True
+                                        appendable l (x:xs)
+                                            | l < length x = False
+                                            | True         = appendable (l+1) xs
 
 
 allEmpty :: [[a]] -> Bool
