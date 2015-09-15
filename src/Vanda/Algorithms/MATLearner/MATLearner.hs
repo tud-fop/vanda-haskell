@@ -99,13 +99,41 @@ instance Ord a => Ord (Tree a) where
     (<=) t1 t2 = (collapsewlr t1) <= (collapsewlr t2)--(a <= b) || (foldl (\le (t1,t2) -> le || t1 <= t2) False (zip t1s t2s))
     
 show' :: (Show a) => (Tree a) -> String
-show' (Node a list) = show a ++ " [ " ++ (intercalate " , " $ map show' list) ++ " ]"
+show' (Node a []  ) = show a 
+show' (Node a [t] ) = show a ++ show' t
+show' (Node a list) = show a ++ "(" ++ (intercalate "," $ map show' list) ++ ")"
+
+
+showContexts :: [String] -> [String] -> [String] -> String
+showContexts [] contexts output
+  |allEmpty contexts  = intercalate "\n" $ reverse $ map reverse output
+  |True               = showContexts [] (map tail' contexts) (appendChar contexts output)
+showContexts (c:cs) contexts output = let newContexts = contexts ++ [c] in showContexts cs (map tail' newContexts) (appendChar newContexts output)
+
+
+allEmpty :: [[a]] -> Bool
+allEmpty []      = True
+allEmpty ([]:xs) = allEmpty xs
+allEmpty _       = False
+
+
+tail' :: [a] -> [a]
+tail' []     = []
+tail' (_:xs) = xs
+
+
+appendChar :: [String] -> [String] -> [String]
+appendChar []         []     = []
+appendChar []         (x:xs) = (' ':x):(appendChar [] xs)
+appendChar ([]:cs)    (x:xs) = (' ':x):(appendChar cs xs)
+appendChar ((c:_):cs) (x:xs) = (c  :x):(appendChar cs xs)
+
 
 showAsString :: Tree String -> String
 showAsString (Node a (t:_)) = a ++ showAsString t
 showAsString (Node a []) = ""
-      
-    
+   
+
 data ObservationTable = OT ([Tree String], -- ^ S
     [Context String], -- ^ C
     (Map (Tree String) Bool)) -- ^ mapping
@@ -218,20 +246,29 @@ correctify teacher = do
                                     return True
                                 else
                                     let counterexample = (fromJust maybeCounterexample)
-                                        mapping' = insert counterexample (not (accepts automaton counterexample)) mapping -- insert membership for counterexample
+                                        isMemberCounterexample = not (accepts automaton counterexample)
                                     in
-                                        do
-                                            put(OT(s,contexts,mapping'))
-                                            x <- extract teacher
-                                                        (getTable s contexts mapping') 
-                                                        (getTable (listMinus (getSigmaS s sigma) s) contexts mapping') -- ^ Simga(S)/S
-                                                        counterexample
-                                            mapping'' <- lift $ updateMapping teacher
-                                                                  mapping' 
-                                                                  (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
-                                                                             (map (concatTree x) (getContexts (s ++ [x]) sigma)))-- we only need to consider trees in which the new tree occurs
-                                            put (OT (s ++ [x],contexts,mapping''))
-                                            return False
+                                      if (checkValidity counterexample sigma) /= Nothing
+                                          then
+                                              error "Counterexample is not a valid tree."
+                                          else
+                                              if (member counterexample mapping) && (mapping ! counterexample /= isMemberCounterexample)
+                                                  then
+                                                      error "Membership is already known and this tree is not a counterexample!"
+                                                  else
+                                                      let mapping' = insert counterexample isMemberCounterexample mapping in -- insert membership for counterexample
+                                                        do
+                                                            put(OT(s,contexts,mapping'))
+                                                            x <- extract teacher
+                                                                        (getTable s contexts mapping') 
+                                                                        (getTable (listMinus (getSigmaS s sigma) s) contexts mapping') -- ^ Simga(S)/S
+                                                                        counterexample
+                                                            mapping'' <- lift $ updateMapping teacher
+                                                                                  mapping' 
+                                                                                  (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
+                                                                                             (map (concatTree x) (getContexts (s ++ [x]) sigma)))-- we only need to consider trees in which the new tree occurs
+                                                            put (OT (s ++ [x],contexts,mapping''))
+                                                            return False
 
 
 -- | extract subtree that has to be added to the observation table

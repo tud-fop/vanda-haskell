@@ -2,14 +2,16 @@ module Vanda.Algorithms.MATLearner.TreesContexts where
 
 import Data.Tree
 
+import Data.List (find,intercalate)
 
 data Context a = X | CNode a [Context a]
 
 
 instance Show a => Show (Context a) where
     show X            = "X"
-    show (CNode l []) = "(Node " ++ (show l) ++ ")"
-    show (CNode l ts) = "(Node " ++ (show l) ++ " [" ++ (concatMap show ts) ++ "])"
+    show (CNode l [] ) = show l
+    show (CNode l [t]) = show l ++ show t
+    show (CNode l ts ) = show l ++ "(" ++ (intercalate "," $ map show ts) ++ ")"
 
 
 
@@ -88,3 +90,18 @@ choose :: Int -> [a] -> [[a]]
 choose 0 _      = [[]]
 choose _ []     = []
 choose n (x:xs) = [(x:xs') | xs' <- choose (n-1) xs] ++ (choose n xs)
+
+
+-- | Checks whether a given tree and a ranked alphabet match, potentially returning an errornous symbol and its correct rank. Returns rank -1, if the symbol is not in the alphabet.
+checkValidity :: Tree String -> [(String,Int)] -> Maybe (String,Int)
+checkValidity (Node symbol children) alphabet = 
+                                    let rank = go $ lookup symbol alphabet in
+                                    if length children == rank 
+                                        then 
+                                            do 
+                                                r <- find (\ x -> x /= Nothing) $ map (flip checkValidity alphabet) children
+                                                r' <- r
+                                                return r'
+                                        else Just (symbol,rank) 
+                                    where go (Just r) = r
+                                          go (Nothing) = -1
