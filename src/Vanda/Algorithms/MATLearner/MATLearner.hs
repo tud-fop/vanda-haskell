@@ -17,10 +17,10 @@ newtype Corpus = Corpus [Tree String]
 data Interactive = Interactive
 data InteractiveString = InteractiveString
 
-class Teacher a where 
-        isMember :: a -> Tree String -> IO Bool
-        conjecture :: (Ord b, Show b) => a -> Automaton b -> IO (Maybe (Tree String))
-        getSigma :: a -> IO [(String,Int)]
+class Teacher t where 
+        isMember :: t -> Tree String -> IO Bool
+        conjecture :: (Ord b, Show b) => t -> Automaton b -> IO (Maybe (Tree String))
+        getSigma :: t -> IO [(String,Int)]
         
 instance Teacher Interactive where
         isMember Interactive baum = do
@@ -159,8 +159,8 @@ data ObservationTable = OT ([Tree String], -- ^ S
 instance Show ObservationTable where
     show (OT (s,contexts,mapping)) = "OT (" ++ (show $ map contextify s) ++ "," ++ (show contexts) ++ "," ++ (show $ map (\(k,v) -> (contextify k,v)) $ toList mapping) ++ ")"
     
-main' :: Teacher t => t -> IO (Automaton Int)
-main' teacher = do
+main' :: Teacher t => t -> Bool -> IO (Automaton Int)
+main' teacher withOutput = do
                 initState <- initialObs teacher
                 evalStateT (learn teacher) initState
 
@@ -375,16 +375,16 @@ learn teacher = do
 
 --use for testing : obst (Node 1 []) [X,(CNode 2 [X])] (fromList [((Node 1 []),True),((Node 2 [Node 1 []]), False)])
 -- | get row of tree in observation table
-obst :: Tree String -> [Context String] -> Map (Tree String) Bool -> ([Bool])
+obst :: Ord a => Tree a -> [Context a] -> Map (Tree a) Bool -> ([Bool])
 obst tree cs mapping = map (\c -> mapping ! (concatTree tree c)) cs
 
 -- | get the filled out table
-getTable :: [Tree String] -> [Context String] -> Map (Tree String) Bool -> ([(Tree String,[Bool])])
+getTable :: Ord a => [Tree a] -> [Context a] -> Map (Tree a) Bool -> ([(Tree a,[Bool])])
 getTable s contexts mapping = zip s (map (\x -> obst x contexts mapping) s)
 
 
 -- | inserts unknown memberships of given trees  into mapping
-updateMapping :: Teacher a => a -> Map (Tree String) Bool -> [Tree String] -> IO (Map (Tree String) Bool)
+updateMapping :: Teacher t => t -> Map (Tree String) Bool -> [Tree String] -> IO (Map (Tree String) Bool)
 updateMapping teacher mapping []     = return mapping 
 updateMapping teacher mapping (t:ts) = do
                                         if  notMember t mapping

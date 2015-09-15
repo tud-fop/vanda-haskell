@@ -19,12 +19,12 @@ instance (Show a) => Show (Automaton a) where
           showEdges ((Binary _ _ _ _ _ ) : _) = undefined
  
 -- | Computes the state of the automaton after running over the tree. Only works if the automaton is bottom up deterministic and total!
-run :: (Eq a) => [Hyperedge a String Int] -> Tree String -> a
+run :: (Eq a, Eq b) => [Hyperedge a b Int] -> Tree b -> a
 run transitions (Node label children) = computeState childrenStates label transitions
   where childrenStates = map (run transitions) children
 
 -- | Selects a Hyperedge from the List of Hyperedges that can be applied to the childrenStates with nodeLabel
-computeState :: (Eq a) => [a] -> String -> [Hyperedge a String Int] -> a
+computeState :: (Eq a, Eq b) => [a] -> b -> [Hyperedge a b Int] -> a
 computeState _ _ [] = error "Automaton has to be total" -- only happens if the automaton is partial
 computeState childrenStates nodeLabel ((Hyperedge to from label _):edges)
   | nodeLabel == label && (V.toList from) == childrenStates = to
@@ -59,7 +59,7 @@ unite (Automaton (EdgeList states1 edges1) finalStates1)
                          (S.union (makePairs finalStates1 states2) (makePairs states1 finalStates2))
 
 
-makePairEdges :: [Hyperedge a String Int] -> [Hyperedge b String Int] -> [Hyperedge (a,b) String Int]
+makePairEdges :: Eq c => [Hyperedge a c Int] -> [Hyperedge b c Int] -> [Hyperedge (a,b) c Int]
 makePairEdges l1 l2 = [ Hyperedge (x,y) (V.zip from1 from2) label 0 | Hyperedge x from1 label _ <- l1, Hyperedge y from2 label' _ <- l2, label == label' ]
 
 makePairs :: (Ord a,Ord b) => S.Set a -> S.Set b -> S.Set (a,b)
