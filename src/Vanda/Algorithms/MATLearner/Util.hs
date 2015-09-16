@@ -1,4 +1,4 @@
-module Vanda.Algorithms.MATLearner.Util (parseFile, parseCorpus, parseAutomaton) where
+module Vanda.Algorithms.MATLearner.Util (parseFile, parseCorpus, parseAutomaton, parseTree, parseStringToTree) where
 
 import Vanda.Algorithms.MATLearner.TreeAutomaton
 import Vanda.Hypergraph
