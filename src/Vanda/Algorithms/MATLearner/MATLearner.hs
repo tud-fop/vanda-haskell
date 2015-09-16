@@ -381,18 +381,26 @@ extract teacher s sigmaS counterexample
 generateAutomaton :: ObservationTable -> [(String,Int)] -> (Automaton Int)
 generateAutomaton (OT (s,contexts,mapping)) sigma = Automaton 
                                                       (EdgeList 
-                                                        (S.fromList [0..length rows]) -- ^ all occunring states
+                                                        (S.fromList [0..length rows]) -- all occunring states
                                                         (map (\(qis,q,s) -> Hyperedge (getIndex q) (V.fromList (map getIndex qis)) s 0) boolTransitions) -- extract hyperedges from boolTransitions
                                                       ) 
                                                       (S.fromList (map (getIndex . snd) (filter  (\(_,(q:qs)) -> q) rows))) -- final states start with 1
     where
-        rows = nub (getTable s contexts mapping)
+        rows = rmdups (getTable s contexts mapping)
         
         boolTransitions = concatMap (\(symbol,arity) -> map (getTransition symbol) (chooseWithDuplicates arity rows)) sigma
+
+        -- | remove dublicates but only consider the second component when comparing elements
+        rmdups :: Eq b => [(a,b)] -> [(a,b)]
+        rmdups []                         = []
+        rmdups ((y,x):xs)   
+            | any (\(_,x') -> x == x') xs = rmdups xs
+            | otherwise                   = (y,x): rmdups xs
 
 
         getTransition :: String -> [(Tree String,[Bool])] -> ([[Bool]],[Bool],String)
         getTransition symbol rows = (map snd rows, obst (Node symbol (map fst rows)) contexts mapping, symbol)
+        
         -- | get the number corresponding to the state
         getIndex :: [Bool] -> Int
         getIndex q = let Just i = elemIndex q (map snd rows) in i
@@ -428,7 +436,7 @@ obst :: Ord a => Tree a -> [Context a] -> Map (Tree a) Bool -> ([Bool])
 obst tree cs mapping = map (\c -> mapping ! (concatTree tree c)) cs
 
 -- | get the filled out table
-getTable :: Ord a => [Tree a] -> [Context a] -> Map (Tree a) Bool -> ([(Tree a,[Bool])])
+getTable :: Ord a => [Tree a] -> [Context a] -> Map (Tree a) Bool -> [(Tree a,[Bool])]
 getTable s contexts mapping = zip s (map (\x -> obst x contexts mapping) s)
 
 
