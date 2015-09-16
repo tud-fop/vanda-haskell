@@ -1,4 +1,5 @@
 module Vanda.Algorithms.MATLearner.TreeAutomaton where
+
 import Vanda.Hypergraph hiding (to,from,label, edges, from1, from2)
 import qualified Data.Set as S
 import qualified Data.Vector as V
@@ -23,7 +24,7 @@ run :: (Eq a, Eq b) => [Hyperedge a b Int] -> Tree b -> a
 run transitions (Node label children) = computeState childrenStates label transitions
   where childrenStates = map (run transitions) children
 
--- | Selects a Hyperedge from the List of Hyperedges that can be applied to the childrenStates with nodeLabel
+-- | Selects a Hyperedge from the list of Hyperedges that can be applied to the childrenStates with nodeLabel
 computeState :: (Eq a, Eq b) => [a] -> b -> [Hyperedge a b Int] -> a
 computeState _ _ [] = error "Automaton has to be total" -- only happens if the automaton is partial
 computeState childrenStates nodeLabel ((Hyperedge to from label _):edges)
@@ -38,7 +39,7 @@ accepts :: (Ord a) => Automaton a -> Tree String -> Bool
 accepts (Automaton (EdgeList _ edges) finalStates) tree = S.member rootState finalStates
   where rootState = run edges tree
 
--- | Returns the complement of an automaton by turning every final state in anon final state and vice versa
+-- | Returns the complement of an automaton by turning every final state in a non final state and vice versa
 complement :: (Ord a) => Automaton a -> Automaton a
 complement (Automaton (EdgeList states edges) finalStates) = Automaton (EdgeList states edges) (states `S.difference` finalStates)
 

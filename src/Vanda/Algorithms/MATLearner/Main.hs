@@ -87,18 +87,20 @@ mainArgs (AutomatonArg v filepath)
               
    
 verboseInteractive :: Bool -> IO ()
-verboseInteractive stringAlphabet = if stringalphabet
-  then do putStrLn "Your Language consists of the following alphabet:"
-    alphabet <- getSigma InteractiveString
-    putStrLn $ (show $ (fst $ unzip (take ((length alphabet) - 1) alphabet))) ++ "\n"
-    automat <- main' InteractiveString True
-    putStrLn $ show automat
-  else do
-    putStrLn "Your Tree-Language consists of the following alphabet:"
-    alphabet <- getSigma Interactive
-    putStrLn $ show alphabet ++ "\n"
-    automat <- main' Interactive True
-    putStrLn $ show automat
+verboseInteractive stringAlphabet = 
+  if stringAlphabet 
+     then do 
+       putStrLn "Your Language consists of the following alphabet:"
+       alphabet <- getSigma InteractiveString
+       putStrLn $ (show $ (fst $ unzip (take ((length alphabet) - 1) alphabet))) ++ "\n"
+       automat <- main' InteractiveString True
+       putStrLn $ show automat
+     else do 
+       putStrLn "Your Tree-Language consists of the following alphabet:"
+       alphabet <- getSigma Interactive
+       putStrLn $ show alphabet ++ "\n"
+       automat <- main' Interactive True
+       putStrLn $ show automat
     
 nonVerboseInteractive :: Bool -> IO ()
 nonVerboseInteractive stringAlphabet = if stringAlphabet
@@ -118,23 +120,23 @@ nonVerboseInteractive stringAlphabet = if stringAlphabet
 verboseCorpus :: FilePath -> IO ()
 verboseCorpus filepath = do
   forest <- parseFile filepath parseCorpus
-  automat <- main' $ (Corpus forest) True
+  automat <- main' (Corpus forest) True
   putStrLn $ show automat
 
-verboseCorpus :: FilePath -> IO ()
+nonVerboseCorpus :: FilePath -> IO ()
 nonVerboseCorpus filepath = do
   forest <- parseFile filepath parseCorpus
-  automat <- main' $ (Corpus forest) False
+  automat <- main' (Corpus forest) False
   putStrLn $ show automat
   
 verboseAutomaton :: FilePath -> IO ()
 verboseAutomaton filepath = do
   automat <- parseFile filepath parseAutomaton
-  automat' <- main' $ automat True
+  automat' <- main' automat True
   putStrLn $ show automat'
   
 nonVerboseAutomaton :: FilePath -> IO ()
 nonVerboseAutomaton filepath = do
   automat <- parseFile filepath parseAutomaton
-  automat' <- main' $ automat False
+  automat' <- main' automat False
   putStrLn $ show automat'

@@ -1,4 +1,4 @@
-module Vanda.Algorithms.MATLearner.Util where
+module Vanda.Algorithms.MATLearner.Util (parseFile, parseCorpus, parseAutomaton) where
 
 import Vanda.Algorithms.MATLearner.TreeAutomaton
 import Vanda.Hypergraph
@@ -6,13 +6,18 @@ import Data.Tree
 import qualified Data.Set as S
 import qualified Data.Vector as V
 
-
+-- | Opens a file and parses it with an arbitrary parser.
 parseFile :: FilePath -> (String -> t) -> IO t 
 parseFile fp parser = do
   file <- readFile fp
   putStrLn $ "Parsing file " ++ fp
   return $ parser (filter (/= ' ') file)
 
+-- | Parses a Tree Corpus from the following text format: One tree per line, where a tree consists of a node in quotation marks followed by its subtrees in brackets, separated by commas. The following exmaple is in the correct format:
+-- @
+--      "sigma" [ "alpha" [], "alpha [] ]
+--      "alpha" []
+-- @
 parseCorpus :: String -> Forest String
 parseCorpus s = map parseTree $ zip (lines s) [1..]
 
@@ -47,6 +52,19 @@ separateTrees s = separateTrees' 0 "" s
 parsingError :: Int -> String -> a
 parsingError line message = error $ "Parsing Error in Line " ++ show line ++ ": " ++ message
 
+-- | Parses an Automaton from the following text format: States are coded as integers, node labels as strings. 
+-- The first line consists of a single number, the maximal state.
+-- The second line consists of a sequence of states in brackets, separated by commas, the final states.
+-- All remaining lines consist of transitions in the following format: A sequence of states in brackets, 
+-- followed by the node label in quotation marks, followed by the target state. 
+-- The following example is in the correct format:
+-- @
+--      1
+--      [1]
+--      [] "a" 0
+--      [0] "gamma" 1
+--      [1] "gamma" 1
+-- @
 parseAutomaton :: String -> Automaton Int
 parseAutomaton s = Automaton (EdgeList (S.fromList states) edges) (S.fromList $ fst finalstates)
   where states = [0..(read $ head (lines s))]
