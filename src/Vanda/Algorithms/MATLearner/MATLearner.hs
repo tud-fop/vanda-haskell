@@ -165,7 +165,7 @@ showObservationtable (OT (s,contexts,mapping)) alphabet = contextsPart ++ "\n" +
                             sigmaRows = map (showBool . snd) sigmaTable -- observation table(sigmaPart | upper table) as [String] with 1 and 0 instead of True and False
 
                             sS = getSigmaS s alphabet
-                            sigmaSTable = getTable sS contexts mapping -- observation table(sigmaSPart | lower table)
+                            sigmaSTable = getTable (listMinus (getSigmaS s alphabet) s) contexts mapping -- observation table(sigmaSPart | lower table) without any elements of the upper one
                             sigmaSTrees = map (show' . fst) sigmaSTable
                             sigmaSRows = map (showBool . snd) sigmaSTable
 
@@ -307,7 +307,7 @@ correctify teacher = do
                                                 put(OT(s,contexts,mapping'))
                                                 x <- extract teacher
                                                             (getTable s contexts mapping') 
-                                                            (getTable (listMinus (getSigmaS s sigma) s) contexts mapping') -- ^ Simga(S)/S
+                                                            (getTable (listMinus (getSigmaS s sigma) s) contexts mapping') -- Simga(S)/S
                                                             counterexample
                                                 mapping'' <- lift $ updateMapping teacher
                                                                       mapping' 
@@ -412,7 +412,7 @@ learn teacher withOutput = do
                 else do
                     correct <- correctify teacher
                     if correct
-                        then do
+                        then do -- automaton accepted programm is finished
                             obs <- get
                             return (generateAutomaton obs sigma)
                         else do
@@ -420,7 +420,7 @@ learn teacher withOutput = do
 
 -- * Observation Table functions
 
---use for testing : obst (Node 1 []) [X,(CNode 2 [X])] (fromList [((Node 1 []),True),((Node 2 [Node 1 []]), False)])
+-- use for testing : obst (Node 1 []) [X,(CNode 2 [X])] (fromList [((Node 1 []),True),((Node 2 [Node 1 []]), False)])
 -- | get row of tree in observation table
 obst :: Ord a => Tree a -> [Context a] -> Map (Tree a) Bool -> ([Bool])
 obst tree cs mapping = map (\c -> mapping ! (concatTree tree c)) cs
