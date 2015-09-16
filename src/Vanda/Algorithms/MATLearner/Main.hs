@@ -64,7 +64,7 @@ cmdArgs
     flagNoneStringAlphabet
       = flagNone ["s"]
                  (\ x -> x{string = True})
-                 "use a string alphabet and a string automaton"
+                 "use a string alphabet, simplifying the queries"
       
 main :: IO ()
 main = processArgs (populateHelpMode Help cmdArgs) >>= mainArgs
@@ -75,41 +75,66 @@ mainArgs :: Args -> IO ()
 mainArgs (Help cs) = putStr $ cs
 
 mainArgs (InteractiveArg v s)
-  =  case v of True     -> putStrLn "Doing verbose Interactive Learn stuff"
+  =  case v of True     -> verboseInteractive s
                False    -> nonVerboseInteractive s
               
 mainArgs (CorpusArg v filepath)
-  = case v of True      -> putStrLn $ "Doing verbose Learn stuff with the corpus located at " ++ filepath
+  = case v of True      -> verboseCorpus filepath
               False     -> nonVerboseCorpus filepath
 mainArgs (AutomatonArg v filepath)
-  = case v of True      -> putStrLn $ "Doing verbose Learn stuff with the automaton located at " ++ filepath
+  = case v of True      -> verboseAutomaton filepath
               False     -> nonVerboseAutomaton filepath
               
-              
+   
+verboseInteractive :: Bool -> IO ()
+verboseInteractive stringAlphabet = if stringalphabet
+  then do putStrLn "Your Language consists of the following alphabet:"
+    alphabet <- getSigma InteractiveString
+    putStrLn $ (show $ (fst $ unzip (take ((length alphabet) - 1) alphabet))) ++ "\n"
+    automat <- main' InteractiveString True
+    putStrLn $ show automat
+  else do
+    putStrLn "Your Tree-Language consists of the following alphabet:"
+    alphabet <- getSigma Interactive
+    putStrLn $ show alphabet ++ "\n"
+    automat <- main' Interactive True
+    putStrLn $ show automat
+    
 nonVerboseInteractive :: Bool -> IO ()
 nonVerboseInteractive stringAlphabet = if stringAlphabet
   then do
     putStrLn "Your Language consists of the following alphabet:"
     alphabet <- getSigma InteractiveString
     putStrLn $ (show $ (fst $ unzip (take ((length alphabet) - 1) alphabet))) ++ "\n"
-    automat <- main' InteractiveString
+    automat <- main' InteractiveString False
     putStrLn $ show automat
   else do
     putStrLn "Your Tree-Language consists of the following alphabet:"
     alphabet <- getSigma Interactive
     putStrLn $ show alphabet ++ "\n"
-    automat <- main' Interactive
+    automat <- main' Interactive False
     putStrLn $ show automat
   
-nonVerboseCorpus :: FilePath -> IO ()
+verboseCorpus :: FilePath -> IO ()
+verboseCorpus filepath = do
+  forest <- parseFile filepath parseCorpus
+  automat <- main' $ (Corpus forest) True
+  putStrLn $ show automat
+
+verboseCorpus :: FilePath -> IO ()
 nonVerboseCorpus filepath = do
   forest <- parseFile filepath parseCorpus
-  automat <- main' $ Corpus forest
+  automat <- main' $ (Corpus forest) False
   putStrLn $ show automat
   
-    
+verboseAutomaton :: FilePath -> IO ()
+verboseAutomaton filepath = do
+  automat <- parseFile filepath parseAutomaton
+  automat' <- main' $ automat True
+  putStrLn $ show automat'
+  
 nonVerboseAutomaton :: FilePath -> IO ()
 nonVerboseAutomaton filepath = do
   automat <- parseFile filepath parseAutomaton
-  automat' <- main' $ automat
+  automat' <- main' $ automat False
   putStrLn $ show automat'
