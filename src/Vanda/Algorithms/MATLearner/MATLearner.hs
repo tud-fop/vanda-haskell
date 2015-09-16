@@ -309,11 +309,13 @@ correctify teacher = do
                                                             (getTable s contexts mapping') 
                                                             (getTable (listMinus (getSigmaS s sigma) s) contexts mapping') -- Simga(S)/S
                                                             counterexample
-                                                mapping'' <- lift $ updateMapping teacher
-                                                                      mapping' 
+                                                (OT (_,_,mapping'')) <- get
+                                                lift $ putStrLn "extraction rdy"
+                                                mapping''' <- lift $ updateMapping teacher
+                                                                      mapping'' 
                                                                       (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
                                                                                  (map (concatTree x) (getContexts (s ++ [x]) sigma)))-- we only need to consider trees in which the new tree occurs
-                                                put (OT (s ++ [x],contexts,mapping''))
+                                                put (OT (s ++ [x],contexts,mapping'''))
                                                 return False
                             where
                                 checkCE :: Tree String -> Map (Tree String) Bool -> [(String,Int)] -> Automaton Int -> IO (Tree String)
