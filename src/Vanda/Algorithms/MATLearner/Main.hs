@@ -11,6 +11,7 @@ import System.Console.CmdArgs.Explicit
 import System.Console.CmdArgs.Explicit.Misc
 import Vanda.Algorithms.MATLearner.MATLearner
 import Vanda.Algorithms.MATLearner.Util
+import Vanda.Algorithms.MATLearner.Teacher
 
 data Args
   = Help String

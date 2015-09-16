@@ -68,6 +68,7 @@ library
     , Vanda.Algorithms.IntersectWithNGramUtil
     , Vanda.Algorithms.MATLearner.Main
     , Vanda.Algorithms.MATLearner.MATLearner
+    , Vanda.Algorithms.MATLearner.Teacher
     , Vanda.Algorithms.MATLearner.TreeAutomaton
     , Vanda.Algorithms.MATLearner.TreesContexts
     , Vanda.Algorithms.MATLearner.Util

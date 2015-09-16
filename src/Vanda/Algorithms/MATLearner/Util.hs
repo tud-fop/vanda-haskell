@@ -1,10 +1,18 @@
-module Vanda.Algorithms.MATLearner.Util (parseFile, parseCorpus, parseAutomaton, parseTree, parseStringToTree) where
+module Vanda.Algorithms.MATLearner.Util (parseFile, parseCorpus, parseAutomaton, parseTree, parseStringToTree, nicerShow) where
 
 import Vanda.Algorithms.MATLearner.TreeAutomaton
 import Vanda.Hypergraph
 import Data.Tree
+import Data.List (intercalate)
 import qualified Data.Set as S
 import qualified Data.Vector as V
+
+
+-- | Display a Tree as a String. Only display parantheses, if the number of children > 1.
+nicerShow :: (Show a) => (Tree a) -> String
+nicerShow (Node a []  ) = show a 
+nicerShow (Node a [t] ) = show a ++ nicerShow t
+nicerShow (Node a list) = show a ++ "(" ++ (intercalate "," $ map nicerShow list) ++ ")"
 
 -- | Opens a file and parses it with an arbitrary parser.
 parseFile :: FilePath -> (String -> t) -> IO t 
@@ -101,3 +109,4 @@ parseSymbol ('"' : rest) line = parseSymbol' rest line
         parseSymbol' (c : s) l = let (restSymbol,restString) = parseSymbol' s l in (c: restSymbol,restString)
         parseSymbol' [] l = parsingError l "'\"' missing."
 parseSymbol _ l = parsingError l "'\"' missing."
+

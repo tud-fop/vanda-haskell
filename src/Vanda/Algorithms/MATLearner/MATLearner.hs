@@ -11,99 +11,13 @@ import Data.List (nub,elemIndex,find,findIndex,intercalate)
 import Data.Maybe
 import Vanda.Algorithms.MATLearner.TreesContexts
 import Vanda.Algorithms.MATLearner.Util
-
-
-newtype Corpus = Corpus [Tree String]
-data Interactive = Interactive
-data InteractiveString = InteractiveString
-
-class Teacher t where 
-        isMember :: t -> Tree String -> IO Bool
-        conjecture :: (Ord b, Show b) => t -> Automaton b -> IO (Maybe (Tree String))
-        getSigma :: t -> IO [(String,Int)]
-        
-instance Teacher Interactive where
-        isMember Interactive baum = do
-          putStrLn "Is this tree part of the language?"
-          putStrLn $ show' baum
-          putStrLn "y/n?"
-          answer <- getLine
-          return $ answer == "y"
-        
-        conjecture Interactive automat = do
-          putStrLn "Is this Automaton correct?"
-          putStrLn $ show automat
-          putStrLn "y/n?"
-          answer <- getLine
-          if answer == "y" then return Nothing
-                           else do
-                             putStrLn "Please enter a counterexample:" 
-                             tree <- getLine
-                             return $ Just (parseTree (filter (/= ' ') tree,0))                                          
-                             
-        getSigma Interactive = return [("sigma",2),("gamma",1),("alpha",0)]
-        
-        
-instance Teacher InteractiveString where
-        isMember InteractiveString baum = do
-          putStrLn "Is this word part of the language?"
-          putStrLn . reverse $ showAsString baum
-          putStrLn "y/n?"
-          answer <- getLine
-          return $ answer == "y"
-        
-        conjecture InteractiveString automat = do
-          putStrLn "Is this Automaton correct?"
-          putStrLn $ show automat
-          putStrLn "y/n?"
-          answer <- getLine
-          if answer == "y" then return Nothing
-                           else do
-                             putStrLn "Please enter a counterexample:"
-                             tree <- getLine -- TODO reverse string or output of membership questions is reversed?
-                             return $ Just (parseStringToTree (reverse tree) "0")
-                             
-        getSigma InteractiveString = return [("a",1),("b",1),("0",0)]
-        
-instance (Ord a) => Teacher (Automaton a) where
-        isMember automat baum = return $ accepts automat baum
-        conjecture automat1 automat2 = return $ isEmpty (unite (intersect (complement automat1) automat2) (intersect automat1 (complement automat2)))
-        getSigma automat = return $ getAlphabet automat
-        
-instance Teacher (Corpus) where
-        isMember (Corpus corpus) tree = return $ elem tree corpus
-        
-        conjecture (Corpus []) _ = return Nothing
-        conjecture (Corpus (x:xs)) automaton
-          | accepts automaton x = conjecture (Corpus xs) automaton
-          | otherwise = return $ Just x
-        
-        getSigma (Corpus []) = return $ []
-        getSigma (Corpus (tree : corpus)) = do
-          l1 <- extractSymbols tree
-          l2 <- getSigma (Corpus corpus)
-          return $ makeSet (l1 ++ l2)
-              where
-                extractSymbols :: Tree String -> IO [(String,Int)]
-                extractSymbols (Node x list) = do
-                  l <- getSigma (Corpus list)
-                  return $ (x, length list) : l
-                makeSet :: Eq a => [a] -> [a]
-                makeSet [] = []
-                makeSet (x : xs)
-                  | elem x xs = makeSet xs
-                  | otherwise = x : makeSet xs
+import Vanda.Algorithms.MATLearner.Teacher
 
 
 instance Ord a => Ord (Tree a) where
     (<=) t1 t2 = (collapsewlr t1) <= (collapsewlr t2)--(a <= b) || (foldl (\le (t1,t2) -> le || t1 <= t2) False (zip t1s t2s))
 
 -- * Output
-
-show' :: (Show a) => (Tree a) -> String
-show' (Node a []  ) = show a 
-show' (Node a [t] ) = show a ++ show' t
-show' (Node a list) = show a ++ "(" ++ (intercalate "," $ map show' list) ++ ")"
 
 
 -- | this function will present strings in the following way:
@@ -153,20 +67,17 @@ appendChar ([]:cs)    (x:xs) = (' ':x):(appendChar cs xs)
 appendChar ((c:_):cs) (x:xs) = (c  :x):(appendChar cs xs)
 
 
-showAsString :: Tree String -> String
-showAsString (Node a (t:_)) = a ++ showAsString t
-showAsString (Node a []) = ""
    
 
 showObservationtable :: ObservationTable -> [(String,Int)] -> String
 showObservationtable (OT (s,contexts,mapping)) alphabet = contextsPart ++ "\n" ++ separationLine ++ "\n" ++ sigmaPart ++ "\n" ++ separationLine ++ "\n" ++ sigmaSPart
                     where   sigmaTable = getTable s contexts mapping
-                            sigmaTrees = map (show' . fst) sigmaTable
+                            sigmaTrees = map (nicerShow . fst) sigmaTable
                             sigmaRows = map (showBool . snd) sigmaTable -- observation table(sigmaPart | upper table) as [String] with 1 and 0 instead of True and False
 
                             sS = getSigmaS s alphabet
                             sigmaSTable = getTable (listMinus (getSigmaS s alphabet) s) contexts mapping -- observation table(sigmaSPart | lower table) without any elements of the upper one
-                            sigmaSTrees = map (show' . fst) sigmaSTable
+                            sigmaSTrees = map (nicerShow . fst) sigmaSTable
                             sigmaSRows = map (showBool . snd) sigmaSTable
 
 
