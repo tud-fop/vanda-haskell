@@ -93,7 +93,7 @@ choose n (x:xs) = [(x:xs') | xs' <- choose (n-1) xs] ++ (choose n xs)
 
 
 -- | Checks whether a given tree and a ranked alphabet match, potentially returning an errornous symbol and its correct rank. Returns rank -1, if the symbol is not in the alphabet.
-checkValidity :: Tree String -> [(String,Int)] -> Maybe (String,Int)
+checkValidity :: Eq a => Tree a -> [(a,Int)] -> Maybe (a,Int)
 checkValidity (Node symbol children) alphabet = 
                                     let rank = go $ lookup symbol alphabet in
                                     if length children == rank 

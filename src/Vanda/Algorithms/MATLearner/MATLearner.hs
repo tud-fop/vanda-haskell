@@ -60,7 +60,7 @@ instance Teacher InteractiveString where
           if answer == "y" then return Nothing
                            else do
                              putStrLn "Please enter a counterexample:"
-                             tree <- getLine
+                             tree <- getLine -- TODO reverse string or output of membership questions is reversed?
                              return $ Just (parseStringToTree (tree,"0"))
                              
         getSigma InteractiveString = return [("a",1),("b",1),("0",0)]
@@ -97,7 +97,9 @@ instance Teacher (Corpus) where
 
 instance Ord a => Ord (Tree a) where
     (<=) t1 t2 = (collapsewlr t1) <= (collapsewlr t2)--(a <= b) || (foldl (\le (t1,t2) -> le || t1 <= t2) False (zip t1s t2s))
-    
+
+-- * Output
+
 show' :: (Show a) => (Tree a) -> String
 show' (Node a []  ) = show a 
 show' (Node a [t] ) = show a ++ show' t
@@ -191,6 +193,9 @@ data ObservationTable = OT ([Tree String], -- ^ S
 instance Show ObservationTable where
     show (OT (s,contexts,mapping)) = "OT (" ++ (show $ map contextify s) ++ "," ++ (show contexts) ++ "," ++ (show $ map (\(k,v) -> (contextify k,v)) $ toList mapping) ++ ")"
     
+
+-- * MAT Learner
+
 main' :: Teacher t => t -> Bool -> IO (Automaton Int)
 main' teacher withOutput = do
                 initState <- initialObs teacher
@@ -295,30 +300,38 @@ correctify teacher = do
                                 then
                                     return True
                                 else
-                                    let counterexample = (fromJust maybeCounterexample)
-                                        isMemberCounterexample = not (accepts automaton counterexample)
-                                    in
-                                      if (checkValidity counterexample sigma) /= Nothing
-                                          then
-                                              error "Counterexample is not a valid tree."
-                                          else
-                                              if (member counterexample mapping) && (mapping ! counterexample /= isMemberCounterexample)
-                                                  then
-                                                      error "Membership is already known and this tree is not a counterexample!"
-                                                  else
-                                                      let mapping' = insert counterexample isMemberCounterexample mapping in -- insert membership for counterexample
-                                                        do
-                                                            put(OT(s,contexts,mapping'))
-                                                            x <- extract teacher
-                                                                        (getTable s contexts mapping') 
-                                                                        (getTable (listMinus (getSigmaS s sigma) s) contexts mapping') -- ^ Simga(S)/S
-                                                                        counterexample
-                                                            mapping'' <- lift $ updateMapping teacher
-                                                                                  mapping' 
-                                                                                  (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
-                                                                                             (map (concatTree x) (getContexts (s ++ [x]) sigma)))-- we only need to consider trees in which the new tree occurs
-                                                            put (OT (s ++ [x],contexts,mapping''))
-                                                            return False
+                                    do
+                                        counterexample <- lift $ checkCE (fromJust maybeCounterexample) mapping sigma automaton -- errors in the counterexample can only occor with an interactive teacher (hopefully)
+                                        let mapping' = insert counterexample (not (accepts automaton counterexample)) mapping in -- insert membership for counterexample
+                                            do
+                                                put(OT(s,contexts,mapping'))
+                                                x <- extract teacher
+                                                            (getTable s contexts mapping') 
+                                                            (getTable (listMinus (getSigmaS s sigma) s) contexts mapping') -- ^ Simga(S)/S
+                                                            counterexample
+                                                mapping'' <- lift $ updateMapping teacher
+                                                                      mapping' 
+                                                                      (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
+                                                                                 (map (concatTree x) (getContexts (s ++ [x]) sigma)))-- we only need to consider trees in which the new tree occurs
+                                                put (OT (s ++ [x],contexts,mapping''))
+                                                return False
+                            where
+                                checkCE :: Tree String -> Map (Tree String) Bool -> [(String,Int)] -> Automaton Int -> IO (Tree String)
+                                checkCE counterexample mapping sigma automaton = if (checkValidity counterexample sigma) /= Nothing
+                                                                                    then -- symbols have wrong ranks
+                                                                                        do
+                                                                                            putStrLn "The counterexample is not a valid tree."
+                                                                                            newcounterexample <- conjecture teacher automaton
+                                                                                            checkCE (fromJust newcounterexample) mapping sigma automaton
+                                                                                    else
+                                                                                        if (member counterexample mapping) && (mapping ! counterexample /= (not (accepts automaton counterexample)))
+                                                                                            then -- the conjectured automaton behaves correctly for the given counterexample
+                                                                                                do
+                                                                                                    putStrLn "Membership is already known and this tree is not a counterexample!"
+                                                                                                    newcounterexample <- conjecture teacher automaton
+                                                                                                    checkCE (fromJust newcounterexample) mapping sigma automaton
+                                                                                            else
+                                                                                                return counterexample
 
 
 -- | extract subtree that has to be added to the observation table
@@ -329,7 +342,6 @@ extract teacher s sigmaS counterexample
                                     (OT (s',contexts,mapping)) <- get
                                     mapping' <- lift $ updateMapping teacher mapping [fromJust newcounterexample]
                                     put(OT(s',contexts,mapping')) -- store membership of new tree in mapping
-                                    lift $ putStrLn (show ((mapping' ! counterexample),(mapping' ! (fromJust newcounterexample))))
                                     if (mapping' ! counterexample) /= (mapping' ! (fromJust newcounterexample)) -- isMemberOldCounterexample not eqal isMemberNewCounterexample
                                         then
                                             return replacedSubtree -- new counterexample is no longer a counterexample
@@ -389,7 +401,7 @@ learn :: Teacher t => t -> Bool -> StateT ObservationTable IO (Automaton Int)
 learn teacher withOutput = do 
     obs@(OT (s,contexts,mapping)) <- get
     sigma <- lift $ getSigma teacher
-    lift $ putStrLn $ showObservationtable obs sigma
+    when withOutput $ lift $ putStrLn $ showObservationtable obs sigma
     consistent <- consistify (choose 2 s) teacher
     if not consistent
         then learn teacher withOutput
