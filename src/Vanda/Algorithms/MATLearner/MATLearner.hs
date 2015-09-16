@@ -194,7 +194,7 @@ instance Show ObservationTable where
 main' :: Teacher t => t -> Bool -> IO (Automaton Int)
 main' teacher withOutput = do
                 initState <- initialObs teacher
-                evalStateT (learn teacher) initState
+                evalStateT (learn teacher withOutput) initState
 
 -- | create and fill initial observation table 
 initialObs :: Teacher t => t -> IO ObservationTable
@@ -206,7 +206,7 @@ initialObs teacher = do
 
 -- | check whether obs is consistent and return consitified version (or old version if the table already was consistent)
 consistify :: Teacher t => [[Tree String]] -> t -> StateT ObservationTable IO Bool
-consistify []           _       = return True
+consistify []           _       = return True -- TODO here output if consistent
 consistify ([s1,s2]:xs) teacher = do
     (OT (s,contexts,mapping)) <- get
     if ((obst s1 contexts mapping) == (obst s2 contexts mapping)) -- ^ both trees represent the same state
@@ -232,7 +232,7 @@ checkConsistencyContexts
     -> Tree String -- ^ second tree
     -> [Context String] -- ^ contexts for which consistency of s1 and s2 has to be checked
     -> StateT ObservationTable IO Bool
-checkConsistencyContexts _       _  _   []     = return True
+checkConsistencyContexts _       _  _   []    = return True
 checkConsistencyContexts teacher s1 s2 (c:cs) = do
     (OT (_,contexts,mapping)) <- get
     consistent <- checkConsistencyOneContext teacher (obst (concatTree s1 c) contexts mapping) (obst (concatTree s2 c) contexts mapping) c contexts
@@ -254,8 +254,8 @@ checkConsistencyOneContext
     -> StateT ObservationTable IO Bool
 checkConsistencyOneContext _ [] [] _ _ = return True
 checkConsistencyOneContext teacher (x:xs) (y:ys) context (c:cs)
-    |x==y = checkConsistencyOneContext teacher xs ys context cs
-    |True = do -- ^ inconsistent!
+    | x == y = checkConsistencyOneContext teacher xs ys context cs
+    | True   = do -- inconsistent!  -- TODO here output if not consistent ???
         (OT (s,contexts,mapping)) <- get
         sigma <- lift $ getSigma teacher
         mapping' <- lift $ updateMapping teacher mapping (getAllTrees s sigma [concatContext context c]) -- we only need to ask for memberships for trees inserted into the new context
@@ -265,14 +265,14 @@ checkConsistencyOneContext teacher (x:xs) (y:ys) context (c:cs)
 
 -- | check whether Observation Table is closed and return a closed Observation Table
 closify :: Teacher t => [Tree String] ->  t -> StateT ObservationTable IO Bool
-closify []     _       = return True
+closify []     _       = return True -- TODO here output if closed
 closify (x:xs) teacher = do
     (OT (s,contexts,mapping)) <- get
     if (any ((obst x contexts mapping) == ) (map snd (getTable s contexts mapping))) 
         then
             closify xs teacher
         else
-            do
+            do -- TODO here output if not closed
                 sigma <- lift $ getSigma teacher
                 mapping' <- lift $ updateMapping teacher
                                       mapping
@@ -385,23 +385,26 @@ generateAutomaton (OT (s,contexts,mapping)) sigma = Automaton
 
 
 -- | main loop in which consistency, closedness and correctness are checked
-learn :: Teacher t => t -> StateT ObservationTable IO (Automaton Int)
-learn teacher = do 
+learn :: Teacher t => t -> Bool -> StateT ObservationTable IO (Automaton Int)
+learn teacher withOutput = do 
     obs@(OT (s,contexts,mapping)) <- get
     sigma <- lift $ getSigma teacher
     lift $ putStrLn $ showObservationtable obs sigma
     consistent <- consistify (choose 2 s) teacher
-    closed <- closify (getSigmaS s sigma) teacher
-    if (not consistent || not closed)
-        then learn teacher
-        else do
-          correct <- correctify teacher
-          if correct
-            then do
-              obs <- get
-              return (generateAutomaton obs sigma)
-            else do
-              learn teacher
+    if not consistent
+        then learn teacher withOutput
+        else do 
+            closed <- closify (getSigmaS s sigma) teacher
+            if not closed
+                then learn teacher withOutput
+                else do
+                    correct <- correctify teacher
+                    if correct
+                        then do
+                            obs <- get
+                            return (generateAutomaton obs sigma)
+                        else do
+                            learn teacher withOutput
 
 -- * Observation Table functions
 
