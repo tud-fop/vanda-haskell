@@ -13,14 +13,15 @@ parseFile fp parser = do
   putStrLn $ "Parsing file " ++ fp
   return $ parser (filter (/= ' ') file)
 
--- | Parses a Tree Corpus from the following text format: One tree per line, where a tree consists of a node in quotation marks followed by its subtrees in brackets, separated by commas. The following exmaple is in the correct format:
--- @
---      "sigma" [ "alpha" [], "alpha [] ]
---      "alpha" []
--- @
+-- | Parses a Tree Corpus from the following text format: One tree per line, the tree format is specified at 'parseTree'
 parseCorpus :: String -> Forest String
 parseCorpus s = map parseTree $ zip (lines s) [1..]
 
+-- | Parses a String to a Tree in the following format: A tree consists of a node in quotation marks followed by its subtrees in brackets, separated by commas. The following exmaple is a tree in the correct format:
+-- @
+--      "sigma" [ "alpha" [], "alpha [] ]
+-- @
+-- The integer value is used in a potential error message as line number.
 parseTree :: (String,Int) -> Tree String
 parseTree ([],line) = parsingError line "No empty Lines allowed."
 parseTree (string,line)
@@ -35,9 +36,10 @@ parseTree (string,line)
           | otherwise = parsingError l "']' missing."
         parseSubTree (_,l) = parsingError l "'[' missing."
  
-parseStringToTree :: (String,String) -> Tree String
-parseStringToTree ([],end) = Node end []
-parseStringToTree ((a:rest),end) = Node [a] [parseStringToTree (rest,end)]
+-- | Parses a string to a monadic tree, treating every character as a node. The final node is represented by the second argument.
+parseStringToTree :: String -> String -> Tree String
+parseStringToTree [] end  = Node end []
+parseStringToTree (a:rest) end = Node [a] [parseStringToTree rest end]
 
 separateTrees :: String -> [String]
 separateTrees s = separateTrees' 0 "" s
@@ -66,20 +68,20 @@ parsingError line message = error $ "Parsing Error in Line " ++ show line ++ ": 
 --      [1] "gamma" 1
 -- @
 parseAutomaton :: String -> Automaton Int
-parseAutomaton s = Automaton (EdgeList (S.fromList states) edges) (S.fromList $ fst finalstates)
+parseAutomaton s = Automaton (EdgeList (S.fromList states) _edges) (S.fromList $ fst finalstates)
   where states = [0..(read $ head (lines s))]
         finalstates = parseList (head $ tail (lines s)) 2
-        edges = map parseEdge $ zip (drop 2 $ lines s) [3..]
+        _edges = map parseEdge $ zip (drop 2 $ lines s) [3..]
         
 parseEdge :: (String,Int) -> Hyperedge Int String Int
-parseEdge (s,l) = Hyperedge to (V.fromList from) label 0
-  where (from,s') = parseList s l
-        (label,s'') = parseSymbol s' l
-        (to) = read s''
+parseEdge (s,l) = Hyperedge _to (V.fromList _from) _label 0
+  where (_from,s') = parseList s l
+        (_label,s'') = parseSymbol s' l
+        (_to) = read s''
 
 parseList :: String -> Int -> ([Int],String)
-parseList ('[':']':s) _ = ([],s)
-parseList ('[':s) l = parseList' s l
+parseList ('[':']':rest) _ = ([],rest)
+parseList ('[':rest) line = parseList' rest line
   where parseList' :: String -> Int -> ([Int],String)
         parseList' [] l = parsingError l "']' missing."
         parseList' list l = 
@@ -93,7 +95,7 @@ parseList ('[':s) l = parseList' s l
 parseList _ l = parsingError l "'[' missing."
         
 parseSymbol :: String -> Int -> (String,String)
-parseSymbol ('"' : s) l = parseSymbol' s l
+parseSymbol ('"' : rest) line = parseSymbol' rest line
   where parseSymbol' :: String -> Int -> (String, String)
         parseSymbol' ('"': s) _ = ("",s)
         parseSymbol' (c : s) l = let (restSymbol,restString) = parseSymbol' s l in (c: restSymbol,restString)

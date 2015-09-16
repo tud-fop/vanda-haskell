@@ -66,6 +66,11 @@ library
     , Vanda.Algorithms.IntersectWithNGram
     , Vanda.Algorithms.IntersectWithNGrams.Main
     , Vanda.Algorithms.IntersectWithNGramUtil
+    , Vanda.Algorithms.MATLearner.Main
+    , Vanda.Algorithms.MATLearner.MATLearner
+    , Vanda.Algorithms.MATLearner.TreeAutomaton
+    , Vanda.Algorithms.MATLearner.TreesContexts
+    , Vanda.Algorithms.MATLearner.Util
     , Vanda.CBSM.CountBasedStateMerging
     , Vanda.CBSM.Dovetailing
     , Vanda.CBSM.Main

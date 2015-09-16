@@ -61,7 +61,7 @@ instance Teacher InteractiveString where
                            else do
                              putStrLn "Please enter a counterexample:"
                              tree <- getLine -- TODO reverse string or output of membership questions is reversed?
-                             return $ Just (parseStringToTree (tree,"0"))
+                             return $ Just (parseStringToTree (reverse tree) "0")
                              
         getSigma InteractiveString = return [("a",1),("b",1),("0",0)]
         
@@ -107,13 +107,13 @@ show' (Node a list) = show a ++ "(" ++ (intercalate "," $ map show' list) ++ ")"
 
 
 -- | this function will present strings in the following way:
--- | every cell a new string begins in the line above or some lines below if there is enougth space
--- |     **  **  **                              
--- |    **  **  **  **  **  **  **  **  **  **   
--- |   **  **  **  **  **  **  **  **  **  **    
--- |  **  **  **  **  **  **  **  **  **  **     
--- | ************    **  **  **  **  **  **  ** 
--- | 123456789...
+-- every cell a new string begins in the line above or some lines below if there is enougth space
+--     **  **  **                              
+--    **  **  **  **  **  **  **  **  **  **   
+--   **  **  **  **  **  **  **  **  **  **    
+--  **  **  **  **  **  **  **  **  **  **     
+-- ************    **  **  **  **  **  **  ** 
+-- 123456789...
 showContexts :: [String] -> [String] -> [String] -> String
 showContexts [] contexts output
   |allEmpty contexts  = intercalate "\n" $ reverse $ map reverse $ filter (any (' '/=)) output -- filter to remove uneccessary empty lines at the top
@@ -186,9 +186,10 @@ showObservationtable (OT (s,contexts,mapping)) alphabet = contextsPart ++ "\n" +
 fillWithSpaces :: Int -> String -> String
 fillWithSpaces n str = str ++ (replicate (n - length str) ' ')
 
-data ObservationTable = OT ([Tree String], -- ^ S
-    [Context String], -- ^ C
-    (Map (Tree String) Bool)) -- ^ mapping
+data ObservationTable = 
+    OT ([Tree String], --  S
+    [Context String], --  C
+    (Map (Tree String) Bool)) --  mapping
 
 instance Show ObservationTable where
     show (OT (s,contexts,mapping)) = "OT (" ++ (show $ map contextify s) ++ "," ++ (show contexts) ++ "," ++ (show $ map (\(k,v) -> (contextify k,v)) $ toList mapping) ++ ")"
@@ -214,7 +215,7 @@ consistify :: Teacher t => [[Tree String]] -> t -> StateT ObservationTable IO Bo
 consistify []           _       = return True -- TODO here output if consistent
 consistify ([s1,s2]:xs) teacher = do
     (OT (s,contexts,mapping)) <- get
-    if ((obst s1 contexts mapping) == (obst s2 contexts mapping)) -- ^ both trees represent the same state
+    if ((obst s1 contexts mapping) == (obst s2 contexts mapping)) --  both trees represent the same state
         then
             do
                 sigma <- lift $ getSigma teacher
@@ -381,7 +382,7 @@ extract teacher s sigmaS counterexample
 generateAutomaton :: ObservationTable -> [(String,Int)] -> (Automaton Int)
 generateAutomaton (OT (s,contexts,mapping)) sigma = Automaton 
                                                       (EdgeList 
-                                                        (S.fromList [0..length rows]) -- ^ all occunring states
+                                                        (S.fromList [0..length rows]) -- all occunring states
                                                         (map (\(qis,q,s) -> Hyperedge (getIndex q) (V.fromList (map getIndex qis)) s 0) boolTransitions) -- extract hyperedges from boolTransitions
                                                       ) 
                                                       (S.fromList (map (getIndex . snd) (filter  (\(_,(q:qs)) -> q) rows))) -- final states start with 1

@@ -24,7 +24,7 @@ run :: (Eq a, Eq b) => [Hyperedge a b Int] -> Tree b -> a
 run transitions (Node label children) = computeState childrenStates label transitions
   where childrenStates = map (run transitions) children
 
--- | Selects a Hyperedge from the list of Hyperedges that can be applied to the childrenStates with nodeLabel
+-- | Selects a Hyperedge from the list of Hyperedges that can be applied to the list of children states at a given node.
 computeState :: (Eq a, Eq b) => [a] -> b -> [Hyperedge a b Int] -> a
 computeState _ _ [] = error "Automaton has to be total" -- only happens if the automaton is partial
 computeState childrenStates nodeLabel ((Hyperedge to from label _):edges)
@@ -34,12 +34,12 @@ computeState _ _ ((Nullary _ _ _ ) : _) = undefined
 computeState _ _ ((Unary _ _ _ _ ) : _) = undefined
 computeState _ _ ((Binary _ _ _ _ _ ) : _) = undefined
 
--- | Computes whether the Automaton accepts a Tree or not
+-- | Computes whether the Automaton accepts a Tree or not.
 accepts :: (Ord a) => Automaton a -> Tree String -> Bool
 accepts (Automaton (EdgeList _ edges) finalStates) tree = S.member rootState finalStates
   where rootState = run edges tree
 
--- | Returns the complement of an automaton by turning every final state in a non final state and vice versa
+-- | Returns the complement of an automaton by turning every final state into a non final state and vice versa.
 complement :: (Ord a) => Automaton a -> Automaton a
 complement (Automaton (EdgeList states edges) finalStates) = Automaton (EdgeList states edges) (states `S.difference` finalStates)
 
