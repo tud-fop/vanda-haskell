@@ -103,14 +103,15 @@ show' (Node a []  ) = show a
 show' (Node a [t] ) = show a ++ show' t
 show' (Node a list) = show a ++ "(" ++ (intercalate "," $ map show' list) ++ ")"
 
+
 -- | this function will present strings in the following way:
 -- | every cell a new string begins in the line above or some lines below if there is enougth space
--- |     **        
--- |    **         
--- |   **  **      
--- |  **  **       
--- | *********
--- | 123456789
+-- |     **  **  **                              
+-- |    **  **  **  **  **  **  **  **  **  **   
+-- |   **  **  **  **  **  **  **  **  **  **    
+-- |  **  **  **  **  **  **  **  **  **  **     
+-- | ************    **  **  **  **  **  **  ** 
+-- | 123456789...
 showContexts :: [String] -> [String] -> [String] -> String
 showContexts [] contexts output
   |allEmpty contexts  = intercalate "\n" $ reverse $ map reverse $ filter (any (' '/=)) output -- filter to remove uneccessary empty lines at the top
@@ -155,14 +156,24 @@ showAsString (Node a (t:_)) = a ++ showAsString t
 showAsString (Node a []) = ""
    
 
-showObservationtable :: ObservationTable -> String
-showObservationtable (OT (s,contexts,mapping)) = contextsPart ++ "\n" ++ sigmaPart
-                    where   table = getTable s contexts mapping
-                            trees = map (show' . fst) table
-                            rows = map (showBool . snd) table
-                            maxTreeLength = maximum $ map length trees -- length of longest tree in sigma TODO longest Tree in sigmaS
-                            contextsPart = showContexts (map show contexts) [] (map (\_ -> replicate maxTreeLength ' ') contexts)
-                            sigmaPart = intercalate "\n" $ zipWith (++) (map (fillWithSpaces maxTreeLength) trees) rows
+showObservationtable :: ObservationTable -> [(String,Int)] -> String
+showObservationtable (OT (s,contexts,mapping)) alphabet = contextsPart ++ "\n" ++ separationLine ++ "\n" ++ sigmaPart ++ "\n" ++ separationLine ++ "\n" ++ sigmaSPart
+                    where   sigmaTable = getTable s contexts mapping
+                            sigmaTrees = map (show' . fst) sigmaTable
+                            sigmaRows = map (showBool . snd) sigmaTable -- observation table(sigmaPart | upper table) as [String] with 1 and 0 instead of True and False
+
+                            sS = getSigmaS s alphabet
+                            sigmaSTable = getTable sS contexts mapping -- observation table(sigmaSPart | lower table)
+                            sigmaSTrees = map (show' . fst) sigmaSTable
+                            sigmaSRows = map (showBool . snd) sigmaSTable
+
+
+                            maxTreeLength = maximum $ map length sigmaSTrees -- length of longest tree in sigmaS (is at least as long as the longest tree in sigma)
+                            separationLine = replicate (maxTreeLength + 3 + (length $ head sigmaRows)) '-' -- +3 for " | "
+                            contextsPart = showContexts (map show contexts) [] (map (\_ -> " | " ++ (replicate maxTreeLength ' ')) contexts) -- " | " at the beginning because the string will be reversed in showContexts
+
+                            sigmaPart = intercalate "\n" $ zipWith (\s r -> s ++ " | " ++ r) (map (fillWithSpaces maxTreeLength) sigmaTrees) sigmaRows
+                            sigmaSPart = intercalate "\n" $ zipWith (\s r -> s ++ " | " ++ r) (map (fillWithSpaces maxTreeLength) sigmaSTrees) sigmaSRows
 
                             showBool :: [Bool] -> String
                             showBool []         = ""
@@ -377,9 +388,9 @@ generateAutomaton (OT (s,contexts,mapping)) sigma = Automaton
 learn :: Teacher t => t -> StateT ObservationTable IO (Automaton Int)
 learn teacher = do 
     obs@(OT (s,contexts,mapping)) <- get
-    lift $ putStrLn $ showObservationtable obs
-    consistent <- consistify (choose 2 s) teacher
     sigma <- lift $ getSigma teacher
+    lift $ putStrLn $ showObservationtable obs sigma
+    consistent <- consistify (choose 2 s) teacher
     closed <- closify (getSigmaS s sigma) teacher
     if (not consistent || not closed)
         then learn teacher
