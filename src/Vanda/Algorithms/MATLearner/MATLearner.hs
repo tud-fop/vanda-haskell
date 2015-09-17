@@ -49,17 +49,20 @@ showContexts (c:cs) contexts output = showContexts cs (map tail' newContexts) (a
                                             | otherwise    = appendable (l+1) xs
 
 
+-- | returns true if all lists in the given list are empty
 allEmpty :: [[a]] -> Bool
 allEmpty []      = True
 allEmpty ([]:xs) = allEmpty xs
 allEmpty _       = False
 
 
+-- | returns the tail of a list or [] if the list is empty
 tail' :: [a] -> [a]
 tail' []     = []
 tail' (_:xs) = xs
 
 
+-- | puts the head of every String in the first list at the beginning of the corresponding string in the second list, or a ' ' if this is not possible 
 appendChar :: [String] -> [String] -> [String]
 appendChar []         []     = []
 appendChar []         (x:xs) = (' ':x):(appendChar [] xs)
@@ -127,6 +130,8 @@ initialObs teacher = do
 
 
 -- | check whether obs is consistent and return consitified version (or old version if the table already was consistent)
+-- | the lists in the first argument must always contain 2 trees so its essentially a list of pairs
+-- | the function checks for each of these pairs whether they have the same row and if thats the case whether this pair is consistent
 consistify :: Teacher t => [[Tree String]] -> t -> StateT ObservationTable IO Bool
 consistify []           _       = return True -- TODO here output if consistent
 consistify ([s1,s2]:xs) teacher = do
@@ -135,7 +140,7 @@ consistify ([s1,s2]:xs) teacher = do
         then do
             sigma <- lift $ getSigma teacher
             consistent <- checkConsistencyContexts teacher s1 s2 (getContexts s sigma)
-            if (consistent)
+            if consistent
                 then
                     consistify xs teacher
                 else
@@ -145,7 +150,8 @@ consistify ([s1,s2]:xs) teacher = do
             consistify xs teacher
 
 
--- | check whether a given pair of trees in S woth the same row in the observation table is consistent
+-- | check whether a given pair of trees in S with the same row in the observation table is consistent
+-- | insert the two trees into every possible context and check whether they behave in the same way
 checkConsistencyContexts
     :: Teacher t 
     => t -- ^ teacher 
@@ -183,6 +189,7 @@ checkConsistencyOneContext teacher (x:xs) (y:ys) context (c:cs)
         let contexts' = contexts ++ [concatContext context c] in
             put (OT (s,contexts', mapping'))
         return False
+
 
 -- | check whether Observation Table is closed and return a closed Observation Table
 closify :: Teacher t => [Tree String] ->  t -> StateT ObservationTable IO Bool
