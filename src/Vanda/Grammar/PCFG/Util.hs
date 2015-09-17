@@ -18,6 +18,8 @@ data ParsedLine =
   Edge String [String] Double |
   StartSymbol String Double
   
+
+  
 -- | Reads a PCFG in the given text format from a file.
 readGrammar :: FilePath -> IO PCFG
 readGrammar file = do 
@@ -26,7 +28,7 @@ readGrammar file = do
   where readGrammar' :: String -> PCFG
         readGrammar' s = let (hyperedges,startsymbols) = collect $ map parseLines ( zip (map words (lines s)) [1..]) 
                              (edges,weights) = unzip hyperedges in 
-                             PCFG (EdgeList (S.fromList (nodesLL edges)) edges) startsymbols (V.fromList $ reverse weights)
+                             PCFG (EdgeList (S.fromList ((nodesLL edges) ++ (fst $ unzip startsymbols))) edges) startsymbols (V.fromList $ reverse weights)
         parseLines :: ([String],Int) -> ParsedLine
         parseLines (list,line) 
           | length list == 0 = Empty
