@@ -19,10 +19,12 @@ instance (Show a) => Show (Automaton a) where
           showEdges ((Unary _ _ _ _ ) : _) = undefined
           showEdges ((Binary _ _ _ _ _ ) : _) = undefined
  
+
 -- | Computes the state of the automaton after running over the tree. Only works if the automaton is bottom up deterministic and total!
 run :: (Eq a, Eq b) => [Hyperedge a b Int] -> Tree b -> a
 run transitions (Node label children) = computeState childrenStates label transitions
   where childrenStates = map (run transitions) children
+
 
 -- | Selects a Hyperedge from the list of Hyperedges that can be applied to the list of children states at a given node.
 computeState :: (Eq a, Eq b) => [a] -> b -> [Hyperedge a b Int] -> a
@@ -34,37 +36,43 @@ computeState _ _ ((Nullary _ _ _ ) : _) = undefined
 computeState _ _ ((Unary _ _ _ _ ) : _) = undefined
 computeState _ _ ((Binary _ _ _ _ _ ) : _) = undefined
 
+
 -- | Computes whether the Automaton accepts a Tree or not.
 accepts :: (Ord a) => Automaton a -> Tree String -> Bool
 accepts (Automaton (EdgeList _ edges) finalStates) tree = S.member rootState finalStates
   where rootState = run edges tree
 
+
 -- | Returns the complement of an automaton by turning every final state into a non final state and vice versa.
 complement :: (Ord a) => Automaton a -> Automaton a
 complement (Automaton (EdgeList states edges) finalStates) = Automaton (EdgeList states edges) (states `S.difference` finalStates)
 
+
 -- | Computes the intersection of two automata
 intersect :: (Ord a, Ord b) => Automaton a -> Automaton b -> Automaton (a,b)
 intersect (Automaton (EdgeList states1 edges1) finalStates1) 
-             (Automaton (EdgeList states2 edges2) finalStates2) 
-             = Automaton (EdgeList (makePairs states1 states2) 
-                                   (makePairEdges edges1 edges2)) 
-                         (makePairs finalStates1 finalStates2)
+            (Automaton (EdgeList states2 edges2) finalStates2) 
+            = Automaton (EdgeList (makePairs states1 states2) 
+                                  (makePairEdges edges1 edges2)) 
+                        (makePairs finalStates1 finalStates2)
+
 
 -- | Computes the union of two automata
 unite :: (Ord a, Ord b) => Automaton a -> Automaton b -> Automaton (a,b)
 unite (Automaton (EdgeList states1 edges1) finalStates1) 
-             (Automaton (EdgeList states2 edges2) finalStates2) 
-             = Automaton (EdgeList (makePairs states1 states2) 
-                                   (makePairEdges edges1 edges2)) 
-                         (S.union (makePairs finalStates1 states2) (makePairs states1 finalStates2))
+            (Automaton (EdgeList states2 edges2) finalStates2) 
+            = Automaton (EdgeList (makePairs states1 states2) 
+                                  (makePairEdges edges1 edges2)) 
+                        (S.union (makePairs finalStates1 states2) (makePairs states1 finalStates2))
 
 
 makePairEdges :: Eq c => [Hyperedge a c Int] -> [Hyperedge b c Int] -> [Hyperedge (a,b) c Int]
 makePairEdges l1 l2 = [ Hyperedge (x,y) (V.zip from1 from2) label 0 | Hyperedge x from1 label _ <- l1, Hyperedge y from2 label' _ <- l2, label == label' ]
 
+
 makePairs :: (Ord a,Ord b) => S.Set a -> S.Set b -> S.Set (a,b)
 makePairs set1 set2 = S.fromList $ [(x,y) | x <- (S.toList set1), y <- (S.toList set2)]
+
 
 getAlphabet :: Automaton a -> [(String, Int)]
 getAlphabet (Automaton (EdgeList _ edges) _) = S.toList $ S.fromList [(label,length $ V.toList  from) | Hyperedge _ from label _ <- edges ]
@@ -78,10 +86,10 @@ isEmpty automaton@(Automaton (EdgeList _ edges) finalStates) = go initTrees init
         initTrees = map (\tree -> (tree,run edges tree)) (getAllTrees [] sigma [X])
         
         --go :: Ord t => [(Tree Int, t)] -> [(Tree Int, t)] -> Maybe (Tree Int)
-        go []                _          = Nothing
+        go []                _           = Nothing
         go ((tree,state):xs) ys
-            |S.member state finalStates = Just tree
-            |True                       = go (xs ++ newStates) (ys ++ newStates)
+            | S.member state finalStates = Just tree
+            | True                       = go (xs ++ newStates) (ys ++ newStates)
                 where
                     newTrees = map (\t -> (t,run edges t)) (map (concatTree tree) (getContexts (map fst ys) sigma))
                     newStates = filter (\(_,nstate) -> not $ any (\(_,oldstate) -> oldstate == nstate) ys) newTrees

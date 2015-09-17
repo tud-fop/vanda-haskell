@@ -4,18 +4,28 @@ import Vanda.Algorithms.MATLearner.TreeAutomaton
 import Vanda.Algorithms.MATLearner.Util
 import Data.Tree
 
+
+-- | The 'Teacher' class defines three methods which have to be implemented: 
+--      * isMember receives a Tree and the teacher has to decide if the Tree is in the language, or not. 
+--      * conjecture receives an 'Automaton' and the teacher has to decide if the Automaton is correct.
+--      * getSigma returns the ranked alphabet of the language.
+class Teacher t where 
+        isMember :: t -> Tree String -> IO Bool
+        conjecture :: (Ord b, Show b) => t -> Automaton b -> IO (Maybe (Tree String))
+        getSigma :: t -> IO [(String,Int)]
+
+
 -- | A Teacher consisting of a Tree Corpus. 'isMember' is 'True', if the given tree is element of the corpus. 'conjecture' is 'True', if the given automaton accepts all trees in the corpus. 'getSigma' returns all occuring symbols with their respective rank.
 newtype Corpus = Corpus [Tree String]
-
 instance Teacher (Corpus) where
         isMember (Corpus corpus) tree = return $ elem tree corpus
         
-        conjecture (Corpus []) _ = return Nothing
+        conjecture (Corpus []    ) _ = return Nothing
         conjecture (Corpus (x:xs)) automaton
           | accepts automaton x = conjecture (Corpus xs) automaton
-          | otherwise = return $ Just x
+          | otherwise           = return $ Just x
         
-        getSigma (Corpus []) = return $ []
+        getSigma (Corpus []             ) = return $ []
         getSigma (Corpus (tree : corpus)) = do
           l1 <- extractSymbols tree
           l2 <- getSigma (Corpus corpus)
@@ -30,6 +40,7 @@ instance Teacher (Corpus) where
                 makeSet (x : xs)
                   | elem x xs = makeSet xs
                   | otherwise = x : makeSet xs
+
 
 -- | An interactive teacher with a fixed alphabet: 'getSigma' returns the alphabet 
 -- @
@@ -58,6 +69,7 @@ instance Teacher Interactive where
                              
         getSigma Interactive = return [("sigma",2),("gamma",1),("alpha",0)]
 
+
 -- | An interactive teacher with a fixed string alphabet: 'getSigma' returns the alphabet 
 -- @
 --      [("a",1),("b",1),("0",0)]
@@ -85,30 +97,13 @@ instance Teacher InteractiveString where
                              
         getSigma InteractiveString = return [("a",1),("b",1),("0",0)]
         
+
 showAsString :: Tree String -> String
 showAsString (Node a (t:_)) = a ++ showAsString t
 showAsString (Node a []) = ""
+
 
 instance (Ord a) => Teacher (Automaton a) where
         isMember automat baum = return $ accepts automat baum
         conjecture automat1 automat2 = return $ isEmpty (unite (intersect (complement automat1) automat2) (intersect automat1 (complement automat2)))
         getSigma automat = return $ getAlphabet automat
-
--- | The 'Teacher' class defines three methods which have to be implemented: 
---      * isMember receives a Tree and the teacher has to decide if the Tree is in the language, or not. 
---      * conjecture receives an 'Automaton' and the teacher has to decide if the Automaton is correct.
---      * getSigma returns the ranked alphabet of the language.
-class Teacher t where 
-        isMember :: t -> Tree String -> IO Bool
-        conjecture :: (Ord b, Show b) => t -> Automaton b -> IO (Maybe (Tree String))
-        getSigma :: t -> IO [(String,Int)]
-        
-
-        
-        
-
-
-
-        
-
-                  
