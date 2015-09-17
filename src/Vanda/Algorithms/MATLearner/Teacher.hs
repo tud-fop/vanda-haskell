@@ -35,6 +35,7 @@ instance Teacher (Corpus) where
                 extractSymbols (Node x list) = do
                   l <- getSigma (Corpus list)
                   return $ (x, length list) : l
+                  
                 makeSet :: Eq a => [a] -> [a]
                 makeSet [] = []
                 makeSet (x : xs)

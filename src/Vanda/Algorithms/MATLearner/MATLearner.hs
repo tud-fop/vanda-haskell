@@ -29,9 +29,9 @@ instance Ord a => Ord (Tree a) where
 -- ************    **  **  **  **  **  **  ** 
 -- 123456789...
 showContexts :: [String] -> [String] -> [String] -> String
-showContexts [] contexts output
-  |allEmpty contexts  = intercalate "\n" $ reverse $ map reverse $ filter (any (' '/=)) output -- filter to remove uneccessary empty lines at the top
-  |True               = showContexts [] (map tail' contexts) (appendChar contexts output)
+showContexts []     contexts output
+  | allEmpty contexts  = intercalate "\n" $ reverse $ map reverse $ filter (any (' '/=)) output -- filter to remove uneccessary empty lines at the top
+  | True               = showContexts [] (map tail' contexts) (appendChar contexts output)
 showContexts (c:cs) contexts output = showContexts cs (map tail' newContexts) (appendChar newContexts output)
                                     where
                                         newContexts = appendContext contexts (c ++ "  ") -- at least two spaces after each word
@@ -40,13 +40,13 @@ showContexts (c:cs) contexts output = showContexts cs (map tail' newContexts) (a
                                         appendContext [] c = [c]
                                         appendContext (x:xs) c 
                                             | appendable 0 (x:xs) = (x ++ c):xs
-                                            | True              = x:(appendContext xs c)
+                                            | otherwise           = x:(appendContext xs c)
 
                                         appendable :: Int -> [String] -> Bool
                                         appendable _ [] = True
                                         appendable l (x:xs)
                                             | l < length x = False
-                                            | True         = appendable (l+1) xs
+                                            | otherwise    = appendable (l+1) xs
 
 
 allEmpty :: [[a]] -> Bool
@@ -93,14 +93,17 @@ showObservationtable (OT (s,contexts,mapping)) alphabet = contextsPart ++ "\n" +
                             showBool (True:xs)  = '1':(showBool xs)
                             showBool (False:xs) = '0':(showBool xs) 
 
+
 -- | fill the string with spaces until it has the given length
 fillWithSpaces :: Int -> String -> String
 fillWithSpaces n str = str ++ (replicate (n - length str) ' ')
+
 
 data ObservationTable = 
     OT ([Tree String], --  S
     [Context String], --  C
     (Map (Tree String) Bool)) --  mapping
+
 
 instance Show ObservationTable where
     show (OT (s,contexts,mapping)) = "OT (" ++ (show $ map contextify s) ++ "," ++ (show contexts) ++ "," ++ (show $ map (\(k,v) -> (contextify k,v)) $ toList mapping) ++ ")"
@@ -113,6 +116,7 @@ main' teacher withOutput = do
                 initState <- initialObs teacher
                 evalStateT (learn teacher withOutput) initState
 
+
 -- | create and fill initial observation table 
 initialObs :: Teacher t => t -> IO ObservationTable
 initialObs teacher = do
@@ -121,21 +125,21 @@ initialObs teacher = do
                             mapping <- updateMapping teacher empty (getAllTrees s sigma [X])
                             return (OT (s,[X],mapping))
 
+
 -- | check whether obs is consistent and return consitified version (or old version if the table already was consistent)
 consistify :: Teacher t => [[Tree String]] -> t -> StateT ObservationTable IO Bool
 consistify []           _       = return True -- TODO here output if consistent
 consistify ([s1,s2]:xs) teacher = do
     (OT (s,contexts,mapping)) <- get
     if ((obst s1 contexts mapping) == (obst s2 contexts mapping)) --  both trees represent the same state
-        then
-            do
-                sigma <- lift $ getSigma teacher
-                consistent <- checkConsistencyContexts teacher s1 s2 (getContexts s sigma)
-                if (consistent)
-                    then
-                        consistify xs teacher
-                    else
-                        return False
+        then do
+            sigma <- lift $ getSigma teacher
+            consistent <- checkConsistencyContexts teacher s1 s2 (getContexts s sigma)
+            if (consistent)
+                then
+                    consistify xs teacher
+                else
+                    return False
 
         else
             consistify xs teacher
@@ -188,15 +192,14 @@ closify (x:xs) teacher = do
     if (any ((obst x contexts mapping) == ) (map snd (getTable s contexts mapping))) 
         then
             closify xs teacher
-        else
-            do -- TODO here output if not closed
-                sigma <- lift $ getSigma teacher
-                mapping' <- lift $ updateMapping teacher
-                                      mapping
-                                      (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
-                                                 (map (concatTree x) (getContexts (s ++ [x]) sigma))) -- we only need to consider trees in which the new tree occurs
-                put (OT (s ++ [x],contexts,mapping'))
-                return False
+        else do -- TODO here output if not closed
+            sigma <- lift $ getSigma teacher
+            mapping' <- lift $ updateMapping teacher
+                                  mapping
+                                  (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
+                                             (map (concatTree x) (getContexts (s ++ [x]) sigma))) -- we only need to consider trees in which the new tree occurs
+            put (OT (s ++ [x],contexts,mapping'))
+            return False
 
 
 
@@ -205,54 +208,48 @@ correctify :: Teacher t => t -> StateT ObservationTable IO Bool
 correctify teacher = do
                     obs@(OT (s,contexts,mapping)) <- get
                     sigma <- lift $ getSigma teacher
-                    let automaton = generateAutomaton obs sigma in
-                        do
-                            maybeCounterexample <- lift $ conjecture teacher automaton
-                            if maybeCounterexample == Nothing
-                                then
-                                    return True
-                                else
-                                    do
-                                        counterexample <- lift $ checkCE (fromJust maybeCounterexample) mapping sigma automaton -- errors in the counterexample can only occor with an interactive teacher (hopefully)
-                                        let mapping' = insert counterexample (not (accepts automaton counterexample)) mapping in -- insert membership for counterexample
-                                            do
-                                                put(OT(s,contexts,mapping'))
-                                                x <- extract teacher
-                                                            (getTable s contexts mapping') 
-                                                            (getTable (listMinus (getSigmaS s sigma) s) contexts mapping') -- Simga(S)/S
-                                                            counterexample
-                                                (OT (_,_,mapping'')) <- get
-                                                lift $ putStrLn "extraction rdy"
-                                                mapping''' <- lift $ updateMapping teacher
-                                                                      mapping'' 
-                                                                      (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
-                                                                                 (map (concatTree x) (getContexts (s ++ [x]) sigma)))-- we only need to consider trees in which the new tree occurs
-                                                put (OT (s ++ [x],contexts,mapping'''))
-                                                return False
+                    let automaton = generateAutomaton obs sigma in do
+                        maybeCounterexample <- lift $ conjecture teacher automaton
+                        if maybeCounterexample == Nothing
+                            then
+                                return True
+                            else do
+                                counterexample <- lift $ checkCE (fromJust maybeCounterexample) mapping sigma automaton -- errors in the counterexample can only occor with an interactive teacher (hopefully)
+                                let mapping' = insert counterexample (not (accepts automaton counterexample)) mapping in do -- insert membership for counterexample
+                                    put(OT(s,contexts,mapping'))
+                                    x <- extract teacher
+                                                (getTable s contexts mapping') 
+                                                (getTable (listMinus (getSigmaS s sigma) s) contexts mapping') -- Simga(S)/S
+                                                counterexample
+                                    (OT (_,_,mapping'')) <- get
+                                    -- extraction finished
+                                    mapping''' <- lift $ updateMapping teacher
+                                                                       mapping'' 
+                                                                       (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
+                                                                                  (map (concatTree x) (getContexts (s ++ [x]) sigma)))-- we only need to consider trees in which the new tree occurs
+                                    put (OT (s ++ [x],contexts,mapping'''))
+                                    return False
                             where
                                 checkCE :: Tree String -> Map (Tree String) Bool -> [(String,Int)] -> Automaton Int -> IO (Tree String)
                                 checkCE counterexample mapping sigma automaton = if (checkValidity counterexample sigma) /= Nothing
-                                                                                    then -- symbols have wrong ranks
-                                                                                        do
-                                                                                            putStrLn "The counterexample is not a valid tree."
+                                                                                    then do -- symbols have wrong ranks
+                                                                                        putStrLn "The counterexample is not a valid tree."
+                                                                                        newcounterexample <- conjecture teacher automaton
+                                                                                        checkCE (fromJust newcounterexample) mapping sigma automaton
+                                                                                    else if (member counterexample mapping) && (mapping ! counterexample /= (not (accepts automaton counterexample)))
+                                                                                        then do -- the conjectured automaton behaves correctly for the given counterexample
+                                                                                            putStrLn "Membership is already known and this tree is not a counterexample!"
                                                                                             newcounterexample <- conjecture teacher automaton
                                                                                             checkCE (fromJust newcounterexample) mapping sigma automaton
-                                                                                    else
-                                                                                        if (member counterexample mapping) && (mapping ! counterexample /= (not (accepts automaton counterexample)))
-                                                                                            then -- the conjectured automaton behaves correctly for the given counterexample
-                                                                                                do
-                                                                                                    putStrLn "Membership is already known and this tree is not a counterexample!"
-                                                                                                    newcounterexample <- conjecture teacher automaton
-                                                                                                    checkCE (fromJust newcounterexample) mapping sigma automaton
-                                                                                            else
-                                                                                                return counterexample
+                                                                                        else
+                                                                                            return counterexample
 
 
 -- | extract subtree that has to be added to the observation table
 extract :: Teacher t => t -> [(Tree String,[Bool])] -> [(Tree String,[Bool])] -> Tree String -> StateT ObservationTable IO (Tree String)
 extract teacher s sigmaS counterexample
     |newcounterexample == Nothing = return replacedSubtree -- no new counterexample found
-    |True                         = do
+    |otherwise                    = do
                                     (OT (s',contexts,mapping)) <- get
                                     mapping' <- lift $ updateMapping teacher mapping [fromJust newcounterexample]
                                     put(OT(s',contexts,mapping')) -- store membership of new tree in mapping
@@ -281,13 +278,14 @@ extract teacher s sigmaS counterexample
                                                             Just (Nothing,replacedSubtree)
                                                         else
                                                             Just (Just (Node symbol ((take indexOfSybtree ts) ++ [fromJust newSubtree] ++ (drop (indexOfSybtree+1) ts))),replacedSubtree) -- replace subtree
-            |True                   = let rowOfs' = find (\(_,q) -> (snd (fromJust maybeRowOfs) == q)) s in -- the current subtree is in Sigma(S)/S now try to replace it by s'
+            |otherwise              = let rowOfs' = find (\(_,q) -> (snd (fromJust maybeRowOfs) == q)) s in -- the current subtree is in Sigma(S)/S now try to replace it by s'
                                         if (rowOfs' == Nothing)
                                             then
                                                 Just (Nothing,tree) -- extracted s from the counterexample
                                             else
                                                 Just (Just (fst $ fromJust rowOfs'),tree) -- replace s by s'
                 where maybeRowOfs = find (\(stree,_) -> tree == stree) sigmaS
+
 
 -- | generate an Automaton from a given Observation Table and an ranked alphabet
 generateAutomaton :: ObservationTable -> [(String,Int)] -> (Automaton Int)
@@ -309,10 +307,10 @@ generateAutomaton (OT (s,contexts,mapping)) sigma = Automaton
             | any (\(_,x') -> x == x') xs = rmdups xs
             | otherwise                   = (y,x): rmdups xs
 
-
+        -- | take a symbol and the rows from the observation table and extract all the transitions with this symbol
         getTransition :: String -> [(Tree String,[Bool])] -> ([[Bool]],[Bool],String)
-        getTransition symbol rows = (map snd rows, obst (Node symbol (map fst rows)) contexts mapping, symbol)
-        
+        getTransition symbol rows = (map snd rows, obst (Node symbol (map fst rows)) contexts mapping, symbol)        
+
         -- | get the number corresponding to the state
         getIndex :: [Bool] -> Int
         getIndex q = let Just i = elemIndex q (map snd rows) in i
@@ -337,17 +335,18 @@ learn teacher withOutput = do
                         then do -- automaton accepted programm is finished
                             obs <- get
                             return (generateAutomaton obs sigma)
-                        else do
+                        else
                             learn teacher withOutput
 
 -- * Observation Table functions
 
 -- use for testing : obst (Node 1 []) [X,(CNode 2 [X])] (fromList [((Node 1 []),True),((Node 2 [Node 1 []]), False)])
--- | get row of tree in observation table
+-- | get row for the given tree in observation table
 obst :: Ord a => Tree a -> [Context a] -> Map (Tree a) Bool -> ([Bool])
 obst tree cs mapping = map (\c -> mapping ! (concatTree tree c)) cs
 
--- | get the filled out table
+
+-- | get the filled out observation table
 getTable :: Ord a => [Tree a] -> [Context a] -> Map (Tree a) Bool -> [(Tree a,[Bool])]
 getTable s contexts mapping = zip s (map (\x -> obst x contexts mapping) s)
 
@@ -356,11 +355,10 @@ getTable s contexts mapping = zip s (map (\x -> obst x contexts mapping) s)
 updateMapping :: Teacher t => t -> Map (Tree String) Bool -> [Tree String] -> IO (Map (Tree String) Bool)
 updateMapping teacher mapping []     = return mapping 
 updateMapping teacher mapping (t:ts) = do
-                                        if  notMember t mapping
-                                            then
-                                                do
-                                                    member <- isMember teacher t
-                                                    updateMapping teacher (insert t member mapping) ts
+                                        if notMember t mapping
+                                            then do
+                                                member <- isMember teacher t
+                                                updateMapping teacher (insert t member mapping) ts
                                             else
                                                 updateMapping teacher mapping ts
 
