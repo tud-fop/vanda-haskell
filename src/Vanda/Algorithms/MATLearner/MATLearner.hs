@@ -17,90 +17,6 @@ import Vanda.Algorithms.MATLearner.Teacher
 instance Ord a => Ord (Tree a) where
     (<=) t1 t2 = (collapsewlr t1) <= (collapsewlr t2)--(a <= b) || (foldl (\le (t1,t2) -> le || t1 <= t2) False (zip t1s t2s))
 
--- * Output
-
-
--- | this function will present strings in the following way:
--- every cell a new string begins in the line above or some lines below if there is enougth space
---     **  **  **                              
---    **  **  **  **  **  **  **  **  **  **   
---   **  **  **  **  **  **  **  **  **  **    
---  **  **  **  **  **  **  **  **  **  **     
--- ************    **  **  **  **  **  **  ** 
--- 123456789...
-showContexts :: [String] -> [String] -> [String] -> String
-showContexts []     contexts output
-  | allEmpty contexts  = intercalate "\n" $ reverse $ map reverse $ filter (any (' '/=)) output -- filter to remove uneccessary empty lines at the top
-  | True               = showContexts [] (map tail' contexts) (appendChar contexts output)
-showContexts (c:cs) contexts output = showContexts cs (map tail' newContexts) (appendChar newContexts output)
-                                    where
-                                        newContexts = appendContext contexts (c ++ "  ") -- at least two spaces after each word
-
-                                        appendContext :: [String] -> String -> [String]
-                                        appendContext [] c = [c]
-                                        appendContext (x:xs) c 
-                                            | appendable 0 (x:xs) = (x ++ c):xs
-                                            | otherwise           = x:(appendContext xs c)
-
-                                        appendable :: Int -> [String] -> Bool
-                                        appendable _ [] = True
-                                        appendable l (x:xs)
-                                            | l < length x = False
-                                            | otherwise    = appendable (l+1) xs
-
-
--- | returns true if all lists in the given list are empty
-allEmpty :: [[a]] -> Bool
-allEmpty []      = True
-allEmpty ([]:xs) = allEmpty xs
-allEmpty _       = False
-
-
--- | returns the tail of a list or [] if the list is empty
-tail' :: [a] -> [a]
-tail' []     = []
-tail' (_:xs) = xs
-
-
--- | puts the head of every String in the first list at the beginning of the corresponding string in the second list, or a ' ' if this is not possible 
-appendChar :: [String] -> [String] -> [String]
-appendChar []         []     = []
-appendChar []         (x:xs) = (' ':x):(appendChar [] xs)
-appendChar ([]:cs)    (x:xs) = (' ':x):(appendChar cs xs)
-appendChar ((c:_):cs) (x:xs) = (c  :x):(appendChar cs xs)
-
-
-   
-
-showObservationtable :: ObservationTable -> [(String,Int)] -> String
-showObservationtable (OT (s,contexts,mapping)) alphabet = contextsPart ++ "\n" ++ separationLine ++ "\n" ++ sigmaPart ++ "\n" ++ separationLine ++ "\n" ++ sigmaSPart
-                    where   sigmaTable = getTable s contexts mapping
-                            sigmaTrees = map (nicerShow . fst) sigmaTable
-                            sigmaRows = map (showBool . snd) sigmaTable -- observation table(sigmaPart | upper table) as [String] with 1 and 0 instead of True and False
-
-                            sS = getSigmaS s alphabet
-                            sigmaSTable = getTable (listMinus (getSigmaS s alphabet) s) contexts mapping -- observation table(sigmaSPart | lower table) without any elements of the upper one
-                            sigmaSTrees = map (nicerShow . fst) sigmaSTable
-                            sigmaSRows = map (showBool . snd) sigmaSTable
-
-
-                            maxTreeLength = maximum $ map length sigmaSTrees -- length of longest tree in sigmaS (is at least as long as the longest tree in sigma)
-                            separationLine = replicate (maxTreeLength + 3 + (length $ head sigmaRows)) '-' -- +3 for " | "
-                            contextsPart = showContexts (map show contexts) [] (map (\_ -> " | " ++ (replicate maxTreeLength ' ')) contexts) -- " | " at the beginning because the string will be reversed in showContexts
-
-                            sigmaPart = intercalate "\n" $ zipWith (\s r -> s ++ " | " ++ r) (map (fillWithSpaces maxTreeLength) sigmaTrees) sigmaRows
-                            sigmaSPart = intercalate "\n" $ zipWith (\s r -> s ++ " | " ++ r) (map (fillWithSpaces maxTreeLength) sigmaSTrees) sigmaSRows
-
-                            showBool :: [Bool] -> String
-                            showBool []         = ""
-                            showBool (True:xs)  = '1':(showBool xs)
-                            showBool (False:xs) = '0':(showBool xs) 
-
-
--- | fill the string with spaces until it has the given length
-fillWithSpaces :: Int -> String -> String
-fillWithSpaces n str = str ++ (replicate (n - length str) ' ')
-
 
 data ObservationTable = 
     OT ([Tree String], --  S
@@ -127,6 +43,29 @@ initialObs teacher = do
                         let s = take 1 (getAllTrees [] sigma [X]) in do
                             mapping <- updateMapping teacher empty (getAllTrees s sigma [X])
                             return (OT (s,[X],mapping))
+
+
+-- | main loop in which consistency, closedness and correctness are checked
+learn :: Teacher t => t -> Bool -> StateT ObservationTable IO (Automaton Int)
+learn teacher withOutput = do 
+    obs@(OT (s,contexts,mapping)) <- get
+    sigma <- lift $ getSigma teacher
+    when withOutput $ lift $ putStrLn $ showObservationtable obs sigma
+    consistent <- consistify (choose 2 s) teacher
+    if not consistent
+        then learn teacher withOutput
+        else do 
+            closed <- closify (getSigmaS s sigma) teacher
+            if not closed
+                then learn teacher withOutput
+                else do
+                    correct <- correctify teacher
+                    if correct
+                        then do -- automaton accepted programm is finished
+                            obs <- get
+                            return (generateAutomaton obs sigma)
+                        else
+                            learn teacher withOutput
 
 
 -- | check whether obs is consistent and return consitified version (or old version if the table already was consistent)
@@ -275,7 +214,7 @@ extract teacher s sigmaS counterexample
                                       in
                                         if (maybeIndexOfSybtree == Nothing)
                                             then
-                                                Nothing -- no substree could be reduced, this should not happen
+                                                Nothing -- no substree could be reduced
                                             else
                                                 let indexOfSybtree = fromJust maybeIndexOfSybtree
                                                     Just (newSubtree,replacedSubtree) = replacedTs !! indexOfSybtree
@@ -323,28 +262,6 @@ generateAutomaton (OT (s,contexts,mapping)) sigma = Automaton
         getIndex q = let Just i = elemIndex q (map snd rows) in i
 
 
--- | main loop in which consistency, closedness and correctness are checked
-learn :: Teacher t => t -> Bool -> StateT ObservationTable IO (Automaton Int)
-learn teacher withOutput = do 
-    obs@(OT (s,contexts,mapping)) <- get
-    sigma <- lift $ getSigma teacher
-    when withOutput $ lift $ putStrLn $ showObservationtable obs sigma
-    consistent <- consistify (choose 2 s) teacher
-    if not consistent
-        then learn teacher withOutput
-        else do 
-            closed <- closify (getSigmaS s sigma) teacher
-            if not closed
-                then learn teacher withOutput
-                else do
-                    correct <- correctify teacher
-                    if correct
-                        then do -- automaton accepted programm is finished
-                            obs <- get
-                            return (generateAutomaton obs sigma)
-                        else
-                            learn teacher withOutput
-
 -- * Observation Table functions
 
 -- use for testing : obst (Node 1 []) [X,(CNode 2 [X])] (fromList [((Node 1 []),True),((Node 2 [Node 1 []]), False)])
@@ -368,6 +285,91 @@ updateMapping teacher mapping (t:ts) = do
                                                 updateMapping teacher (insert t member mapping) ts
                                             else
                                                 updateMapping teacher mapping ts
+
+
+-- * Output
+
+
+-- | this function will present strings in the following way:
+-- every cell a new string begins in the line above or some lines below if there is enougth space
+--     **  **  **                              
+--    **  **  **  **  **  **  **  **  **  **   
+--   **  **  **  **  **  **  **  **  **  **    
+--  **  **  **  **  **  **  **  **  **  **     
+-- ************    **  **  **  **  **  **  ** 
+-- 123456789...
+showContexts :: [String] -> [String] -> [String] -> String
+showContexts []     contexts output
+  | allEmpty contexts  = intercalate "\n" $ reverse $ map reverse $ filter (any (' '/=)) output -- filter to remove uneccessary empty lines at the top
+  | True               = showContexts [] (map tail' contexts) (appendChar contexts output)
+showContexts (c:cs) contexts output = showContexts cs (map tail' newContexts) (appendChar newContexts output)
+                                    where
+                                        newContexts = appendContext contexts (c ++ "  ") -- at least two spaces after each word
+
+                                        appendContext :: [String] -> String -> [String]
+                                        appendContext [] c = [c]
+                                        appendContext (x:xs) c 
+                                            | appendable 0 (x:xs) = (x ++ c):xs
+                                            | otherwise           = x:(appendContext xs c)
+
+                                        appendable :: Int -> [String] -> Bool
+                                        appendable _ [] = True
+                                        appendable l (x:xs)
+                                            | l < length x = False
+                                            | otherwise    = appendable (l+1) xs
+
+
+-- | returns true if all lists in the given list are empty
+allEmpty :: [[a]] -> Bool
+allEmpty []      = True
+allEmpty ([]:xs) = allEmpty xs
+allEmpty _       = False
+
+
+-- | returns the tail of a list or [] if the list is empty
+tail' :: [a] -> [a]
+tail' []     = []
+tail' (_:xs) = xs
+
+
+-- | puts the head of every String in the first list at the beginning of the corresponding string in the second list, or a ' ' if this is not possible 
+appendChar :: [String] -> [String] -> [String]
+appendChar []         []     = []
+appendChar []         (x:xs) = (' ':x):(appendChar [] xs)
+appendChar ([]:cs)    (x:xs) = (' ':x):(appendChar cs xs)
+appendChar ((c:_):cs) (x:xs) = (c  :x):(appendChar cs xs)
+
+
+   
+
+showObservationtable :: ObservationTable -> [(String,Int)] -> String
+showObservationtable (OT (s,contexts,mapping)) alphabet = contextsPart ++ "\n" ++ separationLine ++ "\n" ++ sigmaPart ++ "\n" ++ separationLine ++ "\n" ++ sigmaSPart
+                    where   sigmaTable = getTable s contexts mapping
+                            sigmaTrees = map (nicerShow . fst) sigmaTable
+                            sigmaRows = map (showBool . snd) sigmaTable -- observation table(sigmaPart | upper table) as [String] with 1 and 0 instead of True and False
+
+                            sS = getSigmaS s alphabet
+                            sigmaSTable = getTable (listMinus (getSigmaS s alphabet) s) contexts mapping -- observation table(sigmaSPart | lower table) without any elements of the upper one
+                            sigmaSTrees = map (nicerShow . fst) sigmaSTable
+                            sigmaSRows = map (showBool . snd) sigmaSTable
+
+
+                            maxTreeLength = maximum $ map length sigmaSTrees -- length of longest tree in sigmaS (is at least as long as the longest tree in sigma)
+                            separationLine = replicate (maxTreeLength + 3 + (length $ head sigmaRows)) '-' -- +3 for " | "
+                            contextsPart = showContexts (map show contexts) [] (map (\_ -> " | " ++ (replicate maxTreeLength ' ')) contexts) -- " | " at the beginning because the string will be reversed in showContexts
+
+                            sigmaPart = intercalate "\n" $ zipWith (\s r -> s ++ " | " ++ r) (map (fillWithSpaces maxTreeLength) sigmaTrees) sigmaRows
+                            sigmaSPart = intercalate "\n" $ zipWith (\s r -> s ++ " | " ++ r) (map (fillWithSpaces maxTreeLength) sigmaSTrees) sigmaSRows
+
+                            showBool :: [Bool] -> String
+                            showBool []         = ""
+                            showBool (True:xs)  = '1':(showBool xs)
+                            showBool (False:xs) = '0':(showBool xs) 
+
+
+-- | fill the string with spaces until it has the given length
+fillWithSpaces :: Int -> String -> String
+fillWithSpaces n str = str ++ (replicate (n - length str) ' ')
 
 
 -- * other funtions
