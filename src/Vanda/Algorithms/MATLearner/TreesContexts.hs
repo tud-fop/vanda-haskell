@@ -22,6 +22,16 @@ getSigmaS _     []                  = []
 getSigmaS trees ((symbol,arity):xs) = (listMinus [(Node symbol ts) | ts <- chooseWithDuplicates arity trees] trees) ++ (getSigmaS trees xs)
 
 
+getSigmaSString :: (Eq a,Show a) => [Tree a] -> [(a,Int)] -> [String]
+getSigmaSString _     []                  = []
+getSigmaSString trees ((symbol,arity):xs) = (map fst (listMinusSnd [(show symbol ++ body (map fst ts) , Node symbol (map snd ts))| ts <- chooseWithDuplicates arity treesTxt] trees)) ++ (getSigmaSString trees xs)
+    where treesTxt = zip (zipWith (++) (replicate (length trees) "t") (map show [1..])) trees
+
+          body :: [String] -> String
+          body [] = []
+          body ts = "(" ++ (intercalate "," ts) ++ ")"
+
+
 -- |returns all trees that should be mapped
 getAllTrees :: Eq a => [Tree a] -> [(a,Int)] -> [Context a]-> [Tree a]
 getAllTrees trees xs contexts = [concatTree t c | t <- trees ++ getSigmaS trees xs, c <- contexts]
@@ -98,6 +108,14 @@ listMinus [] ys       = []
 listMinus (x:xs) ys 
     | x `notElem` ys  = x : (listMinus xs ys)
     | otherwise       = listMinus xs ys
+
+
+-- | xs - ys
+listMinusSnd :: Eq b => [(a,b)] -> [b] -> [(a,b)]
+listMinusSnd [] ys       = []
+listMinusSnd ((x,y):xs) ys 
+    | y `notElem` ys  = (x,y) : (listMinusSnd xs ys)
+    | otherwise       = listMinusSnd xs ys
 
 
 -- | Checks whether a given tree and a ranked alphabet match, potentially returning an errornous symbol and its correct rank. Returns rank -1, if the symbol is not in the alphabet.

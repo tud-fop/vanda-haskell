@@ -349,16 +349,16 @@ appendChar ((c:_):cs) (x:xs) = (c  :x):(appendChar cs xs)
 showObservationtable :: ObservationTable -> [(String,Int)] -> String
 showObservationtable (OT (s,contexts,mapping)) alphabet = contextsPart ++ "\n" ++ separationLine ++ "\n" ++ sigmaPart ++ "\n" ++ separationLine ++ "\n" ++ sigmaSPart
                     where   sigmaTable = getTable s contexts mapping
-                            sigmaTrees = map (nicerShow . fst) sigmaTable
+                            sigmaTrees = zipWith (\ treeVariable tree -> treeVariable ++ ":=" ++ tree) (zipWith (++) (replicate (length sigmaTable) "t") (map show [1..])) (map (nicerShow . fst) sigmaTable)
                             sigmaRows = map (showBool . snd) sigmaTable -- observation table(sigmaPart | upper table) as [String] with 1 and 0 instead of True and False
 
                             sS = getSigmaS s alphabet
                             sigmaSTable = getTable sS contexts mapping -- observation table(sigmaSPart | lower table) without any elements of the upper one
-                            sigmaSTrees = map (nicerShow . fst) sigmaSTable
+                            sigmaSTrees = getSigmaSString s alphabet
                             sigmaSRows = map (showBool . snd) sigmaSTable
 
 
-                            maxTreeLength = maximum $ map length sigmaSTrees -- length of longest tree in sigmaS (is at least as long as the longest tree in sigma)
+                            maxTreeLength = maximum $ map length (sigmaTrees ++ sigmaSTrees) -- length of longest String in the left column
                             separationLine = replicate (maxTreeLength + 3 + (length $ head sigmaRows)) '-' -- +3 for " | "
                             contextsPart = showContexts (map show contexts) [] (map (\_ -> " | " ++ (replicate maxTreeLength ' ')) contexts) -- " | " at the beginning because the string will be reversed in showContexts
 
