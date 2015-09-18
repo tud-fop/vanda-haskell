@@ -17,14 +17,14 @@ instance Show a => Show (Context a) where
 
 --use for testing : drawEveryForest $ getSigmaS [(Node 1 []),(Node 2 [])] [(3,2),(4,1),(5,0)]
 -- | return set of trees with symbols from the ranked alpabet as root and trees from trees as substrees
-getSigmaS :: [Tree a] -> [(a,Int)] -> [Tree a]
+getSigmaS :: Eq a => [Tree a] -> [(a,Int)] -> [Tree a]
 getSigmaS _     []                  = []
-getSigmaS trees ((symbol,arity):xs) = [(Node symbol ts) | ts <- chooseWithDuplicates arity trees] ++ (getSigmaS trees xs)
+getSigmaS trees ((symbol,arity):xs) = (listMinus [(Node symbol ts) | ts <- chooseWithDuplicates arity trees] trees) ++ (getSigmaS trees xs)
 
 
 -- |returns all trees that should be mapped
-getAllTrees :: [Tree a] -> [(a,Int)] -> [Context a]-> [Tree a]
-getAllTrees trees xs contexts = [concatTree t c | t <- getSigmaS trees xs, c <- contexts]
+getAllTrees :: Eq a => [Tree a] -> [(a,Int)] -> [Context a]-> [Tree a]
+getAllTrees trees xs contexts = [concatTree t c | t <- trees ++ getSigmaS trees xs, c <- contexts]
 
 
 -- | returns all contexts with depht 1, a symbol from the alphabet at the root and symbols from the list of trees as subtrees
@@ -90,6 +90,14 @@ choose :: Int -> [a] -> [[a]]
 choose 0 _      = [[]]
 choose _ []     = []
 choose n (x:xs) = [(x:xs') | xs' <- choose (n-1) xs] ++ (choose n xs)
+
+
+-- | xs - ys
+listMinus :: Eq a => [a] -> [a] -> [a]
+listMinus [] ys       = []
+listMinus (x:xs) ys 
+    | x `notElem` ys  = x : (listMinus xs ys)
+    | otherwise       = listMinus xs ys
 
 
 -- | Checks whether a given tree and a ranked alphabet match, potentially returning an errornous symbol and its correct rank. Returns rank -1, if the symbol is not in the alphabet.

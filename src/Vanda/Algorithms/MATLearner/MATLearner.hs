@@ -124,9 +124,9 @@ checkConsistencyOneContext teacher (x:xs) (y:ys) context (c:cs)
     | True   = do -- inconsistent!  -- TODO here output if not consistent ???
         (OT (s,contexts,mapping)) <- get
         sigma <- lift $ getSigma teacher
+        -- ask for new memberships
         mapping' <- lift $ updateMapping teacher mapping (getAllTrees s sigma [concatContext context c]) -- we only need to ask for memberships for trees inserted into the new context
-        let contexts' = contexts ++ [concatContext context c] in
-            put (OT (s,contexts', mapping'))
+        put (OT (s,contexts ++ [concatContext context c], mapping'))
         return False
 
 
@@ -138,8 +138,11 @@ closify (x:xs) teacher = do
     if (any ((obst x contexts mapping) == ) (map snd (getTable s contexts mapping))) 
         then
             closify xs teacher
-        else do -- TODO here output if not closed
+        else do
             sigma <- lift $ getSigma teacher
+            -- output OT not closed
+
+            -- ask for new memberships
             mapping' <- lift $ updateMapping teacher
                                   mapping
                                   (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
@@ -165,10 +168,9 @@ correctify teacher = do
                                     put(OT(s,contexts,mapping'))
                                     x <- extract teacher
                                                 (getTable s contexts mapping') 
-                                                (getTable (listMinus (getSigmaS s sigma) s) contexts mapping') -- Simga(S)/S
+                                                (getTable (getSigmaS s sigma) contexts mapping') -- Simga(S)/S
                                                 counterexample
-                                    (OT (_,_,mapping'')) <- get
-                                    -- extraction finished
+                                    (OT (_,_,mapping'')) <- get -- get mapping with the new memberships insertet in extract
                                     mapping''' <- lift $ updateMapping teacher
                                                                        mapping'' 
                                                                        (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
@@ -176,6 +178,8 @@ correctify teacher = do
                                     put (OT (s ++ [x],contexts,mapping'''))
                                     return False
                             where
+                                -- | check whther the given counterexample is a correct tree (check ranks of node labels) and whether it is actually a counterexample and if not ask for a new one
+                                    -- TODO right now each time the automaton is printed out aigain
                                 checkCE :: Tree String -> Map (Tree String) Bool -> [(String,Int)] -> Automaton Int -> IO (Tree String)
                                 checkCE counterexample mapping sigma automaton = if (checkValidity counterexample sigma) /= Nothing
                                                                                     then do -- symbols have wrong ranks
@@ -349,7 +353,7 @@ showObservationtable (OT (s,contexts,mapping)) alphabet = contextsPart ++ "\n" +
                             sigmaRows = map (showBool . snd) sigmaTable -- observation table(sigmaPart | upper table) as [String] with 1 and 0 instead of True and False
 
                             sS = getSigmaS s alphabet
-                            sigmaSTable = getTable (listMinus (getSigmaS s alphabet) s) contexts mapping -- observation table(sigmaSPart | lower table) without any elements of the upper one
+                            sigmaSTable = getTable sS contexts mapping -- observation table(sigmaSPart | lower table) without any elements of the upper one
                             sigmaSTrees = map (nicerShow . fst) sigmaSTable
                             sigmaSRows = map (showBool . snd) sigmaSTable
 
@@ -370,14 +374,3 @@ showObservationtable (OT (s,contexts,mapping)) alphabet = contextsPart ++ "\n" +
 -- | fill the string with spaces until it has the given length
 fillWithSpaces :: Int -> String -> String
 fillWithSpaces n str = str ++ (replicate (n - length str) ' ')
-
-
--- * other funtions
-
-
--- | xs - ys
-listMinus :: (Eq a) => [a] -> [a] -> [a]
-listMinus [] ys       = []
-listMinus (x:xs) ys 
-    | x `notElem` ys  = x : (listMinus xs ys)
-    | otherwise       = listMinus xs ys
