@@ -1,13 +1,16 @@
+{-# LANGUAGE UndecidableInstances, OverlappingInstances,
+             FlexibleInstances, TypeSynonymInstances #-}
+             
 module Vanda.Grammar.PCFG.Util where
 
 import Vanda.Hypergraph
 import qualified Data.Set as S
 import qualified Data.Vector as V
 import Data.List
-data PCFG = 
+data PCFG nonterminalType = 
   PCFG 
-  { productions :: EdgeList String () Int
-  , startsymbols :: [(String,Double)]
+  { productions :: EdgeList nonterminalType () Int
+  , startsymbols :: [(nonterminalType,Double)]
   , weights :: V.Vector Double
   }  
 
@@ -21,11 +24,11 @@ data ParsedLine =
 
   
 -- | Reads a PCFG in the given text format from a file.
-readGrammar :: FilePath -> IO PCFG
+readGrammar :: FilePath -> IO (PCFG String)
 readGrammar file = do 
   input <- readFile file
   return $ readGrammar' input
-  where readGrammar' :: String -> PCFG
+  where readGrammar' :: String -> PCFG String
         readGrammar' s = let (hyperedges,startsymbols) = collect $ map parseLines ( zip (map words (lines s)) [1..]) 
                              (edges,weights) = unzip hyperedges in 
                              PCFG (EdgeList (S.fromList ((nodesLL edges) ++ (fst $ unzip startsymbols))) edges) startsymbols (V.fromList $ reverse weights)
@@ -66,10 +69,10 @@ parsingError :: Int -> String -> a
 parsingError line message = error $ "Parsing Error in Line " ++ show line ++ ": " ++ message
         
 -- | Writes a PCFG in the  given text format to a file.
-writeGrammar :: FilePath -> PCFG -> IO ()
+writeGrammar :: (ToString nonterminalType) => FilePath -> PCFG nonterminalType -> IO ()
 writeGrammar file grammar = do 
-  writeFile file (grammar2string grammar)
-  where grammar2string :: PCFG -> String
+  writeFile file (grammar2string $ toStringPCFG grammar)
+  where grammar2string :: PCFG String -> String
         grammar2string pcfg = 
           startsymbols2string (startsymbols pcfg) (3 + (maxLength 0 (startsymbols pcfg))) ++
           "\n" ++
@@ -138,6 +141,19 @@ writeGrammar file grammar = do
           | c <= length (intercalate " " (V.toList from)) = weightPos (length (intercalate " " (V.toList from))) rest
           | otherwise = weightPos c rest
    
+-- | This class is used to display strings without their quotation marks
+class ToString a where
+  toStringPCFG :: PCFG a -> PCFG String
+  
+instance ToString String where
+  toStringPCFG = id
+
+instance Show a => ToString a where
+  toStringPCFG g = PCFG (EdgeList (S.map show (nodesEL $ productions g)) (map (mapHE show) (edgesEL $ productions g))) (map (\ (x,y) -> (show x,y)) $ startsymbols g) (weights g)
+        
+  
+testPCFG g = PCFG (EdgeList (S.map (\ x -> (x,x)) (nodesEL $ productions g)) (map (mapHE (\x -> (x,x))) (edgesEL $ productions g))) (map (\ (x,y) -> ((x,x),y)) $ startsymbols g) (weights g)
+  
 
 -- Binary IO     
 {-
