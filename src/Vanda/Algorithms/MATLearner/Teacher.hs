@@ -3,6 +3,7 @@ module Vanda.Algorithms.MATLearner.Teacher where
 import Vanda.Algorithms.MATLearner.TreeAutomaton
 import Vanda.Algorithms.MATLearner.Util
 import Data.Tree
+import Graphics.UI.Gtk
 
 
 -- | The 'Teacher' class defines three methods which have to be implemented: 
@@ -35,7 +36,7 @@ instance Teacher (Corpus) where
                 extractSymbols (Node x list) = do
                   l <- getSigma (Corpus list)
                   return $ (x, length list) : l
-                  
+
                 makeSet :: Eq a => [a] -> [a]
                 makeSet [] = []
                 makeSet (x : xs)
@@ -51,22 +52,48 @@ instance Teacher (Corpus) where
 data Interactive = Interactive
 instance Teacher Interactive where
         isMember Interactive baum = do
-          putStrLn "Is this tree part of the language?"
-          putStrLn $ nicerShow baum
-          putStrLn "y/n?"
-          answer <- getLine
-          return $ answer == "y"
+          -- create components
+          dialog <- dialogNew
+          area <- dialogGetUpper dialog
+          membershipQuestion <- labelNew (Just ("Is this tree part of the language?\n" ++ nicerShow baum))
+
+          -- place components
+          boxPackStart area membershipQuestion PackNatural 0
+          dialogAddButton dialog "Yes" ResponseYes
+          dialogAddButton dialog "No" ResponseNo
+
+          -- display components
+          widgetShowAll area
+
+          -- ask for membership
+          answer <- dialogRun dialog
+          widgetDestroy dialog
+
+          return $ answer == ResponseYes
         
         conjecture Interactive automat = do
-          putStrLn "Is this Automaton correct?"
-          putStrLn $ show automat
-          putStrLn "y/n?"
-          answer <- getLine
-          if answer == "y" then return Nothing
-                           else do
-                             putStrLn "Please enter a counterexample:" 
-                             tree <- getLine
-                             return $ Just (parseTree (filter (/= ' ') tree,0))                                          
+          -- create components
+          dialog <- dialogNew
+          counterexampleEntry <- entryNew
+          area <- dialogGetUpper dialog
+          conjectureText <- labelNew (Just ("Is this Automaton correct?\nIf not please enter a counterexample\n" ++ show automat))
+
+          -- place components
+          boxPackStart area conjectureText PackNatural 0
+          boxPackStart area counterexampleEntry PackNatural 0
+          dialogAddButton dialog "Yes" ResponseYes
+          dialogAddButton dialog "No" ResponseNo
+
+          -- display components
+          widgetShowAll area
+
+          -- ask for membership
+          answer <- dialogRun dialog
+          counterexample <- entryGetText counterexampleEntry
+          widgetDestroy dialog
+
+          if answer == ResponseYes then return Nothing
+                                   else return $ Just (parseTree (filter (/= ' ') counterexample,0))                                          
                              
         getSigma Interactive = return [("sigma",2),("gamma",1),("alpha",0)]
 

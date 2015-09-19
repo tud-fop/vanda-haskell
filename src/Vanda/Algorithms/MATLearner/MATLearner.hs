@@ -12,7 +12,7 @@ import Data.Maybe
 import Vanda.Algorithms.MATLearner.TreesContexts
 import Vanda.Algorithms.MATLearner.Util
 import Vanda.Algorithms.MATLearner.Teacher
-
+import Graphics.UI.Gtk hiding (get)
 
 instance Ord a => Ord (Tree a) where
     (<=) t1 t2 = (collapsewlr t1) <= (collapsewlr t2)--(a <= b) || (foldl (\le (t1,t2) -> le || t1 <= t2) False (zip t1s t2s))
@@ -28,12 +28,81 @@ instance Show ObservationTable where
     show (OT (s,contexts,mapping)) = "OT (" ++ (show $ map contextify s) ++ "," ++ (show contexts) ++ "," ++ (show $ map (\(k,v) -> (contextify k,v)) $ toList mapping) ++ ")"
     
 
--- * MAT Learner
+data GraphicUserInterface = 
+    GUI (Dialog, -- window in which observation table is diplayed
+         Label, -- observation table
+         Label) -- status
 
-main' :: Teacher t => t -> Bool -> IO (Automaton Int)
+-- main programm initialises interface, here you can choose which teacher to use
+main :: IO ()
+main = do
+    initGUI
+    hbox <- vBoxNew True 10
+    window <- windowNew
+    set window [containerBorderWidth := 10,
+                containerChild       := hbox ]
+
+
+    buttonInteractive <- buttonNew
+    set buttonInteractive [buttonLabel := "Interactive Teacher"]
+
+    buttonInteractiveString <- buttonNew
+    set buttonInteractiveString [buttonLabel := "Interactive String Teacher"]
+    
+    buttonAutomaton <- buttonNew
+    set buttonAutomaton [buttonLabel := "Automaton Teacher"]
+
+    buttonACorpus <- buttonNew
+    set buttonACorpus [buttonLabel := "Corpus Teacher"]
+
+    
+    boxPackStart hbox buttonInteractive PackNatural 0
+    boxPackStart hbox buttonInteractiveString PackNatural 0
+    boxPackStart hbox buttonAutomaton PackNatural 0
+    boxPackStart hbox buttonACorpus PackNatural 0
+
+
+
+    onClicked buttonInteractive $ main' Interactive True
+
+    onDestroy window mainQuit
+    widgetShowAll window
+    mainGUI
+
+
+-- * MAT Learner
+-- | initialise dialog for output and call learner
+main' :: Teacher t => t -> Bool -> IO ()
 main' teacher withOutput = do
+                -- output
+                
+                -- create components
+                dialog <- dialogNew
+                observationTableOut <- labelNew Nothing
+                statusOut <- labelNew Nothing
+                area <- dialogGetUpper dialog
+                -- vertical growing box
+                vbox <- vBoxNew True 5
+                
+                -- change fonts
+                font <- fontDescriptionFromString "Courier"
+                widgetModifyFont observationTableOut (Just font)
+                widgetModifyFont statusOut (Just font)
+
+                -- place components
+                dialogAddButton dialog "Next Step" ResponseOk
+                containerAdd area vbox
+                boxPackStart vbox observationTableOut PackNatural 0
+                boxPackStart vbox statusOut PackNatural 0
+
+                -- display components
+                widgetShowAll area
+
+                -- call learner
                 initState <- initialObs teacher
-                evalStateT (learn teacher withOutput) initState
+                automaton <- evalStateT (learn teacher withOutput (GUI (dialog,observationTableOut,statusOut))) initState
+                putStrLn $ show automaton
+                widgetDestroy dialog
 
 
 -- | create and fill initial observation table 
@@ -46,18 +115,20 @@ initialObs teacher = do
 
 
 -- | main loop in which consistency, closedness and correctness are checked
-learn :: Teacher t => t -> Bool -> StateT ObservationTable IO (Automaton Int)
-learn teacher withOutput = do 
+learn :: Teacher t => t -> Bool -> GraphicUserInterface -> StateT ObservationTable IO (Automaton Int)
+learn teacher withOutput out@(GUI (dialog,observationTableOut,_)) = do 
     obs@(OT (s,contexts,mapping)) <- get
     sigma <- lift $ getSigma teacher
-    when withOutput $ lift $ putStrLn $ showObservationtable obs sigma
+    lift $ labelSetText observationTableOut $ showObservationtable obs sigma
+    ans <- lift $ dialogRun dialog
+    
     consistent <- consistify (choose 2 s) teacher
     if not consistent
-        then learn teacher withOutput
+        then learn teacher withOutput out
         else do 
             closed <- closify (getSigmaS s sigma) teacher
             if not closed
-                then learn teacher withOutput
+                then learn teacher withOutput out
                 else do
                     correct <- correctify teacher
                     if correct
@@ -65,7 +136,7 @@ learn teacher withOutput = do
                             obs <- get
                             return (generateAutomaton obs sigma)
                         else
-                            learn teacher withOutput
+                            learn teacher withOutput out
 
 
 -- | check whether obs is consistent and return consitified version (or old version if the table already was consistent)
@@ -343,8 +414,6 @@ appendChar []         (x:xs) = (' ':x):(appendChar [] xs)
 appendChar ([]:cs)    (x:xs) = (' ':x):(appendChar cs xs)
 appendChar ((c:_):cs) (x:xs) = (c  :x):(appendChar cs xs)
 
-
-   
 
 showObservationtable :: ObservationTable -> [(String,Int)] -> String
 showObservationtable (OT (s,contexts,mapping)) alphabet = contextsPart ++ "\n" ++ separationLine ++ "\n" ++ sigmaPart ++ "\n" ++ separationLine ++ "\n" ++ sigmaSPart
