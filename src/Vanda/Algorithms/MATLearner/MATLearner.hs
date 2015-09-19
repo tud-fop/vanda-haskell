@@ -34,8 +34,8 @@ data GraphicUserInterface =
          Label) -- status
 
 -- main programm initialises interface, here you can choose which teacher to use
-main :: IO ()
-main = do
+matLearner :: IO ()
+matLearner = do
     initGUI
     hbox <- vBoxNew True 10
     window <- windowNew
