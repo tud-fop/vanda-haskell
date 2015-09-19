@@ -81,8 +81,8 @@ main' teacher withOutput = do
                 observationTableOut <- labelNew Nothing
                 statusOut <- labelNew Nothing
                 area <- dialogGetUpper dialog
-                -- vertical growing box
-                vbox <- vBoxNew True 5
+                -- horizontal growing box ,columns do not have the same width, column distance = 5
+                box <- hBoxNew False 5
                 
                 -- change fonts
                 font <- fontDescriptionFromString "Courier"
@@ -91,12 +91,13 @@ main' teacher withOutput = do
 
                 -- place components
                 dialogAddButton dialog "Next Step" ResponseOk
-                containerAdd area vbox
-                boxPackStart vbox observationTableOut PackNatural 0
-                boxPackStart vbox statusOut PackNatural 0
+                containerAdd area box
+                boxPackStart box observationTableOut PackNatural 0
+                boxPackStart box statusOut PackNatural 0
 
                 -- display components
                 widgetShowAll area
+                ans <- dialogRun dialog
 
                 -- call learner
                 initState <- initialObs teacher
