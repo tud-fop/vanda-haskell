@@ -4,6 +4,7 @@ import Vanda.Algorithms.MATLearner.TreeAutomaton
 import Vanda.Algorithms.MATLearner.Util
 import Data.Tree
 import Graphics.UI.Gtk
+import Control.Monad
 
 
 -- | The 'Teacher' class defines three methods which have to be implemented: 
@@ -83,6 +84,31 @@ instance Teacher Interactive where
           boxPackStart area counterexampleEntry PackNatural 0
           dialogAddButton dialog "Yes" ResponseYes
           dialogAddButton dialog "No" ResponseNo
+
+          -- autocompletion on enter
+          onEntryActivate counterexampleEntry $ do
+                                                    sigma <- getSigma automat
+                                                    msg <- entryGetText counterexampleEntry
+                                                    pos <- editableGetPosition counterexampleEntry
+                                                    let (restMsg,symbol) = getLastSymbol $ (reverse $ take pos msg,[])
+                                                        symbols = filter (samePraefix symbol) $ map (show . fst) sigma
+
+                                                        samePraefix :: String -> String -> Bool
+                                                        samePraefix (x:xs) (y:ys)
+                                                            | x == y    = samePraefix xs ys
+                                                            | otherwise = False
+                                                        samePraefix _      _      = True
+
+                                                        getLastSymbol :: (String,String) -> (String,String)
+                                                        getLastSymbol ([],ys)        = ([],ys)
+                                                        getLastSymbol (('\"':xs),ys) = (reverse xs,('\"':ys))
+                                                        getLastSymbol ((x:xs),ys)    = getLastSymbol (xs,ys ++ [x])
+                                                        in when (length symbols == 1)
+                                                                (do
+                                                                entrySetText counterexampleEntry $ restMsg ++ (head symbols) ++ " [ ]" ++ (drop pos msg)
+                                                                editableSetPosition counterexampleEntry $ length $ restMsg ++ (head symbols) ++ " [")
+                                                            
+
 
           -- display components
           widgetShowAll area
