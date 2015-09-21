@@ -124,8 +124,9 @@ learn :: Teacher t => t -> Bool -> StateT (ObservationTable,GraphicUserInterface
 learn teacher withOutput = do 
     (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status)) <- get
     sigma <- lift $ getSigma teacher
-    let (contextsOut,sigmaTreesOut,sigmaSTreesOut,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
-        noColor = \x -> (x,Color 0 0 0) in
+    let (contextsOut,sigmaTreesOut,sigmaSTreesOutTrees,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
+        noColor = \x -> (x,Color 0 0 0)
+        sigmaSTreesOut = map fst sigmaSTreesOutTrees in
         fillTableWithOT (map noColor contextsOut,map noColor sigmaTreesOut,map noColor sigmaSTreesOut,map (map noColor) sigmaRowsOut,map (map noColor) sigmaSRowsOut)
     ans <- lift $ dialogRun dialog
     
@@ -212,14 +213,15 @@ checkConsistencyOneContext teacher (x:xs) (y:ys) context (c:cs)
 closify :: Teacher t => [Tree String] ->  t -> StateT (ObservationTable,GraphicUserInterface) IO Bool
 closify []     _       = return True -- TODO here output if closed
 closify (x:xs) teacher = do
-    (OT (s,contexts,mapping),out) <- get
+    (OT (s,contexts,mapping),_) <- get
     if (any ((obst x contexts mapping) == ) (map snd (getTable s contexts mapping))) 
         then
             closify xs teacher
         else do
             sigma <- lift $ getSigma teacher
             -- output OT not closed
-
+            outputNotClosed teacher x
+            (_,out) <- get
             -- ask for new memberships
             mapping' <- lift $ updateMapping teacher
                                   mapping
@@ -371,7 +373,7 @@ updateMapping teacher mapping (t:ts) = do
 
 -- * Output
 
-formatObservationTable :: ObservationTable -> [(String,Int)] -> ([String],[String],[String],[[String]],[[String]])
+formatObservationTable :: ObservationTable -> [(String,Int)] -> ([String],[String],[(String,Tree String)],[[String]],[[String]])
 formatObservationTable (OT (s,contexts,mapping)) alphabet = (map show contexts,sigmaTrees,sigmaSTrees,sigmaRows,sigmaSRows)
                     where   sigmaTable = getTable s contexts mapping
                             sigmaTrees = zipWith (\ treeVariable tree -> treeVariable ++ ":=" ++ tree) (zipWith (++) (replicate (length sigmaTable) "t") (map show [1..])) (map (nicerShow . fst) sigmaTable)
@@ -443,3 +445,23 @@ fillTableWithOT (contexts,sigmaTrees,sigmaSTrees,sigmaRows,sigmaSRows) = do
                                 -- increase horizontally
                                 incH :: (Int,Int) -> (Int,Int)
                                 incH (x,y) = (x,y+1)
+
+
+outputNotClosed :: Teacher t => t -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO ()
+outputNotClosed teacher treeClosed = do
+                    (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status)) <- get
+                    sigma <- lift $ getSigma teacher
+                    let (contextsOut,sigmaTreesOut,sigmaSTreesOutTrees,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
+                        noColor = \x -> (x,Color 0 0 0)
+                        notClosedColor = \x -> (x,Color 57940 11823 11823) 
+                        list = map go (zip sigmaSTreesOutTrees sigmaSRowsOut)
+                        sigmaSTreesOutColor = map fst list
+                        sigmaSRowsOutColor = map snd list
+
+                        go ((treeStr,tree),row)
+                            | tree == treeClosed = (notClosedColor treeStr,map notClosedColor row)
+                            | otherwise          = (noColor treeStr,map noColor row)
+                        in
+                        fillTableWithOT (map noColor contextsOut,map noColor sigmaTreesOut,sigmaSTreesOutColor,map (map noColor) sigmaRowsOut,sigmaSRowsOutColor)
+                    ans <- lift $ dialogRun dialog
+                    return ()
