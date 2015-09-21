@@ -14,6 +14,13 @@ instance Show a => Show (Context a) where
     show (CNode l ts ) = show l ++ "(" ++ (intercalate "," $ map show ts) ++ ")"
 
 
+instance Eq a => Eq (Context a) where
+    (==) X              X = True
+    (==) (CNode l [t1]) (CNode r [t2])
+        | l == r    = t1 == t2
+        | otherwise = False
+    (==) _              _ = False
+
 
 --use for testing : drawEveryForest $ getSigmaS [(Node 1 []),(Node 2 [])] [(3,2),(4,1),(5,0)]
 -- | return set of trees with symbols from the ranked alpabet as root and trees from trees as substrees

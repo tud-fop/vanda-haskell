@@ -122,13 +122,9 @@ initialObs teacher = do
 -- | main loop in which consistency, closedness and correctness are checked
 learn :: Teacher t => t -> Bool -> StateT (ObservationTable,GraphicUserInterface) IO (Automaton Int)
 learn teacher withOutput = do 
-    (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status)) <- get
+    outputLearn teacher
+    (obs@(OT (s,contexts,mapping)),out) <- get
     sigma <- lift $ getSigma teacher
-    let (contextsOut,sigmaTreesOut,sigmaSTreesOutTrees,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
-        noColor = \x -> (x,Color 0 0 0)
-        sigmaSTreesOut = map fst sigmaSTreesOutTrees in
-        fillTableWithOT (map noColor contextsOut,map noColor sigmaTreesOut,map noColor sigmaSTreesOut,map (map noColor) sigmaRowsOut,map (map noColor) sigmaSRowsOut)
-    ans <- lift $ dialogRun dialog
     
     consistent <- consistify (choose 2 s) teacher
     if not consistent
@@ -180,12 +176,14 @@ checkConsistencyContexts
 checkConsistencyContexts _       _  _   []    = return True
 checkConsistencyContexts teacher s1 s2 (c:cs) = do
     (OT (_,contexts,mapping),out) <- get
-    consistent <- checkConsistencyOneContext teacher (obst (concatTree s1 c) contexts mapping) (obst (concatTree s2 c) contexts mapping) c contexts
-    if consistent
-        then
-            checkConsistencyContexts teacher s1 s2 cs
-        else
-            return False
+    let s1' = concatTree s1 c
+        s2' = concatTree s2 c in do
+        consistent <- checkConsistencyOneContext teacher (obst s1' contexts mapping) (obst s2' contexts mapping) c contexts s1 s2 s1' s2'
+        if consistent
+            then
+                checkConsistencyContexts teacher s1 s2 cs
+            else
+                return False
 
 
 -- | check whether the two given rows are the same and update the observation table if neccessary
@@ -196,11 +194,16 @@ checkConsistencyOneContext
     -> [Bool] -- ^ row of s2 inserted into c
     -> Context String -- ^ context to determine the new context in case the table is inconsistent
     -> [Context String] -- ^ contexts to determine the new context in case the table is inconsistent
+    -> Tree String -- s1
+    -> Tree String -- s2
+    -> Tree String -- s1'
+    -> Tree String -- s2'
     -> StateT (ObservationTable,GraphicUserInterface) IO Bool
-checkConsistencyOneContext _ [] [] _ _ = return True
-checkConsistencyOneContext teacher (x:xs) (y:ys) context (c:cs)
-    | x == y = checkConsistencyOneContext teacher xs ys context cs
-    | True   = do -- inconsistent!  -- TODO here output if not consistent ???
+checkConsistencyOneContext _       []     []     _       _      _  _  _   _   = return True
+checkConsistencyOneContext teacher (x:xs) (y:ys) context (c:cs) s1 s2 s1' s2'
+    | x == y = checkConsistencyOneContext teacher xs ys context cs s1 s2 s1' s2'
+    | True   = do -- inconsistent!  -- TODO here output if not consistent maybe give the trees down from checkConsistencyContexts???
+        outputNotConsistent teacher s1 s2 s1' s2' c
         (OT (s,contexts,mapping),out) <- get
         sigma <- lift $ getSigma teacher
         -- ask for new memberships
@@ -373,10 +376,10 @@ updateMapping teacher mapping (t:ts) = do
 
 -- * Output
 
-formatObservationTable :: ObservationTable -> [(String,Int)] -> ([String],[String],[(String,Tree String)],[[String]],[[String]])
-formatObservationTable (OT (s,contexts,mapping)) alphabet = (map show contexts,sigmaTrees,sigmaSTrees,sigmaRows,sigmaSRows)
+formatObservationTable :: ObservationTable -> [(String,Int)] -> ([(String,Context String)],[(String,Tree String)],[(String,Tree String)],[[String]],[[String]])
+formatObservationTable (OT (s,contexts,mapping)) alphabet = (zip (map show contexts) contexts,sigmaTrees ,sigmaSTrees,sigmaRows,sigmaSRows)
                     where   sigmaTable = getTable s contexts mapping
-                            sigmaTrees = zipWith (\ treeVariable tree -> treeVariable ++ ":=" ++ tree) (zipWith (++) (replicate (length sigmaTable) "t") (map show [1..])) (map (nicerShow . fst) sigmaTable)
+                            sigmaTrees = zip (zipWith (\ treeVariable tree -> treeVariable ++ ":=" ++ tree) (zipWith (++) (replicate (length sigmaTable) "t") (map show [1..])) (map (nicerShow . fst) sigmaTable)) (map fst sigmaTable)
                             sigmaRows = map (showBool . snd) sigmaTable -- observation table(sigmaPart | upper table) as [String] with 1 and 0 instead of True and False
 
                             sS = getSigmaS s alphabet
@@ -453,15 +456,65 @@ outputNotClosed teacher treeClosed = do
                     sigma <- lift $ getSigma teacher
                     let (contextsOut,sigmaTreesOut,sigmaSTreesOutTrees,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
                         noColor = \x -> (x,Color 0 0 0)
-                        notClosedColor = \x -> (x,Color 57940 11823 11823) 
+                        notClosedColor = \x -> (x,Color 0 65535 0) 
                         list = map go (zip sigmaSTreesOutTrees sigmaSRowsOut)
                         sigmaSTreesOutColor = map fst list
                         sigmaSRowsOutColor = map snd list
 
+                        go :: ((String,Tree String),[String]) -> ((String,Color),[(String,Color)])
                         go ((treeStr,tree),row)
                             | tree == treeClosed = (notClosedColor treeStr,map notClosedColor row)
                             | otherwise          = (noColor treeStr,map noColor row)
                         in
-                        fillTableWithOT (map noColor contextsOut,map noColor sigmaTreesOut,sigmaSTreesOutColor,map (map noColor) sigmaRowsOut,sigmaSRowsOutColor)
+                        fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,sigmaSTreesOutColor,map (map noColor) sigmaRowsOut,sigmaSRowsOutColor)
                     ans <- lift $ dialogRun dialog
                     return ()
+
+
+outputNotConsistent :: Teacher t => t -> Tree String -> Tree String -> Tree String -> Tree String -> Context String -> StateT (ObservationTable,GraphicUserInterface) IO ()
+outputNotConsistent teacher s1 s2 s1' s2' c' = do
+                    (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status)) <- get
+                    sigma <- lift $ getSigma teacher
+                    let (contextsOutTrees,sigmaTreesOutTrees,sigmaSTreesOutTrees,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
+                        noColor = \x -> (x,Color 0 0 0)
+                        notConsistentColor = \x -> (x,Color 65535 0 0)
+
+                        listSigma = map goRow (zip sigmaTreesOutTrees sigmaRowsOut)
+                        sigmaTreesOutColor = map fst listSigma
+                        sigmaRowsOutColor = map snd listSigma
+
+                        listSigmaS = map goRow (zip sigmaSTreesOutTrees sigmaSRowsOut)
+                        sigmaSTreesOutColor = map fst listSigmaS
+                        sigmaSRowsOutColor = map snd listSigmaS
+                        contextsOut = map goContext contextsOutTrees
+                        
+                        goRow :: ((String,Tree String),[String]) -> ((String,Color),[(String,Color)])
+                        goRow ((treeStr,tree),row)
+                            | elem tree [s1,s2,s1',s2'] = (notConsistentColor treeStr,goCol contexts row)
+                            | otherwise                 = (noColor treeStr,map noColor row)
+
+                        goCol :: [Context String] -> [String] -> [(String,Color)]
+                        goCol [] [] = []
+                        goCol (c:cs) (r:rs)
+                            | c == c'   = (notConsistentColor r) : (map noColor rs)
+                            | otherwise = (noColor r) : (goCol cs rs)
+
+                        goContext :: (String,Context String) -> (String,Color)
+                        goContext (cStr,c)
+                            | c == c'   = notConsistentColor cStr
+                            | otherwise = noColor cStr
+                        in
+                        fillTableWithOT (contextsOut,sigmaTreesOutColor,sigmaSTreesOutColor,sigmaRowsOutColor,sigmaSRowsOutColor)
+                    ans <- lift $ dialogRun dialog
+                    return ()
+
+
+outputLearn :: Teacher t => t -> StateT (ObservationTable,GraphicUserInterface) IO ()            
+outputLearn teacher = do
+                (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status)) <- get
+                sigma <- lift $ getSigma teacher
+                let (contextsOut,sigmaTreesOut,sigmaSTreesOut,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
+                    noColor = \x -> (x,Color 0 0 0) in
+                    fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,map (noColor . fst) sigmaSTreesOut,map (map noColor) sigmaRowsOut,map (map noColor) sigmaSRowsOut)
+                ans <- lift $ dialogRun dialog
+                return ()
