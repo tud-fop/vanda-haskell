@@ -14,6 +14,7 @@ import Vanda.Algorithms.MATLearner.Util
 import Vanda.Algorithms.MATLearner.Teacher
 import Graphics.UI.Gtk hiding (get)
 
+
 instance Ord a => Ord (Tree a) where
     (<=) t1 t2 = (collapsewlr t1) <= (collapsewlr t2)--(a <= b) || (foldl (\le (t1,t2) -> le || t1 <= t2) False (zip t1s t2s))
 
@@ -30,7 +31,8 @@ instance Show ObservationTable where
 
 data GraphicUserInterface = 
     GUI (Dialog, -- window in which observation table is diplayed
-         Label, -- observation table
+         Table, -- observation table
+         HBox,
          Label) -- status
 
 -- main programm initialises interface, here you can choose which teacher to use
@@ -78,21 +80,23 @@ main' teacher withOutput = do
                 
                 -- create components
                 dialog <- dialogNew
-                observationTableOut <- labelNew Nothing
+                observationTableOut <- tableNew 0 0 False
                 statusOut <- labelNew Nothing
                 area <- dialogGetUpper dialog
                 -- horizontal growing box ,columns do not have the same width, column distance = 5
                 box <- hBoxNew False 5
+                boxOT <- hBoxNew False 5
                 
                 -- change fonts
                 font <- fontDescriptionFromString "Courier"
-                widgetModifyFont observationTableOut (Just font)
+                --widgetModifyFont observationTableOut (Just font)
                 widgetModifyFont statusOut (Just font)
 
                 -- place components
                 dialogAddButton dialog "Next Step" ResponseOk
                 containerAdd area box
-                boxPackStart box observationTableOut PackNatural 0
+                boxPackStart box boxOT PackNatural 0
+                boxPackStart boxOT observationTableOut PackNatural 0
                 boxPackStart box statusOut PackNatural 0
 
                 -- display components
@@ -101,7 +105,7 @@ main' teacher withOutput = do
 
                 -- call learner
                 initState <- initialObs teacher
-                automaton <- evalStateT (learn teacher withOutput (GUI (dialog,observationTableOut,statusOut))) initState
+                automaton <- evalStateT (learn teacher withOutput (GUI (dialog,observationTableOut,boxOT,statusOut))) initState
                 putStrLn $ show automaton
                 widgetDestroy dialog
 
@@ -117,27 +121,30 @@ initialObs teacher = do
 
 -- | main loop in which consistency, closedness and correctness are checked
 learn :: Teacher t => t -> Bool -> GraphicUserInterface -> StateT ObservationTable IO (Automaton Int)
-learn teacher withOutput out@(GUI (dialog,observationTableOut,_)) = do 
+learn teacher withOutput (GUI (dialog,observationTableOut,box,status)) = do 
     obs@(OT (s,contexts,mapping)) <- get
     sigma <- lift $ getSigma teacher
-    lift $ labelSetText observationTableOut $ showObservationtable obs sigma
-    ans <- lift $ dialogRun dialog
-    
-    consistent <- consistify (choose 2 s) teacher
-    if not consistent
-        then learn teacher withOutput out
-        else do 
-            closed <- closify (getSigmaS s sigma) teacher
-            if not closed
+    let (contextsOut,sigmaTreesOut,sigmaSTreesOut,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
+        noColor = \x -> (x,Color 0 0 0) in do
+        table <- lift $ fillTableWithOT observationTableOut box (map noColor contextsOut,map noColor sigmaTreesOut,map noColor sigmaSTreesOut,map (map noColor) sigmaRowsOut,map (map noColor) sigmaSRowsOut)
+        ans <- lift $ dialogRun dialog
+        
+        consistent <- consistify (choose 2 s) teacher
+        let out = (GUI (dialog,table,box,status)) in
+            if not consistent
                 then learn teacher withOutput out
-                else do
-                    correct <- correctify teacher
-                    if correct
-                        then do -- automaton accepted programm is finished
-                            obs <- get
-                            return (generateAutomaton obs sigma)
-                        else
-                            learn teacher withOutput out
+                else do 
+                    closed <- closify (getSigmaS s sigma) teacher
+                    if not closed
+                        then learn teacher withOutput out
+                        else do
+                            correct <- correctify teacher
+                            if correct
+                                then do -- automaton accepted programm is finished
+                                    obs <- get
+                                    return (generateAutomaton obs sigma)
+                                else
+                                    learn teacher withOutput out
 
 
 -- | check whether obs is consistent and return consitified version (or old version if the table already was consistent)
@@ -444,3 +451,76 @@ showObservationtable (OT (s,contexts,mapping)) alphabet = contextsPart ++ "\n" +
 -- | fill the string with spaces until it has the given length
 fillWithSpaces :: Int -> String -> String
 fillWithSpaces n str = str ++ (replicate (n - length str) ' ')
+
+
+formatObservationTable :: ObservationTable -> [(String,Int)] -> ([String],[String],[String],[[String]],[[String]])
+formatObservationTable (OT (s,contexts,mapping)) alphabet = (map show contexts,sigmaTrees,sigmaSTrees,sigmaRows,sigmaSRows)
+                    where   sigmaTable = getTable s contexts mapping
+                            sigmaTrees = zipWith (\ treeVariable tree -> treeVariable ++ ":=" ++ tree) (zipWith (++) (replicate (length sigmaTable) "t") (map show [1..])) (map (nicerShow . fst) sigmaTable)
+                            sigmaRows = map (showBool . snd) sigmaTable -- observation table(sigmaPart | upper table) as [String] with 1 and 0 instead of True and False
+
+                            sS = getSigmaS s alphabet
+                            sigmaSTable = getTable sS contexts mapping -- observation table(sigmaSPart | lower table) without any elements of the upper one
+                            sigmaSTrees = getSigmaSString s alphabet
+                            sigmaSRows = map (showBool . snd) sigmaSTable
+
+                            showBool :: [Bool] -> [String]
+                            showBool []         = []
+                            showBool (True:xs)  = "1":(showBool xs)
+                            showBool (False:xs) = "0":(showBool xs) 
+
+
+
+-- | put the labels into the table with the given colors
+fillTableWithOT :: Table -> HBox -> ([(String,Color)],[(String,Color)],[(String,Color)],[[(String,Color)]],[[(String,Color)]]) -> IO Table
+fillTableWithOT tableOld box (contexts,sigmaTrees,sigmaSTrees,sigmaRows,sigmaSRows) = do
+                            widgetDestroy tableOld
+                            table <- tableNew (3 + (length (sigmaTrees ++ sigmaSTrees))) (2 + (length contexts)) False
+                            --tableResize table (3 + (length (sigmaTrees ++ sigmaSTrees))) (2 + (length contexts))
+                            -- insert contexts
+                            fillOneDim table (0,2) incH contexts True
+                            -- insert sigma trees
+                            fillOneDim table (2,0) incV sigmaTrees False
+                            -- insert sigma table
+                            fillTwoDim table (2,2) incH incV sigmaRows False
+                            -- insert sigmaS trees
+                            fillOneDim table (3 + (length sigmaTrees),0) incV sigmaSTrees False
+                            -- insert sigmaS table
+                            fillTwoDim table (3 + (length sigmaTrees),2) incH incV sigmaSRows False
+
+
+                            boxPackStart box table PackNatural 0
+                            widgetShowAll table
+                            return table
+
+
+                        where   -- fill table along f
+                                fillOneDim :: Table -> (Int,Int) -> ((Int,Int) -> (Int,Int)) -> [(String,Color)] -> Bool -> IO ()
+                                fillOneDim _     _            _ []               _       = return ()
+                                fillOneDim table (row,column) f ((txt,color):xs) rotated = do
+                                                                                label <- labelNew (Just txt)
+                                                                                -- rotate label only used for contexts
+                                                                                when rotated (labelSetAngle label 90)
+                                                                                -- set color
+                                                                                widgetModifyFg label StateNormal color
+                                                                                tableAttachDefaults table label column (column + 1) row (row + 1)
+                                                                                -- change fonts
+                                                                                font <- fontDescriptionFromString "Courier"
+                                                                                widgetModifyFont label (Just font)
+
+                                                                                fillOneDim table (f (row,column)) f xs rotated
+
+                                -- fill table along f and g
+                                fillTwoDim :: Table -> (Int,Int) -> ((Int,Int) -> (Int,Int)) -> ((Int,Int) -> (Int,Int)) -> [[(String,Color)]] -> Bool -> IO ()
+                                fillTwoDim _     _    _ _ []     _       = return ()
+                                fillTwoDim table cell f g (x:xs) rotated = do
+                                                                    fillOneDim table cell f x rotated
+                                                                    fillTwoDim table (g cell) f g xs rotated
+
+                                -- increase vertically
+                                incV :: (Int,Int) -> (Int,Int)
+                                incV (x,y) = (x+1,y)
+
+                                -- increase horizontally
+                                incH :: (Int,Int) -> (Int,Int)
+                                incH (x,y) = (x,y+1)
