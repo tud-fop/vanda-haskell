@@ -549,9 +549,25 @@ outputUpdateMapping teacher tree = do
                 (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status)) <- get
                 sigma <- lift $ getSigma teacher
                 let (contextsOut,sigmaTreesOut,sigmaSTreesOut,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
+                    sigmaRowsZipped = zipTable (map snd sigmaTreesOut) (map snd contextsOut) sigmaRowsOut
+                    sigmaRowsSZipped = zipTable (map snd sigmaSTreesOut) (map snd contextsOut) sigmaSRowsOut
+
+                    -- takes labels for rows, labels for column and table entrys returns a table where every entry is labeled with the corresponding row and column
+                    --  12
+                    -- a00  --> (0,a,1)(0,a,2)
+                    -- b00      (0,b,1)(0,b,2)
+                    zipTable :: [a] -> [b] -> [[c]] -> [[(c,a,b)]]
+                    zipTable [] _ _ = []
+                    zipTable (x:xs) ys (zs:zss) = (zip3 zs (replicate (length ys) x) ys):(zipTable xs ys zss)
+
+                    paint :: (String,Tree String,Context String) -> (String,Color)
+                    paint (membership,t,c)
+                        | concatTree t c == tree = updateColor membership
+                        | otherwise              = noColor membership
+
                     noColor = \x -> (x,colorNormal)
-                    update = \x -> (x,colorUpdate) in
-                    fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,map (noColor . fst) sigmaSTreesOut,map (map noColor) sigmaRowsOut,map (map noColor) sigmaSRowsOut)
+                    updateColor = \x -> (x,colorUpdate) in
+                    fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,map (noColor . fst) sigmaSTreesOut,map (map paint) sigmaRowsZipped,map (map paint) sigmaRowsSZipped)
                 ans <- lift $ dialogRun dialog
                 return ()
 
