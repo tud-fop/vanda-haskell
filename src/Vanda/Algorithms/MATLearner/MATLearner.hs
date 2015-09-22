@@ -412,6 +412,18 @@ fillTableWithOT (contexts,sigmaTrees,sigmaSTrees,sigmaRows,sigmaSRows) = do
                             -- insert sigmaS table
                             lift $ fillTwoDim table (3 + (length sigmaTrees),2) incH incV sigmaSRows False
 
+                            -- lines
+                            -- TODO find antother solution for the lines
+                            labelH1 <- lift $ labelNew (Just (replicate ((length contexts) + 1 + (maximum (map (length . fst) (sigmaTrees ++ sigmaSTrees)))) '-'))
+                            labelH2 <- lift $ labelNew (Just (replicate ((length contexts) + 1 + (maximum (map (length . fst) (sigmaTrees ++ sigmaSTrees)))) '-'))
+                            labelV <- lift $ labelNew (Just (concat (replicate ((length (sigmaTrees ++ sigmaSTrees)) + 2 + (maximum (map (length . fst) contexts))) "|\n")))
+                            font <- lift $ fontDescriptionFromString "Courier 15"
+                            lift $ widgetModifyFont labelH1 (Just font)
+                            lift $ widgetModifyFont labelH2 (Just font)
+                            lift $ tableAttachDefaults table labelH1 0 (2 + (length contexts)) 1 2
+                            lift $ tableAttachDefaults table labelH2 0 (2 + (length contexts)) (2 + (length sigmaTrees)) (3 + (length sigmaTrees))
+                            lift $ tableAttachDefaults table labelV  1 2 0 (3 + (length (sigmaTrees ++ sigmaSTrees)))
+
 
                             lift $ boxPackStart box table PackNatural 0
                             lift $ widgetShowAll table
@@ -429,7 +441,7 @@ fillTableWithOT (contexts,sigmaTrees,sigmaSTrees,sigmaRows,sigmaSRows) = do
                                                                                 widgetModifyFg label StateNormal color
                                                                                 tableAttachDefaults table label column (column + 1) row (row + 1)
                                                                                 -- change fonts
-                                                                                font <- fontDescriptionFromString "Courier"
+                                                                                font <- fontDescriptionFromString "Courier 15"
                                                                                 widgetModifyFont label (Just font)
 
                                                                                 fillOneDim table (f (row,column)) f xs rotated
@@ -456,7 +468,7 @@ outputNotClosed teacher treeClosed = do
                     sigma <- lift $ getSigma teacher
                     let (contextsOut,sigmaTreesOut,sigmaSTreesOutTrees,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
                         noColor = \x -> (x,Color 0 0 0)
-                        notClosedColor = \x -> (x,Color 0 65535 0) 
+                        notClosedColor = \x -> (x,Color 0 0 65535) 
                         list = map go (zip sigmaSTreesOutTrees sigmaSRowsOut)
                         sigmaSTreesOutColor = map fst list
                         sigmaSRowsOutColor = map snd list
@@ -477,7 +489,7 @@ outputNotConsistent teacher s1 s2 s1' s2' c' = do
                     sigma <- lift $ getSigma teacher
                     let (contextsOutTrees,sigmaTreesOutTrees,sigmaSTreesOutTrees,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
                         noColor = \x -> (x,Color 0 0 0)
-                        notConsistentColor = \x -> (x,Color 65535 0 0)
+                        notConsistentColor = \x -> (x,Color 65535 0 42668)
 
                         listSigma = map goRow (zip sigmaTreesOutTrees sigmaRowsOut)
                         sigmaTreesOutColor = map fst listSigma
