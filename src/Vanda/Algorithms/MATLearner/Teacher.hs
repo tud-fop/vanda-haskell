@@ -121,7 +121,7 @@ instance Teacher Interactive where
           if answer == ResponseYes then return Nothing
                                    else return $ Just (parseTree (filter (/= ' ') counterexample,0))                                          
                              
-        getSigma Interactive = return [("sigma",2),("gamma",1),("alpha",0)]
+        getSigma Interactive = return [("s",2),("g",1),("a",0)]
 
 
 -- | An interactive teacher with a fixed string alphabet: 'getSigma' returns the alphabet 

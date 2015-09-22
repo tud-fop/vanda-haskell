@@ -1,12 +1,13 @@
 module Vanda.Algorithms.MATLearner.MATLearner where
 
+import Prelude hiding (lookup)
 import Data.Tree
 import Control.Monad.State
 import Vanda.Hypergraph.Basic
 import qualified Data.Set as S
 import qualified Data.Vector as V
 import Vanda.Algorithms.MATLearner.TreeAutomaton
-import Data.Map hiding (foldr,foldl,map,filter,findIndex,lookup)
+import Data.Map hiding (foldr,foldl,map,filter,findIndex)
 import Data.List (nub,elemIndex,find,findIndex,intercalate)
 import Data.Maybe
 import Vanda.Algorithms.MATLearner.TreesContexts
@@ -24,10 +25,6 @@ data ObservationTable =
     [Context String], --  C
     (Map (Tree String) Bool)) --  mapping
 
-
-instance Show ObservationTable where
-    show (OT (s,contexts,mapping)) = "OT (" ++ (show $ map contextify s) ++ "," ++ (show contexts) ++ "," ++ (show $ map (\(k,v) -> (contextify k,v)) $ toList mapping) ++ ")"
-    
 
 data GraphicUserInterface = 
     GUI (Dialog, -- window in which observation table is diplayed
@@ -104,35 +101,38 @@ main' teacher withOutput = do
                 ans <- dialogRun dialog
 
                 -- call learner
-                initState <- initialObs teacher
-                automaton <- evalStateT (learn teacher withOutput) (initState,GUI (dialog,observationTableOut,boxOT,statusOut))
+                initState <- evalStateT (initObs teacher) (OT ([],[],empty),GUI (dialog,observationTableOut,boxOT,statusOut))
+                automaton <- evalStateT (learn teacher) initState
                 putStrLn $ show automaton
                 widgetDestroy dialog
 
 
 -- | create and fill initial observation table 
-initialObs :: Teacher t => t -> IO ObservationTable
-initialObs teacher = do
-                        sigma <- getSigma teacher
-                        let s = take 1 (getAllTrees [] sigma [X]) in do
-                            mapping <- updateMapping teacher empty (getAllTrees s sigma [X])
-                            return (OT (s,[X],mapping))
+initObs :: Teacher t => t -> StateT (ObservationTable,GraphicUserInterface) IO (ObservationTable,GraphicUserInterface)
+initObs teacher = do
+                    sigma <- lift $ getSigma teacher
+                    let s = take 1 (getAllTrees [] sigma [X]) in do
+                        (_,out) <- get
+                        put (OT (s,[X],empty),out)
+                        updateMapping teacher (getAllTrees s sigma [X])
+                        state <- get
+                        return state
 
 
 -- | main loop in which consistency, closedness and correctness are checked
-learn :: Teacher t => t -> Bool -> StateT (ObservationTable,GraphicUserInterface) IO (Automaton Int)
-learn teacher withOutput = do 
+learn :: Teacher t => t -> StateT (ObservationTable,GraphicUserInterface) IO (Automaton Int)
+learn teacher = do 
     outputLearn teacher
     (obs@(OT (s,contexts,mapping)),out) <- get
     sigma <- lift $ getSigma teacher
     
     consistent <- consistify (choose 2 s) teacher
     if not consistent
-        then learn teacher withOutput
+        then learn teacher
         else do 
             closed <- closify (getSigmaS s sigma) teacher
             if not closed
-                then learn teacher withOutput
+                then learn teacher
                 else do
                     correct <- correctify teacher
                     if correct
@@ -140,7 +140,7 @@ learn teacher withOutput = do
                             (obs,out) <- get
                             return (generateAutomaton obs sigma)
                         else
-                            learn teacher withOutput
+                            learn teacher
 
 
 -- | check whether obs is consistent and return consitified version (or old version if the table already was consistent)
@@ -206,9 +206,10 @@ checkConsistencyOneContext teacher (x:xs) (y:ys) context (c:cs) s1 s2 s1' s2'
         outputNotConsistent teacher s1 s2 s1' s2' c
         (OT (s,contexts,mapping),out) <- get
         sigma <- lift $ getSigma teacher
+        put (OT (s,contexts ++ [concatContext context c], mapping),out)
         -- ask for new memberships
-        mapping' <- lift $ updateMapping teacher mapping (getAllTrees s sigma [concatContext context c]) -- we only need to ask for memberships for trees inserted into the new context
-        put (OT (s,contexts ++ [concatContext context c], mapping'),out)
+        updateMapping teacher (getAllTrees s sigma [concatContext context c]) -- we only need to ask for memberships for trees inserted into the new context
+        
         return False
 
 
@@ -225,12 +226,11 @@ closify (x:xs) teacher = do
             -- output OT not closed
             outputNotClosed teacher x
             (_,out) <- get
+            put (OT (s ++ [x],contexts,mapping),out)
             -- ask for new memberships
-            mapping' <- lift $ updateMapping teacher
-                                  mapping
-                                  (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
-                                             (map (concatTree x) (getContexts (s ++ [x]) sigma))) -- we only need to consider trees in which the new tree occurs
-            put (OT (s ++ [x],contexts,mapping'),out)
+            updateMapping teacher
+                          (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
+                                     (map (concatTree x) (getContexts (s ++ [x]) sigma))) -- we only need to consider trees in which the new tree occurs
             return False
 
 
@@ -254,11 +254,10 @@ correctify teacher = do
                                                 (getTable (getSigmaS s sigma) contexts mapping') -- Simga(S)/S
                                                 counterexample
                                     (OT (_,_,mapping''),out) <- get -- get mapping with the new memberships insertet in extract
-                                    mapping''' <- lift $ updateMapping teacher
-                                                                       mapping'' 
-                                                                       (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
-                                                                                  (map (concatTree x) (getContexts (s ++ [x]) sigma)))-- we only need to consider trees in which the new tree occurs
-                                    put (OT (s ++ [x],contexts,mapping'''),out)
+                                    put (OT (s ++ [x],contexts,mapping''),out)
+                                    updateMapping teacher
+                                                  (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
+                                                             (map (concatTree x) (getContexts (s ++ [x]) sigma)))-- we only need to consider trees in which the new tree occurs
                                     return False
                             where
                                 -- | check whther the given counterexample is a correct tree (check ranks of node labels) and whether it is actually a counterexample and if not ask for a new one
@@ -283,10 +282,9 @@ extract :: Teacher t => t -> [(Tree String,[Bool])] -> [(Tree String,[Bool])] ->
 extract teacher s sigmaS counterexample
     |newcounterexample == Nothing = return replacedSubtree -- no new counterexample found
     |otherwise                    = do
-                                    (OT (s',contexts,mapping),out) <- get
-                                    mapping' <- lift $ updateMapping teacher mapping [fromJust newcounterexample]
-                                    put(OT(s',contexts,mapping'),out) -- store membership of new tree in mapping
-                                    if (mapping' ! counterexample) /= (mapping' ! (fromJust newcounterexample)) -- isMemberOldCounterexample not eqal isMemberNewCounterexample
+                                    updateMapping teacher [fromJust newcounterexample]-- store membership of new tree in mapping
+                                    (OT (s',contexts,mapping),out) <- get 
+                                    if (mapping ! counterexample) /= (mapping ! (fromJust newcounterexample)) -- isMemberOldCounterexample not eqal isMemberNewCounterexample
                                         then
                                             return replacedSubtree -- new counterexample is no longer a counterexample
                                         else
@@ -351,46 +349,59 @@ generateAutomaton (OT (s,contexts,mapping)) sigma = Automaton
 
 -- * Observation Table functions
 
+
+obst :: Ord a => Tree a -> [Context a] -> Map (Tree a) Bool -> [Bool]
+obst tree cs mapping = map fromJust $ maybeObst tree cs mapping
+
+
+getTable :: Ord a => [Tree a] -> [Context a] -> Map (Tree a) Bool -> [(Tree a,[Bool])]
+getTable s contexts mapping = map (\(tree,row) -> (tree,map fromJust row)) $ maybeGetTable s contexts mapping
+
+
 -- use for testing : obst (Node 1 []) [X,(CNode 2 [X])] (fromList [((Node 1 []),True),((Node 2 [Node 1 []]), False)])
 -- | get row for the given tree in observation table
-obst :: Ord a => Tree a -> [Context a] -> Map (Tree a) Bool -> ([Bool])
-obst tree cs mapping = map (\c -> mapping ! (concatTree tree c)) cs
+maybeObst :: Ord a => Tree a -> [Context a] -> Map (Tree a) Bool -> [Maybe Bool]
+maybeObst tree cs mapping = map (\c -> lookup (concatTree tree c) mapping) cs
 
 
 -- | get the filled out observation table
-getTable :: Ord a => [Tree a] -> [Context a] -> Map (Tree a) Bool -> [(Tree a,[Bool])]
-getTable s contexts mapping = zip s (map (\x -> obst x contexts mapping) s)
+maybeGetTable :: Ord a => [Tree a] -> [Context a] -> Map (Tree a) Bool -> [(Tree a,[Maybe Bool])]
+maybeGetTable s contexts mapping = zip s (map (\x -> maybeObst x contexts mapping) s)
 
 
 -- | inserts unknown memberships of given trees  into mapping
-updateMapping :: Teacher t => t -> Map (Tree String) Bool -> [Tree String] -> IO (Map (Tree String) Bool)
-updateMapping teacher mapping []     = return mapping 
-updateMapping teacher mapping (t:ts) = do
-                                        if notMember t mapping
-                                            then do
-                                                member <- isMember teacher t
-                                                updateMapping teacher (insert t member mapping) ts
-                                            else
-                                                updateMapping teacher mapping ts
+updateMapping :: Teacher t => t -> [Tree String] -> StateT (ObservationTable,GraphicUserInterface) IO ()
+updateMapping teacher []     = return () 
+updateMapping teacher (t:ts) = do
+                            (OT (s,contexts,mapping),_) <- get
+                            when (notMember t mapping)
+                                 (do
+                                    outputUpdateMapping teacher t
+                                    (_,out) <- get
+                                    member <- lift $ isMember teacher t
+                                    put(OT (s,contexts,(insert t member mapping)),out))
+                                    -- TODO outputUpdateMapping2 ? just insertet memberships still in color?
+                            updateMapping teacher ts
 
 
 -- * Output
 
 formatObservationTable :: ObservationTable -> [(String,Int)] -> ([(String,Context String)],[(String,Tree String)],[(String,Tree String)],[[String]],[[String]])
-formatObservationTable (OT (s,contexts,mapping)) alphabet = (zip (map show contexts) contexts,sigmaTrees ,sigmaSTrees,sigmaRows,sigmaSRows)
-                    where   sigmaTable = getTable s contexts mapping
+formatObservationTable (OT (s,contexts,mapping)) alphabet = (zip (map showContext contexts) contexts,sigmaTrees ,sigmaSTrees,sigmaRows,sigmaSRows)
+                    where   sigmaTable = maybeGetTable s contexts mapping
                             sigmaTrees = zip (zipWith (\ treeVariable tree -> treeVariable ++ ":=" ++ tree) (zipWith (++) (replicate (length sigmaTable) "t") (map show [1..])) (map (nicerShow . fst) sigmaTable)) (map fst sigmaTable)
                             sigmaRows = map (showBool . snd) sigmaTable -- observation table(sigmaPart | upper table) as [String] with 1 and 0 instead of True and False
 
                             sS = getSigmaS s alphabet
-                            sigmaSTable = getTable sS contexts mapping -- observation table(sigmaSPart | lower table) without any elements of the upper one
+                            sigmaSTable = maybeGetTable sS contexts mapping -- observation table(sigmaSPart | lower table) without any elements of the upper one
                             sigmaSTrees = getSigmaSString s alphabet
                             sigmaSRows = map (showBool . snd) sigmaSTable
 
-                            showBool :: [Bool] -> [String]
-                            showBool []         = []
-                            showBool (True:xs)  = "1":(showBool xs)
-                            showBool (False:xs) = "0":(showBool xs) 
+                            showBool :: [Maybe Bool] -> [String]
+                            showBool []              = []
+                            showBool (Nothing:xs)    = "*":(showBool xs)
+                            showBool (Just True:xs)  = "1":(showBool xs)
+                            showBool (Just False:xs) = "0":(showBool xs) 
 
 
 
@@ -401,16 +412,17 @@ fillTableWithOT (contexts,sigmaTrees,sigmaSTrees,sigmaRows,sigmaSRows) = do
                             lift $ widgetDestroy tableOld
                             table <- lift $ tableNew (3 + (length (sigmaTrees ++ sigmaSTrees))) (2 + (length contexts)) False
                             --tableResize table (3 + (length (sigmaTrees ++ sigmaSTrees))) (2 + (length contexts))
-                            -- insert contexts
-                            lift $ fillOneDim table (0,2) incH contexts True
-                            -- insert sigma trees
-                            lift $ fillOneDim table (2,0) incV sigmaTrees False
-                            -- insert sigma table
-                            lift $ fillTwoDim table (2,2) incH incV sigmaRows False
-                            -- insert sigmaS trees
-                            lift $ fillOneDim table (3 + (length sigmaTrees),0) incV sigmaSTrees False
-                            -- insert sigmaS table
-                            lift $ fillTwoDim table (3 + (length sigmaTrees),2) incH incV sigmaSRows False
+                            lift $ do 
+                                -- insert contexts
+                                fillOneDim table (0,2) incH contexts True
+                                -- insert sigma trees
+                                fillOneDim table (2,0) incV sigmaTrees False
+                                -- insert sigma table
+                                fillTwoDim table (2,2) incH incV sigmaRows False
+                                -- insert sigmaS trees
+                                fillOneDim table (3 + (length sigmaTrees),0) incV sigmaSTrees False
+                                -- insert sigmaS table
+                                fillTwoDim table (3 + (length sigmaTrees),2) incH incV sigmaSRows False
 
                             -- lines
                             -- TODO find antother solution for the lines
@@ -467,8 +479,8 @@ outputNotClosed teacher treeClosed = do
                     (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status)) <- get
                     sigma <- lift $ getSigma teacher
                     let (contextsOut,sigmaTreesOut,sigmaSTreesOutTrees,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
-                        noColor = \x -> (x,Color 0 0 0)
-                        notClosedColor = \x -> (x,Color 0 0 65535) 
+                        noColor = \x -> (x,colorNormal)
+                        notClosedColor = \x -> (x,colorClosed) 
                         list = map go (zip sigmaSTreesOutTrees sigmaSRowsOut)
                         sigmaSTreesOutColor = map fst list
                         sigmaSRowsOutColor = map snd list
@@ -488,8 +500,8 @@ outputNotConsistent teacher s1 s2 s1' s2' c' = do
                     (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status)) <- get
                     sigma <- lift $ getSigma teacher
                     let (contextsOutTrees,sigmaTreesOutTrees,sigmaSTreesOutTrees,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
-                        noColor = \x -> (x,Color 0 0 0)
-                        notConsistentColor = \x -> (x,Color 65535 0 42668)
+                        noColor = \x -> (x,colorNormal)
+                        notConsistentColor = \x -> (x,colorConsistent)
 
                         listSigma = map goRow (zip sigmaTreesOutTrees sigmaRowsOut)
                         sigmaTreesOutColor = map fst listSigma
@@ -526,7 +538,26 @@ outputLearn teacher = do
                 (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status)) <- get
                 sigma <- lift $ getSigma teacher
                 let (contextsOut,sigmaTreesOut,sigmaSTreesOut,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
-                    noColor = \x -> (x,Color 0 0 0) in
+                    noColor = \x -> (x,colorNormal) in
                     fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,map (noColor . fst) sigmaSTreesOut,map (map noColor) sigmaRowsOut,map (map noColor) sigmaSRowsOut)
                 ans <- lift $ dialogRun dialog
                 return ()
+
+
+outputUpdateMapping :: Teacher t => t -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO ()
+outputUpdateMapping teacher tree = do
+                (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status)) <- get
+                sigma <- lift $ getSigma teacher
+                let (contextsOut,sigmaTreesOut,sigmaSTreesOut,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
+                    noColor = \x -> (x,colorNormal)
+                    update = \x -> (x,colorUpdate) in
+                    fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,map (noColor . fst) sigmaSTreesOut,map (map noColor) sigmaRowsOut,map (map noColor) sigmaSRowsOut)
+                ans <- lift $ dialogRun dialog
+                return ()
+
+
+-- colors for table
+colorNormal = Color 0 0 0
+colorConsistent = Color 65535 0 42668
+colorClosed = Color 0 0 65535
+colorUpdate = Color 65535 0 0

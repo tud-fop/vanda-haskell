@@ -7,11 +7,10 @@ import Data.List (find,intercalate)
 data Context a = X | CNode a [Context a]
 
 
-instance Show a => Show (Context a) where
-    show X            = "X"
-    show (CNode l [] ) = show l
-    show (CNode l [t]) = show l ++ show t
-    show (CNode l ts ) = show l ++ "(" ++ (intercalate "," $ map show ts) ++ ")"
+showContext :: Context String -> String
+showContext X             = "X"
+showContext (CNode l [] ) = l
+showContext (CNode l ts ) = l ++ "(" ++ (intercalate "," $ map showContext ts) ++ ")"
 
 
 instance Eq a => Eq (Context a) where
@@ -29,9 +28,9 @@ getSigmaS _     []                  = []
 getSigmaS trees ((symbol,arity):xs) = (listMinus [(Node symbol ts) | ts <- chooseWithDuplicates arity trees] trees) ++ (getSigmaS trees xs)
 
 
-getSigmaSString :: (Eq a,Show a) => [Tree a] -> [(a,Int)] -> [(String,Tree a)]
+getSigmaSString :: [Tree String] -> [(String,Int)] -> [(String,Tree String)]
 getSigmaSString _     []                  = []
-getSigmaSString trees ((symbol,arity):xs) = ((listMinusSnd [(show symbol ++ body (map fst ts) , Node symbol (map snd ts))| ts <- chooseWithDuplicates arity treesTxt] trees)) ++ (getSigmaSString trees xs)
+getSigmaSString trees ((symbol,arity):xs) = ((listMinusSnd [(symbol ++ body (map fst ts) , Node symbol (map snd ts))| ts <- chooseWithDuplicates arity treesTxt] trees)) ++ (getSigmaSString trees xs)
     where treesTxt = zip (zipWith (++) (replicate (length trees) "t") (map show [1..])) trees
 
           body :: [String] -> String

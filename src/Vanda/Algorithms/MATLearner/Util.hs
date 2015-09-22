@@ -9,10 +9,9 @@ import qualified Data.Vector as V
 
 
 -- | Display a Tree as a String. Only display parantheses, if the number of children > 1.
-nicerShow :: Show a => Tree a -> String
-nicerShow (Node a []  ) = show a 
-nicerShow (Node a [t] ) = show a ++ nicerShow t
-nicerShow (Node a list) = show a ++ "(" ++ (intercalate "," $ map nicerShow list) ++ ")"
+nicerShow :: Tree String -> String
+nicerShow (Node a []  ) = a 
+nicerShow (Node a list) = a ++ "(" ++ (intercalate "," $ map nicerShow list) ++ ")"
 
 
 -- | Opens a file and parses it with an arbitrary parser.
