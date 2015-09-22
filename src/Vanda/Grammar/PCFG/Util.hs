@@ -150,10 +150,7 @@ instance ToString String where
 
 instance Show a => ToString a where
   toStringPCFG g = PCFG (EdgeList (S.map show (nodesEL $ productions g)) (map (mapHE show) (edgesEL $ productions g))) (map (\ (x,y) -> (show x,y)) $ startsymbols g) (weights g)
-        
-  
-testPCFG g = PCFG (EdgeList (S.map (\ x -> (x,x)) (nodesEL $ productions g)) (map (mapHE (\x -> (x,x))) (edgesEL $ productions g))) (map (\ (x,y) -> ((x,x),y)) $ startsymbols g) (weights g)
-  
+         
 
 -- Binary IO     
 {-

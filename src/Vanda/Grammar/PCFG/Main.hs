@@ -38,97 +38,66 @@ data Args
   = Help String
   | Extract
     { treeBank :: FilePath
+    , binary :: Bool
     }
-  | Translate
-    { strategy :: Strategy
-    , transducer :: Transducer
-    , model :: FilePath
+  | Train
+    { grammar :: FilePath
+    , stringCorpus :: FilePath
+    , binary :: Bool
+    }
+  | Bests
+    { number :: Int
+    , grammar :: FilePath
+    , binary :: Bool
+    }
+  | Intersect 
+    { grammar :: FilePath
+    , string :: String
+    , binary :: Bool
     }
   deriving Show
 
-data Strategy
-  = BHPS | Backoff | NoBackoff | Pruning Int | NoBackoffPruning Int deriving (Eq, Show)
-
-data Transducer
-  = Transducer { zhg :: FilePath, mape :: FilePath, mapf :: FilePath } deriving Show
-
 cmdArgs :: Mode Args
 cmdArgs
-  = modes "xrsngrams" (Help $ defaultHelp cmdArgs) "algorithms for combining n-gram models and translation models"
-  [ (modeEmpty $ Product BHPS (Transducer undefined undefined undefined) undefined)
-    { modeNames = ["product"]
-    , modeHelp = "computes the output product of an XRS translation model with an n-gram model"
-    , modeArgs = ( [ flagArgPZhg{argRequire = True}, flagArgPMapE{argRequire = True}, flagArgPMapF{argRequire = True}, flagArgPModel{argRequire = True} ], Nothing )
-    , modeGroupFlags = toGroup [ flagNoneBHPS, flagNoneBackoff, flagNoneNoBackoff, flagReqPruning, flagReqNoBackoffPruning ]
+  = modes "pcfg" (Help $ defaultHelp cmdArgs) "algorithms for extracting and training PCFGs"
+  [ (modeEmpty $ Extract undefined False)
+    { modeNames = ["extract"]
+    , modeHelp = "Extracts a PCFG from a given Treebank."
+    , modeArgs = ( [ flagArgTreeBank{argRequire = True} ], Nothing )
+    , modeGroupFlags = toGroup [ flagBinary ]
     }
-  , (modeEmpty $ Translate BHPS (Transducer undefined undefined undefined) undefined)
-    { modeNames = ["translate"]
-    , modeHelp = "computes the output product of an XRS translation model with an n-gram model and then the input product with a given word"
-    , modeArgs = ( [ flagArgTZhg{argRequire = True}, flagArgTMapE{argRequire = True}, flagArgTMapF{argRequire = True}, flagArgTModel{argRequire = True} ], Nothing )
-    , modeGroupFlags = toGroup [ flagNoneTBHPS, flagNoneTBackoff, flagNoneTNoBackoff, flagReqTPruning, flagReqTNoBackoffPruning ]
+  , (modeEmpty $ Train undefined undefined False)
+    { modeNames = ["train"]
+    , modeHelp = "Trains a given PCFG with a Terminal String Corpus."
+    , modeArgs = ( [ flagArgGrammar{argRequire = True}, flagArgStringCorpus{argRequire = True} ], Nothing )
+    , modeGroupFlags = toGroup [ flagBinary ]
+    }
+  , (modeEmpty $ Bests undefined undefined False)
+    { modeNames = ["bests"]
+    , modeHelp = "Extracts the N best derivations from a PCFG."
+    , modeArgs = ( [ flagArgGrammar{argRequire = True}, flagArgN{argRequire = True} ], Nothing )
+    , modeGroupFlags = toGroup [ flagBinary ]
+    }
+  , (modeEmpty $ Intersect undefined undefined False)
+    { modeNames = ["intersect"]
+    , modeHelp = "Intersects a Terminal String and a PCFG."
+    , modeArgs = ( [ flagArgGrammar{argRequire = True}, flagArgString{argRequire = True} ], Nothing )
+    , modeGroupFlags = toGroup [ flagBinary ]
     }
   ]
   where
-    flagArgPZhg
-      = flagArg (\ a x -> Right x{transducer = (transducer x){zhg = a}}) "ZHG"
-    flagArgPMapE
-      = flagArg (\ a x -> Right x{transducer = (transducer x){mape = a}}) "MAP.E"
-    flagArgPMapF
-      = flagArg (\ a x -> Right x{transducer = (transducer x){mapf = a}}) "MAP.F"
-    flagArgPModel
-      = flagArg (\ a x -> Right x{model = a}) "MODEL"
+    flagArgTreeBank
+      = flagArg (\ a x -> Right x{treeBank = a}) "<Treebank>"
+    flagArgGrammar
+      = flagArg (\ a x -> Right x{grammar = a}) "<Grammar>"
+    flagArgN
+      = flagArg (\ a x -> Right x{number = a}) "<N>"
+    flagArgString
+      = flagArg (\ a x -> Right x{string = a}) "<Terminal String>"
     flagNoneBHPS
-      = flagNone ["bhps"]
-                 (\ x -> x{strategy = BHPS})
-                 "use BHPS strategy"
-    flagNoneBackoff
-      = flagNone ["b", "backoff"]
-                 (\ x -> x{strategy = Backoff})
-                 "use shortened states and backoff"
-    flagNoneNoBackoff
-      = flagNone ["n", "no-backoff"]
-                 (\ x -> x{strategy = BHPS})
-                 "use shortened states but no backoff"
-    flagReqPruning
-      = flagReq ["p", "prune"]
-                (\ a x -> Right x{strategy = Pruning (read a)})
-                "BEAMWIDTH"
-                "use shortened states and create at most BEAMWIDTH new states per old state"
-    flagReqNoBackoffPruning
-      = flagReq ["no-backoff-prune"]
-                (\ a x -> Right x{strategy = NoBackoffPruning (read a)})
-                "BEAMWIDTH"
-                "use shortened states but no backoff and create at most BEAMWIDTH new states per old state"
-    flagArgTZhg
-      = flagArg (\ a x -> Right x{transducer = (transducer x){zhg = a}}) "ZHG"
-    flagArgTMapE
-      = flagArg (\ a x -> Right x{transducer = (transducer x){mape = a}}) "MAP.E"
-    flagArgTMapF
-      = flagArg (\ a x -> Right x{transducer = (transducer x){mapf = a}}) "MAP.F"
-    flagArgTModel
-      = flagArg (\ a x -> Right x{model = a}) "MODEL"
-    flagNoneTBHPS
-      = flagNone ["bhps"]
-                 (\ x -> x{strategy = BHPS})
-                 "use BHPS strategy"
-    flagNoneTBackoff
-      = flagNone ["b", "backoff"]
-                 (\ x -> x{strategy = Backoff})
-                 "use shortened states and backoff"
-    flagNoneTNoBackoff
-      = flagNone ["n", "no-backoff"]
-                 (\ x -> x{strategy = BHPS})
-                 "use shortened states but no backoff"
-    flagReqTPruning
-      = flagReq ["p", "prune"]
-                (\ a x -> Right x{strategy = Pruning (read a)})
-                "BEAMWIDTH"
-                "use shortened states and create at most BEAMWIDTH new states per old state"
-    flagReqTNoBackoffPruning
-      = flagReq ["no-backoff-prune"]
-                (\ a x -> Right x{strategy = NoBackoffPruning (read a)})
-                "BEAMWIDTH"
-                "use shortened states but no backoff and create at most BEAMWIDTH new states per old state"
+      = flagNone ["b"]
+                 (\ x -> x{binary = True})
+                 "read and write Grammars in a binary format"
 
 
 main :: IO ()
@@ -139,18 +108,13 @@ mainArgs :: Args -> IO ()
 
 mainArgs (Help cs) = putStr cs
 
-mainArgs (Product s (Transducer z _ _) m)
-  = case s of BHPS               -> go $ IS.intersectBHPS rel
-              Backoff            -> go $ IS.intersectSmoothed rel
-              NoBackoff          -> go $ IS.intersectUnsmoothed rel
-              Pruning b          -> go $ IS.intersectPruning rel b
-              NoBackoffPruning b -> go $ IS.intersectUnsmoothedPruning rel b
-
-mainArgs (Translate s (Transducer z me mf) m)
-  = case s of BHPS               -> go $ IS.intersectBHPS rel
-              Backoff            -> go $ IS.intersectSmoothed rel
-              NoBackoff          -> go $ IS.intersectUnsmoothed rel
-              Pruning b          -> go $ IS.intersectPruning rel b
-              NoBackoffPruning b -> go $ IS.intersectUnsmoothedPruning rel b
+mainArgs (Extract tb binary)
+  = undefined
+mainArgs (Train g sc binary)
+  = undefined
+mainArgs (Bests n g binary)
+  = undefined
+mainArgs (Intersect g s binary)
+  = undefined
 
  
