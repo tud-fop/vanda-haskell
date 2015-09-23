@@ -7,29 +7,6 @@ module Vanda.Grammar.PCFG.Main
 , Args()
 ) where
 
-
-import           Codec.Compression.GZip ( compress )
-
-import qualified Data.Array as A
-import qualified Data.Binary as B
-import qualified Data.ByteString.Lazy as B
-import qualified Data.Map as M
-import qualified Data.Text as TS
-import qualified Data.Text.Lazy as T
-import qualified Data.Text.Lazy.IO as TIO
-import qualified Data.Vector as V
-import qualified Data.Vector.Unboxed as VU
-
-import           Vanda.Algorithms.IntEarley
-import qualified Vanda.Algorithms.Earley.WSA as WSA
-import qualified Vanda.Algorithms.IntersectWithNGram as IS
-import qualified Vanda.Algorithms.IntersectWithNGramUtil as ISU
-import qualified Vanda.Grammar.NGrams.Functions as LM
-import qualified Vanda.Grammar.XRS.Functions as IF
-import qualified Vanda.Grammar.XRS.IRTG as I
-import qualified Vanda.Hypergraph.IntHypergraph as HI
-import qualified Vanda.Token as TK
-
 import           System.Console.CmdArgs.Explicit
 import           System.Console.CmdArgs.Explicit.Misc
 
@@ -38,66 +15,91 @@ data Args
   = Help String
   | Extract
     { treeBank :: FilePath
-    , binary :: Bool
+    , outputGrammar :: FilePath
+    , binaryOutput :: Bool
     }
   | Train
-    { grammar :: FilePath
+    { inputGrammar :: FilePath
     , stringCorpus :: FilePath
-    , binary :: Bool
+    , outputGrammar :: FilePath
+    , binaryInput :: Bool
+    , binaryOutput :: Bool
     }
   | Bests
     { number :: Int
-    , grammar :: FilePath
-    , binary :: Bool
+    , inputGrammar :: FilePath
+    , binaryInput :: Bool
     }
   | Intersect 
-    { grammar :: FilePath
+    { inputGrammar :: FilePath
     , string :: String
-    , binary :: Bool
+    , outputGrammar :: FilePath
+    , binaryInput :: Bool
+    , binaryOutput :: Bool
+    }
+  | Convert
+    { inputGrammar :: FilePath
+    , outputGrammar :: FilePath
+    , binaryInput :: Bool
+    , binaryOutput :: Bool
     }
   deriving Show
 
 cmdArgs :: Mode Args
 cmdArgs
   = modes "pcfg" (Help $ defaultHelp cmdArgs) "algorithms for extracting and training PCFGs"
-  [ (modeEmpty $ Extract undefined False)
+  [ (modeEmpty $ Extract undefined undefined False)
     { modeNames = ["extract"]
     , modeHelp = "Extracts a PCFG from a given Treebank."
-    , modeArgs = ( [ flagArgTreeBank{argRequire = True} ], Nothing )
-    , modeGroupFlags = toGroup [ flagBinary ]
+    , modeArgs = ( [ flagArgOutputGrammar{argRequire = True}, flagArgTreeBank{argRequire = True} ], Nothing )
+    , modeGroupFlags = toGroup [ flagOutBinary ]
     }
-  , (modeEmpty $ Train undefined undefined False)
+  , (modeEmpty $ Train undefined undefined undefined False False)
     { modeNames = ["train"]
     , modeHelp = "Trains a given PCFG with a Terminal String Corpus."
-    , modeArgs = ( [ flagArgGrammar{argRequire = True}, flagArgStringCorpus{argRequire = True} ], Nothing )
-    , modeGroupFlags = toGroup [ flagBinary ]
+    , modeArgs = ( [ flagArgInputGrammar{argRequire = True}, flagArgStringCorpus{argRequire = True} ], Nothing )
+    , modeGroupFlags = toGroup [ flagOutBinary, flagInBinary ]
     }
   , (modeEmpty $ Bests undefined undefined False)
     { modeNames = ["bests"]
     , modeHelp = "Extracts the N best derivations from a PCFG."
-    , modeArgs = ( [ flagArgGrammar{argRequire = True}, flagArgN{argRequire = True} ], Nothing )
-    , modeGroupFlags = toGroup [ flagBinary ]
+    , modeArgs = ( [ flagArgInputGrammar{argRequire = True}, flagArgN{argRequire = True} ], Nothing )
+    , modeGroupFlags = toGroup [ flagInBinary ]
     }
-  , (modeEmpty $ Intersect undefined undefined False)
+  , (modeEmpty $ Intersect undefined undefined undefined False False)
     { modeNames = ["intersect"]
     , modeHelp = "Intersects a Terminal String and a PCFG."
-    , modeArgs = ( [ flagArgGrammar{argRequire = True}, flagArgString{argRequire = True} ], Nothing )
-    , modeGroupFlags = toGroup [ flagBinary ]
+    , modeArgs = ( [ flagArgInputGrammar{argRequire = True}, flagArgOutputGrammar{argRequire = True}, flagArgString{argRequire = True} ], Nothing )
+    , modeGroupFlags = toGroup [ flagOutBinary, flagInBinary ]
+    }
+  , (modeEmpty $ Convert undefined undefined False False)
+    { modeNames = ["convert"]
+    , modeHelp = "Converts a pcfg file from binary format to text format or vice-versa."
+    , modeArgs = ( [ flagArgInputGrammar{argRequire = True}, flagArgOutputGrammar{argRequire = True} ], Nothing )
+    , modeGroupFlags = toGroup [ flagOutBinary, flagInBinary ]
     }
   ]
   where
     flagArgTreeBank
       = flagArg (\ a x -> Right x{treeBank = a}) "<Treebank>"
-    flagArgGrammar
-      = flagArg (\ a x -> Right x{grammar = a}) "<Grammar>"
+    flagArgInputGrammar
+      = flagArg (\ a x -> Right x{inputGrammar = a}) "<Input Grammar>"
+    flagArgOutputGrammar
+      = flagArg (\ a x -> Right x{outputGrammar = a}) "<Output Grammar>"
     flagArgN
-      = flagArg (\ a x -> Right x{number = a}) "<N>"
+      = flagArg (\ a x -> Right x{number = read a}) "<N>"
     flagArgString
       = flagArg (\ a x -> Right x{string = a}) "<Terminal String>"
-    flagNoneBHPS
-      = flagNone ["b"]
-                 (\ x -> x{binary = True})
-                 "read and write Grammars in a binary format"
+    flagArgStringCorpus
+      = flagArg (\ a x -> Right x{stringCorpus = a}) "<String Corpus>"
+    flagInBinary
+      = flagNone ["bin"]
+                 (\ x -> x{binaryInput = True})
+                 "read the input Grammar from a binary format"
+    flagOutBinary
+      = flagNone ["bout"]
+                 (\ x -> x{binaryOutput = True})
+                 "write the output Grammar to a binary format"
 
 
 main :: IO ()
@@ -108,13 +110,19 @@ mainArgs :: Args -> IO ()
 
 mainArgs (Help cs) = putStr cs
 
-mainArgs (Extract tb binary)
+mainArgs (Extract treebank outgrammar bout)
   = undefined
-mainArgs (Train g sc binary)
+  
+mainArgs (Train ingrammar stringcorpus outgrammar bin bout)
   = undefined
-mainArgs (Bests n g binary)
+  
+mainArgs (Bests n ingrammar bin)
   = undefined
-mainArgs (Intersect g s binary)
+  
+mainArgs (Intersect ingrammar string outgrammar bin bout)
+  = undefined
+  
+mainArgs (Convert ingrammar outgrammar bin bout)
   = undefined
 
  
