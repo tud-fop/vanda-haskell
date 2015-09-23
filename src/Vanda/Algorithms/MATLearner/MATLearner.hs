@@ -549,8 +549,10 @@ outputUpdateMapping teacher tree = do
                 (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status)) <- get
                 sigma <- lift $ getSigma teacher
                 let (contextsOut,sigmaTreesOut,sigmaSTreesOut,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
-                    sigmaRowsZipped = zipTable (map snd sigmaTreesOut) (map snd contextsOut) sigmaRowsOut
-                    sigmaRowsSZipped = zipTable (map snd sigmaSTreesOut) (map snd contextsOut) sigmaSRowsOut
+                    sigmaTrees = map snd sigmaTreesOut
+                    sigmaSTrees = map snd sigmaSTreesOut
+                    sigmaRowsZipped = zipTable sigmaTrees (map snd contextsOut) sigmaRowsOut
+                    sigmaRowsSZipped = zipTable sigmaSTrees (map snd contextsOut) sigmaSRowsOut
 
                     -- takes labels for rows, labels for column and table entrys returns a table where every entry is labeled with the corresponding row and column
                     --  12
@@ -560,14 +562,24 @@ outputUpdateMapping teacher tree = do
                     zipTable [] _ _ = []
                     zipTable (x:xs) ys (zs:zss) = (zip3 zs (replicate (length ys) x) ys):(zipTable xs ys zss)
 
-                    paint :: (String,Tree String,Context String) -> (String,Color)
-                    paint (membership,t,c)
+                    paintEntries :: (String,Tree String,Context String) -> (String,Color)
+                    paintEntries (membership,t,c)
                         | concatTree t c == tree = updateColor membership
                         | otherwise              = noColor membership
 
+                    paintContext :: [Tree String] -> (String,Context String) -> (String,Color)
+                    paintContext ts (cStr,c)
+                        | any (tree==) (map (\t -> concatTree t c) ts) = updateColor cStr
+                        | otherwise                                    = noColor cStr
+
+                    paintTrees :: [Context String] -> (String,Tree String) -> (String,Color)
+                    paintTrees cs (tStr,t)
+                        | any (tree==) (map (concatTree t) cs) = updateColor tStr
+                        | otherwise                            = noColor tStr
+
                     noColor = \x -> (x,colorNormal)
                     updateColor = \x -> (x,colorUpdate) in
-                    fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,map (noColor . fst) sigmaSTreesOut,map (map paint) sigmaRowsZipped,map (map paint) sigmaRowsSZipped)
+                    fillTableWithOT (map (paintContext (sigmaTrees ++ sigmaSTrees)) contextsOut,map (paintTrees contexts) sigmaTreesOut,map (paintTrees contexts) sigmaSTreesOut,map (map paintEntries) sigmaRowsZipped,map (map paintEntries) sigmaRowsSZipped)
                 ans <- lift $ dialogRun dialog
                 return ()
 
