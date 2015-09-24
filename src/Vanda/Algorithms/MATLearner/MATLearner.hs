@@ -130,12 +130,12 @@ learn teacher = do
     (obs@(OT (s,contexts,mapping)),out) <- get
     sigma <- lift $ getSigma teacher
     
-    consistent <- consistify (choose 2 s) teacher
-    if not consistent
+    closed <- closify (getSigmaS s sigma) teacher
+    if not closed
         then learn teacher
         else do 
-            closed <- closify (getSigmaS s sigma) teacher
-            if not closed
+            consistent <- consistify (choose 2 s) teacher
+            if not consistent
                 then learn teacher
                 else do
                     correct <- correctify teacher
@@ -151,7 +151,9 @@ learn teacher = do
 -- | the lists in the first argument must always contain 2 trees so its essentially a list of pairs
 -- | the function checks for each of these pairs whether they have the same row and if thats the case whether this pair is consistent
 consistify :: Teacher t => [[Tree String]] -> t -> StateT (ObservationTable,GraphicUserInterface) IO Bool
-consistify []           _       = return True -- TODO here output if consistent
+consistify []           teacher = do
+    outputConsistent teacher
+    return True
 consistify ([s1,s2]:xs) teacher = do
     (OT (s,contexts,mapping),out) <- get
     if ((obst s1 contexts mapping) == (obst s2 contexts mapping)) --  both trees represent the same state
@@ -206,7 +208,7 @@ checkConsistencyOneContext
 checkConsistencyOneContext _       []     []     _       _      _  _  _   _   = return True
 checkConsistencyOneContext teacher (x:xs) (y:ys) context (c:cs) s1 s2 s1' s2'
     | x == y = checkConsistencyOneContext teacher xs ys context cs s1 s2 s1' s2'
-    | True   = do -- inconsistent!  -- TODO here output if not consistent maybe give the trees down from checkConsistencyContexts???
+    | True   = do
         outputNotConsistent teacher s1 s2 s1' s2' c (concatContext context c)
         (OT (s,contexts,mapping),out) <- get
         sigma <- lift $ getSigma teacher
@@ -219,7 +221,9 @@ checkConsistencyOneContext teacher (x:xs) (y:ys) context (c:cs) s1 s2 s1' s2'
 
 -- | check whether Observation Table is closed and return a closed Observation Table
 closify :: Teacher t => [Tree String] ->  t -> StateT (ObservationTable,GraphicUserInterface) IO Bool
-closify []     _       = return True -- TODO here output if closed
+closify []     teacher = do
+    outputClosed teacher
+    return True
 closify (x:xs) teacher = do
     (OT (s,contexts,mapping),_) <- get
     if (any ((obst x contexts mapping) == ) (map snd (getTable s contexts mapping))) 
@@ -508,6 +512,18 @@ fillTableWithOT (contexts,sigmaTrees,sigmaSTrees,sigmaRows,sigmaSRows) = do
                                 incH (x,y) = (x,y+1)
 
 
+outputClosed :: Teacher t => t -> StateT (ObservationTable,GraphicUserInterface) IO ()
+outputClosed teacher = do
+                    fillStatus 2
+                    (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status,frameStatus)) <- get
+                    sigma <- lift $ getSigma teacher
+                    let (contextsOut,sigmaTreesOut,sigmaSTreesOut,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
+                        noColor = \x -> (x,colorNormal) in
+                        fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,map (noColor . fst) sigmaSTreesOut,map (map noColor) sigmaRowsOut,map (map noColor) sigmaSRowsOut)
+                    ans <- lift $ dialogRun dialog
+                    return ()
+
+
 outputNotClosed :: Teacher t => t -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO ()
 outputNotClosed teacher treeClosed = do
                     fillStatus 2
@@ -528,6 +544,18 @@ outputNotClosed teacher treeClosed = do
                         fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,sigmaSTreesOutColor,map (map noColor) sigmaRowsOut,sigmaSRowsOutColor)
                     ans <- lift $ dialogRun dialog
                     lift $ displayDialog (addTree treeClosed) nextStep
+                    return ()
+
+
+outputConsistent :: Teacher t => t -> StateT (ObservationTable,GraphicUserInterface) IO ()
+outputConsistent teacher = do
+                    fillStatus 3
+                    (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status,frameStatus)) <- get
+                    sigma <- lift $ getSigma teacher
+                    let (contextsOut,sigmaTreesOut,sigmaSTreesOut,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
+                        noColor = \x -> (x,colorNormal) in
+                        fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,map (noColor . fst) sigmaSTreesOut,map (map noColor) sigmaRowsOut,map (map noColor) sigmaSRowsOut)
+                    ans <- lift $ dialogRun dialog
                     return ()
 
 
@@ -573,7 +601,7 @@ outputNotConsistent teacher s1 s2 s1' s2' c' newC = do
 
 outputLearn :: Teacher t => t -> StateT (ObservationTable,GraphicUserInterface) IO ()            
 outputLearn teacher = do
-                fillStatus 0
+                --fillStatus 0
                 (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status,frameStatus)) <- get
                 sigma <- lift $ getSigma teacher
                 let (contextsOut,sigmaTreesOut,sigmaSTreesOut,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
