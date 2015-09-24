@@ -82,17 +82,21 @@ main' teacher withOutput = do
                 area <- dialogGetUpper dialog
                 -- horizontal growing box ,columns do not have the same width, column distance = 5
                 box <- hBoxNew False 5
+                frameOT <- frameNew
                 boxOT <- hBoxNew False 5
                 
                 -- change fonts
                 font <- fontDescriptionFromString "Courier"
                 --widgetModifyFont observationTableOut (Just font)
                 widgetModifyFont statusOut (Just font)
+                frameSetShadowType frameOT ShadowOut
+                frameSetLabel frameOT "Observation Table"
 
                 -- place components
-                dialogAddButton dialog "Next Step" ResponseOk
+                dialogAddButton dialog nextStep ResponseOk
                 containerAdd area box
-                boxPackStart box boxOT PackNatural 0
+                containerAdd frameOT boxOT
+                boxPackStart box frameOT PackNatural 0
                 boxPackStart boxOT observationTableOut PackNatural 0
                 boxPackStart box statusOut PackNatural 0
 
@@ -203,7 +207,7 @@ checkConsistencyOneContext _       []     []     _       _      _  _  _   _   = 
 checkConsistencyOneContext teacher (x:xs) (y:ys) context (c:cs) s1 s2 s1' s2'
     | x == y = checkConsistencyOneContext teacher xs ys context cs s1 s2 s1' s2'
     | True   = do -- inconsistent!  -- TODO here output if not consistent maybe give the trees down from checkConsistencyContexts???
-        outputNotConsistent teacher s1 s2 s1' s2' c
+        outputNotConsistent teacher s1 s2 s1' s2' c (concatContext context c)
         (OT (s,contexts,mapping),out) <- get
         sigma <- lift $ getSigma teacher
         put (OT (s,contexts ++ [concatContext context c], mapping),out)
@@ -282,12 +286,14 @@ extract :: Teacher t => t -> [(Tree String,[Bool])] -> [(Tree String,[Bool])] ->
 extract teacher s sigmaS counterexample
     |newcounterexample == Nothing = return replacedSubtree -- no new counterexample found
     |otherwise                    = do
+                                    -- TODO new update mapping with different output?
                                     updateMapping teacher [fromJust newcounterexample]-- store membership of new tree in mapping
                                     (OT (s',contexts,mapping),out) <- get 
                                     if (mapping ! counterexample) /= (mapping ! (fromJust newcounterexample)) -- isMemberOldCounterexample not eqal isMemberNewCounterexample
                                         then
                                             return replacedSubtree -- new counterexample is no longer a counterexample
                                         else
+                                            -- TODO output reduced counterexample
                                             extract teacher s sigmaS (fromJust newcounterexample)
     where 
         Just (newcounterexample, replacedSubtree) = tryReduce counterexample
@@ -492,11 +498,12 @@ outputNotClosed teacher treeClosed = do
                         in
                         fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,sigmaSTreesOutColor,map (map noColor) sigmaRowsOut,sigmaSRowsOutColor)
                     ans <- lift $ dialogRun dialog
+                    lift $ displayDialog (addTree treeClosed) nextStep
                     return ()
 
 
-outputNotConsistent :: Teacher t => t -> Tree String -> Tree String -> Tree String -> Tree String -> Context String -> StateT (ObservationTable,GraphicUserInterface) IO ()
-outputNotConsistent teacher s1 s2 s1' s2' c' = do
+outputNotConsistent :: Teacher t => t -> Tree String -> Tree String -> Tree String -> Tree String -> Context String -> Context String -> StateT (ObservationTable,GraphicUserInterface) IO ()
+outputNotConsistent teacher s1 s2 s1' s2' c' newC = do
                     (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status)) <- get
                     sigma <- lift $ getSigma teacher
                     let (contextsOutTrees,sigmaTreesOutTrees,sigmaSTreesOutTrees,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
@@ -530,6 +537,7 @@ outputNotConsistent teacher s1 s2 s1' s2' c' = do
                         in
                         fillTableWithOT (contextsOut,sigmaTreesOutColor,sigmaSTreesOutColor,sigmaRowsOutColor,sigmaSRowsOutColor)
                     ans <- lift $ dialogRun dialog
+                    lift $ displayDialog (addContext newC) nextStep
                     return ()
 
 
@@ -582,6 +590,33 @@ outputUpdateMapping teacher tree = do
                     fillTableWithOT (map (paintContext (sigmaTrees ++ sigmaSTrees)) contextsOut,map (paintTrees contexts) sigmaTreesOut,map (paintTrees contexts) sigmaSTreesOut,map (map paintEntries) sigmaRowsZipped,map (map paintEntries) sigmaRowsSZipped)
                 ans <- lift $ dialogRun dialog
                 return ()
+
+
+-- | diplay dialog with the given taxt and destroy it afterwards
+displayDialog :: String -> String -> IO ()
+displayDialog labelText buttonText = do
+            dialog <- dialogNew
+            area <- dialogGetUpper dialog
+            label <- labelNew (Just labelText)
+
+            -- place components
+            boxPackStart area label PackNatural 0
+            dialogAddButton dialog buttonText ResponseOk
+
+            -- display components
+            widgetShowAll area
+
+            -- wait for ok
+            answer <- dialogRun dialog
+            widgetDestroy dialog
+            return ()
+
+
+-- * colors and texts
+
+nextStep = "Next Step"
+addContext context = "The context\n" ++ showContext context ++ "\nwill be added to C."
+addTree tree = "The tree\n" ++ nicerShow tree ++ "\nwill be added to S."
 
 
 -- colors for table
