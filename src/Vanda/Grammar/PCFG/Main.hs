@@ -7,8 +7,14 @@ module Vanda.Grammar.PCFG.Main
 , Args()
 ) where
 
-import           System.Console.CmdArgs.Explicit
-import           System.Console.CmdArgs.Explicit.Misc
+import System.Console.CmdArgs.Explicit
+import System.Console.CmdArgs.Explicit.Misc
+import Vanda.Grammar.PCFG.Functions
+import Vanda.Grammar.PCFG.Util
+import Vanda.Corpus.Penn.Text
+import Vanda.Corpus.TreeTerm
+import Vanda.Corpus.SExpression
+import qualified Data.Text.Lazy as T
 
 
 data Args
@@ -111,16 +117,22 @@ mainArgs :: Args -> IO ()
 mainArgs (Help cs) = putStr cs
 
 mainArgs (Extract treebank outgrammar bout)
-  = undefined
+  = do
+  e <- parseFromFile pSExpressions treebank 
+  writeGrammar outgrammar . extractPCFG $ map (treeToDeriv . toTree) e
   
 mainArgs (Train ingrammar stringcorpus outgrammar bin bout)
   = undefined
   
 mainArgs (Bests n ingrammar bin)
-  = undefined
+  = do
+    g <- readGrammar ingrammar
+    putStr (T.unpack . unparsePenn . map (derivToTree . fst) $ bestDerivations g n)
   
 mainArgs (Intersect ingrammar string outgrammar bin bout)
-  = undefined
+  = do
+    g <- readGrammar ingrammar
+    writeGrammar outgrammar (intersect g string)
   
 mainArgs (Convert ingrammar outgrammar bin bout)
   = undefined

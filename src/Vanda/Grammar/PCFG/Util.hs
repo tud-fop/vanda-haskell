@@ -30,7 +30,7 @@ readGrammar file = do
 
 readGrammar' :: String -> PCFG String String
 readGrammar' s = let (hyperedges,startsymbols,nonterminals) = collect $ map parseLines ( zip (map words (lines s)) [1..]) 
-                     hyperedges' = map (\ (from,to,weight,i) -> (mkHyperedge from (filter ((flip S.member) nonterminals) to) (makeLabel nonterminals to 1) i , weight)) hyperedges
+                     hyperedges' = map (\ (from,to,weight,i) -> (mkHyperedge from (filter ((flip S.member) nonterminals) to) (makeLabel nonterminals to 0) i , weight)) hyperedges
                      (edges,weights) = unzip hyperedges' in 
                      PCFG (EdgeList nonterminals edges) startsymbols (V.fromList $ reverse weights)
                       
@@ -52,7 +52,7 @@ parseEdge _ line = parsingError line "\"->\" missing."
 readDouble :: Int -> String -> Double
 readDouble line value = case reads value of
   [(val, "")] -> val
-  _           -> parsingError line "weight has to be a number."
+  _           -> parsingError line "weight missing."
 
 makeLabel :: S.Set String -> [String] -> Int -> [Either Int String]
 makeLabel nonterminals (string:rest) current
@@ -124,8 +124,8 @@ transform h = mkHyperedge (to h) (zipHE h) () (ident h)
   where zipHE :: Hyperedge String [Either Int String] Int -> [String]
         zipHE (Nullary _ label _) = map (either (errorHere "transform" "Nullary edge has invalid label") id) label
         zipHE (Unary _ from label _) = map (either (\ _ -> from) id) label
-        zipHE (Binary _ from1 from2 label _) = map (either (\ x -> V.fromList [from1,from2] V.! (x-1)) id) label
-        zipHE (Hyperedge _ from label _) = map (either (\ x -> from V.! (x-1)) id) label
+        zipHE (Binary _ from1 from2 label _) = map (either (\ x -> V.fromList [from1,from2] V.! (x)) id) label
+        zipHE (Hyperedge _ from label _) = map (either (\ x -> from V.! (x)) id) label
 
 -- | Sort the hyperedges by their left hand side, so same left hand sides are printed as a block.
 sortEdges :: [Hyperedge String () Int] -> [[Hyperedge String () Int]]
