@@ -55,6 +55,7 @@ instance Teacher Interactive where
         isMember Interactive baum = do
           -- create components
           dialog <- dialogNew
+          set dialog [windowTitle := "isMember"]
           area <- dialogGetUpper dialog
           membershipQuestion <- labelNew (Just ("Is this tree part of the language?\n" ++ nicerShow baum))
 
@@ -75,6 +76,7 @@ instance Teacher Interactive where
         conjecture Interactive automat = do
           -- create components
           dialog <- dialogNew
+          set dialog [windowTitle := "Conjecture"]
           counterexampleEntry <- entryNew
           area <- dialogGetUpper dialog
           conjectureText <- labelNew (Just ("Is this Automaton correct?\nIf not please enter a counterexample\n" ++ show automat))

@@ -39,7 +39,8 @@ matLearner = do
     initGUI
     hbox <- vBoxNew True 10
     window <- windowNew
-    set window [containerBorderWidth := 10,
+    set window [windowTitle          := menueTitle,
+                containerBorderWidth := 10,
                 containerChild       := hbox ]
 
 
@@ -63,7 +64,7 @@ matLearner = do
 
 
 
-    onClicked buttonInteractive $ main' Interactive True
+    onClicked buttonInteractive $ main' Interactive
 
     onDestroy window mainQuit
     widgetShowAll window
@@ -72,12 +73,13 @@ matLearner = do
 
 -- * MAT Learner
 -- | initialise dialog for output and call learner
-main' :: Teacher t => t -> Bool -> IO ()
-main' teacher withOutput = do
+main' :: Teacher t => t -> IO ()
+main' teacher = do
                 -- output
                 
                 -- create components
                 dialog <- dialogNew
+                set dialog [windowTitle := observationTableDialogTitle]
                 observationTableOut <- tableNew 0 0 False
                 statusOut <- tableNew 0 0 False
                 area <- dialogGetUpper dialog
@@ -129,7 +131,7 @@ learn teacher = do
     outputLearn teacher
     (obs@(OT (s,contexts,mapping)),out) <- get
     sigma <- lift $ getSigma teacher
-    
+
     closed <- closify (getSigmaS s sigma) teacher
     if not closed
         then learn teacher
@@ -251,7 +253,8 @@ correctify teacher = do
                     let automaton = generateAutomaton obs sigma in do
                         maybeCounterexample <- lift $ conjecture teacher automaton
                         if maybeCounterexample == Nothing
-                            then
+                            then do
+                                outputCorrect teacher automaton
                                 return True
                             else do
                                 counterexample <- lift $ checkCE (fromJust maybeCounterexample) mapping sigma automaton -- errors in the counterexample can only occor with an interactive teacher (hopefully)
@@ -521,6 +524,8 @@ outputClosed teacher = do
                         noColor = \x -> (x,colorNormal) in
                         fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,map (noColor . fst) sigmaSTreesOut,map (map noColor) sigmaRowsOut,map (map noColor) sigmaSRowsOut)
                     ans <- lift $ dialogRun dialog
+                    lift $ displayDialog isClosedMsg nextStep
+                    ans <- lift $ dialogRun dialog
                     return ()
 
 
@@ -543,6 +548,8 @@ outputNotClosed teacher treeClosed = do
                         in
                         fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,sigmaSTreesOutColor,map (map noColor) sigmaRowsOut,sigmaSRowsOutColor)
                     ans <- lift $ dialogRun dialog
+                    lift $ displayDialog isNotClosedMsg nextStep
+                    ans <- lift $ dialogRun dialog
                     lift $ displayDialog (addTree treeClosed) nextStep
                     return ()
 
@@ -555,6 +562,8 @@ outputConsistent teacher = do
                     let (contextsOut,sigmaTreesOut,sigmaSTreesOut,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
                         noColor = \x -> (x,colorNormal) in
                         fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,map (noColor . fst) sigmaSTreesOut,map (map noColor) sigmaRowsOut,map (map noColor) sigmaSRowsOut)
+                    ans <- lift $ dialogRun dialog
+                    lift $ displayDialog isConsistentMsg nextStep
                     ans <- lift $ dialogRun dialog
                     return ()
 
@@ -595,8 +604,16 @@ outputNotConsistent teacher s1 s2 s1' s2' c' newC = do
                         in
                         fillTableWithOT (contextsOut,sigmaTreesOutColor,sigmaSTreesOutColor,sigmaRowsOutColor,sigmaSRowsOutColor)
                     ans <- lift $ dialogRun dialog
+                    lift $ displayDialog isNotConsistentMsg nextStep
+                    ans <- lift $ dialogRun dialog
                     lift $ displayDialog (addContext newC) nextStep
                     return ()
+
+
+outputCorrect :: Teacher t => t -> Automaton Int -> StateT (ObservationTable,GraphicUserInterface) IO ()            
+outputCorrect teacher automaton = do
+                lift $ displayDialog (show automaton) lastStep
+                return ()
 
 
 outputLearn :: Teacher t => t -> StateT (ObservationTable,GraphicUserInterface) IO ()            
@@ -656,6 +673,7 @@ outputUpdateMapping teacher tree = do
 displayDialog :: String -> String -> IO ()
 displayDialog labelText buttonText = do
             dialog <- dialogNew
+            set dialog [windowTitle := infoDialog]
             area <- dialogGetUpper dialog
             label <- labelNew (Just labelText)
 
@@ -689,7 +707,17 @@ status 3 = "Consistent"
 status 4 = "Correct"
 status 5 = "Extract"
 
+menueTitle = "MATLearner"
+observationTableDialogTitle = "MATLearner"
+infoDialog = "MATLearner"
+
+isClosedMsg = "Observation Table is closed."
+isNotClosedMsg = "Observation Table is not closed."
+isConsistentMsg = "Observation Table is consistent."
+isNotConsistentMsg = "Observation Table is not consistent."
+
 nextStep = "Next Step"
+lastStep = "Close"
 addContext context = "The context\n" ++ showContext context ++ "\nwill be added to C."
 addTree tree = "The tree\n" ++ nicerShow tree ++ "\nwill be added to S."
 
