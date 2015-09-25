@@ -304,7 +304,7 @@ extract :: Teacher t => t -> [(Tree String,[Bool])] -> [(Tree String,[Bool])] ->
 extract teacher s sigmaS counterexample
     |newcounterexample == Nothing = return replacedSubtree -- no new counterexample found
     |otherwise                    = do
-                                    outputExtractFill teacher counterexample replacedSubtree
+                                    outputExtractFill teacher counterexample replacedSubtree s sigmaS
                                     -- TODO new update mapping with different output?
                                     updateMappingExtract teacher (fromJust newcounterexample)-- store membership of new tree in mapping
                                     (OT (s',contexts,mapping),out) <- get 
@@ -312,7 +312,6 @@ extract teacher s sigmaS counterexample
                                         then
                                             return replacedSubtree -- new counterexample is no longer a counterexample
                                         else
-                                            -- TODO output reduced counterexample
                                             extract teacher s sigmaS (fromJust newcounterexample)
     where 
         Just (newcounterexample, replacedSubtree) = tryReduce counterexample
@@ -700,6 +699,7 @@ outputExtractInit teacher counterexample = do
 
                 (obs,GUI (dialog,observationTableOut,box,status,frameStatus,extractOutOld)) <- get
                 dialogExtract <- lift $ dialogNew
+                lift $ set dialogExtract [windowTitle := extractTitle]
 
                 lift $ dialogAddButton dialogExtract nextStep ResponseOk
                 area <- lift $ dialogGetUpper dialogExtract
@@ -712,30 +712,42 @@ outputExtractInit teacher counterexample = do
                 lift $ boxPackStart hBox vBox1 PackNatural 0
                 lift $ boxPackStart hBox vBox2 PackNatural 0
                 lift $ boxPackStart hBox vBox3 PackNatural 0
+
+                -- fill initial row
+                label1 <- lift $ labelNew (Just "Counterexample")
+                label2 <- lift $ labelNew (Just "Replaced subtree")
+                label3 <- lift $ labelNew (Just "Inserted subtree")
+                lift $ boxPackStart vBox1 label1 PackNatural 0
+                lift $ boxPackStart vBox2 label2 PackNatural 0
+                lift $ boxPackStart vBox3 label3 PackNatural 0
                 
                 lift $ widgetShowAll dialogExtract
                 put (obs,GUI (dialog,observationTableOut,box,status,frameStatus,Extract (dialogExtract,vBox1,vBox2,vBox3)))
                 return ()
 
 
-outputExtractFill :: Teacher t => t -> Tree String -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO () 
-outputExtractFill teacher counterexample subtree = do
-                (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status,frameStatus,Extract (dialogExtract,vBox1,vBox2,vBox3))) <- get
-                label1 <- lift $ labelNew (Just (nicerShow counterexample))
-                label2 <- lift $ labelNew (Just (nicerShow subtree))
-                lift $ boxPackStart vBox1 label1 PackNatural 0
-                lift $ boxPackStart vBox2 label2 PackNatural 0
+outputExtractFill :: Teacher t => t -> Tree String -> Tree String -> [(Tree String, [Bool])] -> [(Tree String, [Bool])] -> StateT (ObservationTable,GraphicUserInterface) IO () 
+outputExtractFill teacher counterexample subtree  s sigmaS = do
+                (obs,GUI (dialog,observationTableOut,box,status,frameStatus,Extract (dialogExtract,vBox1,vBox2,vBox3))) <- get
+                let Just (_,rowOfs) = find (\(tree,_) -> (tree == subtree)) sigmaS
+                    Just rowOfs' = find (\(_,q) -> (rowOfs == q)) s in do
+                    label1 <- lift $ labelNew (Just (nicerShow counterexample))
+                    label2 <- lift $ labelNew (Just (nicerShow subtree))
+                    label3 <- lift $ labelNew (Just (nicerShow $ fst rowOfs'))
+                    lift $ boxPackStart vBox1 label1 PackNatural 0
+                    lift $ boxPackStart vBox2 label2 PackNatural 0
+                    lift $ boxPackStart vBox3 label3 PackNatural 0
 
 
-                lift $ widgetShowAll dialogExtract
-                ans <- lift $ dialogRun dialogExtract
-                --put (obs,GUI (dialog,observationTableOut,box,status,frameStatus,extractOut,boxExtract))
-                return ()
+                    lift $ widgetShowAll dialogExtract
+                    ans <- lift $ dialogRun dialogExtract
+                    --put (obs,GUI (dialog,observationTableOut,box,status,frameStatus,extractOut,boxExtract))
+                    return ()
 
 
 outputExtractDelete :: Teacher t => t -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO () 
 outputExtractDelete teacher extractedTree = do
-                (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status,frameStatus,Extract (dialogExtract,vBox1,vBox2,vBox3))) <- get
+                (obs,GUI (dialog,observationTableOut,box,status,frameStatus,Extract (dialogExtract,vBox1,vBox2,vBox3))) <- get
 
                 lift $ widgetDestroy dialogExtract
                 lift $ displayDialog (extracted extractedTree) nextStep
@@ -785,6 +797,7 @@ status 5 = "Extract"
 menueTitle = "MATLearner"
 observationTableDialogTitle = "MATLearner"
 infoDialog = "MATLearner"
+extractTitle = "Extract"
 
 isClosedMsg = "Observation Table is closed."
 isNotClosedMsg = "Observation Table is not closed."
