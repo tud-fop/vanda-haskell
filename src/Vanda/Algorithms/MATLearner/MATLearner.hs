@@ -26,12 +26,20 @@ data ObservationTable =
     (Map (Tree String) Bool)) --  mapping
 
 
+data ExtractGUI = 
+    Extract (Dialog,
+             VBox,
+             VBox,
+             VBox)
+    | None
+
 data GraphicUserInterface = 
     GUI (Dialog, -- window in which observation table is diplayed
          Table, -- observation table
          Frame, -- frame which inhabits the table needed because table has to be destroyed everytime a new one is draw (maybe find a better solution for this)
          Table, -- status
-         Frame) -- frame which inhabits status table
+         Frame, -- frame which inhabits status table
+         ExtractGUI) -- extract
 
 -- main programm initialises interface, here you can choose which teacher to use
 matLearner :: IO ()
@@ -102,12 +110,13 @@ main' teacher = do
                 boxPackStart box frameOT PackNatural 0
                 boxPackStart box frameStatus PackNatural 0
 
+
                 -- display components
                 widgetShowAll area
                 ans <- dialogRun dialog
 
                 -- call learner
-                initState <- evalStateT (initObs teacher) (OT ([],[],empty),GUI (dialog,observationTableOut,frameOT,statusOut,frameStatus))
+                initState <- evalStateT (initObs teacher) (OT ([],[],empty),GUI (dialog,observationTableOut,frameOT,statusOut,frameStatus,None))
                 automaton <- evalStateT (learn teacher) initState
                 putStrLn $ show automaton
                 widgetDestroy dialog
@@ -260,10 +269,12 @@ correctify teacher = do
                                 counterexample <- lift $ checkCE (fromJust maybeCounterexample) mapping sigma automaton -- errors in the counterexample can only occor with an interactive teacher (hopefully)
                                 let mapping' = insert counterexample (not (accepts automaton counterexample)) mapping in do -- insert membership for counterexample
                                     put(OT(s,contexts,mapping'),out)
+                                    outputExtractInit teacher counterexample
                                     x <- extract teacher
                                                 (getTable s contexts mapping') 
                                                 (getTable (getSigmaS s sigma) contexts mapping') -- Simga(S)/S
                                                 counterexample
+                                    outputExtractDelete teacher x
                                     (OT (_,_,mapping''),out) <- get -- get mapping with the new memberships insertet in extract
                                     put (OT (s ++ [x],contexts,mapping''),out)
                                     updateMapping teacher
@@ -293,11 +304,9 @@ extract :: Teacher t => t -> [(Tree String,[Bool])] -> [(Tree String,[Bool])] ->
 extract teacher s sigmaS counterexample
     |newcounterexample == Nothing = return replacedSubtree -- no new counterexample found
     |otherwise                    = do
-                                    -- TODO extract output
-                                    lift $ putStrLn $ nicerShow (fromJust newcounterexample)
-                                    lift $ putStrLn $ nicerShow replacedSubtree
+                                    outputExtractFill teacher counterexample replacedSubtree
                                     -- TODO new update mapping with different output?
-                                    updateMapping teacher [fromJust newcounterexample]-- store membership of new tree in mapping
+                                    updateMappingExtract teacher (fromJust newcounterexample)-- store membership of new tree in mapping
                                     (OT (s',contexts,mapping),out) <- get 
                                     if (mapping ! counterexample) /= (mapping ! (fromJust newcounterexample)) -- isMemberOldCounterexample not eqal isMemberNewCounterexample
                                         then
@@ -400,6 +409,16 @@ updateMapping teacher (t:ts) = do
                             updateMapping teacher ts
 
 
+-- | inserts unknown memberships of given trees  into mapping
+updateMappingExtract :: Teacher t => t -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO ()
+updateMappingExtract teacher t = do
+                            (OT (s,contexts,mapping),_) <- get
+                            when (notMember t mapping)
+                                 (do
+                                    (_,out) <- get
+                                    member <- lift $ isMember teacher t
+                                    put(OT (s,contexts,(insert t member mapping)),out))
+                            return ()
 -- * Output
 
 formatObservationTable :: ObservationTable -> [(String,Int)] -> ([(String,Context String)],[(String,Tree String)],[(String,Tree String)],[[String]],[[String]])
@@ -423,7 +442,7 @@ formatObservationTable (OT (s,contexts,mapping)) alphabet = (zip (map showContex
 
 fillStatus :: Int -> StateT (ObservationTable,GraphicUserInterface) IO ()
 fillStatus n = do
-            (obs,GUI (dialog,table,box,statusOld,frameStatus)) <- get
+            (obs,GUI (dialog,table,box,statusOld,frameStatus,extractOut)) <- get
             lift $ widgetDestroy statusOld
             statusNew <- lift $ tableNew 5 1 False
             lift $ addStatus 1 statusNew
@@ -434,7 +453,7 @@ fillStatus n = do
 
             lift $ containerAdd frameStatus statusNew
             lift $ widgetShowAll statusNew
-            put(obs,GUI (dialog,table,box,statusNew,frameStatus))
+            put(obs,GUI (dialog,table,box,statusNew,frameStatus,extractOut))
 
             where 
                 addStatus i statusNew = do
@@ -449,7 +468,7 @@ fillStatus n = do
 -- | put the labels into the table with the given colors
 fillTableWithOT :: ([(String,Color)],[(String,Color)],[(String,Color)],[[(String,Color)]],[[(String,Color)]]) -> StateT (ObservationTable,GraphicUserInterface) IO ()
 fillTableWithOT (contexts,sigmaTrees,sigmaSTrees,sigmaRows,sigmaSRows) = do
-                            (obs,GUI (dialog,tableOld,box,status,frameStatus)) <- get
+                            (obs,GUI (dialog,tableOld,box,status,frameStatus,extractOut)) <- get
                             lift $ widgetDestroy tableOld
                             table <- lift $ tableNew (3 + (length (sigmaTrees ++ sigmaSTrees))) (2 + (length contexts)) False
                             --tableResize table (3 + (length (sigmaTrees ++ sigmaSTrees))) (2 + (length contexts))
@@ -480,7 +499,7 @@ fillTableWithOT (contexts,sigmaTrees,sigmaSTrees,sigmaRows,sigmaSRows) = do
 
                             lift $ containerAdd box table
                             lift $ widgetShowAll table
-                            put(obs,GUI (dialog,table,box,status,frameStatus))
+                            put(obs,GUI (dialog,table,box,status,frameStatus,extractOut))
 
 
                         where   -- fill table along f
@@ -518,7 +537,7 @@ fillTableWithOT (contexts,sigmaTrees,sigmaSTrees,sigmaRows,sigmaSRows) = do
 outputClosed :: Teacher t => t -> StateT (ObservationTable,GraphicUserInterface) IO ()
 outputClosed teacher = do
                     fillStatus 2
-                    (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status,frameStatus)) <- get
+                    (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status,frameStatus,extractOut)) <- get
                     sigma <- lift $ getSigma teacher
                     let (contextsOut,sigmaTreesOut,sigmaSTreesOut,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
                         noColor = \x -> (x,colorNormal) in
@@ -532,7 +551,7 @@ outputClosed teacher = do
 outputNotClosed :: Teacher t => t -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO ()
 outputNotClosed teacher treeClosed = do
                     fillStatus 2
-                    (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status,frameStatus)) <- get
+                    (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status,frameStatus,extractOut)) <- get
                     sigma <- lift $ getSigma teacher
                     let (contextsOut,sigmaTreesOut,sigmaSTreesOutTrees,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
                         noColor = \x -> (x,colorNormal)
@@ -557,7 +576,7 @@ outputNotClosed teacher treeClosed = do
 outputConsistent :: Teacher t => t -> StateT (ObservationTable,GraphicUserInterface) IO ()
 outputConsistent teacher = do
                     fillStatus 3
-                    (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status,frameStatus)) <- get
+                    (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status,frameStatus,extractOut)) <- get
                     sigma <- lift $ getSigma teacher
                     let (contextsOut,sigmaTreesOut,sigmaSTreesOut,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
                         noColor = \x -> (x,colorNormal) in
@@ -571,7 +590,7 @@ outputConsistent teacher = do
 outputNotConsistent :: Teacher t => t -> Tree String -> Tree String -> Tree String -> Tree String -> Context String -> Context String -> StateT (ObservationTable,GraphicUserInterface) IO ()
 outputNotConsistent teacher s1 s2 s1' s2' c' newC = do
                     fillStatus 3
-                    (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status,frameStatus)) <- get
+                    (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status,frameStatus,extractOut)) <- get
                     sigma <- lift $ getSigma teacher
                     let (contextsOutTrees,sigmaTreesOutTrees,sigmaSTreesOutTrees,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
                         noColor = \x -> (x,colorNormal)
@@ -619,7 +638,7 @@ outputCorrect teacher automaton = do
 outputLearn :: Teacher t => t -> StateT (ObservationTable,GraphicUserInterface) IO ()            
 outputLearn teacher = do
                 --fillStatus 0
-                (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status,frameStatus)) <- get
+                (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status,frameStatus,extractOut)) <- get
                 sigma <- lift $ getSigma teacher
                 let (contextsOut,sigmaTreesOut,sigmaSTreesOut,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
                     noColor = \x -> (x,colorNormal) in
@@ -631,7 +650,7 @@ outputLearn teacher = do
 outputUpdateMapping :: Teacher t => t -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO ()
 outputUpdateMapping teacher tree = do
                 fillStatus 1
-                (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status,frameStatus)) <- get
+                (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status,frameStatus,extractOut)) <- get
                 sigma <- lift $ getSigma teacher
                 let (contextsOut,sigmaTreesOut,sigmaSTreesOut,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
                     sigmaTrees = map snd sigmaTreesOut
@@ -669,6 +688,62 @@ outputUpdateMapping teacher tree = do
                 return ()
 
 
+outputExtractInit :: Teacher t => t -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO ()  
+outputExtractInit teacher counterexample = do
+                fillStatus 4
+                (obs,GUI (dialog0,_,_,_,_,_)) <- get
+                lift $ displayDialog (notCorrect counterexample) nextStep
+                ans <- lift $ dialogRun dialog0
+
+                -- begin extraction
+                fillStatus 5
+
+                (obs,GUI (dialog,observationTableOut,box,status,frameStatus,extractOutOld)) <- get
+                dialogExtract <- lift $ dialogNew
+
+                lift $ dialogAddButton dialogExtract nextStep ResponseOk
+                area <- lift $ dialogGetUpper dialogExtract
+                hBox <- lift $ hBoxNew False 5
+                vBox1 <- lift $ vBoxNew False 5
+                vBox2 <- lift $ vBoxNew False 5
+                vBox3 <- lift $ vBoxNew False 5
+
+                lift $ containerAdd area hBox
+                lift $ boxPackStart hBox vBox1 PackNatural 0
+                lift $ boxPackStart hBox vBox2 PackNatural 0
+                lift $ boxPackStart hBox vBox3 PackNatural 0
+                
+                lift $ widgetShowAll dialogExtract
+                put (obs,GUI (dialog,observationTableOut,box,status,frameStatus,Extract (dialogExtract,vBox1,vBox2,vBox3)))
+                return ()
+
+
+outputExtractFill :: Teacher t => t -> Tree String -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO () 
+outputExtractFill teacher counterexample subtree = do
+                (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status,frameStatus,Extract (dialogExtract,vBox1,vBox2,vBox3))) <- get
+                label1 <- lift $ labelNew (Just (nicerShow counterexample))
+                label2 <- lift $ labelNew (Just (nicerShow subtree))
+                lift $ boxPackStart vBox1 label1 PackNatural 0
+                lift $ boxPackStart vBox2 label2 PackNatural 0
+
+
+                lift $ widgetShowAll dialogExtract
+                ans <- lift $ dialogRun dialogExtract
+                --put (obs,GUI (dialog,observationTableOut,box,status,frameStatus,extractOut,boxExtract))
+                return ()
+
+
+outputExtractDelete :: Teacher t => t -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO () 
+outputExtractDelete teacher extractedTree = do
+                (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status,frameStatus,Extract (dialogExtract,vBox1,vBox2,vBox3))) <- get
+
+                lift $ widgetDestroy dialogExtract
+                lift $ displayDialog (extracted extractedTree) nextStep
+
+                put (obs,GUI (dialog,observationTableOut,box,status,frameStatus,None))
+                return ()
+
+
 -- | diplay dialog with the given taxt and destroy it afterwards
 displayDialog :: String -> String -> IO ()
 displayDialog labelText buttonText = do
@@ -697,8 +772,8 @@ activeColor :: Int -> Color
 activeColor 1 = colorUpdate
 activeColor 2 = colorClosed
 activeColor 3 = colorConsistent
-activeColor 4 = Color 52254 49220 49220
-activeColor 5 = Color 52254 49220 49220
+activeColor 4 = Color 52254 10000 0
+activeColor 5 = colorExtract
 
 status :: Int -> String
 status 1 = "Fill Table"
@@ -720,6 +795,8 @@ nextStep = "Next Step"
 lastStep = "Close"
 addContext context = "The context\n" ++ showContext context ++ "\nwill be added to C."
 addTree tree = "The tree\n" ++ nicerShow tree ++ "\nwill be added to S."
+notCorrect tree = "The automaton is not correct. The given counterexample is\n" ++ nicerShow tree
+extracted tree = "The tree\n" ++ nicerShow tree ++ "\nwas extracet and will be added to S."
 
 
 -- colors for table
@@ -727,3 +804,4 @@ colorNormal = Color 0 0 0
 colorConsistent = Color 65535 0 42668
 colorClosed = Color 0 0 65535
 colorUpdate = Color 65535 0 0
+colorExtract = Color 6592 31310 3756
