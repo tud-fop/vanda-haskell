@@ -301,44 +301,39 @@ correctify teacher = do
 
 -- | extract subtree that has to be added to the observation table
 extract :: Teacher t => t -> [(Tree String,[Bool])] -> [(Tree String,[Bool])] -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO (Tree String)
-extract teacher s sigmaS counterexample
-    |newcounterexample == Nothing = return replacedSubtree -- no new counterexample found
-    |otherwise                    = do
-                                    outputExtractFill teacher counterexample replacedSubtree s sigmaS
-                                    -- TODO new update mapping with different output?
-                                    updateMappingExtract teacher (fromJust newcounterexample)-- store membership of new tree in mapping
-                                    (OT (s',contexts,mapping),out) <- get 
-                                    if (mapping ! counterexample) /= (mapping ! (fromJust newcounterexample)) -- isMemberOldCounterexample not eqal isMemberNewCounterexample
+extract teacher s sigmaS counterexample = do
+                                    newcounterexample <- getNewCandidate newCECandidates
+                                    if newcounterexample == Nothing
                                         then
-                                            return replacedSubtree -- new counterexample is no longer a counterexample
-                                        else
-                                            extract teacher s sigmaS (fromJust newcounterexample)
+                                            return sTree
+                                        else do
+                                            outputExtractFill teacher counterexample sTree (snd $ fromJust newcounterexample)
+                                            extract teacher s sigmaS (fst $ fromJust newcounterexample)
     where 
-        Just (newcounterexample, replacedSubtree) = tryReduce counterexample
+        (newCECandidates,sTree) = tryReduce counterexample
 
-        tryReduce :: Tree String -> Maybe (Maybe (Tree String),Tree String)
+        -- check whether for some s' the tree is still a counterexample
+        getNewCandidate :: [(Tree String,Tree String)] -> StateT (ObservationTable,GraphicUserInterface) IO (Maybe (Tree String,Tree String))
+        getNewCandidate []             = return Nothing
+        getNewCandidate ((x,s'Tree):xs) = do
+                                    updateMappingExtract teacher x -- store membership of new tree in mapping
+                                    (OT (s,contexts,mapping),out) <- get
+                                    if mapping ! counterexample /= mapping ! x  -- isMemberOldCounterexample not eqal isMemberNewCounterexample
+                                        then
+                                            getNewCandidate xs
+                                        else
+                                            return $ Just (x,s'Tree)
+
+        -- return list of Trees where s is replaced by all possible s'
+        tryReduce :: Tree String -> ([(Tree String,Tree String)],Tree String)
         tryReduce tree@(Node symbol ts)
-            |maybeRowOfs == Nothing = let replacedTs = (map tryReduce ts) -- the current subtree is not in Sigma(S)/S
-                                          maybeIndexOfSybtree = findIndex (Nothing /=) replacedTs
+            |maybeRowOfs == Nothing = let -- the current subtree is not in Sigma(S)/S
+                                          insertTrees _      []          _                       = ([],tree)
+                                          insertTrees tsLeft (t:tsRight) (([],_    ):tsReplaced) = insertTrees (tsLeft ++ [t]) tsRight tsReplaced
+                                          insertTrees tsLeft (t:tsRight) ((tR,sTree):tsReplaced) = ([(Node symbol (tsLeft ++ [t'] ++ tsRight),oldSubtree) | (t',oldSubtree)<-tR],sTree) -- we only need one s but all possible s'
                                       in
-                                        if (maybeIndexOfSybtree == Nothing)
-                                            then
-                                                Nothing -- no substree could be reduced
-                                            else
-                                                let indexOfSybtree = fromJust maybeIndexOfSybtree
-                                                    Just (newSubtree,replacedSubtree) = replacedTs !! indexOfSybtree
-                                                in
-                                                    if (newSubtree == Nothing) -- no s' found so return s 
-                                                        then
-                                                            Just (Nothing,replacedSubtree)
-                                                        else
-                                                            Just (Just (Node symbol ((take indexOfSybtree ts) ++ [fromJust newSubtree] ++ (drop (indexOfSybtree+1) ts))),replacedSubtree) -- replace subtree
-            |otherwise              = let rowOfs' = find (\(_,q) -> (snd (fromJust maybeRowOfs) == q)) s in -- the current subtree is in Sigma(S)/S now try to replace it by s'
-                                        if (rowOfs' == Nothing)
-                                            then
-                                                Just (Nothing,tree) -- extracted s from the counterexample
-                                            else
-                                                Just (Just (fst $ fromJust rowOfs'),tree) -- replace s by s'
+                                        insertTrees [] ts (map tryReduce ts)
+            |otherwise              = (map (\(t,_) -> (t,t)) $ filter (\(_,q) -> (snd (fromJust maybeRowOfs) == q)) s,tree) -- the current subtree is in Sigma(S)/S now return all possible s'
                 where maybeRowOfs = find (\(stree,_) -> tree == stree) sigmaS
 
 
@@ -726,23 +721,21 @@ outputExtractInit teacher counterexample = do
                 return ()
 
 
-outputExtractFill :: Teacher t => t -> Tree String -> Tree String -> [(Tree String, [Bool])] -> [(Tree String, [Bool])] -> StateT (ObservationTable,GraphicUserInterface) IO () 
-outputExtractFill teacher counterexample subtree  s sigmaS = do
+outputExtractFill :: Teacher t => t -> Tree String -> Tree String -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO () 
+outputExtractFill teacher counterexample subtree  s' = do
                 (obs,GUI (dialog,observationTableOut,box,status,frameStatus,Extract (dialogExtract,vBox1,vBox2,vBox3))) <- get
-                let Just (_,rowOfs) = find (\(tree,_) -> (tree == subtree)) sigmaS
-                    Just rowOfs' = find (\(_,q) -> (rowOfs == q)) s in do
-                    label1 <- lift $ labelNew (Just (nicerShow counterexample))
-                    label2 <- lift $ labelNew (Just (nicerShow subtree))
-                    label3 <- lift $ labelNew (Just (nicerShow $ fst rowOfs'))
-                    lift $ boxPackStart vBox1 label1 PackNatural 0
-                    lift $ boxPackStart vBox2 label2 PackNatural 0
-                    lift $ boxPackStart vBox3 label3 PackNatural 0
+                label1 <- lift $ labelNew (Just (nicerShow counterexample))
+                label2 <- lift $ labelNew (Just (nicerShow subtree))
+                label3 <- lift $ labelNew (Just (nicerShow s'))
+                lift $ boxPackStart vBox1 label1 PackNatural 0
+                lift $ boxPackStart vBox2 label2 PackNatural 0
+                lift $ boxPackStart vBox3 label3 PackNatural 0
 
 
-                    lift $ widgetShowAll dialogExtract
-                    ans <- lift $ dialogRun dialogExtract
-                    --put (obs,GUI (dialog,observationTableOut,box,status,frameStatus,extractOut,boxExtract))
-                    return ()
+                lift $ widgetShowAll dialogExtract
+                ans <- lift $ dialogRun dialogExtract
+                --put (obs,GUI (dialog,observationTableOut,box,status,frameStatus,extractOut,boxExtract))
+                return ()
 
 
 outputExtractDelete :: Teacher t => t -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO () 
@@ -809,7 +802,7 @@ lastStep = "Close"
 addContext context = "The context\n" ++ showContext context ++ "\nwill be added to C."
 addTree tree = "The tree\n" ++ nicerShow tree ++ "\nwill be added to S."
 notCorrect tree = "The automaton is not correct. The given counterexample is\n" ++ nicerShow tree
-extracted tree = "The tree\n" ++ nicerShow tree ++ "\nwas extracet and will be added to S."
+extracted tree = "The tree\n" ++ nicerShow tree ++ "\nwas extracted and will be added to S."
 
 
 -- colors for table
