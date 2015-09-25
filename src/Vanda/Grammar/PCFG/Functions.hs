@@ -95,7 +95,7 @@ equals _ _ _ _ = False
 
 
 -- Schnitt Grammatik + String
-
+-- | Computes the intersection of a PCFG and a Terminal String, using 'earley\''
 intersect :: (Ord a, Show a) => PCFG a String -> String -> PCFG (Int,a,Int) String
 intersect p s = let (el,w) = earley' (productions p) label (fromList 1 $ words s) (map fst $ startsymbols p) in
                     PCFG (mapLabels (mapHEi fst) el) (map (\(x,y) -> ((0,x,(length (words s))),y)) $ startsymbols p) (weights p)
@@ -104,31 +104,16 @@ intersect p s = let (el,w) = earley' (productions p) label (fromList 1 $ words s
 
 -- EM Algorithmus
 
-train :: PCFG String String -> [String] -> String
-train = undefined
+train :: PCFG String String -> [String] -> PCFG String String 
+train pcfg@(PCFG prod ss weight) corpus = 
+  PCFG prod ss (VG.convert (forestEM (map snd . partition $ edgesEL prod) (map (intersect' pcfg) corpus) ident (\ _ x -> x >= 10) (VG.convert weight)))
+  where intersect' :: PCFG String String -> String -> ((Int,String,Int),EdgeList (Int,String,Int) [Either Int String] Int,Double)
+        intersect' p s = let p' = intersect p s in
+                             (fst . head $ startsymbols p',productions p',1.0)
 
 
 -- * n best derivations
-data Deriv a b 
-  = DNode a [Deriv a b] | DLeaf b deriving Show
-  
-root :: Deriv a a -> a
-root (DLeaf x) = x
-root (DNode x _) = x
-
-derivToTree :: Deriv a a -> Tree a
-derivToTree (DLeaf x) = T.Node x []
-derivToTree (DNode x l) = T.Node x (map derivToTree l)
-
-treeToDeriv :: Tree a -> Deriv a a
-treeToDeriv (Node x li) 
-  | length li == 0 = DLeaf x
-  | otherwise      = DNode x (map treeToDeriv li)
-
-
-bestDerivsAsString :: (PennFamily a, Ord a) => PCFG a a -> Int -> String
-bestDerivsAsString p n = T.unpack . unparsePenn . map (derivToTree . fst) $ bestDerivations p n
-
+-- | Computes the n best derivations, using 'bests'.
 bestDerivations :: (Ord nonterminalType, Eq terminalType) => PCFG nonterminalType terminalType -> Int -> [(Deriv nonterminalType terminalType,Double)]
 bestDerivations pcfg n = map (\ c -> (extractDerivation $ deriv c, weight c)) candidates
   where candidates = take n . merge $ map (\ (x,y) -> map (scale y) (bmap M.! x)) (startsymbols pcfg)
