@@ -11,6 +11,7 @@ import Vanda.Features hiding (product)
 import Vanda.Corpus.Penn.Text
 import Vanda.Corpus.TreeTerm
 import Vanda.Corpus.SExpression
+import Data.Maybe
 import qualified Data.Map as M
 import qualified Data.Vector as V
 import qualified Data.Vector.Generic as VG
@@ -96,21 +97,40 @@ equals _ _ _ _ = False
 
 -- Schnitt Grammatik + String
 -- | Computes the intersection of a PCFG and a Terminal String, using 'earley\''
-intersect :: (Ord a, Show a) => PCFG a String -> String -> PCFG (Int,a,Int) String
-intersect p s = let (el,w) = earley' (productions p) label (fromList 1 $ words s) (map fst $ startsymbols p) in
-                    PCFG (mapLabels (mapHEi fst) el) (map (\(x,y) -> ((0,x,(length (words s))),y)) $ startsymbols p) (weights p)
+intersect :: (Ord a, Show a, Ord b, Show b) => PCFG a b -> [b] -> PCFG (Int,a,Int) b
+intersect p s = let (el,w) = earley' (productions p) label (fromList 1 s) (map fst $ startsymbols p) in
+                    PCFG (mapLabels (mapHEi fst) el) (map (\(x,y) -> ((0,x,(length (s))),y)) $ startsymbols p) (weights p)
                     
 
 
 -- EM Algorithmus
-
-train :: PCFG String String -> [String] -> PCFG String String 
-train pcfg@(PCFG prod ss weight) corpus = 
-  PCFG prod ss (VG.convert (forestEM (map snd . partition $ edgesEL prod) (map (intersect' pcfg) corpus) ident (\ _ x -> x >= 10) (VG.convert weight)))
-  where intersect' :: PCFG String String -> String -> ((Int,String,Int),EdgeList (Int,String,Int) [Either Int String] Int,Double)
+-- | Trains a PCFG with the EM algorithm on a given corpus and with a maximum number of iterations.
+train :: (Eq a, Ord a, Show a, Ord b, Show b) => PCFG a b -> [[b]] -> Int -> PCFG a b 
+train pcfg corpus n = let pcfg'@(PCFG prod ss weight) = toSingleSS pcfg in
+  fromSingleSS $ PCFG prod ss (VG.convert (forestEM (map snd . partition $ edgesEL prod) (map (intersect' pcfg') corpus) ident (\ _ x -> x <= n) (VG.convert weight)))
+  where intersect' :: (Ord a, Show a, Ord b, Show b) => PCFG (a) b -> [b] -> ((Int,a,Int),EdgeList (Int,a,Int) [Either Int b] Int,Double)
         intersect' p s = let p' = intersect p s in
                              (fst . head $ startsymbols p',productions p',1.0)
 
+toSingleSS :: Ord a => PCFG a b -> PCFG (Maybe a) b
+toSingleSS (PCFG prod ss weight) =
+  PCFG (EdgeList (S.union (S.map Just (nodesEL prod)) (S.singleton Nothing)) (map (mapHE Just) (edgesEL prod) ++ e')) [(Nothing,1.0)] (weight V.++ w')
+    where (e',w') = makeEdges ss (length weight)
+          makeEdges :: [(a,Double)] -> Int -> ([Hyperedge (Maybe a) [Either Int b] Int],V.Vector Double)
+          makeEdges [] _ = ([],V.empty)
+          makeEdges ((x,w):rest) i = let (hes,v) = makeEdges rest (i+1) in
+            ((mkHyperedge Nothing [Just x] [Left 0] i):hes,V.cons w v)
+  
+fromSingleSS :: (Ord a) => PCFG (Maybe a) b -> PCFG a b
+fromSingleSS (PCFG prod ss weight) = let (hes,ss,w) = fromSingleSS' (edgesEL prod) (V.map Just weight) in
+  PCFG (EdgeList (S.map fromJust $ S.filter isJust (nodesEL prod)) hes) ss (V.map fromJust $ V.filter (isJust) w)
+  where fromSingleSS' :: [Hyperedge (Maybe a) [Either Int b] Int] -> V.Vector (Maybe Double) -> ([Hyperedge a [Either Int b] Int],[(a,Double)],V.Vector (Maybe Double))
+        fromSingleSS' [] w = ([],[],w)
+        fromSingleSS' (he:rest) w 
+          | isJust (to he) = ((mapHE fromJust he):hes',ss',w)
+          | otherwise      = (hes',(fromJust $ from1 he,fromJust $ w V.! (ident he)):ss',w V.// [(ident he,Nothing)])
+          where (hes',ss',w') = fromSingleSS' rest w 
+            
 
 -- * n best derivations
 -- | Computes the n best derivations, using 'bests'.
