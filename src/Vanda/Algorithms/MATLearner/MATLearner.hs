@@ -257,6 +257,7 @@ closify (x:xs) teacher = do
 -- | check whether the current ObservationTable represents the correct Automaton and process counterexample
 correctify :: Teacher t => t -> StateT (ObservationTable,GraphicUserInterface) IO Bool
 correctify teacher = do
+                    fillStatus 4
                     (obs@(OT (s,contexts,mapping)),out) <- get
                     sigma <- lift $ getSigma teacher
                     let automaton = generateAutomaton obs sigma in do
@@ -302,19 +303,21 @@ correctify teacher = do
 -- | extract subtree that has to be added to the observation table
 extract :: Teacher t => t -> [(Tree String,[Bool])] -> [(Tree String,[Bool])] -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO (Tree String)
 extract teacher s sigmaS counterexample = do
+                                    outputExtractFill1 teacher counterexample
                                     newcounterexample <- getNewCandidate newCECandidates
                                     if newcounterexample == Nothing
-                                        then
+                                        then do
+                                            outputExtractFill3 teacher sTree
                                             return sTree
                                         else do
-                                            outputExtractFill teacher counterexample sTree (snd $ fromJust newcounterexample)
+                                            outputExtractFill2 teacher sTree (snd $ fromJust newcounterexample)
                                             extract teacher s sigmaS (fst $ fromJust newcounterexample)
     where 
         (newCECandidates,sTree) = tryReduce counterexample
 
         -- check whether for some s' the tree is still a counterexample
         getNewCandidate :: [(Tree String,Tree String)] -> StateT (ObservationTable,GraphicUserInterface) IO (Maybe (Tree String,Tree String))
-        getNewCandidate []             = return Nothing
+        getNewCandidate []             = return Nothing -- no s' to s found that fulfills all conditions
         getNewCandidate ((x,s'Tree):xs) = do
                                     updateMappingExtract teacher x -- store membership of new tree in mapping
                                     (OT (s,contexts,mapping),out) <- get
@@ -684,7 +687,6 @@ outputUpdateMapping teacher tree = do
 
 outputExtractInit :: Teacher t => t -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO ()  
 outputExtractInit teacher counterexample = do
-                fillStatus 4
                 (obs,GUI (dialog0,_,_,_,_,_)) <- get
                 lift $ displayDialog (notCorrect counterexample) nextStep
                 ans <- lift $ dialogRun dialog0
@@ -709,25 +711,51 @@ outputExtractInit teacher counterexample = do
                 lift $ boxPackStart hBox vBox3 PackNatural 0
 
                 -- fill initial row
-                label1 <- lift $ labelNew (Just "Counterexample")
-                label2 <- lift $ labelNew (Just "Replaced subtree")
-                label3 <- lift $ labelNew (Just "Inserted subtree")
-                lift $ boxPackStart vBox1 label1 PackNatural 0
-                lift $ boxPackStart vBox2 label2 PackNatural 0
-                lift $ boxPackStart vBox3 label3 PackNatural 0
+                label1 <- lift $ labelNew (Just $ extractTableHead 1)
+                label2 <- lift $ labelNew (Just $ extractTableHead 2)
+                label3 <- lift $ labelNew (Just $ extractTableHead 3)
+                lift $ boxPackStart vBox1 label1 PackNatural 5
+                lift $ boxPackStart vBox2 label2 PackNatural 5
+                lift $ boxPackStart vBox3 label3 PackNatural 5
                 
                 lift $ widgetShowAll dialogExtract
                 put (obs,GUI (dialog,observationTableOut,box,status,frameStatus,Extract (dialogExtract,vBox1,vBox2,vBox3)))
                 return ()
 
 
-outputExtractFill :: Teacher t => t -> Tree String -> Tree String -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO () 
-outputExtractFill teacher counterexample subtree  s' = do
+outputExtractFill1 :: Teacher t => t -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO () 
+outputExtractFill1 teacher counterexample = do
                 (obs,GUI (dialog,observationTableOut,box,status,frameStatus,Extract (dialogExtract,vBox1,vBox2,vBox3))) <- get
                 label1 <- lift $ labelNew (Just (nicerShow counterexample))
+                lift $ boxPackStart vBox1 label1 PackNatural 0
+                
+
+                lift $ widgetShowAll dialogExtract
+                ans <- lift $ dialogRun dialogExtract
+                --put (obs,GUI (dialog,observationTableOut,box,status,frameStatus,extractOut,boxExtract))
+                return ()
+
+
+outputExtractFill2 :: Teacher t => t -> Tree String -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO () 
+outputExtractFill2 teacher subtree  s' = do
+                (obs,GUI (dialog,observationTableOut,box,status,frameStatus,Extract (dialogExtract,vBox1,vBox2,vBox3))) <- get
                 label2 <- lift $ labelNew (Just (nicerShow subtree))
                 label3 <- lift $ labelNew (Just (nicerShow s'))
-                lift $ boxPackStart vBox1 label1 PackNatural 0
+                lift $ boxPackStart vBox2 label2 PackNatural 0
+                lift $ boxPackStart vBox3 label3 PackNatural 0
+
+
+                lift $ widgetShowAll dialogExtract
+                ans <- lift $ dialogRun dialogExtract
+                --put (obs,GUI (dialog,observationTableOut,box,status,frameStatus,extractOut,boxExtract))
+                return ()
+
+
+outputExtractFill3 :: Teacher t => t -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO () 
+outputExtractFill3 teacher subtree = do
+                (obs,GUI (dialog,observationTableOut,box,status,frameStatus,Extract (dialogExtract,vBox1,vBox2,vBox3))) <- get
+                label2 <- lift $ labelNew (Just (nicerShow subtree))
+                label3 <- lift $ labelNew (Just "-")
                 lift $ boxPackStart vBox2 label2 PackNatural 0
                 lift $ boxPackStart vBox3 label3 PackNatural 0
 
@@ -786,6 +814,11 @@ status 2 = "Closed"
 status 3 = "Consistent"
 status 4 = "Correct"
 status 5 = "Extract"
+
+extractTableHead :: Int -> String
+extractTableHead 1 = "Counterexample"
+extractTableHead 2 = "Replaced subtree (s)"
+extractTableHead 3 = "Inserted subtree (s')"
 
 menueTitle = "MATLearner"
 observationTableDialogTitle = "MATLearner"
