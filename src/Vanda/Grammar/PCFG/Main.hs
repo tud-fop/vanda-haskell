@@ -13,7 +13,6 @@ import Vanda.Grammar.PCFG.Functions
 import Vanda.Grammar.PCFG.Util
 import Vanda.Grammar.PCFG.PCFG
 import Vanda.Corpus.Penn.Text
-import Vanda.Corpus.TreeTerm
 import Vanda.Corpus.SExpression
 import qualified Data.Text.Lazy as T
 import Text.Printf
@@ -134,33 +133,35 @@ mainArgs (Help cs) = putStr cs
 mainArgs (Extract treebank outgrammar bout)
   = do
   e <- parseFromFile pSExpressions treebank 
-  writeGrammar outgrammar . extractPCFG $ map (treeToDeriv . toTree) e
+  writeGrammar bout outgrammar . extractPCFG $ map (treeToDeriv . toTree) e
   
 mainArgs (Train ingrammar stringcorpus outgrammar nit bin bout)
   = do
-    g <- readGrammar ingrammar
+    g <- readGrammar bin ingrammar
     s <- readFile stringcorpus
-    writeGrammar outgrammar $ train g (map words $ lines s) nit
+    writeGrammar bout outgrammar $ train g (map words $ lines s) nit
   
-mainArgs (Bests n ingrammar yld probs bin)
+mainArgs (Bests n ingrammar yld0 probs0 bin)
   = do
-    g <- readGrammar ingrammar
-    putStr $ toStr (bestDerivations g n) yld probs
+    g <- readGrammar bin ingrammar
+    putStr $ toStr (bestDerivations g n) yld0 probs0
     where toStr :: [(Deriv String String,Double)] -> Bool -> Bool -> String
           toStr [] _ _ = ""
-          toStr ((deriv,weight):rest) yld probs = 
-            (if probs then printf "%.3f   " weight
+          toStr ((deriv,weight):rest) yld1 probs1 = 
+            (if probs1 then printf "%.3f   " weight
                       else "")
-            ++ (if yld then (T.unpack $ yield [derivToTree deriv])
+            ++ (if yld1 then (T.unpack $ yield [derivToTree deriv])
                        else (T.unpack $ unparsePenn [derivToTree deriv]))
-            ++ toStr rest yld probs
+            ++ toStr rest yld1 probs1
                         
-mainArgs (Intersect ingrammar string outgrammar bin bout)
+mainArgs (Intersect ingrammar string0 outgrammar bin bout)
   = do
-    g <- readGrammar ingrammar
-    writeGrammar outgrammar (intersect g $ words string)
+    g <- readGrammar bin ingrammar
+    writeGrammar bout outgrammar (intersect g $ words string0)
   
 mainArgs (Convert ingrammar outgrammar bin bout)
-  = undefined
+  = do
+    g <- readGrammar bin ingrammar
+    writeGrammar bout outgrammar g
 
  
