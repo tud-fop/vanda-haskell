@@ -54,22 +54,13 @@ matLearner = do
 
     buttonInteractive <- buttonNew
     set buttonInteractive [buttonLabel := "Interactive Teacher"]
-
-    buttonInteractiveString <- buttonNew
-    set buttonInteractiveString [buttonLabel := "Interactive String Teacher"]
     
     buttonAutomaton <- buttonNew
     set buttonAutomaton [buttonLabel := "Automaton Teacher"]
 
-    buttonACorpus <- buttonNew
-    set buttonACorpus [buttonLabel := "Corpus Teacher"]
-
     
     boxPackStart hbox buttonInteractive PackNatural 0
-    boxPackStart hbox buttonInteractiveString PackNatural 0
     boxPackStart hbox buttonAutomaton PackNatural 0
-    boxPackStart hbox buttonACorpus PackNatural 0
-
 
 
     onClicked buttonInteractive $ main' Interactive
@@ -93,6 +84,7 @@ main' teacher = do
                 area <- dialogGetUpper dialog
                 -- horizontal growing box ,columns do not have the same width, column distance = 5
                 box <- hBoxNew False 5
+                vbox <- vBoxNew False 5
                 frameOT <- frameNew
                 frameStatus <- frameNew
                 
@@ -108,7 +100,8 @@ main' teacher = do
                 containerAdd frameOT observationTableOut
                 containerAdd frameStatus statusOut
                 boxPackStart box frameOT PackNatural 0
-                boxPackStart box frameStatus PackNatural 0
+                boxPackStart box vbox PackNatural 0
+                boxPackStart vbox frameStatus PackNatural 0
 
 
                 -- display components
@@ -303,14 +296,14 @@ correctify teacher = do
 -- | extract subtree that has to be added to the observation table
 extract :: Teacher t => t -> [(Tree String,[Bool])] -> [(Tree String,[Bool])] -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO (Tree String)
 extract teacher s sigmaS counterexample = do
-                                    outputExtractFill1 teacher counterexample
+                                    outputExtractFill1 teacher counterexample sTree
                                     newcounterexample <- getNewCandidate newCECandidates
                                     if newcounterexample == Nothing
                                         then do
-                                            outputExtractFill3 teacher sTree
+                                            outputExtractFill3 teacher
                                             return sTree
                                         else do
-                                            outputExtractFill2 teacher sTree (snd $ fromJust newcounterexample)
+                                            outputExtractFill2 teacher (snd $ fromJust newcounterexample)
                                             extract teacher s sigmaS (fst $ fromJust newcounterexample)
     where 
         (newCECandidates,sTree) = tryReduce counterexample
@@ -491,7 +484,8 @@ fillTableWithOT (contexts,sigmaTrees,sigmaSTrees,sigmaRows,sigmaSRows) = do
                             lift $ widgetModifyFont labelH2 (Just font)
                             lift $ tableAttachDefaults table labelH1 0 (2 + (length contexts)) 1 2
                             lift $ tableAttachDefaults table labelH2 0 (2 + (length contexts)) (2 + (length sigmaTrees)) (3 + (length sigmaTrees))
-                            lift $ tableAttachDefaults table labelV  1 2 0 (3 + (length (sigmaTrees ++ sigmaSTrees)))
+                            --lift $ tableAttachDefaults table labelV  1 2 0 (3 + (length (sigmaTrees ++ sigmaSTrees)))
+                            lift $ fillOneDim table (1,1) incV (replicate ((length (sigmaTrees ++ sigmaSTrees)) + 2) ("|",colorNormal)) False
 
 
                             lift $ containerAdd box table
@@ -690,7 +684,12 @@ outputExtractInit teacher counterexample = do
                 (obs,GUI (dialog0,_,_,_,_,_)) <- get
                 lift $ displayDialog (notCorrect counterexample) nextStep
                 ans <- lift $ dialogRun dialog0
+                sep1 <- lift $ vSeparatorNew
+                sep2 <- lift $ vSeparatorNew
 
+                seph1 <- lift $ hSeparatorNew
+                seph2 <- lift $ hSeparatorNew
+                seph3 <- lift $ hSeparatorNew
                 -- begin extraction
                 fillStatus 5
 
@@ -707,28 +706,36 @@ outputExtractInit teacher counterexample = do
 
                 lift $ containerAdd area hBox
                 lift $ boxPackStart hBox vBox1 PackNatural 0
+                lift $ boxPackStart hBox sep1 PackNatural 0
                 lift $ boxPackStart hBox vBox2 PackNatural 0
+                lift $ boxPackStart hBox sep2 PackNatural 0
                 lift $ boxPackStart hBox vBox3 PackNatural 0
 
                 -- fill initial row
                 label1 <- lift $ labelNew (Just $ extractTableHead 1)
                 label2 <- lift $ labelNew (Just $ extractTableHead 2)
                 label3 <- lift $ labelNew (Just $ extractTableHead 3)
-                lift $ boxPackStart vBox1 label1 PackNatural 5
-                lift $ boxPackStart vBox2 label2 PackNatural 5
-                lift $ boxPackStart vBox3 label3 PackNatural 5
+                lift $ boxPackStart vBox1 label1 PackNatural 0
+                lift $ boxPackStart vBox1 seph1 PackNatural 0
+                lift $ boxPackStart vBox2 label2 PackNatural 0
+                lift $ boxPackStart vBox2 seph2 PackNatural 0
+                lift $ boxPackStart vBox3 label3 PackNatural 0
+                lift $ boxPackStart vBox3 seph3 PackNatural 0
                 
                 lift $ widgetShowAll dialogExtract
                 put (obs,GUI (dialog,observationTableOut,box,status,frameStatus,Extract (dialogExtract,vBox1,vBox2,vBox3)))
                 return ()
 
 
-outputExtractFill1 :: Teacher t => t -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO () 
-outputExtractFill1 teacher counterexample = do
+outputExtractFill1 :: Teacher t => t -> Tree String -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO () 
+outputExtractFill1 teacher counterexample s = do
                 (obs,GUI (dialog,observationTableOut,box,status,frameStatus,Extract (dialogExtract,vBox1,vBox2,vBox3))) <- get
                 label1 <- lift $ labelNew (Just (nicerShow counterexample))
+                label2 <- lift $ labelNew (Just (nicerShow s))
                 lift $ boxPackStart vBox1 label1 PackNatural 0
-                
+                lift $ widgetShowAll dialogExtract
+                ans <- lift $ dialogRun dialogExtract
+                lift $ boxPackStart vBox2 label2 PackNatural 0
 
                 lift $ widgetShowAll dialogExtract
                 ans <- lift $ dialogRun dialogExtract
@@ -736,12 +743,10 @@ outputExtractFill1 teacher counterexample = do
                 return ()
 
 
-outputExtractFill2 :: Teacher t => t -> Tree String -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO () 
-outputExtractFill2 teacher subtree  s' = do
+outputExtractFill2 :: Teacher t => t -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO () 
+outputExtractFill2 teacher s' = do
                 (obs,GUI (dialog,observationTableOut,box,status,frameStatus,Extract (dialogExtract,vBox1,vBox2,vBox3))) <- get
-                label2 <- lift $ labelNew (Just (nicerShow subtree))
                 label3 <- lift $ labelNew (Just (nicerShow s'))
-                lift $ boxPackStart vBox2 label2 PackNatural 0
                 lift $ boxPackStart vBox3 label3 PackNatural 0
 
 
@@ -751,12 +756,10 @@ outputExtractFill2 teacher subtree  s' = do
                 return ()
 
 
-outputExtractFill3 :: Teacher t => t -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO () 
-outputExtractFill3 teacher subtree = do
+outputExtractFill3 :: Teacher t => t -> StateT (ObservationTable,GraphicUserInterface) IO () 
+outputExtractFill3 teacher = do
                 (obs,GUI (dialog,observationTableOut,box,status,frameStatus,Extract (dialogExtract,vBox1,vBox2,vBox3))) <- get
-                label2 <- lift $ labelNew (Just (nicerShow subtree))
                 label3 <- lift $ labelNew (Just "-")
-                lift $ boxPackStart vBox2 label2 PackNatural 0
                 lift $ boxPackStart vBox3 label3 PackNatural 0
 
 
