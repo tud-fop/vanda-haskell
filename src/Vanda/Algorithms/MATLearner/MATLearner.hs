@@ -260,7 +260,7 @@ correctify teacher = do
                                 outputCorrect teacher automaton
                                 return True
                             else do
-                                counterexample <- lift $ checkCE (fromJust maybeCounterexample) mapping sigma automaton -- errors in the counterexample can only occor with an interactive teacher (hopefully)
+                                counterexample <- lift $ checkCE maybeCounterexample mapping sigma automaton -- errors in the counterexample can only occor with an interactive teacher (hopefully)
                                 let mapping' = insert counterexample (not (accepts automaton counterexample)) mapping in do -- insert membership for counterexample
                                     put(OT(s,contexts,mapping'),out)
                                     outputExtractInit teacher counterexample
@@ -278,17 +278,21 @@ correctify teacher = do
                             where
                                 -- | check whther the given counterexample is a correct tree (check ranks of node labels) and whether it is actually a counterexample and if not ask for a new one
                                     -- TODO right now each time the automaton is printed out aigain
-                                checkCE :: Tree String -> Map (Tree String) Bool -> [(String,Int)] -> Automaton Int -> IO (Tree String)
-                                checkCE counterexample mapping sigma automaton = if (checkValidity counterexample sigma) /= Nothing
+                                checkCE :: Maybe (Tree String) -> Map (Tree String) Bool -> [(String,Int)] -> Automaton Int -> IO (Tree String)
+                                checkCE Nothing               mapping sigma automaton = do
+                                                                                displayDialog counterexampleNothing tryAgain
+                                                                                newcounterexample <- conjecture teacher automaton
+                                                                                checkCE newcounterexample mapping sigma automaton
+                                checkCE (Just counterexample) mapping sigma automaton = if (checkValidity counterexample sigma) /= Nothing
                                                                                     then do -- symbols have wrong ranks
-                                                                                        putStrLn "The counterexample is not a valid tree."
+                                                                                        displayDialog counterexampleNoTree tryAgain
                                                                                         newcounterexample <- conjecture teacher automaton
-                                                                                        checkCE (fromJust newcounterexample) mapping sigma automaton
+                                                                                        checkCE newcounterexample mapping sigma automaton
                                                                                     else if (member counterexample mapping) && (mapping ! counterexample /= (not (accepts automaton counterexample)))
                                                                                         then do -- the conjectured automaton behaves correctly for the given counterexample
-                                                                                            putStrLn "Membership is already known and this tree is not a counterexample!"
+                                                                                            displayDialog counterexampleMember tryAgain
                                                                                             newcounterexample <- conjecture teacher automaton
-                                                                                            checkCE (fromJust newcounterexample) mapping sigma automaton
+                                                                                            checkCE newcounterexample mapping sigma automaton
                                                                                         else
                                                                                             return counterexample
 
@@ -845,6 +849,11 @@ addContext context = "The context\n" ++ showContext context ++ "\nwill be added 
 addTree tree = "The tree\n" ++ nicerShow tree ++ "\nwill be added to S."
 notCorrect tree = "The automaton is not correct. The given counterexample is\n" ++ nicerShow tree
 extracted tree = "The tree\n" ++ nicerShow tree ++ "\nwas extracted and will be added to S."
+
+counterexampleNothing = "Please enter a counterexample"
+counterexampleNoTree = "The counterexample is not a valid tree."
+counterexampleMember = "Membership is already known and this tree is not a counterexample!"
+tryAgain = "Try again."
 
 
 -- colors for table
