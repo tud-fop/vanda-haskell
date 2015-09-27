@@ -53,10 +53,10 @@ matLearner = do
 
 
     buttonInteractive <- buttonNew
-    set buttonInteractive [buttonLabel := "Interactive Teacher"]
+    set buttonInteractive [buttonLabel := buttonInteractiveText]
     
     buttonAutomaton <- buttonNew
-    set buttonAutomaton [buttonLabel := "Automaton Teacher"]
+    set buttonAutomaton [buttonLabel := buttonAutomatonText]
 
     
     boxPackStart hbox buttonInteractive PackNatural 0
@@ -90,9 +90,9 @@ main' teacher = do
                 
                 -- set frame style and text
                 frameSetShadowType frameOT ShadowOut
-                frameSetLabel frameOT "Observation Table"
+                frameSetLabel frameOT observationTableFrame
                 frameSetShadowType frameStatus ShadowOut
-                frameSetLabel frameStatus "Status"
+                frameSetLabel frameStatus statusFrame
 
                 -- place components
                 dialogAddButton dialog nextStep ResponseOk
@@ -802,6 +802,7 @@ displayDialog labelText buttonText = do
 
 
 -- * colors and texts
+
 inactiveColor = Color 52254 49220 49220
 
 activeColor :: Int -> Color
@@ -823,6 +824,11 @@ extractTableHead 1 = "Counterexample"
 extractTableHead 2 = "Replaced subtree (s)"
 extractTableHead 3 = "Inserted subtree (s')"
 
+buttonInteractiveText = "Interactive Teacher"
+buttonAutomatonText = "Automaton Teacher"
+
+observationTableFrame = "Observation Table"
+statusFrame = "Status"
 menueTitle = "MATLearner"
 observationTableDialogTitle = "MATLearner"
 infoDialog = "MATLearner"
