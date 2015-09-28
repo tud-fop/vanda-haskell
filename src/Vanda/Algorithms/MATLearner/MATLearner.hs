@@ -483,7 +483,7 @@ fillTableWithOT (contexts,sigmaTrees,sigmaSTrees,sigmaRows,sigmaSRows) = do
                             labelH1 <- lift $ labelNew (Just (replicate ((length contexts) + 1 + (maximum (map (length . fst) (sigmaTrees ++ sigmaSTrees)))) '-'))
                             labelH2 <- lift $ labelNew (Just (replicate ((length contexts) + 1 + (maximum (map (length . fst) (sigmaTrees ++ sigmaSTrees)))) '-'))
                             labelV <- lift $ labelNew (Just (concat (replicate ((length (sigmaTrees ++ sigmaSTrees)) + 2 + (maximum (map (length . fst) contexts))) "|\n")))
-                            font <- lift $ fontDescriptionFromString "Courier 15"
+                            font <- lift $ fontDescriptionFromString fontObservationtable
                             lift $ widgetModifyFont labelH1 (Just font)
                             lift $ widgetModifyFont labelH2 (Just font)
                             lift $ tableAttachDefaults table labelH1 0 (2 + (length contexts)) 1 2
@@ -508,7 +508,7 @@ fillTableWithOT (contexts,sigmaTrees,sigmaSTrees,sigmaRows,sigmaSRows) = do
                                                                                 widgetModifyFg label StateNormal color
                                                                                 tableAttachDefaults table label column (column + 1) row (row + 1)
                                                                                 -- change fonts
-                                                                                font <- fontDescriptionFromString "Courier 15"
+                                                                                font <- fontDescriptionFromString fontObservationtable
                                                                                 widgetModifyFont label (Just font)
 
                                                                                 fillOneDim table (f (row,column)) f xs rotated
@@ -601,9 +601,14 @@ outputNotConsistent teacher s1 s2 s1' s2' c' newC = do
                         contextsOut = map goContext contextsOutTrees
                         
                         goRow :: ((String,Tree String),[String]) -> ((String,Color),[(String,Color)])
-                        goRow ((treeStr,tree),row)
-                            | elem tree [s1,s2,s1',s2'] = (notConsistentColor treeStr,goCol contexts row)
+                        goRow (ele@(treeStr,tree),row)
+                            | elem tree [s1,s2,s1',s2'] = (notConsistentColor (fst $ goElem s1 "s1" $ goElem s2 "s2" $ goElem s1' "s1'" $ goElem s2' "s2'" ele),goCol contexts row)
                             | otherwise                 = (noColor treeStr,map noColor row)
+
+                        goElem :: Tree String -> String -> (String,Tree String) -> (String,Tree String)
+                        goElem sTree sTreeText (treeStr,tree)
+                            | tree == sTree     = (sTreeText ++ "=" ++ treeStr,tree)
+                            | otherwise         = (treeStr,tree)
 
                         goCol :: [Context String] -> [String] -> [(String,Color)]
                         goCol [] [] = []
@@ -827,6 +832,8 @@ extractTableHead :: Int -> String
 extractTableHead 1 = "Counterexample"
 extractTableHead 2 = "Replaced subtree (s)"
 extractTableHead 3 = "Inserted subtree (s')"
+
+fontObservationtable = "Courier 15"
 
 buttonInteractiveText = "Interactive Teacher"
 buttonAutomatonText = "Automaton Teacher"
