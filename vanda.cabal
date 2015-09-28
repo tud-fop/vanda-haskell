@@ -98,6 +98,10 @@ library
     , Vanda.Grammar.NGrams.VandaNGrams
     , Vanda.Grammar.NGrams.WTA
     , Vanda.Grammar.NGrams.WTA_BHPS
+    , Vanda.Grammar.PCFG.PCFG
+    , Vanda.Grammar.PCFG.IO
+    , Vanda.Grammar.PCFG.Functions
+    , Vanda.Grammar.PCFG.Main
     , Vanda.Grammar.XRS.Binarize
     , Vanda.Grammar.XRS.Functions
     , Vanda.Grammar.XRS.GHKM

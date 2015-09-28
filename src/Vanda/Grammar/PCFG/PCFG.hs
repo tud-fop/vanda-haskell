@@ -1,9 +1,26 @@
+{-|
+Module:      Vanda.Grammar.PCFG.PCFG
+Description: data structures of /PCFG/
+Copyright:   (c) Technische Universität Dresden 2015
+License:     Redistribution and use in source and binary forms, with
+             or without modification, is ONLY permitted for teaching
+             purposes at Technische Universität Dresden AND IN
+             COORDINATION with the Chair of Foundations of Programming.
+Maintainer:  markus.napierkowski@mailbox.tu-dresden.de
+Stability:   unknown
+
+This module contains data structures used for PCFGs and a 
+few simple functions.
+-}
+
 module Vanda.Grammar.PCFG.PCFG where
 
-import Vanda.Hypergraph
+
+import           Vanda.Hypergraph
+import           Data.Tree
 import qualified Data.Vector as V
-import Data.Either
-import Data.Tree
+
+
 
 data PCFG nonterminalType terminalType = 
   PCFG 
@@ -12,9 +29,10 @@ data PCFG nonterminalType terminalType =
   , weights :: V.Vector Double
   }   
 
+-- | Partition the identifiers of a list of hyperedges by their 'to' node
 partition :: Eq a => [Hyperedge a c Int] -> [(a,[Int])]
 partition [] = []
-partition ((he):rest) = insert (ident he) (to he) (partition rest)
+partition ((he):rest0) = insert (ident he) (to he) (partition rest0)
   where insert :: Eq a => Int -> a -> [(a,[Int])] -> [(a,[Int])]
         insert i s [] = [(s,[i])]
         insert i s ((s',l):rest) 
@@ -22,7 +40,7 @@ partition ((he):rest) = insert (ident he) (to he) (partition rest)
           | otherwise = (s',l):(insert i s rest)
           
 data Deriv a b 
-  = DNode a [Deriv a b] | DLeaf b deriving Show
+  = DNode a [Deriv a b] | DLeaf b
   
 root :: Deriv a a -> a
 root (DLeaf x) = x

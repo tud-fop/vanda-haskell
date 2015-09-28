@@ -1,5 +1,17 @@
 {-# OPTIONS_GHC -fno-warn-incomplete-record-updates #-}
 
+{-|
+Module:      Vanda.Grammar.PCFG.PCFG
+Description: program structure of the /PCFG/ part of Vanda
+Copyright:   (c) Technische Universität Dresden 2015
+License:     Redistribution and use in source and binary forms, with
+             or without modification, is ONLY permitted for teaching
+             purposes at Technische Universität Dresden AND IN
+             COORDINATION with the Chair of Foundations of Programming.
+Maintainer:  markus.napierkowski@mailbox.tu-dresden.de
+Stability:   unknown
+
+-}
 module Vanda.Grammar.PCFG.Main
 ( main
 , mainArgs
@@ -9,13 +21,14 @@ module Vanda.Grammar.PCFG.Main
 
 import System.Console.CmdArgs.Explicit
 import System.Console.CmdArgs.Explicit.Misc
-import Vanda.Grammar.PCFG.Functions
-import Vanda.Grammar.PCFG.Util
-import Vanda.Grammar.PCFG.PCFG
-import Vanda.Corpus.Penn.Text
-import Vanda.Corpus.SExpression
+
 import qualified Data.Text.Lazy as T
 import Text.Printf
+import Vanda.Corpus.Penn.Text
+import Vanda.Corpus.SExpression
+import Vanda.Grammar.PCFG.Functions
+import Vanda.Grammar.PCFG.IO
+import Vanda.Grammar.PCFG.PCFG
 
 
 data Args
@@ -29,7 +42,7 @@ data Args
     { inputGrammar :: FilePath
     , stringCorpus :: FilePath
     , outputGrammar :: FilePath
-    , iterations :: Int
+    , its :: Int
     , binaryInput :: Bool
     , binaryOutput :: Bool
     }
@@ -57,35 +70,58 @@ data Args
 
 cmdArgs :: Mode Args
 cmdArgs
-  = modes "pcfg" (Help $ defaultHelp cmdArgs) "algorithms for extracting and training PCFGs"
+  = modes "pcfg" (Help $ defaultHelp cmdArgs) 
+    "algorithms for extracting and training PCFGs"
   [ (modeEmpty $ Extract undefined undefined False)
     { modeNames = ["extract"]
     , modeHelp = "Extracts a PCFG from a given Treebank."
-    , modeArgs = ( [ flagArgOutputGrammar{argRequire = True}, flagArgTreeBank{argRequire = True} ], Nothing )
+    , modeArgs = ( [ flagArgOutputGrammar{argRequire = True}
+                   , flagArgTreeBank{argRequire = True} 
+                   ]
+                 , Nothing 
+                 )
     , modeGroupFlags = toGroup [ flagOutBinary ]
     }
   , (modeEmpty $ Train undefined undefined undefined undefined False False)
     { modeNames = ["train"]
     , modeHelp = "Trains a given PCFG with a Terminal String Corpus."
-    , modeArgs = ( [ flagArgInputGrammar{argRequire = True},flagArgOutputGrammar{argRequire = True}, flagArgStringCorpus{argRequire = True}, flagArgIterations{argRequire = True} ], Nothing )
+    , modeArgs = ( [ flagArgInputGrammar{argRequire = True}
+                   , flagArgOutputGrammar{argRequire = True}
+                   , flagArgStringCorpus{argRequire = True}
+                   , flagArgIterations{argRequire = True} 
+                   ]
+                 , Nothing 
+                 )
     , modeGroupFlags = toGroup [ flagOutBinary, flagInBinary ]
     }
   , (modeEmpty $ Bests undefined undefined False False False)
     { modeNames = ["bests"]
     , modeHelp = "Extracts the N best derivations from a PCFG."
-    , modeArgs = ( [ flagArgInputGrammar{argRequire = True}, flagArgN{argRequire = True} ], Nothing )
+    , modeArgs = ( [ flagArgInputGrammar{argRequire = True}
+                   , flagArgN{argRequire = True} 
+                   ]
+                 , Nothing
+                 )
     , modeGroupFlags = toGroup [ flagInBinary, flagYield, flagProbs ]
     }
   , (modeEmpty $ Intersect undefined undefined undefined False False)
     { modeNames = ["intersect"]
     , modeHelp = "Intersects a Terminal String and a PCFG."
-    , modeArgs = ( [ flagArgInputGrammar{argRequire = True}, flagArgOutputGrammar{argRequire = True}, flagArgString{argRequire = True} ], Nothing )
+    , modeArgs = ( [ flagArgInputGrammar{argRequire = True}
+                   , flagArgOutputGrammar{argRequire = True}
+                   , flagArgString{argRequire = True} 
+                   ]
+                 , Nothing )
     , modeGroupFlags = toGroup [ flagOutBinary, flagInBinary ]
     }
   , (modeEmpty $ Convert undefined undefined False False)
     { modeNames = ["convert"]
-    , modeHelp = "Converts a pcfg file from binary format to text format or vice-versa."
-    , modeArgs = ( [ flagArgInputGrammar{argRequire = True}, flagArgOutputGrammar{argRequire = True} ], Nothing )
+    , modeHelp = "Converts a pcfg file from binary format to text format\
+                 \or vice-versa."
+    , modeArgs = ( [ flagArgInputGrammar{argRequire = True}
+                   , flagArgOutputGrammar{argRequire = True} 
+                   ]
+                 , Nothing )
     , modeGroupFlags = toGroup [ flagOutBinary, flagInBinary ]
     }
   ]
@@ -97,7 +133,7 @@ cmdArgs
     flagArgOutputGrammar
       = flagArg (\ a x -> Right x{outputGrammar = a}) "<Output Grammar>"
     flagArgIterations
-      = flagArg (\ a x -> Right x{iterations = read a}) "<Number of Iterations>"
+      = flagArg (\ a x -> Right x{its = read a}) "<Number of Iterations>"
     flagArgN
       = flagArg (\ a x -> Right x{number = read a}) "<N>"
     flagArgString
@@ -149,9 +185,9 @@ mainArgs (Bests n ingrammar yld0 probs0 bin)
           toStr [] _ _ = ""
           toStr ((deriv,weight):rest) yld1 probs1 = 
             (if probs1 then printf "%.3f   " weight
-                      else "")
+                       else "")
             ++ (if yld1 then (T.unpack $ yield [derivToTree deriv])
-                       else (T.unpack $ unparsePenn [derivToTree deriv]))
+                        else (T.unpack $ unparsePenn [derivToTree deriv]))
             ++ toStr rest yld1 probs1
                         
 mainArgs (Intersect ingrammar string0 outgrammar bin bout)
