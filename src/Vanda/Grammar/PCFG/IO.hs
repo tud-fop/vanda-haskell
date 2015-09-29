@@ -261,7 +261,7 @@ weightPos c [] = c
 weightPos c (he:rest)
   | c <= length (L.intercalate " " (from he)) = 
       weightPos (length (L.intercalate " " (from he))) rest
-weightPos _ (_ : _) = errorHere "weightPos" "Pattern not matched"
+  | otherwise = weightPos c rest
    
 -- | This class is used to display PCFGs with strings as their 
 -- (non-)terminal type without quotation marks around the symbols
