@@ -78,7 +78,7 @@ readGrammar bin
 
 -- | Write a grammar to the given text format, or to a binary format.
 writeGrammar 
-  :: (Ord a, Show a, Ord b, Show b, Binary a, Binary b) 
+  :: (Ord a, Show a, Ord b, Show b, ToString a b, Binary a, Binary b) 
     => Bool -- ^ Read from a binary format
     -> FilePath -- ^ Path to the file
     -> PCFG a b -- ^ The grammar to be written
@@ -268,23 +268,23 @@ weightPos c (he:rest)
 class (ToString a b) where
   toStringPCFG :: PCFG a b -> PCFG String String
 
-instance {-# INCOHERENT #-} ToString String String where
+instance {-# OVERLAPPING #-} ToString String String where
   toStringPCFG = id  
   
-instance {-# INCOHERENT #-} Show a => ToString String a where
+instance {-# OVERLAPPABLE #-} Show a => ToString String a where
   toStringPCFG g = 
     PCFG (mapLabels showLabel (productions g)) 
          (startsymbols g) 
          (weights g)
   
-instance {-# INCOHERENT #-} Show a => ToString a String where
+instance {-# OVERLAPPABLE #-} Show a => ToString a String where
   toStringPCFG g = 
     PCFG (EdgeList (S.map show (nodesEL $ productions g)) 
                    (map (mapHE show) (edgesEL $ productions g))) 
          (map (\ (x,y) -> (show x,y)) $ startsymbols g) 
          (weights g)
 
-instance {-# INCOHERENT #-} (Show a, Show b) => ToString a b where
+instance {-# OVERLAPPABLE #-} (Show a, Show b) => ToString a b where
   toStringPCFG g = PCFG (mapLabels showLabel 
                     (EdgeList (S.map show (nodesEL $ productions g)) 
                               (map (mapHE show) (edgesEL $ productions g)))) 

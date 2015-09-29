@@ -42,7 +42,7 @@ data Args
     { inputGrammar :: FilePath
     , stringCorpus :: FilePath
     , outputGrammar :: FilePath
-    , its :: Int
+    , number :: Int
     , binaryInput :: Bool
     , binaryOutput :: Bool
     }
@@ -74,7 +74,8 @@ cmdArgs
     "algorithms for extracting and training PCFGs"
   [ (modeEmpty $ Extract undefined undefined False)
     { modeNames = ["extract"]
-    , modeHelp = "Extracts a PCFG from a given Treebank."
+    , modeHelp = "Extracts a PCFG from <Treebank> and writes it to \
+                 \<Output Grammar>."
     , modeArgs = ( [ flagArgOutputGrammar{argRequire = True}
                    , flagArgTreeBank{argRequire = True} 
                    ]
@@ -84,11 +85,13 @@ cmdArgs
     }
   , (modeEmpty $ Train undefined undefined undefined undefined False False)
     { modeNames = ["train"]
-    , modeHelp = "Trains a given PCFG with a Terminal String Corpus."
+    , modeHelp = "Reads a PCFG from <Input Grammar> and trains it with \
+                 \<N> Iterations on <Corpus> and writes the resulting grammar\
+                 \ to <Output Grammar>."
     , modeArgs = ( [ flagArgInputGrammar{argRequire = True}
                    , flagArgOutputGrammar{argRequire = True}
                    , flagArgStringCorpus{argRequire = True}
-                   , flagArgIterations{argRequire = True} 
+                   , flagArgN{argRequire = True} 
                    ]
                  , Nothing 
                  )
@@ -96,7 +99,8 @@ cmdArgs
     }
   , (modeEmpty $ Bests undefined undefined False False False)
     { modeNames = ["bests"]
-    , modeHelp = "Extracts the N best derivations from a PCFG."
+    , modeHelp = "Reads a PCFG from <Input Grammar>, extracts the <N> best\
+                 \ derivations and writes it to stdout."
     , modeArgs = ( [ flagArgInputGrammar{argRequire = True}
                    , flagArgN{argRequire = True} 
                    ]
@@ -106,7 +110,8 @@ cmdArgs
     }
   , (modeEmpty $ Intersect undefined undefined undefined False False)
     { modeNames = ["intersect"]
-    , modeHelp = "Intersects a Terminal String and a PCFG."
+    , modeHelp = "Reads a PCFG from <Input Grammar>, intersects it with \
+                 \ <String> and writes the result to <Output Grammar>."
     , modeArgs = ( [ flagArgInputGrammar{argRequire = True}
                    , flagArgOutputGrammar{argRequire = True}
                    , flagArgString{argRequire = True} 
@@ -116,8 +121,9 @@ cmdArgs
     }
   , (modeEmpty $ Convert undefined undefined False False)
     { modeNames = ["convert"]
-    , modeHelp = "Converts a pcfg file from binary format to text format\
-                 \or vice-versa."
+    , modeHelp = "Converts a PCFG from <Input Grammar> from text format to \ 
+                 \binary or vice-versa and writes the result to \
+                 \<Output Grammar>"
     , modeArgs = ( [ flagArgInputGrammar{argRequire = True}
                    , flagArgOutputGrammar{argRequire = True} 
                    ]
@@ -132,18 +138,16 @@ cmdArgs
       = flagArg (\ a x -> Right x{inputGrammar = a}) "<Input Grammar>"
     flagArgOutputGrammar
       = flagArg (\ a x -> Right x{outputGrammar = a}) "<Output Grammar>"
-    flagArgIterations
-      = flagArg (\ a x -> Right x{its = read a}) "<Number of Iterations>"
     flagArgN
       = flagArg (\ a x -> Right x{number = read a}) "<N>"
     flagArgString
-      = flagArg (\ a x -> Right x{string = a}) "<Terminal String>"
+      = flagArg (\ a x -> Right x{string = a}) "<String>"
     flagArgStringCorpus
-      = flagArg (\ a x -> Right x{stringCorpus = a}) "<String Corpus>"
+      = flagArg (\ a x -> Right x{stringCorpus = a}) "<Corpus>"
     flagInBinary
       = flagNone ["bin"]
                  (\ x -> x{binaryInput = True})
-                 "Read the input Grammar from a binary format."
+                 "Read <Input Grammar> from a binary format."
     flagYield
       = flagNone ["y"]
                  (\ x -> x{yld = True})
@@ -155,7 +159,7 @@ cmdArgs
     flagOutBinary
       = flagNone ["bout"]
                  (\ x -> x{binaryOutput = True})
-                 "Write the output Grammar to a binary format."
+                 "Write <Output Grammar> to a binary format."
 
 
 main :: IO ()
@@ -169,7 +173,7 @@ mainArgs (Help cs) = putStr cs
 mainArgs (Extract treebank outgrammar bout)
   = do
   e <- parseFromFile pSExpressions treebank 
-  writeGrammar bout outgrammar . extractPCFG $ map (treeToDeriv . toTree) e
+  writeGrammar bout outgrammar . extractPCFG $ map treeToDeriv $ concatMap toForest e
   
 mainArgs (Train ingrammar stringcorpus outgrammar nit bin bout)
   = do

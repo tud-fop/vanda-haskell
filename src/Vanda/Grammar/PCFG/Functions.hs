@@ -38,7 +38,7 @@ extractPCFG l = let PCFG p s w = extractPCFG' l in
            (normalize (map snd . partition $ edgesEL p) (VG.convert w)))
 
 extractPCFG' :: (Ord a) => [Deriv a a] -> PCFG a a
-extractPCFG' l = 
+extractPCFG' l =
   let (edgelist,e) = 
         runState (generateEdges (sentences2edges l) [] (terminals l)) V.empty 
   in
@@ -72,7 +72,7 @@ generateEdges :: (Ord a)
               -> State (V.Vector Double) 
                        [Hyperedge a [Either Int a] Int]
 generateEdges [] l _ = return l
-generateEdges ((to',b):rest) l t = 
+generateEdges ((to',b):rest) l t =
   let (frm,lbl) = split b t 0
       (c,id') = contains to' frm lbl l in 
     if not c then do
@@ -84,7 +84,7 @@ generateEdges ((to',b):rest) l t =
           put (v V.// [(id',(v V.! id') + 1)])
           generateEdges rest l t
 
--- | Split a derivation into it's child-nonterminals and the future label in
+-- | Split a derivation into its child-nonterminals and the future label in
 -- the hypergraph.
 split :: (Ord a) => [a] -> S.Set a -> Int -> ([a],[Either Int a])
 split [] _ _ = ([],[])
