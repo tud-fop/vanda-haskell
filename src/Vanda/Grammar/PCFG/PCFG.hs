@@ -13,12 +13,13 @@ This module contains data structures used for PCFGs and a
 few simple functions.
 -}
 
+{-# LANGUAGE DeriveAnyClass #-}
 module Vanda.Grammar.PCFG.PCFG where
 
-
-import           Vanda.Hypergraph
+import           Control.DeepSeq
 import           Data.Tree
 import qualified Data.Vector as V
+import           Vanda.Hypergraph
 
 
 
@@ -42,6 +43,7 @@ partition ((he):rest0) = insert (ident he) (to he) (partition rest0)
 data Deriv a b 
   = DNode a [Deriv a b] | DLeaf b
   
+  
 root :: Deriv a a -> a
 root (DLeaf x) = x
 root (DNode x _) = x
@@ -50,7 +52,11 @@ derivToTree :: Deriv a a -> Tree a
 derivToTree (DLeaf x) = Node x []
 derivToTree (DNode x l) = Node x (map derivToTree l)
 
-treeToDeriv :: Tree a -> Deriv a a
+treeToDeriv :: (NFData a) => Tree a -> Deriv a a
 treeToDeriv (Node x li) 
   | length li == 0 = DLeaf x
   | otherwise      = DNode x (map treeToDeriv li)
+  
+instance (NFData b, NFData a) => NFData (Deriv a b) where
+  rnf (DNode a b) = a `deepseq` rnf b
+  rnf (DLeaf a) = a `deepseq` ()

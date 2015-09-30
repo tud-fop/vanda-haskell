@@ -33,15 +33,19 @@ import Vanda.Hypergraph
 -- * Extraction from Treebank
 -- | Extracts a PCFG from a list of derivations, calculating the probability 
 -- for a rule by counting their occurences in the corpus.
-extractPCFG :: (Eq a, Ord a) => [Deriv a a] -> PCFG a a
+extractPCFG :: (NFData a, Eq a, Ord a) => [Deriv a a] -> PCFG a a
 extractPCFG l = let PCFG p s w = extractPCFG' l in 
   PCFG p s (VG.convert 
            (normalize (map snd . partition $ edgesEL p) (VG.convert w)))
 
-extractPCFG' :: (Ord a) => [Deriv a a] -> PCFG a a
-extractPCFG' l =
+extractPCFG' :: (NFData a, Ord a) => [Deriv a a] -> PCFG a a
+extractPCFG' l = l `deepseq`
   let (edgelist,e) = 
-        runState (generateEdges (sentences2edges l) [] M.empty (terminals l)) 
+        runState (generateEdges (sentences2edges l) 
+                                [] 
+                                M.empty 
+                                (terminals l) 
+                                0) 
                  V.empty 
   in
   PCFG (mkHypergraph edgelist) 
@@ -67,23 +71,28 @@ terminals [] = S.empty
 terminals ((DNode _ li):rest) = S.union (terminals li) (terminals rest)
 terminals ((DLeaf a):rest) = S.insert a (terminals rest)
 
-generateEdges :: (Ord a) 
+generateEdges :: (Ord a, NFData a) 
               => [(a,[a])] 
               -> [Hyperedge a [Either Int a] Int] 
               -> M.Map (a,[a],[Either Int a]) Int
               -> S.Set a 
+              -> Int
               -> State (V.Vector Double) 
                        [Hyperedge a [Either Int a] Int]
-generateEdges [] l _ _ = return l
-generateEdges ((to',b):rest) l m t = 
+generateEdges [] l _ _ _ = return l
+generateEdges ((to',b):rest) l m t i =
   if c then do
     v <- get
     v `deepseq` (v V.! id') `seq` put (V.unsafeUpd v [(id',(v V.! id') + 1)])
-    generateEdges rest l m t
+    generateEdges rest l m t i
        else do
     v <- get
     v `deepseq` put (V.snoc v 1)
-    generateEdges rest (mkHyperedge to' frm lbl (V.length v):l) (M.insert (to',frm,lbl) (V.length v) m) t
+    mkHyperedge to' frm lbl (i) `deepseq` generateEdges rest 
+                  (mkHyperedge to' frm lbl (i):l) 
+                  (M.insert (to',frm,lbl) (i) m) 
+                  t 
+                  (i + 1)
       where (frm,lbl) = split b t 0
             (c,id') = contains to' frm lbl m 
 
