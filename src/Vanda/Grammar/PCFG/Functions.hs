@@ -40,7 +40,8 @@ extractPCFG l = let PCFG p s w = extractPCFG' l in
 extractPCFG' :: (Ord a) => [Deriv a a] -> PCFG a a
 extractPCFG' l =
   let (edgelist,e) = 
-        runState (generateEdges (sentences2edges l) [] (terminals l)) V.empty 
+        runState (generateEdges (sentences2edges l) [] M.empty (terminals l)) 
+                 V.empty 
   in
   PCFG (mkHypergraph edgelist) 
        (map (\ (x,y) -> (x,y/(fromIntegral $ length l))) 
@@ -68,21 +69,22 @@ terminals ((DLeaf a):rest) = S.insert a (terminals rest)
 generateEdges :: (Ord a) 
               => [(a,[a])] 
               -> [Hyperedge a [Either Int a] Int] 
+              -> M.Map (a,[a],[Either Int a]) Int
               -> S.Set a 
               -> State (V.Vector Double) 
                        [Hyperedge a [Either Int a] Int]
-generateEdges [] l _ = return l
-generateEdges ((to',b):rest) l t =
-  let (frm,lbl) = split b t 0
-      (c,id') = contains to' frm lbl l in 
-    if not c then do
-          v <- get
-          put (V.snoc v 1)
-          generateEdges rest ((mkHyperedge to' frm lbl (V.length v)):l) t
-          else do
-          v <- get
-          put (v V.// [(id',(v V.! id') + 1)])
-          generateEdges rest l t
+generateEdges [] l _ _ = return l
+generateEdges ((to',b):rest) l m t = 
+  if c then do
+    v <- get
+    v V.! id' `seq` put (V.unsafeUpd v [(id',(v V.! id') + 1)])
+    generateEdges rest l m t
+       else do
+    v <- get
+    put (V.snoc v 1)
+    generateEdges rest (mkHyperedge to' frm lbl (V.length v):l) (M.insert (to',frm,lbl) (V.length v) m) t
+      where (frm,lbl) = split b t 0
+            (c,id') = contains to' frm lbl m 
 
 -- | Split a derivation into its child-nonterminals and the future label in
 -- the hypergraph.
@@ -99,27 +101,18 @@ sentences2edges ((DNode a subtrees):rest) =
   (a,map (root) subtrees) : sentences2edges subtrees ++ sentences2edges rest
 sentences2edges ((DLeaf _) : rest) = sentences2edges rest
 
--- | Check if a list of hyperedges already contains a hyperedge, and if it
+-- | Check if mapping which maps from components of a hyperedge to an 
+-- identifier already contains this combination of components, and if it
 -- does, return the identifier of the already existing one.
-contains :: (Eq a) 
+contains :: (Eq a, Ord a) 
          => a  -- ^ 'to' node of a Hyperedge
          -> [a] -- ^ 'from' list of a Hyperedge
          -> [Either Int a] -- ^ 'label' of a Hyperedge
-         -> [Hyperedge a [Either Int a] Int] -- ^ the list of Hyperedges
+         -> M.Map (a,[a],[Either Int a]) Int -- ^ the list of Hyperedges
          -> (Bool,Int)
-contains _ _ _ [] = (False,0)
-contains a b l (c:cs)
-  | equals a b l c = (True,ident c)
-  | otherwise = contains a b l cs
-  
-equals :: (Eq a) 
-       => a 
-       -> [a] 
-       -> [Either Int a] 
-       -> Hyperedge a [Either Int a] Int 
-       -> Bool
-equals to' from' label' he = 
-  to' == to he && label' == label he && from' == from he
+contains a b l m = case M.lookup (a,b,l) m of
+    Just i  -> (True,i)
+    Nothing -> (False,0)
           
           
           
