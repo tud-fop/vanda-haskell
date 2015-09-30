@@ -14,6 +14,7 @@ This module contains functions to work with PCFGs.
 
 module Vanda.Grammar.PCFG.Functions (extractPCFG, train, intersect, bestDerivations) where
 
+import Control.DeepSeq
 import Control.Monad.State
 import qualified Data.Map as M
 import Data.Maybe
@@ -77,11 +78,11 @@ generateEdges [] l _ _ = return l
 generateEdges ((to',b):rest) l m t = 
   if c then do
     v <- get
-    v V.! id' `seq` put (V.unsafeUpd v [(id',(v V.! id') + 1)])
+    v `deepseq` (v V.! id') `seq` put (V.unsafeUpd v [(id',(v V.! id') + 1)])
     generateEdges rest l m t
        else do
     v <- get
-    put (V.snoc v 1)
+    v `deepseq` put (V.snoc v 1)
     generateEdges rest (mkHyperedge to' frm lbl (V.length v):l) (M.insert (to',frm,lbl) (V.length v) m) t
       where (frm,lbl) = split b t 0
             (c,id') = contains to' frm lbl m 
