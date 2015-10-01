@@ -269,6 +269,16 @@ class (ToString a b) where
 instance {-# OVERLAPPING #-} ToString String String where
   toStringPCFG = id  
   
+-- | Display PCFGs resulting from 'intersect' without parantheses.
+instance {-# OVERLAPPING #-} ToString (Int,String,Int) String where
+  toStringPCFG g = 
+    PCFG (EdgeList (S.map show' (nodesEL $ productions g)) 
+                   (map (mapHE show') (edgesEL $ productions g))) 
+         (map (\ (x,y) -> (show' x,y)) $ startsymbols g) 
+         (weights g)
+            where show' (i1,s,i2) = show i1 ++ "," ++ s ++ "," ++ show i2
+  
+  
 instance {-# OVERLAPPABLE #-} Show a => ToString String a where
   toStringPCFG g = 
     PCFG (mapLabels showLabel (productions g)) 
