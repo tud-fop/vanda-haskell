@@ -418,7 +418,7 @@ updateMappingExtract teacher t = do
 formatObservationTable :: ObservationTable -> [(String,Int)] -> ([(String,Context String)],[(String,Tree String)],[(String,Tree String)],[[String]],[[String]])
 formatObservationTable (OT (s,contexts,mapping)) alphabet = (zip (map showContext contexts) contexts,sigmaTrees ,sigmaSTrees,sigmaRows,sigmaSRows)
                     where   sigmaTable = maybeGetTable s contexts mapping
-                            sigmaTrees = zip (zipWith (\ treeVariable tree -> treeVariable ++ ":=" ++ tree) (zipWith (++) (replicate (length sigmaTable) "t") (map show [1..])) (map (nicerShow . fst) sigmaTable)) (map fst sigmaTable)
+                            sigmaTrees = zip (zipWith (\ treeVariable tree -> treeVariable ++ ":=" ++ tree) (zipWith (++) (repeat "t") (map show [1..])) (map (nicerShow . fst) sigmaTable)) (map fst sigmaTable)
                             sigmaRows = map (showBool . snd) sigmaTable -- observation table(sigmaPart | upper table) as [String] with 1 and 0 instead of True and False
 
                             sS = getSigmaS s alphabet
@@ -482,7 +482,7 @@ fillTableWithOT (contexts,sigmaTrees,sigmaSTrees,sigmaRows,sigmaSRows) = do
                             -- TODO find antother solution for the lines
                             labelH1 <- lift $ labelNew (Just (replicate ((length contexts) + 1 + (maximum (map (length . fst) (sigmaTrees ++ sigmaSTrees)))) '-'))
                             labelH2 <- lift $ labelNew (Just (replicate ((length contexts) + 1 + (maximum (map (length . fst) (sigmaTrees ++ sigmaSTrees)))) '-'))
-                            labelV <- lift $ labelNew (Just (concat (replicate ((length (sigmaTrees ++ sigmaSTrees)) + 2 + (maximum (map (length . fst) contexts))) "|\n")))
+                            --labelV <- lift $ labelNew (Just (concat (replicate ((length (sigmaTrees ++ sigmaSTrees)) + 2 + (maximum (map (length . fst) contexts))) "|\n")))
                             font <- lift $ fontDescriptionFromString fontObservationtable
                             lift $ widgetModifyFont labelH1 (Just font)
                             lift $ widgetModifyFont labelH2 (Just font)
@@ -664,7 +664,7 @@ outputUpdateMapping teacher tree = do
                     -- b00      (0,b,1)(0,b,2)
                     zipTable :: [a] -> [b] -> [[c]] -> [[(c,a,b)]]
                     zipTable [] _ _ = []
-                    zipTable (x:xs) ys (zs:zss) = (zip3 zs (replicate (length ys) x) ys):(zipTable xs ys zss)
+                    zipTable (x:xs) ys (zs:zss) = (zip3 zs (repeat x) ys):(zipTable xs ys zss)
 
                     paintEntries :: (String,Tree String,Context String) -> (String,Color)
                     paintEntries (membership,t,c)
