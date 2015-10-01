@@ -33,12 +33,12 @@ data PCFG nonterminalType terminalType =
 -- | Partition the identifiers of a list of hyperedges by their 'to' node
 partition :: Eq a => [Hyperedge a c Int] -> [(a,[Int])]
 partition [] = []
-partition ((he):rest0) = insert (ident he) (to he) (partition rest0)
+partition (he:rest0) = insert (ident he) (to he) (partition rest0)
   where insert :: Eq a => Int -> a -> [(a,[Int])] -> [(a,[Int])]
         insert i s [] = [(s,[i])]
-        insert i s ((s',l):rest) 
-          | s == s' = (s',i:l):rest
-          | otherwise = (s',l):(insert i s rest)
+        insert i s ((s',l) : rest) 
+          | s == s' = (s',i:l) : rest
+          | otherwise = (s',l) : insert i s rest
           
 data Deriv a b 
   = DNode a [Deriv a b] | DLeaf b
@@ -53,9 +53,8 @@ derivToTree (DLeaf x) = Node x []
 derivToTree (DNode x l) = Node x (map derivToTree l)
 
 treeToDeriv :: (NFData a) => Tree a -> Deriv a a
-treeToDeriv (Node x li) 
-  | length li == 0 = DLeaf x
-  | otherwise      = DNode x (map treeToDeriv li)
+treeToDeriv (Node x []) = DLeaf x
+treeToDeriv (Node x li) = DNode x (map treeToDeriv li)
   
 instance (NFData b, NFData a) => NFData (Deriv a b) where
   rnf (DNode a b) = a `deepseq` rnf b

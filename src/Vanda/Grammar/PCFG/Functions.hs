@@ -49,48 +49,50 @@ extractPCFG' l = l `deepseq`
                  V.empty 
   in
   PCFG (mkHypergraph edgelist) 
-       (map (\ (x,y) -> (x,y/(fromIntegral $ length l))) 
+       (map (\ (x,y) -> (x, y / fromIntegral (length l))) 
          $ generateStartSymbols l) 
        e
 
 generateStartSymbols :: (Eq a) => [Deriv a a] -> [(a,Double)]
-generateStartSymbols [] = []
-generateStartSymbols ((DNode a _):rest) = insert a $ generateStartSymbols rest
-generateStartSymbols ((DLeaf a  ):rest) = insert a $ generateStartSymbols rest
+generateStartSymbols = foldr (insert . root) []
 
 insert :: (Eq a) => a -> [(a,Double)] -> [(a,Double)]
 insert a [] = [(a,1.0)]
 insert a ((b,w):rest) 
   | a == b = (b,w+1):rest
-  | otherwise = (b,w) : (insert a rest)
+  | otherwise = (b,w) : insert a rest
   
 -- | Calculate a list of all terminal symbols to differentiate between 
 -- terminal symbols and nonterminal symbols.
 terminals :: (Ord a) => [Deriv a a] -> S.Set a
 terminals [] = S.empty
-terminals ((DNode _ li):rest) = S.union (terminals li) (terminals rest)
-terminals ((DLeaf a):rest) = S.insert a (terminals rest)
+terminals (DNode _ li : rest) = terminals li `S.union` terminals rest
+terminals (DLeaf a : rest) = S.insert a (terminals rest)
 
-generateEdges :: (Ord a, NFData a) 
-              => [(a,[a])] 
+-- | Generates the actual list of Hyperedges and their respective weights.
+generateEdges :: (Ord a) 
+              => [(a,[a])] -- ^ A list of productions
               -> [Hyperedge a [Either Int a] Int] 
-              -> M.Map (a,[a],[Either Int a]) Int
-              -> S.Set a 
-              -> Int
-              -> State (V.Vector Double) 
+              -- ^ The current list of hyperedges
+              -> M.Map (a,[a],[Either Int a]) Int 
+              -- ^ A map for deciding, if a hyperedge is already contained
+              -> S.Set a -- ^ The set of all occuring terminal symbols
+              -> Int -- ^ The number of hyperedges currently in the list of hyperedges
+              -> State (V.Vector Double)
                        [Hyperedge a [Either Int a] Int]
 generateEdges [] l _ _ _ = return l
 generateEdges ((to',b):rest) l m t i =
   if c then do
     v <- get
-    v `deepseq` (v V.! id') `seq` put (V.unsafeUpd v [(id',(v V.! id') + 1)])
+    let cnt = (v V.! id') + 1
+    cnt `seq` put (V.unsafeUpd v [(id',cnt)])
     generateEdges rest l m t i
        else do
     v <- get
-    v `deepseq` put (V.snoc v 1)
-    mkHyperedge to' frm lbl (i) `deepseq` generateEdges rest 
-                  (mkHyperedge to' frm lbl (i):l) 
-                  (M.insert (to',frm,lbl) (i) m) 
+    put (V.snoc v 1)
+    generateEdges rest 
+                  (mkHyperedge to' frm lbl i : l) 
+                  (M.insert (to',frm,lbl) i m) 
                   t 
                   (i + 1)
       where (frm,lbl) = split b t 0
@@ -101,15 +103,15 @@ generateEdges ((to',b):rest) l m t i =
 split :: (Ord a) => [a] -> S.Set a -> Int -> ([a],[Either Int a])
 split [] _ _ = ([],[])
 split (x:xs) t i
-  | S.member x t = let (a,b) = split xs t i in (a,(Right x):b)
-  | otherwise = let (a,b) = split xs t (i + 1) in (x:a,(Left i):b)
+  | S.member x t = let (a,b) = split xs t i in (a,Right x : b)
+  | otherwise = let (a,b) = split xs t (i + 1) in (x:a,Left i : b)
                     
 
 sentences2edges :: [Deriv a a] -> [(a,[a])]
 sentences2edges [] = []
-sentences2edges ((DNode a subtrees):rest) = 
-  (a,map (root) subtrees) : sentences2edges subtrees ++ sentences2edges rest
-sentences2edges ((DLeaf _) : rest) = sentences2edges rest
+sentences2edges (DNode a subtrees : rest) = 
+  (a,map root subtrees) : sentences2edges subtrees ++ sentences2edges rest
+sentences2edges (DLeaf _ : rest) = sentences2edges rest
 
 -- | Check if mapping which maps from components of a hyperedge to an 
 -- identifier already contains this combination of components, and if it
@@ -139,7 +141,7 @@ intersect p s =
         (map fst $ startsymbols p) 
   in
   PCFG (mapLabels (mapHEi fst) el) 
-       (map (\(x,y) -> ((0,x,(length (s))),y)) $ startsymbols p) 
+       (map (\(x,y) -> ((0,x,length s),y)) $ startsymbols p) 
        (weights p)
                     
 
@@ -164,7 +166,7 @@ train pcfg corpus n = let pcfg'@(PCFG prod ss weight') = toSingleSS pcfg in
                      (\ _ x -> x <= n) 
                      (VG.convert weight')))
   where intersect' :: (Ord a, Show a, Ord b, Show b) 
-                   => PCFG (a) b 
+                   => PCFG a b 
                    -> [b] 
                    -> ( (Int,a,Int)
                       , EdgeList (Int,a,Int) [Either Int b] Int
@@ -179,8 +181,8 @@ train pcfg corpus n = let pcfg'@(PCFG prod ss weight') = toSingleSS pcfg in
 -- startsymbol an edge is added from 'Nothing' to this symbol.
 toSingleSS :: Ord a => PCFG a b -> PCFG (Maybe a) b
 toSingleSS (PCFG prod ss weight') =
-  PCFG (EdgeList (S.union (S.map Just (nodesEL prod)) 
-                 (S.singleton Nothing)) 
+  PCFG (EdgeList (S.map Just (nodesEL prod)
+                 `S.union` S.singleton Nothing) 
                  (map (mapHE Just) (edgesEL prod) ++ e')) 
        [(Nothing,1.0)] 
        (weight' V.++ w')
@@ -192,7 +194,7 @@ toSingleSS (PCFG prod ss weight') =
                        )
           makeEdges [] _ = ([],V.empty)
           makeEdges ((x,w):rest) i = let (hes,v) = makeEdges rest (i+1) in
-            ((mkHyperedge Nothing [Just x] [Left 0] i):hes,V.cons w v)
+            (mkHyperedge Nothing [Just x] [Left 0] i : hes,V.cons w v)
 
 -- | The inverse function to 'toSingleSS'.
 fromSingleSS :: (Ord a) => PCFG (Maybe a) b -> PCFG a b
@@ -200,7 +202,7 @@ fromSingleSS (PCFG prod _ weight') =
   let (hes,ss,w) = fromSingleSS' (edgesEL prod) (V.map Just weight') in
     PCFG (EdgeList (S.map fromJust $ S.filter isJust (nodesEL prod)) hes) 
          ss 
-         (V.map fromJust $ V.filter (isJust) w)
+         (V.map fromJust $ V.filter isJust w)
   where fromSingleSS' :: [Hyperedge (Maybe a) [Either Int b] Int] 
                       -> V.Vector (Maybe Double) 
                       -> ( [Hyperedge a [Either Int b] Int]
@@ -209,10 +211,10 @@ fromSingleSS (PCFG prod _ weight') =
                          )
         fromSingleSS' [] w = ([],[],w)
         fromSingleSS' (he:rest) w 
-          | isJust (to he) = ((mapHE fromJust he):hes',ss',w')
+          | isJust (to he) = (mapHE fromJust he : hes', ss', w')
           | otherwise      = 
             ( hes'
-            , (fromJust $ from1 he,fromJust $ w V.! (ident he)):ss'
+            , (fromJust $ from1 he,fromJust $ w V.! ident he):ss'
             , w' V.// [(ident he,Nothing)]
             )
           where (hes',ss',w') = fromSingleSS' rest w 
@@ -258,10 +260,10 @@ merge' :: [Candidate v l i x] -> [Candidate v l i x] -> [Candidate v l i x]
 merge' [] l = l
 merge' l [] = l
 merge' (c1:r1) (c2:r2)
-  | weight c1 >= weight c2 = c1 : (merge' r1 (c2:r2))
-  | otherwise              = c2 : (merge' (c1:r1) r2)
+  | weight c1 >= weight c2 = c1 : merge' r1 (c2:r2)
+  | otherwise              = c2 : merge' (c1:r1) r2
 
 defaultFeature :: V.Vector Double -> Feature [Either Int a] Int Double
 defaultFeature v = Feature p f
   where p _ i xs = (v V.! i) * product xs
-        f x = V.singleton x
+        f = V.singleton

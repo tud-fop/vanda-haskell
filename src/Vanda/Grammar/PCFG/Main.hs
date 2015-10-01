@@ -190,8 +190,8 @@ mainArgs (Bests n ingrammar yld0 probs0 bin)
           toStr ((deriv,weight):rest) yld1 probs1 = 
             (if probs1 then printf "%.3f   " weight
                        else "")
-            ++ (if yld1 then (T.unpack $ yield [derivToTree deriv])
-                        else (T.unpack $ unparsePenn [derivToTree deriv]))
+            ++ T.unpack (if yld1 then yield [derivToTree deriv]
+                                 else unparsePenn [derivToTree deriv])
             ++ toStr rest yld1 probs1
                         
 mainArgs (Intersect ingrammar string0 outgrammar bin bout)
