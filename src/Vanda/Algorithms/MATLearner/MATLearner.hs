@@ -119,12 +119,12 @@ main' teacher = do
 initObs :: Teacher t => t -> StateT (ObservationTable,GraphicUserInterface) IO (ObservationTable,GraphicUserInterface)
 initObs teacher = do
                     sigma <- lift $ getSigma teacher
-                    let s = take 1 (getAllTrees [] sigma [X]) in do
-                        (_,out) <- get
-                        put (OT (s,[X],empty),out)
-                        updateMapping teacher (getAllTrees s sigma [X])
-                        state <- get
-                        return state
+                    let s = take 1 (getAllTrees [] sigma [X])
+                    (_,out) <- get
+                    put (OT (s,[X],empty),out)
+                    updateMapping teacher (getAllTrees s sigma [X])
+                    state <- get
+                    return state
 
 
 -- | main loop in which consistency, closedness and correctness are checked
@@ -187,13 +187,13 @@ checkConsistencyContexts _       _  _   []    = return True
 checkConsistencyContexts teacher s1 s2 (c:cs) = do
     (OT (_,contexts,mapping),out) <- get
     let s1' = concatTree s1 c
-        s2' = concatTree s2 c in do
-        consistent <- checkConsistencyOneContext teacher (obst s1' contexts mapping) (obst s2' contexts mapping) c contexts s1 s2 s1' s2'
-        if consistent
-            then
-                checkConsistencyContexts teacher s1 s2 cs
-            else
-                return False
+        s2' = concatTree s2 c
+    consistent <- checkConsistencyOneContext teacher (obst s1' contexts mapping) (obst s2' contexts mapping) c contexts s1 s2 s1' s2'
+    if consistent
+        then
+            checkConsistencyContexts teacher s1 s2 cs
+        else
+            return False
 
 
 -- | check whether the two given rows are the same and update the observation table if neccessary
@@ -253,28 +253,28 @@ correctify teacher = do
                     fillStatus 4
                     (obs@(OT (s,contexts,mapping)),out) <- get
                     sigma <- lift $ getSigma teacher
-                    let automaton = generateAutomaton obs sigma in do
-                        maybeCounterexample <- lift $ conjecture teacher automaton
-                        if maybeCounterexample == Nothing
-                            then do
-                                outputCorrect teacher automaton
-                                return True
-                            else do
-                                counterexample <- lift $ checkCE maybeCounterexample mapping sigma automaton -- errors in the counterexample can only occor with an interactive teacher (hopefully)
-                                let mapping' = insert counterexample (not (accepts automaton counterexample)) mapping in do -- insert membership for counterexample
-                                    put(OT(s,contexts,mapping'),out)
-                                    outputExtractInit teacher counterexample
-                                    x <- extract teacher
-                                                (getTable s contexts mapping') 
-                                                (getTable (getSigmaS s sigma) contexts mapping') -- Simga(S)/S
-                                                counterexample
-                                    outputExtractDelete teacher x
-                                    (OT (_,_,mapping''),out) <- get -- get mapping with the new memberships insertet in extract
-                                    put (OT (s ++ [x],contexts,mapping''),out)
-                                    updateMapping teacher
-                                                  (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
-                                                             (map (concatTree x) (getContexts (s ++ [x]) sigma)))-- we only need to consider trees in which the new tree occurs
-                                    return False
+                    let automaton = generateAutomaton obs sigma
+                    maybeCounterexample <- lift $ conjecture teacher automaton
+                    if maybeCounterexample == Nothing
+                        then do
+                            outputCorrect teacher automaton
+                            return True
+                        else do
+                            counterexample <- lift $ checkCE maybeCounterexample mapping sigma automaton -- errors in the counterexample can only occor with an interactive teacher (hopefully)
+                            let mapping' = insert counterexample (not (accepts automaton counterexample)) mapping -- insert membership for counterexample
+                            put(OT(s,contexts,mapping'),out)
+                            outputExtractInit teacher counterexample
+                            x <- extract teacher
+                                        (getTable s contexts mapping') 
+                                        (getTable (getSigmaS s sigma) contexts mapping') -- Simga(S)/S
+                                        counterexample
+                            outputExtractDelete teacher x
+                            (OT (_,_,mapping''),out) <- get -- get mapping with the new memberships insertet in extract
+                            put (OT (s ++ [x],contexts,mapping''),out)
+                            updateMapping teacher
+                                          (concatMap (\t -> map (\c -> concatTree t c) contexts) -- insert the trees into all possible contexts
+                                                     (map (concatTree x) (getContexts (s ++ [x]) sigma)))-- we only need to consider trees in which the new tree occurs
+                            return False
                             where
                                 -- | check whther the given counterexample is a correct tree (check ranks of node labels) and whether it is actually a counterexample and if not ask for a new one
                                     -- TODO right now each time the automaton is printed out aigain
@@ -535,8 +535,8 @@ outputClosed teacher = do
                     (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status,frameStatus,extractOut)) <- get
                     sigma <- lift $ getSigma teacher
                     let (contextsOut,sigmaTreesOut,sigmaSTreesOut,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
-                        noColor = \x -> (x,colorNormal) in
-                        fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,map (noColor . fst) sigmaSTreesOut,map (map noColor) sigmaRowsOut,map (map noColor) sigmaSRowsOut)
+                        noColor = \x -> (x,colorNormal)
+                    fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,map (noColor . fst) sigmaSTreesOut,map (map noColor) sigmaRowsOut,map (map noColor) sigmaSRowsOut)
                     ans <- lift $ dialogRun dialog
                     lift $ displayDialog isClosedMsg nextStep
                     ans <- lift $ dialogRun dialog
@@ -559,8 +559,7 @@ outputNotClosed teacher treeClosed = do
                         go ((treeStr,tree),row)
                             | tree == treeClosed = (notClosedColor treeStr,map notClosedColor row)
                             | otherwise          = (noColor treeStr,map noColor row)
-                        in
-                        fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,sigmaSTreesOutColor,map (map noColor) sigmaRowsOut,sigmaSRowsOutColor)
+                    fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,sigmaSTreesOutColor,map (map noColor) sigmaRowsOut,sigmaSRowsOutColor)
                     ans <- lift $ dialogRun dialog
                     lift $ displayDialog isNotClosedMsg nextStep
                     ans <- lift $ dialogRun dialog
@@ -574,8 +573,8 @@ outputConsistent teacher = do
                     (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status,frameStatus,extractOut)) <- get
                     sigma <- lift $ getSigma teacher
                     let (contextsOut,sigmaTreesOut,sigmaSTreesOut,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
-                        noColor = \x -> (x,colorNormal) in
-                        fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,map (noColor . fst) sigmaSTreesOut,map (map noColor) sigmaRowsOut,map (map noColor) sigmaSRowsOut)
+                        noColor = \x -> (x,colorNormal)
+                    fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,map (noColor . fst) sigmaSTreesOut,map (map noColor) sigmaRowsOut,map (map noColor) sigmaSRowsOut)
                     ans <- lift $ dialogRun dialog
                     lift $ displayDialog isConsistentMsg nextStep
                     ans <- lift $ dialogRun dialog
@@ -620,8 +619,7 @@ outputNotConsistent teacher s1 s2 s1' s2' c' newC = do
                         goContext (cStr,c)
                             | c == c'   = notConsistentColor cStr
                             | otherwise = noColor cStr
-                        in
-                        fillTableWithOT (contextsOut,sigmaTreesOutColor,sigmaSTreesOutColor,sigmaRowsOutColor,sigmaSRowsOutColor)
+                    fillTableWithOT (contextsOut,sigmaTreesOutColor,sigmaSTreesOutColor,sigmaRowsOutColor,sigmaSRowsOutColor)
                     ans <- lift $ dialogRun dialog
                     lift $ displayDialog isNotConsistentMsg nextStep
                     ans <- lift $ dialogRun dialog
@@ -641,8 +639,8 @@ outputLearn teacher = do
                 (obs@(OT (s,contexts,mapping)),GUI (dialog,observationTableOut,box,status,frameStatus,extractOut)) <- get
                 sigma <- lift $ getSigma teacher
                 let (contextsOut,sigmaTreesOut,sigmaSTreesOut,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
-                    noColor = \x -> (x,colorNormal) in
-                    fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,map (noColor . fst) sigmaSTreesOut,map (map noColor) sigmaRowsOut,map (map noColor) sigmaSRowsOut)
+                    noColor = \x -> (x,colorNormal)
+                fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,map (noColor . fst) sigmaSTreesOut,map (map noColor) sigmaRowsOut,map (map noColor) sigmaSRowsOut)
                 ans <- lift $ dialogRun dialog
                 return ()
 
@@ -682,8 +680,8 @@ outputUpdateMapping teacher tree = do
                         | otherwise                            = noColor tStr
 
                     noColor = \x -> (x,colorNormal)
-                    updateColor = \x -> (x,colorUpdate) in
-                    fillTableWithOT (map (paintContext (sigmaTrees ++ sigmaSTrees)) contextsOut,map (paintTrees contexts) sigmaTreesOut,map (paintTrees contexts) sigmaSTreesOut,map (map paintEntries) sigmaRowsZipped,map (map paintEntries) sigmaRowsSZipped)
+                    updateColor = \x -> (x,colorUpdate)
+                fillTableWithOT (map (paintContext (sigmaTrees ++ sigmaSTrees)) contextsOut,map (paintTrees contexts) sigmaTreesOut,map (paintTrees contexts) sigmaSTreesOut,map (map paintEntries) sigmaRowsZipped,map (map paintEntries) sigmaRowsSZipped)
                 ans <- lift $ dialogRun dialog
                 return ()
 
