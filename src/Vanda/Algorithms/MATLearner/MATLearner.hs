@@ -49,7 +49,9 @@ matLearner = do
     window <- windowNew
     set window [windowTitle          := menueTitle,
                 containerBorderWidth := 10,
-                containerChild       := hbox ]
+                containerChild       := hbox,
+                windowDefaultWidth   := 200,
+                windowDefaultHeight  := 100 ]
 
 
     buttonInteractive <- buttonNew
@@ -65,6 +67,41 @@ matLearner = do
 
     onClicked buttonInteractive $ main' Interactive
 
+    onClicked buttonAutomaton $ do  dialog <- dialogNew
+                                    set dialog [windowTitle := fileDialogTitle, 
+                                                windowDefaultWidth := 500,
+                                                windowDefaultHeight := 400 ]
+
+                                    area <- dialogGetUpper dialog
+
+                                    fch <- fileChooserWidgetNew FileChooserActionOpen
+                                    containerAdd area fch 
+
+                                    --hsfilt <- fileFilterNew
+                                    --fileFilterAddPattern hsfilt "*.txt"
+                                    --fileFilterSetName hsfilt "Text Files"   
+                                    --fileChooserAddFilter fch hsfilt
+
+                                    --nofilt <- fileFilterNew
+                                    --fileFilterAddPattern nofilt "*.*"
+                                    --fileFilterSetName nofilt "All Files"
+                                    --fileChooserAddFilter fch nofilt
+                                                           
+                                    onFileActivated fch $ 
+                                         do file <- fileChooserGetFilename fch
+                                            case file of
+                                                 Just fpath -> do widgetDestroy dialog
+                                                                  automat <- parseFile fpath parseAutomaton
+                                                                  main' automat
+                                                 Nothing -> return ()
+
+                                    --onToggled selopt $ do state <- toggleButtonGetActive selopt
+                                    --                      fileChooserSetSelectMultiple fch state
+
+                                    widgetShowAll dialog
+                                    --automat <- parseFile filepath parseAutomaton
+                                    --main' automat
+
     onDestroy window mainQuit
     widgetShowAll window
     mainGUI
@@ -78,7 +115,9 @@ main' teacher = do
                 
                 -- create components
                 dialog <- dialogNew
-                set dialog [windowTitle := observationTableDialogTitle]
+                set dialog [windowTitle := observationTableDialogTitle,
+                                           windowDefaultWidth   := 200,
+                                           windowDefaultHeight  := 200]
                 observationTableOut <- tableNew 0 0 False
                 statusOut <- tableNew 0 0 False
                 area <- dialogGetUpper dialog
@@ -111,7 +150,6 @@ main' teacher = do
                 -- call learner
                 initState <- evalStateT (initObs teacher) (OT ([],[],empty),GUI (dialog,observationTableOut,frameOT,statusOut,frameStatus,None))
                 automaton <- evalStateT (learn teacher) initState
-                putStrLn $ show automaton
                 widgetDestroy dialog
 
 
@@ -830,6 +868,8 @@ extractTableHead :: Int -> String
 extractTableHead 1 = "Counterexample"
 extractTableHead 2 = "Replaced subtree (s)"
 extractTableHead 3 = "Inserted subtree (s')"
+
+fileDialogTitle = "Choose Automaton"
 
 fontObservationtable = "Courier 15"
 
