@@ -88,56 +88,19 @@ mainArgs (AutomatonArg v filepath)
               
    
 verboseInteractive :: Bool -> IO ()
-verboseInteractive stringAlphabet = 
-  if stringAlphabet 
-     then do 
-       putStrLn "Your Language consists of the following alphabet:"
-       alphabet <- getSigma InteractiveString
-       putStrLn $ (show $ (fst $ unzip (take ((length alphabet) - 1) alphabet))) ++ "\n"
-       automat <- main' InteractiveString True
-       putStrLn $ show automat
-     else do 
-       putStrLn "Your Tree-Language consists of the following alphabet:"
-       alphabet <- getSigma Interactive
-       putStrLn $ show alphabet ++ "\n"
-       automat <- main' Interactive True
-       putStrLn $ show automat
+verboseInteractive stringAlphabet = error "not working"
     
 nonVerboseInteractive :: Bool -> IO ()
-nonVerboseInteractive stringAlphabet = if stringAlphabet
-  then do
-    putStrLn "Your Language consists of the following alphabet:"
-    alphabet <- getSigma InteractiveString
-    putStrLn $ (show $ (fst $ unzip (take ((length alphabet) - 1) alphabet))) ++ "\n"
-    automat <- main' InteractiveString False
-    putStrLn $ show automat
-  else do
-    putStrLn "Your Tree-Language consists of the following alphabet:"
-    alphabet <- getSigma Interactive
-    putStrLn $ show alphabet ++ "\n"
-    automat <- main' Interactive False
-    putStrLn $ show automat
+nonVerboseInteractive b = matLearner
   
 verboseCorpus :: FilePath -> IO ()
-verboseCorpus filepath = do
-  forest <- parseFile filepath parseCorpus
-  automat <- main' (Corpus forest) True
-  putStrLn $ show automat
+verboseCorpus filepath = error "not working"
 
 nonVerboseCorpus :: FilePath -> IO ()
-nonVerboseCorpus filepath = do
-  forest <- parseFile filepath parseCorpus
-  automat <- main' (Corpus forest) False
-  putStrLn $ show automat
+nonVerboseCorpus filepath = error "not working"
   
 verboseAutomaton :: FilePath -> IO ()
-verboseAutomaton filepath = do
-  automat <- parseFile filepath parseAutomaton
-  automat' <- main' automat True
-  putStrLn $ show automat'
+verboseAutomaton filepath = error "not working"
   
 nonVerboseAutomaton :: FilePath -> IO ()
-nonVerboseAutomaton filepath = do
-  automat <- parseFile filepath parseAutomaton
-  automat' <- main' automat False
-  putStrLn $ show automat'
+nonVerboseAutomaton filepath = error "not working"
