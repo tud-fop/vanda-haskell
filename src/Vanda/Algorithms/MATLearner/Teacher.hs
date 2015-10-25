@@ -74,6 +74,14 @@ instance Teacher Interactive where
           return $ answer == ResponseYes
         
         conjecture Interactive automat = do
+          getCounterexampleFromUser automat
+                             
+        getSigma Interactive = return [("s",2),("g",1),("a",0)]
+
+
+-- | Dialog with automaton and counterexample input
+getCounterexampleFromUser :: (Ord b, Show b) => Automaton b -> IO (Maybe (Tree String))
+getCounterexampleFromUser automat = do
           -- create components
           dialog <- dialogNew
           set dialog [windowTitle := "Conjecture"]
@@ -123,10 +131,8 @@ instance Teacher Interactive where
           if answer == ResponseYes then return Nothing
                                    else case (parseTree (filter (/= ' ') counterexample)) of
                                              Left t     -> return $ Just t
-                                             Right err  -> error err
-                             
-        getSigma Interactive = return [("s",2),("g",1),("a",0)]
-
+                                             Right err  -> do 
+                                                            getCounterexampleFromUser automat
 
 -- | An interactive teacher with a fixed string alphabet: 'getSigma' returns the alphabet 
 -- @
