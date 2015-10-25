@@ -70,7 +70,7 @@ matLearner = do
     onClicked buttonAutomaton $ do  dialog <- dialogNew
                                     set dialog [windowTitle := fileDialogTitle, 
                                                 windowDefaultWidth := 500,
-                                                windowDefaultHeight := 400 ]
+                                                windowDefaultHeight := 400]
 
                                     area <- dialogGetUpper dialog
 

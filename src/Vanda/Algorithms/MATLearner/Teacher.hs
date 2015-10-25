@@ -121,7 +121,9 @@ instance Teacher Interactive where
           widgetDestroy dialog
 
           if answer == ResponseYes then return Nothing
-                                   else return $ Just (parseTree (filter (/= ' ') counterexample,0))                                          
+                                   else case (parseTree (filter (/= ' ') counterexample)) of
+                                             Left t     -> return $ Just t
+                                             Right err  -> error err
                              
         getSigma Interactive = return [("s",2),("g",1),("a",0)]
 
