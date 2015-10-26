@@ -825,27 +825,6 @@ outputExtractDelete teacher extractedTree = do
                 return ()
 
 
--- | diplay dialog with the given taxt and destroy it afterwards
-displayDialog :: String -> String -> IO ()
-displayDialog labelText buttonText = do
-            dialog <- dialogNew
-            set dialog [windowTitle := infoDialog]
-            area <- dialogGetUpper dialog
-            label <- labelNew (Just labelText)
-
-            -- place components
-            boxPackStart area label PackNatural 0
-            dialogAddButton dialog buttonText ResponseOk
-
-            -- display components
-            widgetShowAll area
-
-            -- wait for ok
-            answer <- dialogRun dialog
-            widgetDestroy dialog
-            return ()
-
-
 -- * colors and texts
 
 inactiveColor = Color 52254 49220 49220
@@ -880,7 +859,6 @@ observationTableFrame = "Observation Table"
 statusFrame = "Status"
 menueTitle = "MATLearner"
 observationTableDialogTitle = "MATLearner"
-infoDialog = "MATLearner"
 extractTitle = "Extract"
 
 isClosedMsg = "Observation Table is closed."
@@ -898,7 +876,6 @@ extracted tree = "The tree\n" ++ nicerShow tree ++ "\nwas extracted and will be 
 counterexampleNothing = "Please enter a counterexample"
 counterexampleNoTree = "The counterexample is not a valid tree."
 counterexampleMember = "Membership is already known and this tree is not a counterexample!"
-tryAgain = "Try again."
 
 
 -- colors for table

@@ -74,14 +74,14 @@ instance Teacher Interactive where
           return $ answer == ResponseYes
         
         conjecture Interactive automat = do
-          getCounterexampleFromUser automat
+          getCounterexampleFromUser automat ""
                              
         getSigma Interactive = return [("s",2),("g",1),("a",0)]
 
 
 -- | Dialog with automaton and counterexample input
-getCounterexampleFromUser :: (Ord b, Show b) => Automaton b -> IO (Maybe (Tree String))
-getCounterexampleFromUser automat = do
+getCounterexampleFromUser :: (Ord b, Show b) => Automaton b -> String -> IO (Maybe (Tree String))
+getCounterexampleFromUser automat oldTreeString = do
           -- create components
           dialog <- dialogNew
           set dialog [windowTitle := "Conjecture"]
@@ -94,7 +94,7 @@ getCounterexampleFromUser automat = do
           boxPackStart area counterexampleEntry PackNatural 0
           dialogAddButton dialog "Yes" ResponseYes
           dialogAddButton dialog "No" ResponseNo
-
+          entrySetText counterexampleEntry oldTreeString
           -- autocompletion on enter
           onEntryActivate counterexampleEntry $ do
                                                     sigma <- getSigma automat
@@ -132,7 +132,30 @@ getCounterexampleFromUser automat = do
                                    else case (parseTree (filter (/= ' ') counterexample)) of
                                              Left t     -> return $ Just t
                                              Right err  -> do 
-                                                            getCounterexampleFromUser automat
+                                                            displayDialog err tryAgain
+                                                            getCounterexampleFromUser automat counterexample
+
+
+-- | diplay dialog with the given taxt and destroy it afterwards
+displayDialog :: String -> String -> IO ()
+displayDialog labelText buttonText = do
+            dialog <- dialogNew
+            set dialog [windowTitle := infoDialog]
+            area <- dialogGetUpper dialog
+            label <- labelNew (Just labelText)
+
+            -- place components
+            boxPackStart area label PackNatural 0
+            dialogAddButton dialog buttonText ResponseOk
+
+            -- display components
+            widgetShowAll area
+
+            -- wait for ok
+            answer <- dialogRun dialog
+            widgetDestroy dialog
+            return ()
+
 
 -- | An interactive teacher with a fixed string alphabet: 'getSigma' returns the alphabet 
 -- @
@@ -171,3 +194,8 @@ instance (Ord a) => Teacher (Automaton a) where
         isMember automat baum = return $ accepts automat baum
         conjecture automat1 automat2 = return $ isEmpty (unite (intersect (complement automat1) automat2) (intersect automat1 (complement automat2)))
         getSigma automat = return $ getAlphabet automat
+
+
+
+infoDialog = "MATLearner"
+tryAgain = "Try again."
