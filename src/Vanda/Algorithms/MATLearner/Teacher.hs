@@ -46,19 +46,45 @@ instance Teacher Interactive where
 
           return $ answer == ResponseYes
         
-        conjecture Interactive skip oldTreeString automat = do
+        conjecture Interactive False oldTreeString automat = do
           -- create components
+          dialog <- dialogNew
+          set dialog [windowTitle := "Conjecture"]
+          area <- dialogGetUpper dialog
+          conjectureText <- labelNew (Just ("Is this your Automaton?" ++ show automat))
+
+          -- place components
+          boxPackStart area conjectureText PackNatural 0
+          dialogAddButton dialog "Yes" ResponseYes
+          dialogAddButton dialog "No" ResponseNo                                                 
+
+          -- display components
+          widgetShowAll area
+
+          -- ask for membership
+          answer <- dialogRun dialog
+          widgetDestroy dialog
+
+          if answer == ResponseYes then return Nothing
+                                   else askForCounterexample oldTreeString automat
+        conjecture Interactive True oldTreeString automat = askForCounterexample oldTreeString automat 
+
+
+        getSigma Interactive = return [("s",2),("g",1),("a",0)]
+
+
+askForCounterexample oldTreeString automat = do
+            -- create components
           dialog <- dialogNew
           set dialog [windowTitle := "Conjecture"]
           counterexampleEntry <- entryNew
           area <- dialogGetUpper dialog
-          conjectureText <- labelNew (Just ("Is this Automaton correct?\nIf not please enter a counterexample\n" ++ show automat))
+          conjectureText <- labelNew (Just ("Please enter a counterexample\n" ++ show automat))
 
           -- place components
           boxPackStart area conjectureText PackNatural 0
           boxPackStart area counterexampleEntry PackNatural 0
-          dialogAddButton dialog "Yes" ResponseYes
-          dialogAddButton dialog "No" ResponseNo
+          dialogAddButton dialog "Next" ResponseOk
           entrySetText counterexampleEntry oldTreeString
           -- autocompletion on enter
           onEntryActivate counterexampleEntry $ do
@@ -82,22 +108,14 @@ instance Teacher Interactive where
                                                                 (do
                                                                 entrySetText counterexampleEntry $ restMsg ++ (head symbols) ++ " [ ]" ++ (drop pos msg)
                                                                 editableSetPosition counterexampleEntry $ length $ restMsg ++ (head symbols) ++ " [")
-                                                            
-
-
           -- display components
           widgetShowAll area
 
-          -- ask for membership
+          -- ask for counterexample
           answer <- dialogRun dialog
           counterexample <- entryGetText counterexampleEntry
           widgetDestroy dialog
-
-          if answer == ResponseYes then return Nothing
-                                   else return $ Just (parseTree (filter (/= ' ') counterexample))
-                             
-        getSigma Interactive = return [("s",2),("g",1),("a",0)]
-
+          return $ Just (parseTree (filter (/= ' ') counterexample)) 
 
 
 -- | diplay dialog with the given taxt and destroy it afterwards
