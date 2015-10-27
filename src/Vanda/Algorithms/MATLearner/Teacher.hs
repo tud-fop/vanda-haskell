@@ -49,9 +49,9 @@ instance Teacher Interactive where
         conjecture Interactive False oldTreeString automat = do
           -- create components
           dialog <- dialogNew
-          set dialog [windowTitle := "Conjecture"]
+          set dialog [windowTitle := conjectureTitle]
           area <- dialogGetUpper dialog
-          conjectureText <- labelNew (Just ("Is this your Automaton?" ++ show automat))
+          conjectureText <- labelNew (Just (conjectureTextQuestion++ show automat))
 
           -- place components
           boxPackStart area conjectureText PackNatural 0
@@ -76,10 +76,10 @@ instance Teacher Interactive where
 askForCounterexample oldTreeString automat = do
             -- create components
           dialog <- dialogNew
-          set dialog [windowTitle := "Conjecture"]
+          set dialog [windowTitle := conjectureTitle]
           counterexampleEntry <- entryNew
           area <- dialogGetUpper dialog
-          conjectureText <- labelNew (Just ("Please enter a counterexample\n" ++ show automat))
+          conjectureText <- labelNew (Just (conjectureEnterCE ++ "\n" ++ show automat))
 
           -- place components
           boxPackStart area conjectureText PackNatural 0
@@ -143,11 +143,30 @@ instance (Ord a) => Teacher (Automaton a) where
         isMember automat baum = return $ accepts automat baum
         conjecture automat1 _ _ automat2 = case isEmpty (unite (intersect (complement automat1) automat2) (intersect automat1 (complement automat2))) of
                                         Nothing -> return Nothing
-                                        Just t  -> return $ Just (Left t)
+                                        Just t  -> do
+                                                    -- create components
+                                                    dialog <- dialogNew
+                                                    set dialog [windowTitle := conjectureTitle]
+                                                    area <- dialogGetUpper dialog
+                                                    conjectureText <- labelNew (Just (conjectureTextNotAutomaton ++ "\n" ++ show automat2))
+
+                                                    -- place components
+                                                    boxPackStart area conjectureText PackNatural 0
+                                                    dialogAddButton dialog "Next Step" ResponseOk                                               
+
+                                                    -- display components
+                                                    widgetShowAll area
+
+                                                    -- ask for membership
+                                                    answer <- dialogRun dialog
+                                                    widgetDestroy dialog
+                                                    return $ Just (Left t)
 
         getSigma automat = return $ getAlphabet automat
 
-
-
+conjectureTitle = "Conjecture"
+conjectureTextQuestion = "Is this your Automaton?"
+conjectureEnterCE = "Please enter a counterexample"
+conjectureTextNotAutomaton = "This is not the Automaton."
 infoDialog = "MATLearner"
 tryAgain = "Try again."
