@@ -292,7 +292,7 @@ correctify teacher = do
                     (obs@(OT (s,contexts,mapping)),out) <- get
                     sigma <- lift $ getSigma teacher
                     let automaton = generateAutomaton obs sigma
-                    maybeCounterexample <- lift $ conjecture teacher automaton
+                    maybeCounterexample <- lift $ conjecture teacher False "" automaton
                     if maybeCounterexample == Nothing
                         then do
                             outputCorrect teacher automaton
@@ -316,23 +316,27 @@ correctify teacher = do
                             where
                                 -- | check whther the given counterexample is a correct tree (check ranks of node labels) and whether it is actually a counterexample and if not ask for a new one
                                     -- TODO right now each time the automaton is printed out aigain
-                                checkCE :: Maybe (Tree String) -> Map (Tree String) Bool -> [(String,Int)] -> Automaton Int -> IO (Tree String)
-                                checkCE Nothing               mapping sigma automaton = do
+                                checkCE :: Maybe (Either (Tree String) String) -> Map (Tree String) Bool -> [(String,Int)] -> Automaton Int -> IO (Tree String)
+                                checkCE Nothing                      mapping sigma automaton = do -- this should be impossible
                                                                                 displayDialog counterexampleNothing tryAgain
-                                                                                newcounterexample <- conjecture teacher automaton
+                                                                                newcounterexample <- conjecture teacher True "" automaton
                                                                                 checkCE newcounterexample mapping sigma automaton
-                                checkCE (Just counterexample) mapping sigma automaton = if (checkValidity counterexample sigma) /= Nothing
-                                                                                    then do -- symbols have wrong ranks
-                                                                                        displayDialog counterexampleNoTree tryAgain
-                                                                                        newcounterexample <- conjecture teacher automaton
+                                checkCE (Just (Right err))           mapping sigma automaton = do 
+                                                                                displayDialog err tryAgain
+                                                                                newcounterexample <- conjecture teacher True "" automaton
+                                                                                checkCE newcounterexample mapping sigma automaton
+                                checkCE (Just (Left counterexample)) mapping sigma automaton = if (checkValidity counterexample sigma) /= Nothing
+                                                                                then do -- symbols have wrong ranks
+                                                                                    displayDialog counterexampleNoTree tryAgain
+                                                                                    newcounterexample <- conjecture teacher True "" automaton
+                                                                                    checkCE newcounterexample mapping sigma automaton
+                                                                                else if (member counterexample mapping) && (mapping ! counterexample /= (not (accepts automaton counterexample)))
+                                                                                    then do -- the conjectured automaton behaves correctly for the given counterexample
+                                                                                        displayDialog counterexampleMember tryAgain
+                                                                                        newcounterexample <- conjecture teacher True "" automaton
                                                                                         checkCE newcounterexample mapping sigma automaton
-                                                                                    else if (member counterexample mapping) && (mapping ! counterexample /= (not (accepts automaton counterexample)))
-                                                                                        then do -- the conjectured automaton behaves correctly for the given counterexample
-                                                                                            displayDialog counterexampleMember tryAgain
-                                                                                            newcounterexample <- conjecture teacher automaton
-                                                                                            checkCE newcounterexample mapping sigma automaton
-                                                                                        else
-                                                                                            return counterexample
+                                                                                    else
+                                                                                        return counterexample
 
 
 -- | extract subtree that has to be added to the observation table
