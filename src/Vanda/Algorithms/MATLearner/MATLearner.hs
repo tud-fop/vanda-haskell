@@ -14,6 +14,7 @@ import Vanda.Algorithms.MATLearner.TreesContexts
 import Vanda.Algorithms.MATLearner.Util
 import Vanda.Algorithms.MATLearner.Teacher
 import Graphics.UI.Gtk hiding (get)
+import System.Exit
 
 
 instance Ord a => Ord (Tree a) where
@@ -579,9 +580,9 @@ outputClosed teacher = do
                     let (contextsOut,sigmaTreesOut,sigmaSTreesOut,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
                         noColor = \x -> (x,colorNormal)
                     fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,map (noColor . fst) sigmaSTreesOut,map (map noColor) sigmaRowsOut,map (map noColor) sigmaSRowsOut)
-                    ans <- lift $ dialogRun dialog
+                    lift $ waitForNextStep dialog
                     lift $ displayDialog isClosedMsg nextStep
-                    ans <- lift $ dialogRun dialog
+                    lift $ waitForNextStep dialog
                     return ()
 
 
@@ -602,9 +603,9 @@ outputNotClosed teacher treeClosed = do
                             | tree == treeClosed = (notClosedColor treeStr,map notClosedColor row)
                             | otherwise          = (noColor treeStr,map noColor row)
                     fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,sigmaSTreesOutColor,map (map noColor) sigmaRowsOut,sigmaSRowsOutColor)
-                    ans <- lift $ dialogRun dialog
+                    lift $ waitForNextStep dialog
                     lift $ displayDialog isNotClosedMsg nextStep
-                    ans <- lift $ dialogRun dialog
+                    lift $ waitForNextStep dialog
                     lift $ displayDialog (addTree treeClosed) nextStep
                     return ()
 
@@ -617,9 +618,9 @@ outputConsistent teacher = do
                     let (contextsOut,sigmaTreesOut,sigmaSTreesOut,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
                         noColor = \x -> (x,colorNormal)
                     fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,map (noColor . fst) sigmaSTreesOut,map (map noColor) sigmaRowsOut,map (map noColor) sigmaSRowsOut)
-                    ans <- lift $ dialogRun dialog
+                    lift $ waitForNextStep dialog
                     lift $ displayDialog isConsistentMsg nextStep
-                    ans <- lift $ dialogRun dialog
+                    lift $ waitForNextStep dialog
                     return ()
 
 
@@ -662,9 +663,9 @@ outputNotConsistent teacher s1 s2 s1' s2' c' newC = do
                             | c == c'   = notConsistentColor cStr
                             | otherwise = noColor cStr
                     fillTableWithOT (contextsOut,sigmaTreesOutColor,sigmaSTreesOutColor,sigmaRowsOutColor,sigmaSRowsOutColor)
-                    ans <- lift $ dialogRun dialog
+                    lift $ waitForNextStep dialog
                     lift $ displayDialog isNotConsistentMsg nextStep
-                    ans <- lift $ dialogRun dialog
+                    lift $ waitForNextStep dialog
                     lift $ displayDialog (addContext newC) nextStep
                     return ()
 
@@ -683,7 +684,7 @@ outputLearn teacher = do
                 let (contextsOut,sigmaTreesOut,sigmaSTreesOut,sigmaRowsOut,sigmaSRowsOut) = formatObservationTable obs sigma
                     noColor = \x -> (x,colorNormal)
                 fillTableWithOT (map (noColor . fst) contextsOut,map (noColor . fst) sigmaTreesOut,map (noColor . fst) sigmaSTreesOut,map (map noColor) sigmaRowsOut,map (map noColor) sigmaSRowsOut)
-                ans <- lift $ dialogRun dialog
+                lift $ waitForNextStep dialog
                 return ()
 
 
@@ -724,7 +725,7 @@ outputUpdateMapping teacher tree = do
                     noColor = \x -> (x,colorNormal)
                     updateColor = \x -> (x,colorUpdate)
                 fillTableWithOT (map (paintContext (sigmaTrees ++ sigmaSTrees)) contextsOut,map (paintTrees contexts) sigmaTreesOut,map (paintTrees contexts) sigmaSTreesOut,map (map paintEntries) sigmaRowsZipped,map (map paintEntries) sigmaRowsSZipped)
-                ans <- lift $ dialogRun dialog
+                lift $ waitForNextStep dialog
                 return ()
 
 
@@ -732,7 +733,7 @@ outputExtractInit :: Teacher t => t -> Tree String -> StateT (ObservationTable,G
 outputExtractInit teacher counterexample = do
                 (obs,GUI (dialog0,_,_,_,_,_)) <- get
                 lift $ displayDialog (notCorrect counterexample) nextStep
-                ans <- lift $ dialogRun dialog0
+                lift $ waitForNextStep dialog0
                 sep1 <- lift $ vSeparatorNew
                 sep2 <- lift $ vSeparatorNew
 
@@ -828,6 +829,11 @@ outputExtractDelete teacher extractedTree = do
                 put (obs,GUI (dialog,observationTableOut,box,status,frameStatus,None))
                 return ()
 
+waitForNextStep dialog = do
+   ans <- dialogRun dialog
+   case ans of
+      ResponseClose -> exitWith ExitSuccess
+      ResponseOk    -> return ()
 
 -- * colors and texts
 

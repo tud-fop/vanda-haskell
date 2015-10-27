@@ -5,6 +5,7 @@ import Vanda.Algorithms.MATLearner.Util
 import Data.Tree
 import Graphics.UI.Gtk
 import Control.Monad
+import System.Exit
 
 
 -- | The 'Teacher' class defines three methods which have to be implemented: 
@@ -65,8 +66,10 @@ instance Teacher Interactive where
           answer <- dialogRun dialog
           widgetDestroy dialog
 
-          if answer == ResponseYes then return Nothing
-                                   else askForCounterexample oldTreeString automat
+          case answer of
+              ResponseYes -> return Nothing
+              ResponseNo  -> askForCounterexample oldTreeString automat
+              ResponseClose -> exitWith ExitSuccess
         conjecture Interactive True oldTreeString automat = askForCounterexample oldTreeString automat 
 
 
@@ -160,7 +163,9 @@ instance (Ord a) => Teacher (Automaton a) where
                                                     -- ask for membership
                                                     answer <- dialogRun dialog
                                                     widgetDestroy dialog
-                                                    return $ Just (Left t)
+                                                    case answer of
+                                                      ResponseOk    -> return $ Just (Left t)
+                                                      ResponseClose -> exitWith ExitSuccess
 
         getSigma automat = return $ getAlphabet automat
 
