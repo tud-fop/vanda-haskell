@@ -831,9 +831,9 @@ outputExtractDelete teacher extractedTree = do
 
 waitForNextStep dialog = do
    ans <- dialogRun dialog
-   case ans of
-      ResponseClose -> exitWith ExitSuccess
-      ResponseOk    -> return ()
+   if ans == ResponseOk 
+    then return ()
+    else exitWith ExitSuccess
 
 -- * colors and texts
 
