@@ -37,8 +37,9 @@ fileDialogTitle = "Choose Automaton"
 
 fontObservationtable = "Courier 15"
 
-buttonInteractiveText = "Interactive Teacher"
-buttonAutomatonText   = "Automaton Teacher"
+buttonInteractiveText  = "Interactive Teacher"
+buttonAutomatonText    = "Automaton Teacher"
+buttonAutomatonIntText = "Half Interactive Automaton Teacher"
 
 observationTableFrame       = "Observation Table"
 statusFrame                 = "Status"

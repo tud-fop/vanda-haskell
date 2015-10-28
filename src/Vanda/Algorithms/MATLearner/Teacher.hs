@@ -152,3 +152,26 @@ instance (Ord a) => Teacher (Automaton a) where
                                                       ResponseClose -> exitWith ExitSuccess
 
         getSigma automat = return $ getAlphabet automat
+
+
+data Automaton' a = A (Automaton a)
+instance (Ord a, Show a) => Teacher (Automaton' a) where
+        isMember (A automat) baum = return $ accepts automat baum
+        conjecture (A automat1) False oldTreeString automat2 = case isEmpty (unite (intersect (complement automat1) automat2) (intersect automat1 (complement automat2))) of
+                                        Nothing -> return Nothing
+                                        Just t  -> do
+                                                    ce <- askForCounterexample oldTreeString automat1
+                                                    case ce of 
+                                                      Just (Right _)   -> return $ ce
+                                                      Just (Left tree) -> if accepts automat1 tree == accepts automat2 tree 
+                                                        then return $ Just $ Right "Not CE in original Aut"
+                                                        else return $ Just $ Left tree
+        conjecture (A automat1) True oldTreeString automat2 = do
+                                                    ce <- askForCounterexample oldTreeString automat1
+                                                    case ce of 
+                                                      Just (Right _)   -> return $ ce
+                                                      Just (Left tree) -> if accepts automat1 tree == accepts automat2 tree 
+                                                        then return $ Just $ Right "Not CE in original Aut"
+                                                        else return $ Just $ Left tree
+
+        getSigma (A automat) = return $ getAlphabet automat

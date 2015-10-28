@@ -63,8 +63,12 @@ matLearner = do
     set buttonAutomaton [buttonLabel := buttonAutomatonText]
 
     
+    buttonAutomatonInt <- buttonNew
+    set buttonAutomatonInt [buttonLabel := buttonAutomatonIntText]
+
     boxPackStart hbox buttonInteractive PackNatural 0
     boxPackStart hbox buttonAutomaton PackNatural 0
+    boxPackStart hbox buttonAutomatonInt PackNatural 0
 
 
     onClicked buttonInteractive $ main' Interactive
@@ -103,6 +107,26 @@ matLearner = do
                                     widgetShowAll dialog
                                     --automat <- parseFile filepath parseAutomaton
                                     --main' automat
+
+    onClicked buttonAutomatonInt $ do dialog <- dialogNew
+                                      set dialog [windowTitle := fileDialogTitle, 
+                                                  windowDefaultWidth := 500,
+                                                  windowDefaultHeight := 400]
+
+                                      area <- dialogGetUpper dialog
+
+                                      fch <- fileChooserWidgetNew FileChooserActionOpen
+                                      containerAdd area fch 
+                                                           
+                                      onFileActivated fch $ 
+                                           do file <- fileChooserGetFilename fch
+                                              case file of
+                                                   Just fpath -> do widgetDestroy dialog
+                                                                    automat <- parseFile fpath parseAutomaton
+                                                                    main' (A automat)
+                                                   Nothing -> return ()
+
+                                      widgetShowAll dialog
 
     onDestroy window mainQuit
     widgetShowAll window
