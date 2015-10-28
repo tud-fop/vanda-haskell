@@ -39,7 +39,8 @@ parseTree string = case s of
             | last rest == ')' = if length rest == 1 then Left []
                                                      else map' parseTree $ (separateTrees $ take ((length rest) - 1) rest)
             | otherwise        = Right parseErrorLeftBracket
-        parseSubTree _         = Right parseErrorRightBracket
+        parseSubTree ""        = Left []
+        parseSubTree _         = Right parseErrorLeftBracket
         parseSymbol' :: String -> Either (String,String) String
         parseSymbol' ('(' : rest) = Right parseErrorInvalidSymbol
         parseSymbol' (')' : rest) = Right parseErrorInvalidSymbol
@@ -126,4 +127,3 @@ parseSymbol ('"' : rest) line = parseSymbol' rest line
           parseSymbol' (c  : s) l = let (restSymbol,restString) = parseSymbol' s l in (c: restSymbol,restString)
           parseSymbol' []       l = parsingError l "'\"' missing."
 parseSymbol _             line = parsingError line "'\"' missing."
-
