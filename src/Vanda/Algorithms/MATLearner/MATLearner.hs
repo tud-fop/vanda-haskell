@@ -330,12 +330,12 @@ correctify teacher = do
                                 checkCE (Just (Left counterexample)) mapping sigma automaton = if (checkValidity counterexample sigma) /= Nothing
                                                                                 then do -- symbols have wrong ranks
                                                                                     displayDialog counterexampleNoTree tryAgain
-                                                                                    newcounterexample <- conjecture teacher True "" automaton
+                                                                                    newcounterexample <- conjecture teacher True (nicerShow counterexample) automaton
                                                                                     checkCE newcounterexample mapping sigma automaton
                                                                                 else if (member counterexample mapping) && (mapping ! counterexample /= (not (accepts automaton counterexample)))
                                                                                     then do -- the conjectured automaton behaves correctly for the given counterexample
                                                                                         displayDialog counterexampleMember tryAgain
-                                                                                        newcounterexample <- conjecture teacher True "" automaton
+                                                                                        newcounterexample <- conjecture teacher True (nicerShow counterexample) automaton
                                                                                         checkCE newcounterexample mapping sigma automaton
                                                                                     else
                                                                                         return counterexample
@@ -830,6 +830,29 @@ outputExtractDelete teacher extractedTree = do
                 put (obs,GUI (dialog,observationTableOut,box,status,frameStatus,None))
                 return ()
 
+
+-- | diplay dialog with the given taxt and destroy it afterwards
+displayDialog :: String -> String -> IO ()
+displayDialog labelText buttonText = do
+            dialog <- dialogNew
+            set dialog [windowTitle := infoDialog]
+            area <- dialogGetUpper dialog
+            label <- labelNew (Just labelText)
+
+            -- place components
+            boxPackStart area label PackNatural 0
+            dialogAddButton dialog buttonText ResponseOk
+
+            -- display components
+            widgetShowAll area
+
+            -- wait for ok
+            answer <- dialogRun dialog
+            widgetDestroy dialog
+            return ()
+
+
+waitForNextStep :: DialogClass self => self -> IO ()
 waitForNextStep dialog = do
    ans <- dialogRun dialog
    if ans == ResponseOk 

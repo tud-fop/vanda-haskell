@@ -77,6 +77,7 @@ instance Teacher Interactive where
         getSigma Interactive = return [("s",2),("g",1),("a",0)]
 
 
+askForCounterexample :: (Show t, Teacher t) => String -> t -> IO (Maybe (Either (Tree String) String))
 askForCounterexample oldTreeString automat = do
             -- create components
           dialog <- dialogNew
@@ -95,8 +96,8 @@ askForCounterexample oldTreeString automat = do
                                                     sigma <- getSigma automat
                                                     msg <- entryGetText counterexampleEntry
                                                     pos <- editableGetPosition counterexampleEntry
-                                                    let (restMsg,symbol) = getLastSymbol $ (reverse $ take pos msg,[])
-                                                        symbols = filter (samePraefix symbol) $ map (show . fst) sigma
+                                                    let (restMsg,symbol) = (take (pos-1) msg,last $ take pos msg)
+                                                        symbols = filter (samePraefix ('\"':[symbol])) $ map (show . fst) sigma
 
                                                         samePraefix :: String -> String -> Bool
                                                         samePraefix (x:xs) (y:ys)
@@ -104,43 +105,25 @@ askForCounterexample oldTreeString automat = do
                                                             | otherwise = False
                                                         samePraefix _      _      = True
 
-                                                        getLastSymbol :: (String,String) -> (String,String)
-                                                        getLastSymbol ([],ys)        = ([],ys)
-                                                        getLastSymbol (('\"':xs),ys) = (reverse xs,('\"':ys))
-                                                        getLastSymbol ((x:xs),ys)    = getLastSymbol (xs,ys ++ [x])
+                                                        --getLastSymbol :: (String,String) -> (String,String)
+                                                        --getLastSymbol ([],ys)        = ([],ys)
+                                                        --getLastSymbol (('\"':xs),ys) = (reverse xs,('\"':ys))
+                                                        --getLastSymbol ((x:xs),ys)    = getLastSymbol (xs,ys ++ [x])
                                                         in when (length symbols == 1)
                                                                 (do
-                                                                entrySetText counterexampleEntry $ restMsg ++ (head symbols) ++ " ( )" ++ (drop pos msg)
-                                                                editableSetPosition counterexampleEntry $ length $ restMsg ++ (head symbols) ++ " (")
+                                                                entrySetText counterexampleEntry $ restMsg ++ [symbol] ++ "()" ++ (drop pos msg)
+                                                                editableSetPosition counterexampleEntry $ length $ restMsg ++ [symbol] ++ "(")
           -- display components
           widgetShowAll area
 
           -- ask for counterexample
           answer <- dialogRun dialog
-          counterexample <- entryGetText counterexampleEntry
-          widgetDestroy dialog
-          return $ Just (parseTree (filter (/= ' ') counterexample)) 
-
-
--- | diplay dialog with the given taxt and destroy it afterwards
-displayDialog :: String -> String -> IO ()
-displayDialog labelText buttonText = do
-            dialog <- dialogNew
-            set dialog [windowTitle := infoDialog]
-            area <- dialogGetUpper dialog
-            label <- labelNew (Just labelText)
-
-            -- place components
-            boxPackStart area label PackNatural 0
-            dialogAddButton dialog buttonText ResponseOk
-
-            -- display components
-            widgetShowAll area
-
-            -- wait for ok
-            answer <- dialogRun dialog
-            widgetDestroy dialog
-            return ()
+          if answer /= ResponseOk
+            then exitWith ExitSuccess
+            else do
+              counterexample <- entryGetText counterexampleEntry
+              widgetDestroy dialog
+              return $ Just (parseTree (filter (/= ' ') counterexample)) 
 
 
 instance (Ord a) => Teacher (Automaton a) where
