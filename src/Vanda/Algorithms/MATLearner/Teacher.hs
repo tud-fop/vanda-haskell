@@ -2,6 +2,7 @@ module Vanda.Algorithms.MATLearner.Teacher where
 
 import Vanda.Algorithms.MATLearner.TreeAutomaton
 import Vanda.Algorithms.MATLearner.Util
+import Vanda.Algorithms.MATLearner.Strings
 import Data.Tree
 import Graphics.UI.Gtk
 import Control.Monad
@@ -109,8 +110,8 @@ askForCounterexample oldTreeString automat = do
                                                         getLastSymbol ((x:xs),ys)    = getLastSymbol (xs,ys ++ [x])
                                                         in when (length symbols == 1)
                                                                 (do
-                                                                entrySetText counterexampleEntry $ restMsg ++ (head symbols) ++ " [ ]" ++ (drop pos msg)
-                                                                editableSetPosition counterexampleEntry $ length $ restMsg ++ (head symbols) ++ " [")
+                                                                entrySetText counterexampleEntry $ restMsg ++ (head symbols) ++ " ( )" ++ (drop pos msg)
+                                                                editableSetPosition counterexampleEntry $ length $ restMsg ++ (head symbols) ++ " (")
           -- display components
           widgetShowAll area
 
@@ -168,10 +169,3 @@ instance (Ord a) => Teacher (Automaton a) where
                                                       ResponseClose -> exitWith ExitSuccess
 
         getSigma automat = return $ getAlphabet automat
-
-conjectureTitle = "Conjecture"
-conjectureTextQuestion = "Is this your Automaton?"
-conjectureEnterCE = "Please enter a counterexample"
-conjectureTextNotAutomaton = "This is not the Automaton."
-infoDialog = "MATLearner"
-tryAgain = "Try again."

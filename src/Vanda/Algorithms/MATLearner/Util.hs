@@ -1,6 +1,7 @@
 module Vanda.Algorithms.MATLearner.Util (parseFile, parseAutomaton, parseTree, parseStringToTree, nicerShow) where
 
 import Vanda.Algorithms.MATLearner.TreeAutomaton
+import Vanda.Algorithms.MATLearner.Strings
 import Vanda.Hypergraph
 import Data.Tree
 import Data.List (intercalate)
@@ -9,18 +10,12 @@ import qualified Data.Vector as V
 import Debug.Trace
 
 
--- | Display a Tree as a String. Only display parantheses, if the number of children > 1.
-nicerShow :: Tree String -> String
-nicerShow (Node a []  ) = a 
-nicerShow (Node a list) = a ++ "(" ++ (intercalate "," $ map nicerShow list) ++ ")"
 
 
--- | Opens a file and parses it with an arbitrary parser.
+-- | Opens a file and parses it with a given parser.
 parseFile :: (Show t) => FilePath -> (String -> t) -> IO t 
 parseFile fp parser = do
     file <- readFile fp
-    putStrLn $ "Parsing file " ++ fp
-    putStrLn . show $ parser (filter (/= ' ') file)
     return $ parser (filter (/= ' ') file)
 
 
@@ -31,31 +26,26 @@ parseFile fp parser = do
 -- @
 -- The integer value is used in a potential error message as line number.
 parseTree :: String -> Either (Tree String) (String)
-parseTree [] = Right "No empty Lines allowed."
+parseTree [] = Right counterexampleNothing
 parseTree string = case s of
-                        Left ("",_) -> Right "Tree Nodes can't be empty."
                         Right err   -> Right err
                         Left (symbol,subTree) -> case parseSubTree subTree of
                                                         Left st -> Left $ Node symbol (st)
                                                         Right err -> Right err
   where s = parseSymbol' string
         parseSubTree :: String -> Either [Tree String] String
-        parseSubTree ( '[' : rest)
-            | rest == ""       = Right "']' missing."
-            | last rest == ']' = if length rest == 1 then Left []
+        parseSubTree ( '(' : rest)
+            | rest == ""       = Right parseErrorRightBracket
+            | last rest == ')' = if length rest == 1 then Left []
                                                      else map' parseTree $ (separateTrees $ take ((length rest) - 1) rest)
-            | otherwise        = Right "']' missing."
-        parseSubTree _         = Right "'[' missing."
+            | otherwise        = Right parseErrorLeftBracket
+        parseSubTree _         = Right parseErrorRightBracket
         parseSymbol' :: String -> Either (String,String) String
-        parseSymbol' ('"' : rest) = parseSymbol'' rest
-        parseSymbol' _ = Right "'\"' missing."
-        
-        parseSymbol'' :: String -> Either (String, String) String
-        parseSymbol'' ('"': s) = Left ("",s)
-        parseSymbol'' (c  : s) = case parseSymbol'' s of
-                                        Right err -> Right err
-                                        Left (restSymbol,restString) -> Left (c: restSymbol,restString)
-        parseSymbol'' []       = Right "'\"' missing."
+        parseSymbol' ('(' : rest) = Right parseErrorInvalidSymbol
+        parseSymbol' (')' : rest) = Right parseErrorInvalidSymbol
+        parseSymbol' ('"' : rest) = Right parseErrorInvalidSymbol
+        parseSymbol' (c : rest) = Left ([c],rest)
+        parseSymbol' [] = Right parseErrorNoTreeNode
           
         map' :: (a -> Either b c) -> [a] -> Either [b] c
         map' f [] = Left []
