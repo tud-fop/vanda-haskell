@@ -94,7 +94,7 @@ colorExtract = Color 6592 31310 3756
 
 
 
--- | Display a Tree as a String. Only display parantheses, if the number of children > 1.
+-- | Display a Tree as a String. Only display parantheses, if the number of children > 0.
 nicerShow :: Tree String -> String
 nicerShow (Node a []  ) = a 
 nicerShow (Node a list) = a ++ "(" ++ (intercalate "," $ map nicerShow list) ++ ")"

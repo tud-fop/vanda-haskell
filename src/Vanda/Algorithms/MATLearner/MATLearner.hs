@@ -104,7 +104,9 @@ displayFileDialog callLearner = do
               case file of
                    Just fpath -> do widgetDestroy dialog
                                     automat <- parseFile fpath parseAutomaton
-                                    callLearner automat
+                                    case automat of
+                                         Left automat' -> callLearner automat'
+                                         Right err -> error $ "hihi" ++ err
                    Nothing -> return ()
 
       widgetShowAll dialog

@@ -48,12 +48,6 @@ parseTree string = case s of
         parseSymbol' (c : rest) = Left ([c],rest)
         parseSymbol' [] = Right parseErrorNoTreeNode
           
-        map' :: (a -> Either b c) -> [a] -> Either [b] c
-        map' f [] = Left []
-        map' f (a:rest) = case (f a,map' f rest) of
-                               (Right c,_) -> Right c
-                               (_,Right c) -> Right c
-                               (Left b,Left c) -> Left (b:c)
                                           
 -- | Parses a string to a monadic tree, treating every character as a node. The final node is represented by the second argument.
 parseStringToTree :: String -> String -> Tree String
@@ -72,8 +66,15 @@ separateTrees s = separateTrees' 0 "" s
               | otherwise                     = separateTrees' level       (currentWord ++ [c]) rest
                     
 
-parsingError :: Int -> String -> a
-parsingError line message = error $ "Parsing Error in Line " ++ show line ++ ": " ++ message
+map' :: (a -> Either b c) -> [a] -> Either [b] c
+map' f [] = Left []
+map' f (a:rest) = case (f a,map' f rest) of
+                        (Right c,_) -> Right c
+                        (_,Right c) -> Right c
+                        (Left b,Left c) -> Left (b:c)
+
+parsingError :: Int -> String -> String
+parsingError line message = "Parsing Error in Line " ++ show line ++ ": " ++ message
 
 -- | Parses an Automaton from the following text format: States are coded as integers, node labels as strings. 
 -- The first line consists of a sequence of states in brackets, separated by commas, the final states.
@@ -86,44 +87,56 @@ parsingError line message = error $ "Parsing Error in Line " ++ show line ++ ": 
 --      [0] "g" 1
 --      [1] "g" 1
 -- @
-parseAutomaton :: String -> Automaton Int
-parseAutomaton s = trace (show states) $ Automaton (EdgeList (states) _edges) (S.fromList $ fst finalstates)
+parseAutomaton :: String -> Either (Automaton Int) String
+parseAutomaton s = case (finalstates,_edges) of
+                        ((Right err,_),_) -> Right err
+                        (_,Right err) -> Right err
+                        ((Left finalstates',_),Left edges') -> Left $ Automaton (EdgeList (states) edges') (S.fromList finalstates')
     where finalstates = parseList (head (lines s)) 1
-          _edges = map parseEdge $ zip (tail $ lines s) [2..]
-          states = getStates (S.fromList $ fst finalstates) _edges
+          _edges = map' parseEdge $ zip (tail $ lines s) [2..]
+          states = case (finalstates,_edges) of
+                        ((Left finalstates',_),Left edges') -> getStates (S.fromList finalstates') edges'
+                        (_,_) -> S.empty
           
           getStates :: S.Set Int -> [Hyperedge Int String Int] -> S.Set Int
           getStates currentStates [] = currentStates 
           getStates currentStates (he:rest) = getStates (S.singleton (to he) `S.union` S.fromList (from he) `S.union` currentStates) rest
 
-parseEdge :: (String,Int) -> Hyperedge Int String Int
-parseEdge (s,l) = Hyperedge _to (V.fromList _from) _label 0
+parseEdge :: (String,Int) -> Either (Hyperedge Int String Int) String
+parseEdge (s,l) = case (_from,_label,_to) of
+                       (Right err,_,_) -> Right err
+                       (_,Right err,_) -> Right err
+                       (_,_,Right err) -> Right err
+                       (Left from',Left label',Left to') -> Left $ Hyperedge to' (V.fromList from') label' 0
     where (_from,s') = parseList s l
           (_label,s'') = parseSymbol s' l
-          (_to) = read s''
+          (_to) = case reads s'' of
+                       [(x,"")] -> Left x
+                       _        -> Right $ parsingError l "Only numbers allowed."
 
 
-parseList :: String -> Int -> ([Int],String)
-parseList ('[':']':rest) _    = ([],rest)
-parseList ('[':rest)     line = parseList' rest line
-    where parseList' :: String -> Int -> ([Int],String)
-          parseList' []   l = parsingError l "']' missing."
-          parseList' list l = 
-              case reads list of
-                  [(x,s')] -> let (xs,s'') = parseList'' s' l in ((x:xs),s'')
-                  _        -> parsingError l "Only numbers allowed."
+parseList :: String -> Int -> (Either [Int] String,String)
+parseList ('(':')':rest) _    = (Left [],rest)
+parseList ('(':rest)     line = parseList' rest line
+  where parseList' :: String -> Int -> (Either [Int] String,String)
+        parseList' []   l = (Right $ parsingError l "']' missing.","")
+        parseList' list l = 
+          case reads list of
+                [(x,s')] -> let (xs,s'') = parseList'' s' l in 
+                                case xs of 
+                                      Right err -> (Right err,s'')
+                                      Left xs'  -> (Left (x:xs'),s'')
+                _        -> (Right $ parsingError l "Only numbers allowed.","")
 
-          parseList'' :: String -> Int -> ([Int],String)
-          parseList'' (',':s) l = parseList' s l
-          parseList'' (']':s) _ = ([],s)
-          parseList'' _       l = parsingError l "Numbers have to be seperated by ','."
-parseList _              line = parsingError line "'[' missing."
+        parseList'' :: String -> Int -> (Either [Int] String,String)
+        parseList'' (',':s) l = parseList' s l
+        parseList'' (']':s) _ = (Left [],s)
+        parseList'' _       l = (Right $ parsingError l "Numbers have to be seperated by ','.","")
+parseList _              line = (Right $ parsingError line "'[' missing.","")
 
-
-parseSymbol :: String -> Int -> (String,String)
-parseSymbol ('"' : rest) line = parseSymbol' rest line
-    where parseSymbol' :: String -> Int -> (String, String)
-          parseSymbol' ('"': s) _ = ("",s)
-          parseSymbol' (c  : s) l = let (restSymbol,restString) = parseSymbol' s l in (c: restSymbol,restString)
-          parseSymbol' []       l = parsingError l "'\"' missing."
-parseSymbol _             line = parsingError line "'\"' missing."
+parseSymbol :: String -> Int -> (Either String String,String)
+parseSymbol ('(' : rest) i = (Right $ parsingError i parseErrorInvalidSymbol,rest)
+parseSymbol (')' : rest) i = (Right $ parsingError i parseErrorInvalidSymbol,rest)
+parseSymbol ('"' : rest) i = (Right $ parsingError i parseErrorInvalidSymbol,rest)
+parseSymbol (c : rest) _ = (Left [c],rest)
+parseSymbol [] i = (Right $ parsingError i parseErrorNoTreeNode,"")
