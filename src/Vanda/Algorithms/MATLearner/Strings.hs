@@ -1,3 +1,14 @@
+{-|
+Module:      Vanda.Algorithms.MATLearner.Strings
+Description: Strings for the GTK Windows in the MATLearner
+Copyright:   (c) Technische Universität Dresden 2015
+License:     Redistribution and use in source and binary forms, with
+             or without modification, is ONLY permitted for teaching
+             purposes at Technische Universität Dresden AND IN
+             COORDINATION with the Chair of Foundations of Programming.
+Maintainer:  markus.napierkowski@mailbox.tu-dresden.de
+Stability:   unknown
+-}
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 module Vanda.Algorithms.MATLearner.Strings where
 

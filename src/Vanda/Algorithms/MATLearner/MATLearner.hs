@@ -12,7 +12,7 @@ import Data.Map hiding (foldr,foldl,map,filter,findIndex)
 import Data.List (elemIndex,find)
 import Data.Maybe
 import Vanda.Algorithms.MATLearner.TreesContexts
-import Vanda.Algorithms.MATLearner.Util
+import Vanda.Algorithms.MATLearner.Parser
 import Vanda.Algorithms.MATLearner.Teacher
 import Graphics.UI.Gtk hiding (get)
 import System.Exit

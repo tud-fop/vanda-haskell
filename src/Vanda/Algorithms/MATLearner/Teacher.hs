@@ -1,7 +1,7 @@
 module Vanda.Algorithms.MATLearner.Teacher where
 
 import Vanda.Algorithms.MATLearner.TreeAutomaton
-import Vanda.Algorithms.MATLearner.Util
+import Vanda.Algorithms.MATLearner.Parser
 import Vanda.Algorithms.MATLearner.Strings
 import Data.Tree
 import Graphics.UI.Gtk
