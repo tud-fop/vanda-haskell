@@ -5,19 +5,22 @@ import qualified Data.Set as S
 import qualified Data.Vector as V
 import Data.Tree
 import Vanda.Algorithms.MATLearner.TreesContexts
+import qualified "Control.Error"
 
+errorHere :: String -> String -> String
+errorHere = Control.Error.errorHere "Vanda.Algorithms.MATLearner.TreeAutomaton"
 
 data Automaton a = 
   Automaton (EdgeList a String Int) (S.Set a)
   
 instance (Show a) => Show (Automaton a) where
-  show (Automaton (EdgeList _ edgelist) finalStates) = "Edges:\n" ++ showEdges edgelist ++ "Final States: " ++ showlist (S.toAscList finalStates)
+  show (Automaton (EdgeList _ edgelist) finalStates) = "Final States: " ++ showlist (S.toAscList finalStates) ++"\nEdges:\n" ++ showEdges edgelist
     where showEdges :: (Show a) => [Hyperedge a String Int] -> String
           showEdges [] = ""
           showEdges ((Hyperedge to from label _) :xs) = showlist (V.toList from) ++ " -> " ++ label ++ " " ++ show to ++ "\n" ++ showEdges xs
-          showEdges ((Nullary _ _ _ ) : _) = undefined
-          showEdges ((Unary _ _ _ _ ) : _) = undefined
-          showEdges ((Binary _ _ _ _ _ ) : _) = undefined
+          showEdges ((Nullary _ _ _ ) : _) = errorHere "show" "Automaton contains edge with constructor Nullary"
+          showEdges ((Unary _ _ _ _ ) : _) = errorHere "show" "Automaton contains edge with constructor Unary"
+          showEdges ((Binary _ _ _ _ _ ) : _) = errorHere "show" "Automaton contains edge with constructor Binary"
           showlist li = "(" ++ drop 1 (take (length (show li) -1) (show li)) ++ ")"
 
 -- | Computes the state of the automaton after running over the tree. Only works if the automaton is bottom up deterministic and total!
@@ -32,9 +35,9 @@ computeState _ _ [] = error "Automaton has to be total" -- only happens if the a
 computeState childrenStates nodeLabel ((Hyperedge to from label _):edges)
   | nodeLabel == label && (V.toList from) == childrenStates = to
   | otherwise = computeState childrenStates nodeLabel edges 
-computeState _ _ ((Nullary _ _ _ ) : _) = undefined
-computeState _ _ ((Unary _ _ _ _ ) : _) = undefined
-computeState _ _ ((Binary _ _ _ _ _ ) : _) = undefined
+computeState _ _ ((Nullary _ _ _ ) : _) = errorHere "computeState" "Automaton contains edge with constructor Nullary"
+computeState _ _ ((Unary _ _ _ _ ) : _) = errorHere "computeState" "Automaton contains edge with constructor Unary"
+computeState _ _ ((Binary _ _ _ _ _ ) : _) = errorHere "computeState" "Automaton contains edge with constructor Binary"
 
 
 -- | Computes whether the Automaton accepts a Tree or not.

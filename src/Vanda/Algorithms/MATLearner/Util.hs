@@ -20,11 +20,10 @@ parseFile fp parser = do
 
 
 
--- | Parses a String to a Tree in the following format: A tree consists of a node in quotation marks followed by its subtrees in brackets, separated by commas. The following exmaple is a tree in the correct format:
+-- | Parses a String to a Tree in the following format: A tree consists of a node (a simple character) followed by its subtrees in parantheses, separated by commas. With symbols of rank 0, the parantheses can be ommited. The following exmaple is a tree in the correct format:
 -- @
---      "sigma" [ "alpha" [], "alpha" [] ]
+--      s(g(a),a)
 -- @
--- The integer value is used in a potential error message as line number.
 parseTree :: String -> Either (Tree String) (String)
 parseTree [] = Right counterexampleNothing
 parseTree string = case s of
@@ -76,16 +75,16 @@ map' f (a:rest) = case (f a,map' f rest) of
 parsingError :: Int -> String -> String
 parsingError line message = "Parsing Error in Line " ++ show line ++ ": " ++ message
 
--- | Parses an Automaton from the following text format: States are coded as integers, node labels as strings. 
--- The first line consists of a sequence of states in brackets, separated by commas, the final states.
--- All remaining lines consist of transitions in the following format: A sequence of states in brackets, 
--- followed by the node label in quotation marks, followed by the target state. 
+-- | Parses an Bottom-Up Tree Automaton from the following text format: States are coded as integers, node labels as characters. 
+-- The first line consists of a sequence of states in parantheses, separated by commas, the final states.
+-- All remaining lines consist of transitions in the following format: A sequence of states in parantheses, followed by an arrow,
+-- followed by the node label, followed by the target state. 
 -- The following example is in the correct format:
 -- @
---      [1]
---      [] "a" 0
---      [0] "g" 1
---      [1] "g" 1
+--      (0)
+--      () -> a 0
+--      (0) -> g 1
+--      (1) -> g 1
 -- @
 parseAutomaton :: String -> Either (Automaton Int) String
 parseAutomaton s = case (finalstates,_edges) of

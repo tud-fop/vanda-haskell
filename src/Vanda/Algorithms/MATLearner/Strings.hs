@@ -24,9 +24,9 @@ status 5 = "Extract"
 helpText :: Int -> String
 helpText 1 = "The algorithm is filling the Observation Table\nwith information, whether given trees are part\nof the language or not."
 helpText 2 = "The algorithm is determining, whether the\nObservation Table is closed, i.e. if every\nbitstring which occurs in the lower part\nof the table, exists in the upper part."
-helpText 3 = "The algorithm is determining, whether the\nObservation Table is consistent, i.e. if for\nevery pair of trees s1 and s2 in the upper\npart holds: if their bitstrings are equal, the\nbitstrings of any context applied to\nthese trees have to be equal." -- TODO: Besser erkären
+helpText 3 = "The algorithm is determining, whether the\nObservation Table is consistent, i.e. if for\nevery pair of trees s1 and s2 in the upper\npart holds: if their bitstrings are equal, the\nbitstrings of any context applied to\nthese trees have to be equal."
 helpText 4 = "The algorithm is determining, whether the\nteacher agrees with the current automaton and calculates\na counterexample if not."
-helpText 5 = "A counterexample has been given.\nThe algorithm now reduces this\ncounterexample to a minimal one." -- TODO: BEsser erklären
+helpText 5 = "A counterexample has been given.\nThe algorithm now reduces this\ncounterexample to a minimal one."
 
 helpTextOT  = "Something helpfull."
 
