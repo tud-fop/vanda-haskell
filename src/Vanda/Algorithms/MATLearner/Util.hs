@@ -4,10 +4,8 @@ import Vanda.Algorithms.MATLearner.TreeAutomaton
 import Vanda.Algorithms.MATLearner.Strings
 import Vanda.Hypergraph
 import Data.Tree
-import Data.List (intercalate)
 import qualified Data.Set as S
 import qualified Data.Vector as V
-import Debug.Trace
 
 
 
@@ -41,9 +39,9 @@ parseTree string = case s of
         parseSubTree ""        = Left []
         parseSubTree _         = Right parseErrorLeftBracket
         parseSymbol' :: String -> Either (String,String) String
-        parseSymbol' ('(' : rest) = Right parseErrorInvalidSymbol
-        parseSymbol' (')' : rest) = Right parseErrorInvalidSymbol
-        parseSymbol' ('"' : rest) = Right parseErrorInvalidSymbol
+        parseSymbol' ('(' : _) = Right parseErrorInvalidSymbol
+        parseSymbol' (')' : _) = Right parseErrorInvalidSymbol
+        parseSymbol' ('"' : _) = Right parseErrorInvalidSymbol
         parseSymbol' (c : rest) = Left ([c],rest)
         parseSymbol' [] = Right parseErrorNoTreeNode
           
@@ -66,7 +64,7 @@ separateTrees s = separateTrees' 0 "" s
                     
 
 map' :: (a -> Either b c) -> [a] -> Either [b] c
-map' f [] = Left []
+map' _ [] = Left []
 map' f (a:rest) = case (f a,map' f rest) of
                         (Right c,_) -> Right c
                         (_,Right c) -> Right c
@@ -85,7 +83,7 @@ parsingError line message = "Parsing Error in Line " ++ show line ++ ": " ++ mes
 --      () -> a 0
 --      (0) -> g 1
 --      (1) -> g 1
--- @
+-- @ 
 parseAutomaton :: String -> Either (Automaton Int) String
 parseAutomaton s = case (finalstates,_edges) of
                         ((Right err,_),_) -> Right err
@@ -117,7 +115,7 @@ parseEdge (s,l) = case (_from,_label,_to,arrow) of
 
 
 parseArrow :: String -> Int -> (Maybe String,String)
-parseArrow ('-':'>':rest) l = (Nothing,rest)
+parseArrow ('-':'>':rest) _ = (Nothing,rest)
 parseArrow _ l = (Just $ parsingError l parseErrorArrowMissing,"")
                        
 parseList :: String -> Int -> (Either [Int] String,String)

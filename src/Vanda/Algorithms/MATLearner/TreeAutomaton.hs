@@ -5,9 +5,9 @@ import qualified Data.Set as S
 import qualified Data.Vector as V
 import Data.Tree
 import Vanda.Algorithms.MATLearner.TreesContexts
-import qualified "Control.Error"
+import qualified Control.Error 
 
-errorHere :: String -> String -> String
+errorHere :: String -> String -> a
 errorHere = Control.Error.errorHere "Vanda.Algorithms.MATLearner.TreeAutomaton"
 
 data Automaton a = 

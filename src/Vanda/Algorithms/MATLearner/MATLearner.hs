@@ -83,7 +83,7 @@ matLearner = do
     onDestroy window mainQuit
     widgetShowAll window
     mainGUI
-
+ 
 
 -- | display a file dialog parse the automaton in the selected file and apply this automaton to callLearner
 displayFileDialog :: (Automaton Int -> IO ()) -> IO ()
@@ -567,7 +567,7 @@ fillTableWithOT (contexts,sigmaTrees,sigmaSTrees,sigmaRows,sigmaSRows) = do
 
                             -- add help button
                             button <- lift $ buttonNew
-                            lift $ set button [buttonLabel := helpButtonLabel]
+                            lift $ set button [buttonLabel := helpButtonLabelOT]
 
                             lift $ onClicked button $do dialog2 <- dialogNew
                                                         set dialog2 [windowTitle := infoDialog]

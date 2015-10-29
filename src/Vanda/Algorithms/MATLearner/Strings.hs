@@ -1,9 +1,14 @@
+{-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 module Vanda.Algorithms.MATLearner.Strings where
 
 import Vanda.Algorithms.MATLearner.TreesContexts
 import Graphics.UI.Gtk
 import Data.Tree
 import Data.List
+import qualified Control.Error
+
+errorHere :: String -> String -> a
+errorHere = Control.Error.errorHere "Vanda.Algorithms.MATLearner.Strings"
 
 inactiveColor = Color 52254 49220 49220
 
@@ -13,6 +18,7 @@ activeColor 2 = colorClosed
 activeColor 3 = colorConsistent
 activeColor 4 = Color 52254 10000 0
 activeColor 5 = colorExtract
+activeColor _ = errorHere "activeColor" "Parameter not in Domain"
 
 status :: Int -> String
 status 1 = "Fill Table"
@@ -20,6 +26,7 @@ status 2 = "Closed"
 status 3 = "Consistent"
 status 4 = "Correct"
 status 5 = "Extract"
+status _ = errorHere "status" "Parameter not in Domain"
 
 helpText :: Int -> String
 helpText 1 = "The algorithm is filling the Observation Table\nwith information, whether given trees are part\nof the language or not."
@@ -27,13 +34,15 @@ helpText 2 = "The algorithm is determining, whether the\nObservation Table is cl
 helpText 3 = "The algorithm is determining, whether the\nObservation Table is consistent, i.e. if for\nevery pair of trees s1 and s2 in the upper\npart holds: if their bitstrings are equal, the\nbitstrings of any context applied to\nthese trees have to be equal."
 helpText 4 = "The algorithm is determining, whether the\nteacher agrees with the current automaton and calculates\na counterexample if not."
 helpText 5 = "A counterexample has been given.\nThe algorithm now reduces this\ncounterexample to a minimal one."
+helpText _ = errorHere "helpText" "Parameter not in Domain"
 
-helpTextOT  = "Something helpfull."
+helpTextOT  = "The rows of the Observation Table are assigned\nto trees and the columns to contexts. The content\nof the cell in row i, column j, represents, whether\nthe tree resulting from applying context j to tree i\nis in the language or not."
 
 extractTableHead :: Int -> String
 extractTableHead 1 = "Counterexample"
 extractTableHead 2 = "Replaced subtree (s)"
 extractTableHead 3 = "Inserted subtree (s')"
+extractTableHead _ = errorHere "extractTableHead" "Parameter not in Domain"
 
 fileDialogTitle = "Choose Automaton"
 
@@ -41,7 +50,7 @@ fontObservationtable = "Courier 15"
 
 buttonInteractiveText  = "Interactive Teacher"
 buttonAutomatonText    = "Automaton Teacher"
-buttonAutomatonIntText = "Half Interactive Automaton Teacher"
+buttonAutomatonIntText = "Semi-Interactive Automaton Teacher"
 
 observationTableFrame       = "Observation Table"
 statusFrame                 = "Status"
@@ -81,6 +90,7 @@ isMemberYes           = "Yes"
 isMemberNo            = "No"
 
 helpButtonLabel ="?"
+helpButtonLabelOT ="What's this?"
 
 conjectureTitle = "Conjecture"
 conjectureTextQuestion = "Is this your Automaton?\n"
