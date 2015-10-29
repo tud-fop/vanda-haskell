@@ -159,11 +159,11 @@ main' teacher = do
 
                 -- display components
                 widgetShowAll area
-                ans <- dialogRun dialog
+                _ <- dialogRun dialog
 
                 -- call learner
                 initState <- evalStateT (initObs teacher) (OT ([],[],empty),GUI (dialog,observationTableOut,frameOT,statusOut,frameStatus,None))
-                automaton <- evalStateT (learn teacher) initState
+                _ <- evalStateT (learn teacher) initState
                 widgetDestroy dialog
 
 
@@ -211,7 +211,7 @@ consistify []           teacher = do
     outputConsistent teacher
     return True
 consistify ([s1,s2]:xs) teacher = do
-    (OT (s,contexts,mapping),out) <- get
+    (OT (s,contexts,mapping),_) <- get
     if ((obst s1 contexts mapping) == (obst s2 contexts mapping)) --  both trees represent the same state
         then do
             sigma <- lift $ getSigma teacher
@@ -237,7 +237,7 @@ checkConsistencyContexts
     -> StateT (ObservationTable,GraphicUserInterface) IO Bool
 checkConsistencyContexts _       _  _   []    = return True
 checkConsistencyContexts teacher s1 s2 (c:cs) = do
-    (OT (_,contexts,mapping),out) <- get
+    (OT (_,contexts,mapping),_) <- get
     let s1' = concatTree s1 c
         s2' = concatTree s2 c
     consistent <- checkConsistencyOneContext teacher (obst s1' contexts mapping) (obst s2' contexts mapping) c contexts s1 s2 s1' s2'
@@ -386,7 +386,7 @@ extract teacher s sigmaS counterexample = do
             |maybeRowOfs == Nothing = let -- the current subtree is not in Sigma(S)/S
                                           insertTrees _      []          _                       = ([],tree)
                                           insertTrees tsLeft (t:tsRight) (([],_    ):tsReplaced) = insertTrees (tsLeft ++ [t]) tsRight tsReplaced
-                                          insertTrees tsLeft (t:tsRight) ((tR,sTree):tsReplaced) = ([(Node symbol (tsLeft ++ [t'] ++ tsRight),oldSubtree) | (t',oldSubtree)<-tR],sTree) -- we only need one s but all possible s'
+                                          insertTrees tsLeft (_:tsRight) ((tR,sTree):_         ) = ([(Node symbol (tsLeft ++ [t'] ++ tsRight),oldSubtree) | (t',oldSubtree)<-tR],sTree) -- we only need one s but all possible s'
                                       in
                                         insertTrees [] ts (map tryReduce ts)
             |otherwise              = (map (\(t,_) -> (t,t)) $ filter (\(_,q) -> (snd (fromJust maybeRowOfs) == q)) s,tree) -- the current subtree is in Sigma(S)/S now return all possible s'
@@ -588,7 +588,7 @@ fillTableWithOT (contexts,sigmaTrees,sigmaSTrees,sigmaRows,sigmaSRows) = do
                                                         widgetShowAll area
 
                                                         -- wait for ok
-                                                        answer <- dialogRun dialog2
+                                                        _ <- dialogRun dialog2
                                                         widgetDestroy dialog2
                                                         return ()
 
@@ -744,7 +744,7 @@ outputNotConsistent teacher s1 s2 s1' s2' c' newC = do
 
 -- | the learner has finished diplay the learned automaton and exit to the main menue
 outputCorrect :: Teacher t => t -> Automaton Int -> StateT (ObservationTable,GraphicUserInterface) IO ()            
-outputCorrect teacher automaton = do
+outputCorrect _ automaton = do
                 lift $ displayDialog (automatonLearned ++ show automaton) lastStep
                 return ()
 
@@ -806,15 +806,15 @@ outputUpdateMapping teacher tree = do
 
 -- | initialize the extract window
 outputExtractInit :: Teacher t => t -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO ()  
-outputExtractInit teacher counterexample = do
-                (obs,GUI (dialog0,_,_,_,_,_)) <- get
+outputExtractInit _ counterexample = do
+                (_,GUI (dialog0,_,_,_,_,_)) <- get
                 lift $ displayDialog (notCorrect counterexample) nextStep
                 lift $ waitForNextStep dialog0
 
                 -- begin extraction
                 fillStatus 5
 
-                (obs,GUI (dialog,observationTableOut,box,status,frameStatus,extractOutOld)) <- get
+                (obs,GUI (dialog,observationTableOut,box,status,frameStatus,_)) <- get
                 dialogExtract <- lift $ dialogNew
                 lift $ set dialogExtract [windowTitle := extractTitle]
 
@@ -872,7 +872,7 @@ outputExtractInit teacher counterexample = do
                                             widgetShowAll area
 
                                             -- wait for ok
-                                            answer <- dialogRun dialog2
+                                            _ <- dialogRun dialog2
                                             widgetDestroy dialog2
                                             return ()
 
@@ -883,47 +883,47 @@ outputExtractInit teacher counterexample = do
 
 -- | fill the first and second column of the extraction table
 outputExtractFill1 :: Teacher t => t -> Tree String -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO () 
-outputExtractFill1 teacher counterexample s = do
+outputExtractFill1 _ counterexample s = do
                 (_,GUI (_,_,_,_,_,Extract (dialogExtract,vBox1,vBox2,_))) <- get
                 label1 <- lift $ labelNew (Just (nicerShow counterexample))
                 label2 <- lift $ labelNew (Just (nicerShow s))
                 lift $ boxPackStart vBox1 label1 PackNatural 0
                 lift $ widgetShowAll dialogExtract
-                ans <- lift $ dialogRun dialogExtract
+                _ <- lift $ dialogRun dialogExtract
                 lift $ boxPackStart vBox2 label2 PackNatural 0
 
                 lift $ widgetShowAll dialogExtract
-                ans <- lift $ dialogRun dialogExtract
+                _ <- lift $ dialogRun dialogExtract
                 return ()
 
 
 -- | fill the third column of the extraction table if the extraction is not finished
 outputExtractFill2 :: Teacher t => t -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO () 
-outputExtractFill2 teacher s' = do
+outputExtractFill2 _ s' = do
                 (_,GUI (_,_,_,_,_,Extract (dialogExtract,_,_,vBox3))) <- get
                 label3 <- lift $ labelNew (Just (nicerShow s'))
                 lift $ boxPackStart vBox3 label3 PackNatural 0
 
                 lift $ widgetShowAll dialogExtract
-                ans <- lift $ dialogRun dialogExtract
+                _ <- lift $ dialogRun dialogExtract
                 return ()
 
 
 -- | fill the third column of the extraction tableif the extraction is finished
 outputExtractFill3 :: Teacher t => t -> StateT (ObservationTable,GraphicUserInterface) IO () 
-outputExtractFill3 teacher = do
+outputExtractFill3 _ = do
                 (_,GUI (_,_,_,_,_,Extract (dialogExtract,_,_,vBox3))) <- get
                 label3 <- lift $ labelNew (Just "-")
                 lift $ boxPackStart vBox3 label3 PackNatural 0
 
                 lift $ widgetShowAll dialogExtract
-                ans <- lift $ dialogRun dialogExtract
+                _ <- lift $ dialogRun dialogExtract
                 return ()
 
 
 -- | delete the extraction window
 outputExtractDelete :: Teacher t => t -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO () 
-outputExtractDelete teacher extractedTree = do
+outputExtractDelete _ extractedTree = do
                 (obs,GUI (dialog,observationTableOut,box,status,frameStatus,Extract (dialogExtract,_,_,_))) <- get
 
                 lift $ widgetDestroy dialogExtract
@@ -949,7 +949,7 @@ displayDialog labelText buttonText = do
             widgetShowAll area
 
             -- wait for ok
-            answer <- dialogRun dialog
+            _ <- dialogRun dialog
             widgetDestroy dialog
             return ()
 

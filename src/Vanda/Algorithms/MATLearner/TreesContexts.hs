@@ -110,7 +110,7 @@ choose n (x:xs) = [(x:xs') | xs' <- choose (n-1) xs] ++ (choose n xs)
 
 -- | xs - ys
 listMinus :: Eq a => [a] -> [a] -> [a]
-listMinus [] ys       = []
+listMinus [] _        = []
 listMinus (x:xs) ys 
     | x `notElem` ys  = x : (listMinus xs ys)
     | otherwise       = listMinus xs ys
@@ -118,7 +118,7 @@ listMinus (x:xs) ys
 
 -- | xs - ys
 listMinusSnd :: Eq b => [(a,b)] -> [b] -> [(a,b)]
-listMinusSnd [] ys       = []
+listMinusSnd [] _     = []
 listMinusSnd ((x,y):xs) ys 
     | y `notElem` ys  = (x,y) : (listMinusSnd xs ys)
     | otherwise       = listMinusSnd xs ys

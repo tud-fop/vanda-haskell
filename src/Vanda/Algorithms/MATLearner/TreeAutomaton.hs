@@ -100,20 +100,20 @@ isEmpty automaton@(Automaton (EdgeList _ edges) finalStates) = go initTrees init
 
 
 isTotal :: (Ord a) => Automaton a -> Bool
-isTotal automaton@(Automaton (EdgeList _ edges) finalStates) = S.fromList lhss == S.fromList possibleLhs
+isTotal automaton@(Automaton (EdgeList _ edges) _) = S.fromList lhss == S.fromList possibleLhs
   where
     lhss = map (\(Hyperedge _ from label _) -> (V.toList from,label)) edges
     states = getStates automaton
     sigma = getAlphabet automaton
-    possibleLhs = [(from,symbol)| (symbol,arity) <- sigma, from <- chooseWithDuplicates arity states]
+    possibleLhs = [(from,symbol)| (symbol,symbolArity) <- sigma, from <- chooseWithDuplicates symbolArity states]
 
 isDeterministic :: (Ord a) => Automaton a -> Bool
-isDeterministic (Automaton (EdgeList _ edges) finalStates) = (length $ nub lhss) == length lhss
+isDeterministic (Automaton (EdgeList _ edges) _) = (length $ nub lhss) == length lhss
   where lhss = map (\(Hyperedge _ from label _) -> (from,label)) edges
 
 
 -- | returns the states that the automaton uses in transitions without dublicates
 getStates :: (Ord a) => Automaton a -> [a]
-getStates (Automaton (EdgeList _ edges) finalStates) = nub (concatMap statesFromEdge edges)
+getStates (Automaton (EdgeList _ edges) _) = nub (concatMap statesFromEdge edges)
   where
-    statesFromEdge (Hyperedge to from label _) = to : (V.toList from)
+    statesFromEdge (Hyperedge to from _ _) = to : (V.toList from)
