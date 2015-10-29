@@ -166,14 +166,14 @@ instance (Ord a, Show a) => Teacher (Automaton' a) where
         conjecture (A automat1) False _            automat2 = case isEmpty (unite (intersect (complement automat1) automat2) (intersect automat1 (complement automat2))) of
                                         Nothing -> return Nothing
                                         Just t  -> do
-                                                    ce <- askForCounterexample (nicerShow t) automat1
+                                                    ce <- askForCounterexample (nicerShow t) automat2
                                                     case ce of 
                                                       Just (Right _)   -> return $ ce
                                                       Just (Left tree) -> if accepts automat1 tree == accepts automat2 tree 
                                                         then return $ Just $ Right (counterexampleAutInt $ nicerShow tree)
                                                         else return $ Just $ Left tree
         conjecture (A automat1) True oldTreeString automat2 = do
-                                                    ce <- askForCounterexample oldTreeString automat1
+                                                    ce <- askForCounterexample oldTreeString automat2
                                                     case ce of 
                                                       Nothing          -> error ""
                                                       Just (Right _)   -> return $ ce

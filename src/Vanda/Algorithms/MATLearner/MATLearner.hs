@@ -603,7 +603,7 @@ fillTableWithOT (contexts,sigmaTrees,sigmaSTrees,sigmaRows,sigmaSRows) = do
                                                         widgetDestroy dialog2
                                                         return ()
 
-                            lift $ tableAttachDefaults table button 0 1 0 1
+                            lift $ tableAttach table button 0 1 0 1 [Shrink] [Shrink] 0 0
 
                             lift $ containerAdd box table
                             lift $ widgetShowAll table
