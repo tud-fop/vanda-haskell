@@ -82,6 +82,9 @@ isMemberNo            = "No"
 
 helpButtonLabel ="?"
 
+errNotDeterministic = "The automaton is not deterministic!"
+errNotTotal            = "The automaton is not total!"
+
 conjectureTitle = "Conjecture"
 conjectureTextQuestion = "Is this your Automaton?\n"
 conjectureEnterCE = "Please enter a counterexample\n"

@@ -70,7 +70,7 @@ instance Teacher Interactive where
           case answer of
               ResponseYes -> return Nothing
               ResponseNo  -> askForCounterexample oldTreeString automat
-              ResponseClose -> exitWith ExitSuccess
+              _           -> exitWith ExitSuccess
         conjecture Interactive True oldTreeString automat = askForCounterexample oldTreeString automat 
 
 
@@ -144,8 +144,8 @@ instance (Ord a) => Teacher (Automaton a) where
                                                     answer <- dialogRun dialog
                                                     widgetDestroy dialog
                                                     case answer of
-                                                      ResponseOk    -> return $ Just (Left t)
-                                                      ResponseClose -> exitWith ExitSuccess
+                                                      ResponseOk -> return $ Just (Left t)
+                                                      _          -> exitWith ExitSuccess
 
         getSigma automat = return $ getAlphabet automat
 
@@ -153,7 +153,7 @@ instance (Ord a) => Teacher (Automaton a) where
 data Automaton' a = A (Automaton a)
 instance (Ord a, Show a) => Teacher (Automaton' a) where
         isMember (A automat) baum = return $ accepts automat baum
-        conjecture (A automat1) False oldTreeString automat2 = case isEmpty (unite (intersect (complement automat1) automat2) (intersect automat1 (complement automat2))) of
+        conjecture (A automat1) False _            automat2 = case isEmpty (unite (intersect (complement automat1) automat2) (intersect automat1 (complement automat2))) of
                                         Nothing -> return Nothing
                                         Just t  -> do
                                                     ce <- askForCounterexample (nicerShow t) automat1

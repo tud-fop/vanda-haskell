@@ -105,7 +105,15 @@ displayFileDialog callLearner = do
                    Just fpath -> do widgetDestroy dialog
                                     automat <- parseFile fpath parseAutomaton
                                     case automat of
-                                         Left automat' -> callLearner automat'
+                                         Left automat' -> do 
+                                            if isDeterministic automat' 
+                                                then if isTotal automat'
+                                                    then 
+                                                        callLearner automat'
+                                                    else 
+                                                        displayDialog errNotTotal lastStep
+                                                else
+                                                    displayDialog errNotDeterministic lastStep
                                          Right err -> do 
                                             displayDialog err lastStep
                                             return ()

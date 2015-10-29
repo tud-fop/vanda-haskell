@@ -5,6 +5,7 @@ import qualified Data.Set as S
 import qualified Data.Vector as V
 import Data.Tree
 import Vanda.Algorithms.MATLearner.TreesContexts
+import Data.List
 
 
 data Automaton a = 
@@ -93,3 +94,23 @@ isEmpty automaton@(Automaton (EdgeList _ edges) finalStates) = go initTrees init
                 where
                     newTrees = map (\t -> (t,run edges t)) (map (concatTree tree) (getContexts (map fst ys) sigma))
                     newStates = filter (\(_,nstate) -> not $ any (\(_,oldstate) -> oldstate == nstate) ys) newTrees
+
+
+isTotal :: (Ord a) => Automaton a -> Bool
+isTotal automaton@(Automaton (EdgeList _ edges) finalStates) = S.fromList lhss == S.fromList possibleLhs
+  where
+    lhss = map (\(Hyperedge _ from label _) -> (V.toList from,label)) edges
+    states = getStates automaton
+    sigma = getAlphabet automaton
+    possibleLhs = [(from,symbol)| (symbol,arity) <- sigma, from <- chooseWithDuplicates arity states]
+
+isDeterministic :: (Ord a) => Automaton a -> Bool
+isDeterministic (Automaton (EdgeList _ edges) finalStates) = (length $ nub lhss) == length lhss
+  where lhss = map (\(Hyperedge _ from label _) -> (from,label)) edges
+
+
+-- | returns the states that the automaton uses in transitions without dublicates
+getStates :: (Ord a) => Automaton a -> [a]
+getStates (Automaton (EdgeList _ edges) finalStates) = nub (concatMap statesFromEdge edges)
+  where
+    statesFromEdge (Hyperedge to from label _) = to : (V.toList from)
