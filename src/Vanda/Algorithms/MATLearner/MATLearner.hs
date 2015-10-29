@@ -29,10 +29,10 @@ data ObservationTable =
 
 
 data ExtractGUI = 
-    Extract (Dialog,
-             VBox,
-             VBox,
-             VBox)
+    Extract (Dialog,-- window in which extraction table is diplayed
+             VBox, -- first column
+             VBox, -- second column
+             VBox) -- third column
     | None
 
 data GraphicUserInterface = 
@@ -47,6 +47,7 @@ data GraphicUserInterface =
 matLearner :: IO ()
 matLearner = do
     initGUI
+    -- create main window
     hbox <- vBoxNew True 10
     window <- windowNew
     set window [windowTitle          := menueTitle,
@@ -55,7 +56,7 @@ matLearner = do
                 windowDefaultWidth   := 200,
                 windowDefaultHeight  := 100 ]
 
-
+    -- create teacher buttons
     buttonInteractive <- buttonNew
     set buttonInteractive [buttonLabel := buttonInteractiveText]
     
@@ -66,72 +67,47 @@ matLearner = do
     buttonAutomatonInt <- buttonNew
     set buttonAutomatonInt [buttonLabel := buttonAutomatonIntText]
 
+    -- put the buttons in the window
     boxPackStart hbox buttonInteractive PackNatural 0
     boxPackStart hbox buttonAutomaton PackNatural 0
     boxPackStart hbox buttonAutomatonInt PackNatural 0
 
 
+    -- add click events to the buttons
     onClicked buttonInteractive $ main' Interactive
 
-    onClicked buttonAutomaton $ do  dialog <- dialogNew
-                                    set dialog [windowTitle := fileDialogTitle, 
-                                                windowDefaultWidth := 500,
-                                                windowDefaultHeight := 400]
+    onClicked buttonAutomaton $ displayFileDialog (\ automat -> main' automat)
 
-                                    area <- dialogGetUpper dialog
-
-                                    fch <- fileChooserWidgetNew FileChooserActionOpen
-                                    containerAdd area fch 
-
-                                    --hsfilt <- fileFilterNew
-                                    --fileFilterAddPattern hsfilt "*.txt"
-                                    --fileFilterSetName hsfilt "Text Files"   
-                                    --fileChooserAddFilter fch hsfilt
-
-                                    --nofilt <- fileFilterNew
-                                    --fileFilterAddPattern nofilt "*.*"
-                                    --fileFilterSetName nofilt "All Files"
-                                    --fileChooserAddFilter fch nofilt
-                                                           
-                                    onFileActivated fch $ 
-                                         do file <- fileChooserGetFilename fch
-                                            case file of
-                                                 Just fpath -> do widgetDestroy dialog
-                                                                  automat <- parseFile fpath parseAutomaton
-                                                                  main' automat
-                                                 Nothing -> return ()
-
-                                    --onToggled selopt $ do state <- toggleButtonGetActive selopt
-                                    --                      fileChooserSetSelectMultiple fch state
-
-                                    widgetShowAll dialog
-                                    --automat <- parseFile filepath parseAutomaton
-                                    --main' automat
-
-    onClicked buttonAutomatonInt $ do dialog <- dialogNew
-                                      set dialog [windowTitle := fileDialogTitle, 
-                                                  windowDefaultWidth := 500,
-                                                  windowDefaultHeight := 400]
-
-                                      area <- dialogGetUpper dialog
-
-                                      fch <- fileChooserWidgetNew FileChooserActionOpen
-                                      containerAdd area fch 
-                                                           
-                                      onFileActivated fch $ 
-                                           do file <- fileChooserGetFilename fch
-                                              case file of
-                                                   Just fpath -> do widgetDestroy dialog
-                                                                    automat <- parseFile fpath parseAutomaton
-                                                                    main' (A automat)
-                                                   Nothing -> return ()
-
-                                      widgetShowAll dialog
+    onClicked buttonAutomatonInt $ displayFileDialog (\ automat -> main' (A automat))
 
     onDestroy window mainQuit
     widgetShowAll window
     mainGUI
 
+
+-- | display a file dialog parse the automaton in the selected file and apply this automaton to callLearner
+displayFileDialog :: (Automaton Int -> IO ()) -> IO ()
+displayFileDialog callLearner = do
+      -- create file dialog
+      dialog <- dialogNew
+      set dialog [windowTitle := fileDialogTitle, 
+                  windowDefaultWidth := 500,
+                  windowDefaultHeight := 400]
+
+      area <- dialogGetUpper dialog
+
+      fch <- fileChooserWidgetNew FileChooserActionOpen
+      containerAdd area fch 
+                           
+      onFileActivated fch $ 
+           do file <- fileChooserGetFilename fch
+              case file of
+                   Just fpath -> do widgetDestroy dialog
+                                    automat <- parseFile fpath parseAutomaton
+                                    callLearner automat
+                   Nothing -> return ()
+
+      widgetShowAll dialog
 
 -- * MAT Learner
 -- | initialise dialog for output and call learner
@@ -386,7 +362,7 @@ extract teacher s sigmaS counterexample = do
         getNewCandidate ((x,s'Tree):xs) = do
                                     updateMappingExtract teacher x -- store membership of new tree in mapping
                                     (OT (s,contexts,mapping),out) <- get
-                                    lift $ displayDialog ("The tree\n" ++ (nicerShow x) ++ "\nis" ++ (if mapping!x then " " else " NOT ") ++ "a member.") nextStep
+                                    lift $ displayDialog (extractIsMember (nicerShow x) (mapping!x)) nextStep
                                     if mapping ! counterexample /= mapping ! x  -- isMemberOldCounterexample not eqal isMemberNewCounterexample
                                         then
                                             getNewCandidate xs
@@ -515,7 +491,7 @@ fillStatus n = do
             lift $ addStatus 5 statusNew
 
             button <- lift $ buttonNew
-            lift $ set button [buttonLabel := "?"]
+            lift $ set button [buttonLabel := helpButtonLabel]
 
             lift $ onClicked button $do dialog2 <- dialogNew
                                         set dialog2 [windowTitle := infoDialog]
@@ -823,7 +799,7 @@ outputExtractInit teacher counterexample = do
                 
                 -- add help button
                 button <- lift $ buttonNew
-                lift $ set button [buttonLabel := "?"]
+                lift $ set button [buttonLabel := helpButtonLabel]
 
                 lift $ boxPackStart vBox4 button PackNatural 0
 

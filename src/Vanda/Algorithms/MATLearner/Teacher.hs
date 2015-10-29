@@ -27,17 +27,17 @@ class Teacher t where
 -- 'isMember' and 'conjecture' will ask the user for an answer.
 data Interactive = Interactive
 instance Teacher Interactive where
-        isMember Interactive baum = do
+        isMember Interactive tree = do
           -- create components
           dialog <- dialogNew
-          set dialog [windowTitle := "isMember"]
+          set dialog [windowTitle := isMemberTitle]
           area <- dialogGetUpper dialog
-          membershipQuestion <- labelNew (Just ("Is this tree part of the language?\n" ++ nicerShow baum))
+          membershipQuestion <- labelNew (Just (isMemberQuestion $ nicerShow tree))
 
           -- place components
           boxPackStart area membershipQuestion PackNatural 0
-          dialogAddButton dialog "Yes" ResponseYes
-          dialogAddButton dialog "No" ResponseNo
+          dialogAddButton dialog isMemberYes ResponseYes
+          dialogAddButton dialog isMemberNo ResponseNo
 
           -- display components
           widgetShowAll area
@@ -57,8 +57,8 @@ instance Teacher Interactive where
 
           -- place components
           boxPackStart area conjectureText PackNatural 0
-          dialogAddButton dialog "Yes" ResponseYes
-          dialogAddButton dialog "No" ResponseNo                                                 
+          dialogAddButton dialog isMemberYes ResponseYes
+          dialogAddButton dialog isMemberNo ResponseNo                                                 
 
           -- display components
           widgetShowAll area
@@ -89,7 +89,7 @@ askForCounterexample oldTreeString automat = do
           -- place components
           boxPackStart area conjectureText PackNatural 0
           boxPackStart area counterexampleEntry PackNatural 0
-          dialogAddButton dialog "Next" ResponseOk
+          dialogAddButton dialog nextStep ResponseOk
           entrySetText counterexampleEntry oldTreeString
           -- autocompletion on enter
           onEntryActivate counterexampleEntry $ do
@@ -105,10 +105,6 @@ askForCounterexample oldTreeString automat = do
                                                             | otherwise = False
                                                         samePraefix _      _      = True
 
-                                                        --getLastSymbol :: (String,String) -> (String,String)
-                                                        --getLastSymbol ([],ys)        = ([],ys)
-                                                        --getLastSymbol (('\"':xs),ys) = (reverse xs,('\"':ys))
-                                                        --getLastSymbol ((x:xs),ys)    = getLastSymbol (xs,ys ++ [x])
                                                         in when (length symbols == 1 && ((snd $ head symbols) /= 0))
                                                                 (do
                                                                 entrySetText counterexampleEntry $ restMsg ++ [symbol] ++ "()" ++ (drop pos msg)
@@ -139,7 +135,7 @@ instance (Ord a) => Teacher (Automaton a) where
 
                                                     -- place components
                                                     boxPackStart area conjectureText PackNatural 0
-                                                    dialogAddButton dialog "Next Step" ResponseOk                                               
+                                                    dialogAddButton dialog nextStep ResponseOk                                               
 
                                                     -- display components
                                                     widgetShowAll area
@@ -164,14 +160,14 @@ instance (Ord a, Show a) => Teacher (Automaton' a) where
                                                     case ce of 
                                                       Just (Right _)   -> return $ ce
                                                       Just (Left tree) -> if accepts automat1 tree == accepts automat2 tree 
-                                                        then return $ Just $ Right "Not CE in original Aut"
+                                                        then return $ Just $ Right (counterexampleAutInt $ nicerShow tree)
                                                         else return $ Just $ Left tree
         conjecture (A automat1) True oldTreeString automat2 = do
                                                     ce <- askForCounterexample oldTreeString automat1
                                                     case ce of 
                                                       Just (Right _)   -> return $ ce
                                                       Just (Left tree) -> if accepts automat1 tree == accepts automat2 tree 
-                                                        then return $ Just $ Right "Not CE in original Aut"
+                                                        then return $ Just $ Right (counterexampleAutInt $ nicerShow tree)
                                                         else return $ Just $ Left tree
 
         getSigma (A automat) = return $ getAlphabet automat
