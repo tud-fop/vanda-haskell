@@ -1,4 +1,14 @@
-module Vanda.Algorithms.MATLearner.TreesContexts where
+{-|
+Module:      Vanda.Algorithms.MATLearner.Parser
+Description: Implementation of tree contexts for the MAT Learner
+Copyright:   (c) Technische Universität Dresden 2015
+License:     Redistribution and use in source and binary forms, with
+             or without modification, is ONLY permitted for teaching
+             purposes at Technische Universität Dresden AND IN
+             COORDINATION with the Chair of Foundations of Programming.
+Maintainer:  markus.napierkowski@mailbox.tu-dresden.de
+Stability:   unknown
+-}module Vanda.Algorithms.MATLearner.TreesContexts where
 
 import Data.Tree
 
