@@ -1,3 +1,14 @@
+{-|
+Module:      Vanda.Algorithms.MATLearner.Parser
+Description: Main module of the MAT Learner
+Copyright:   (c) Technische Universität Dresden 2015
+License:     Redistribution and use in source and binary forms, with
+             or without modification, is ONLY permitted for teaching
+             purposes at Technische Universität Dresden AND IN
+             COORDINATION with the Chair of Foundations of Programming.
+Maintainer:  markus.napierkowski@mailbox.tu-dresden.de
+Stability:   unknown
+-}
 module Vanda.Algorithms.MATLearner.MATLearner where
 
 import Prelude hiding (lookup)
@@ -12,7 +23,7 @@ import Data.Map hiding (foldr,foldl,map,filter,findIndex)
 import Data.List (elemIndex,find)
 import Data.Maybe
 import Vanda.Algorithms.MATLearner.TreesContexts
-import Vanda.Algorithms.MATLearner.Util
+import Vanda.Algorithms.MATLearner.Parser
 import Vanda.Algorithms.MATLearner.Teacher
 import Graphics.UI.Gtk hiding (get)
 import System.Exit
