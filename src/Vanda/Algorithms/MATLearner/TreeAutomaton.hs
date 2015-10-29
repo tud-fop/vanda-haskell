@@ -11,14 +11,14 @@ data Automaton a =
   Automaton (EdgeList a String Int) (S.Set a)
   
 instance (Show a) => Show (Automaton a) where
-  show (Automaton (EdgeList _ edgelist) finalStates) = "Edges:\n" ++ showEdges edgelist ++ "Final States: " ++ show (S.toAscList finalStates)
+  show (Automaton (EdgeList _ edgelist) finalStates) = "Edges:\n" ++ showEdges edgelist ++ "Final States: " ++ showlist (S.toAscList finalStates)
     where showEdges :: (Show a) => [Hyperedge a String Int] -> String
           showEdges [] = ""
-          showEdges ((Hyperedge to from label _) :xs) = show (V.toList from) ++ " -> " ++ label ++ " " ++ show to ++ "\n" ++ showEdges xs
+          showEdges ((Hyperedge to from label _) :xs) = showlist (V.toList from) ++ " -> " ++ label ++ " " ++ show to ++ "\n" ++ showEdges xs
           showEdges ((Nullary _ _ _ ) : _) = undefined
           showEdges ((Unary _ _ _ _ ) : _) = undefined
           showEdges ((Binary _ _ _ _ _ ) : _) = undefined
- 
+          showlist li = "(" ++ drop 1 (take (length (show li) -1) (show li)) ++ ")"
 
 -- | Computes the state of the automaton after running over the tree. Only works if the automaton is bottom up deterministic and total!
 run :: (Eq a, Eq b) => [Hyperedge a b Int] -> Tree b -> a

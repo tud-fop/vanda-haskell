@@ -107,7 +107,7 @@ displayFileDialog callLearner = do
                                     case automat of
                                          Left automat' -> callLearner automat'
                                          Right err -> do 
-                                            displayDialog err nextStep
+                                            displayDialog err lastStep
                                             return ()
                    Nothing -> return ()
 
