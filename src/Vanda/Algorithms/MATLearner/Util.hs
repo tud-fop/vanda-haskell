@@ -103,36 +103,42 @@ parseAutomaton s = case (finalstates,_edges) of
           getStates currentStates (he:rest) = getStates (S.singleton (to he) `S.union` S.fromList (from he) `S.union` currentStates) rest
 
 parseEdge :: (String,Int) -> Either (Hyperedge Int String Int) String
-parseEdge (s,l) = case (_from,_label,_to) of
-                       (Right err,_,_) -> Right err
-                       (_,Right err,_) -> Right err
-                       (_,_,Right err) -> Right err
-                       (Left from',Left label',Left to') -> Left $ Hyperedge to' (V.fromList from') label' 0
+parseEdge (s,l) = case (_from,_label,_to,arrow) of
+                       (Right err,_,_,_) -> Right err
+                       (_,_,_,Just err) -> Right err
+                       (_,Right err,_,_) -> Right err
+                       (_,_,Right err,_) -> Right err
+                       (Left from',Left label',Left to',Nothing) -> Left $ Hyperedge to' (V.fromList from') label' 0
     where (_from,s') = parseList s l
-          (_label,s'') = parseSymbol s' l
-          (_to) = case reads s'' of
+          (arrow,s'') = parseArrow s' l
+          (_label,s''') = parseSymbol s'' l
+          (_to) = case reads s''' of
                        [(x,"")] -> Left x
-                       _        -> Right $ parsingError l "Only numbers allowed."
+                       _        -> Right $ parsingError l parseErrorOnlyNumbers
 
 
+parseArrow :: String -> Int -> (Maybe String,String)
+parseArrow ('-':'>':rest) l = (Nothing,rest)
+parseArrow _ l = (Just $ parsingError l parseErrorArrowMissing,"")
+                       
 parseList :: String -> Int -> (Either [Int] String,String)
 parseList ('(':')':rest) _    = (Left [],rest)
 parseList ('(':rest)     line = parseList' rest line
   where parseList' :: String -> Int -> (Either [Int] String,String)
-        parseList' []   l = (Right $ parsingError l "']' missing.","")
+        parseList' []   l = (Right $ parsingError l parseErrorRightBracket,"")
         parseList' list l = 
           case reads list of
                 [(x,s')] -> let (xs,s'') = parseList'' s' l in 
                                 case xs of 
                                       Right err -> (Right err,s'')
                                       Left xs'  -> (Left (x:xs'),s'')
-                _        -> (Right $ parsingError l "Only numbers allowed.","")
+                _        -> (Right $ parsingError l parseErrorOnlyNumbers,"")
 
         parseList'' :: String -> Int -> (Either [Int] String,String)
         parseList'' (',':s) l = parseList' s l
-        parseList'' (']':s) _ = (Left [],s)
-        parseList'' _       l = (Right $ parsingError l "Numbers have to be seperated by ','.","")
-parseList _              line = (Right $ parsingError line "'[' missing.","")
+        parseList'' (')':s) _ = (Left [],s)
+        parseList'' _       l = (Right $ parsingError l parseErrorStateSeperator,"")
+parseList _              line = (Right $ parsingError line parseErrorLeftBracket,"")
 
 parseSymbol :: String -> Int -> (Either String String,String)
 parseSymbol ('(' : rest) i = (Right $ parsingError i parseErrorInvalidSymbol,rest)
