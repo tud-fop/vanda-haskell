@@ -58,16 +58,25 @@ addContext context = "The context\n" ++ showContext context ++ "\nwill be added 
 addTree tree       = "The tree\n" ++ nicerShow tree ++ "\nwill be added to S."
 notCorrect tree    = "The automaton is not correct. The given counterexample is\n" ++ nicerShow tree
 extracted tree     = "The tree\n" ++ nicerShow tree ++ "\nwas extracted and will be added to S."
+extractIsMember tree isMember = "The tree\n" ++ tree ++ "\nis" ++ (if isMember then " " else " NOT ") ++ "a member."
 
-counterexampleNothing = "Please enter a counterexample"
-counterexampleNoTree  = "The counterexample is not a valid tree."
-counterexampleMember  = "Membership is already known and this tree is not a counterexample!"
+counterexampleAutInt tree = "The tree\n" ++ tree ++ "\nis NOT a counterexample according to the original automaton."
+counterexampleNothing     = "Please enter a counterexample"
+counterexampleNoTree      = "The counterexample is not a valid tree."
+counterexampleMember      = "Membership is already known and this tree is not a counterexample!"
 
 parseErrorRightBracket   = "')' missing."
-parseErrorLeftBracket   = "'(' missing."
-parseErrorInvalidSymbol = "Node symbol can't be any of '(',')'."
-parseErrorNoTreeNode    = "No Tree Node symbol given."
+parseErrorLeftBracket    = "'(' missing."
+parseErrorInvalidSymbol  = "Node symbol can't be any of '(',')'."
+parseErrorNoTreeNode     = "No Tree Node symbol given."
 
+
+isMemberTitle         = "isMember"
+isMemberQuestion tree = "Is this tree part of the language?\n" ++ tree
+isMemberYes           = "Yes"
+isMemberNo            = "No"
+
+helpButtonLabel ="?"
 
 conjectureTitle = "Conjecture"
 conjectureTextQuestion = "Is this your Automaton?\n"

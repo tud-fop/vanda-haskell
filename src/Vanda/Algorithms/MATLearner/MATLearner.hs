@@ -82,16 +82,6 @@ matLearner = do
 
                                     fch <- fileChooserWidgetNew FileChooserActionOpen
                                     containerAdd area fch 
-
-                                    --hsfilt <- fileFilterNew
-                                    --fileFilterAddPattern hsfilt "*.txt"
-                                    --fileFilterSetName hsfilt "Text Files"   
-                                    --fileChooserAddFilter fch hsfilt
-
-                                    --nofilt <- fileFilterNew
-                                    --fileFilterAddPattern nofilt "*.*"
-                                    --fileFilterSetName nofilt "All Files"
-                                    --fileChooserAddFilter fch nofilt
                                                            
                                     onFileActivated fch $ 
                                          do file <- fileChooserGetFilename fch
@@ -101,12 +91,7 @@ matLearner = do
                                                                   main' automat
                                                  Nothing -> return ()
 
-                                    --onToggled selopt $ do state <- toggleButtonGetActive selopt
-                                    --                      fileChooserSetSelectMultiple fch state
-
                                     widgetShowAll dialog
-                                    --automat <- parseFile filepath parseAutomaton
-                                    --main' automat
 
     onClicked buttonAutomatonInt $ do dialog <- dialogNew
                                       set dialog [windowTitle := fileDialogTitle, 
@@ -386,7 +371,7 @@ extract teacher s sigmaS counterexample = do
         getNewCandidate ((x,s'Tree):xs) = do
                                     updateMappingExtract teacher x -- store membership of new tree in mapping
                                     (OT (s,contexts,mapping),out) <- get
-                                    lift $ displayDialog ("The tree\n" ++ (nicerShow x) ++ "\nis" ++ (if mapping!x then " " else " NOT ") ++ "a member.") nextStep
+                                    lift $ displayDialog (extractIsMember (nicerShow x) (mapping!x)) nextStep
                                     if mapping ! counterexample /= mapping ! x  -- isMemberOldCounterexample not eqal isMemberNewCounterexample
                                         then
                                             getNewCandidate xs
@@ -515,7 +500,7 @@ fillStatus n = do
             lift $ addStatus 5 statusNew
 
             button <- lift $ buttonNew
-            lift $ set button [buttonLabel := "?"]
+            lift $ set button [buttonLabel := helpButtonLabel]
 
             lift $ onClicked button $do dialog2 <- dialogNew
                                         set dialog2 [windowTitle := infoDialog]
@@ -823,7 +808,7 @@ outputExtractInit teacher counterexample = do
                 
                 -- add help button
                 button <- lift $ buttonNew
-                lift $ set button [buttonLabel := "?"]
+                lift $ set button [buttonLabel := helpButtonLabel]
 
                 lift $ boxPackStart vBox4 button PackNatural 0
 
