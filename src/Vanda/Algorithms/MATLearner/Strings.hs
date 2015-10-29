@@ -101,6 +101,7 @@ conjectureEnterCE = "Please enter a counterexample\n"
 conjectureTextNotAutomaton = "This is not the Automaton.\n"
 infoDialog = "MATLearner"
 tryAgain = "Try again."
+automatonLearned = "The following automaton has been learned:\n\n" 
 
 -- colors for table
 colorNormal = Color 0 0 0

@@ -745,7 +745,7 @@ outputNotConsistent teacher s1 s2 s1' s2' c' newC = do
 -- | the learner has finished diplay the learned automaton and exit to the main menue
 outputCorrect :: Teacher t => t -> Automaton Int -> StateT (ObservationTable,GraphicUserInterface) IO ()            
 outputCorrect teacher automaton = do
-                lift $ displayDialog (show automaton) lastStep
+                lift $ displayDialog (automatonLearned ++ show automaton) lastStep
                 return ()
 
 -- | wait one step after the table is filled completely before checking closedness etc.
