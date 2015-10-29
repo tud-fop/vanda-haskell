@@ -67,8 +67,8 @@ separateTrees s = separateTrees' 0 "" s
           separateTrees' _     currentWord [] = [currentWord]
           separateTrees' level currentWord (c:rest) 
               | and [(c == ','),(level <= 0)] = currentWord : separateTrees rest
-              | c == '['                      = separateTrees' (level + 1) (currentWord ++ "[") rest
-              | c == ']'                      = separateTrees' (level - 1) (currentWord ++ "]") rest
+              | c == '('                      = separateTrees' (level + 1) (currentWord ++ "(") rest
+              | c == ')'                      = separateTrees' (level - 1) (currentWord ++ ")") rest
               | otherwise                     = separateTrees' level       (currentWord ++ [c]) rest
                     
 

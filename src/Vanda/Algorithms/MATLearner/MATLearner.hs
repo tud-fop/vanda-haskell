@@ -386,6 +386,7 @@ extract teacher s sigmaS counterexample = do
         getNewCandidate ((x,s'Tree):xs) = do
                                     updateMappingExtract teacher x -- store membership of new tree in mapping
                                     (OT (s,contexts,mapping),out) <- get
+                                    lift $ displayDialog ("The tree\n" ++ (nicerShow x) ++ "\nis" ++ (if mapping!x then " " else " NOT ") ++ "a member.") nextStep
                                     if mapping ! counterexample /= mapping ! x  -- isMemberOldCounterexample not eqal isMemberNewCounterexample
                                         then
                                             getNewCandidate xs
@@ -506,12 +507,33 @@ fillStatus :: Int -> StateT (ObservationTable,GraphicUserInterface) IO ()
 fillStatus n = do
             (obs,GUI (dialog,table,box,statusOld,frameStatus,extractOut)) <- get
             lift $ widgetDestroy statusOld
-            statusNew <- lift $ tableNew 5 1 False
+            statusNew <- lift $ tableNew 6 1 False
             lift $ addStatus 1 statusNew
             lift $ addStatus 2 statusNew
             lift $ addStatus 3 statusNew
             lift $ addStatus 4 statusNew
             lift $ addStatus 5 statusNew
+
+            button <- lift $ buttonNew
+            lift $ set button [buttonLabel := "?"]
+
+            lift $ onClicked button $do dialog2 <- dialogNew
+                                        set dialog2 [windowTitle := infoDialog]
+                                        area <- dialogGetUpper dialog2
+                                        label <- labelNew (Just (helpText n))
+
+                                        -- place components
+                                        boxPackStart area label PackNatural 0
+                                        
+                                        -- display components
+                                        widgetShowAll area
+
+                                        -- wait for ok
+                                        answer <- dialogRun dialog2
+                                        widgetDestroy dialog2
+                                        return ()
+
+            lift $ tableAttachDefaults statusNew button 0 1 5 6
 
             lift $ containerAdd frameStatus statusNew
             lift $ widgetShowAll statusNew
@@ -778,6 +800,7 @@ outputExtractInit teacher counterexample = do
                 vBox1 <- lift $ vBoxNew False 5
                 vBox2 <- lift $ vBoxNew False 5
                 vBox3 <- lift $ vBoxNew False 5
+                vBox4 <- lift $ vBoxNew False 5
 
                 lift $ containerAdd area hBox
                 lift $ boxPackStart hBox vBox1 PackNatural 0
@@ -785,6 +808,7 @@ outputExtractInit teacher counterexample = do
                 lift $ boxPackStart hBox vBox2 PackNatural 0
                 lift $ boxPackStart hBox sep2 PackNatural 0
                 lift $ boxPackStart hBox vBox3 PackNatural 0
+                lift $ boxPackStart hBox vBox4 PackNatural 0
 
                 -- fill initial row
                 label1 <- lift $ labelNew (Just $ extractTableHead 1)
@@ -797,6 +821,28 @@ outputExtractInit teacher counterexample = do
                 lift $ boxPackStart vBox3 label3 PackNatural 0
                 lift $ boxPackStart vBox3 seph3 PackNatural 0
                 
+                -- add help button
+                button <- lift $ buttonNew
+                lift $ set button [buttonLabel := "?"]
+
+                lift $ boxPackStart vBox4 button PackNatural 0
+
+                lift $ onClicked button $do dialog2 <- dialogNew
+                                            set dialog2 [windowTitle := infoDialog]
+                                            area <- dialogGetUpper dialog2
+                                            label <- labelNew (Just (helpText 5))
+
+                                            -- place components
+                                            boxPackStart area label PackNatural 0
+                                            
+                                            -- display components
+                                            widgetShowAll area
+
+                                            -- wait for ok
+                                            answer <- dialogRun dialog2
+                                            widgetDestroy dialog2
+                                            return ()
+
                 lift $ widgetShowAll dialogExtract
                 put (obs,GUI (dialog,observationTableOut,box,status,frameStatus,Extract (dialogExtract,vBox1,vBox2,vBox3)))
                 return ()

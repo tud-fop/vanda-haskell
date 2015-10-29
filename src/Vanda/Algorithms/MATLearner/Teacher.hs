@@ -97,11 +97,11 @@ askForCounterexample oldTreeString automat = do
                                                     msg <- entryGetText counterexampleEntry
                                                     pos <- editableGetPosition counterexampleEntry
                                                     let (restMsg,symbol) = (take (pos-1) msg,last $ take pos msg)
-                                                        symbols = filter (samePraefix ('\"':[symbol])) $ map (show . fst) sigma
+                                                        symbols = filter (samePraefix ('\"':[symbol])) $ map (\(sym,arity) -> (show sym,arity)) sigma
 
-                                                        samePraefix :: String -> String -> Bool
-                                                        samePraefix (x:xs) (y:ys)
-                                                            | x == y    = samePraefix xs ys
+                                                        samePraefix :: String -> (String,t) -> Bool
+                                                        samePraefix (x:xs) ((y:ys),t)
+                                                            | x == y    = samePraefix xs (ys,t)
                                                             | otherwise = False
                                                         samePraefix _      _      = True
 
@@ -109,7 +109,7 @@ askForCounterexample oldTreeString automat = do
                                                         --getLastSymbol ([],ys)        = ([],ys)
                                                         --getLastSymbol (('\"':xs),ys) = (reverse xs,('\"':ys))
                                                         --getLastSymbol ((x:xs),ys)    = getLastSymbol (xs,ys ++ [x])
-                                                        in when (length symbols == 1)
+                                                        in when (length symbols == 1 && ((snd $ head symbols) /= 0))
                                                                 (do
                                                                 entrySetText counterexampleEntry $ restMsg ++ [symbol] ++ "()" ++ (drop pos msg)
                                                                 editableSetPosition counterexampleEntry $ length $ restMsg ++ [symbol] ++ "(")
@@ -160,7 +160,7 @@ instance (Ord a, Show a) => Teacher (Automaton' a) where
         conjecture (A automat1) False oldTreeString automat2 = case isEmpty (unite (intersect (complement automat1) automat2) (intersect automat1 (complement automat2))) of
                                         Nothing -> return Nothing
                                         Just t  -> do
-                                                    ce <- askForCounterexample oldTreeString automat1
+                                                    ce <- askForCounterexample (nicerShow t) automat1
                                                     case ce of 
                                                       Just (Right _)   -> return $ ce
                                                       Just (Left tree) -> if accepts automat1 tree == accepts automat2 tree 
