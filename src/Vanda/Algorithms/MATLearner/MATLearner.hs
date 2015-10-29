@@ -488,7 +488,7 @@ fillStatus :: Int -> StateT (ObservationTable,GraphicUserInterface) IO ()
 fillStatus n = do
             (obs,GUI (dialog,table,box,statusOld,frameStatus,extractOut)) <- get
             lift $ widgetDestroy statusOld
-            statusNew <- lift $ tableNew 7 1 False
+            statusNew <- lift $ tableNew 6 1 False
             -- recolor status statements
             lift $ addStatus 1 statusNew
             lift $ addStatus 2 statusNew
@@ -516,29 +516,8 @@ fillStatus n = do
                                          widgetDestroy dialog2
                                          return ()
 
-            -- add help button2
-            button2 <- lift $ buttonNew
-            lift $ set button2 [buttonLabel := helpButtonLabel]
-
-            lift $ onClicked button2 $ do dialog2 <- dialogNew
-                                          set dialog2 [windowTitle := infoDialog]
-                                          area <- dialogGetUpper dialog2
-                                          label <- labelNew (Just (helpTextNext n))
-
-                                          -- place components
-                                          boxPackStart area label PackNatural 0
-                                        
-                                          -- display components
-                                          widgetShowAll area
-  
-                                          -- wait for ok
-                                          answer <- dialogRun dialog2
-                                          widgetDestroy dialog2
-                                          return ()
-
 
             lift $ tableAttachDefaults statusNew button 0 1 5 6
-            lift $ tableAttachDefaults statusNew button2 0 1 6 7
 
             lift $ containerAdd frameStatus statusNew
             lift $ widgetShowAll statusNew
@@ -586,6 +565,27 @@ fillTableWithOT (contexts,sigmaTrees,sigmaSTrees,sigmaRows,sigmaSRows) = do
                             --lift $ tableAttachDefaults table labelV  1 2 0 (3 + (length (sigmaTrees ++ sigmaSTrees)))
                             lift $ fillOneDim table (1,1) incV (replicate ((length (sigmaTrees ++ sigmaSTrees)) + 2) ("|",colorNormal)) False
 
+                            -- add help button
+                            button <- lift $ buttonNew
+                            lift $ set button [buttonLabel := helpButtonLabel]
+
+                            lift $ onClicked button $do dialog2 <- dialogNew
+                                                        set dialog2 [windowTitle := infoDialog]
+                                                        area <- dialogGetUpper dialog2
+                                                        label <- labelNew (Just (helpTextOT))
+
+                                                        -- place components
+                                                        boxPackStart area label PackNatural 0
+                                                        
+                                                        -- display components
+                                                        widgetShowAll area
+
+                                                        -- wait for ok
+                                                        answer <- dialogRun dialog2
+                                                        widgetDestroy dialog2
+                                                        return ()
+
+                            lift $ tableAttachDefaults table button 0 1 0 1
 
                             lift $ containerAdd box table
                             lift $ widgetShowAll table

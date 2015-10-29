@@ -28,12 +28,7 @@ helpText 3 = "The algorithm is determining, whether the\nObservation Table is co
 helpText 4 = "The algorithm is determining, whether the\nteacher agrees with the current automaton and calculates\na counterexample if not."
 helpText 5 = "A counterexample has been given.\nThe algorithm now reduces this\ncounterexample to a minimal one." -- TODO: BEsser erklären
 
-helpTextNext :: Int -> String
-helpTextNext 1 = "Something helpfull."
-helpTextNext 2 = "Something helpfull."
-helpTextNext 3 = "Something helpfull."
-helpTextNext 4 = "Something helpfull."
-helpTextNext 5 = "Something helpfull."
+helpTextOT  = "Something helpfull."
 
 extractTableHead :: Int -> String
 extractTableHead 1 = "Counterexample"
