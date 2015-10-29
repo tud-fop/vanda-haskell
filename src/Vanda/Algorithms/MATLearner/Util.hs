@@ -4,10 +4,8 @@ import Vanda.Algorithms.MATLearner.TreeAutomaton
 import Vanda.Algorithms.MATLearner.Strings
 import Vanda.Hypergraph
 import Data.Tree
-import Data.List (intercalate)
 import qualified Data.Set as S
 import qualified Data.Vector as V
-import Debug.Trace
 
 
 
@@ -20,11 +18,10 @@ parseFile fp parser = do
 
 
 
--- | Parses a String to a Tree in the following format: A tree consists of a node in quotation marks followed by its subtrees in brackets, separated by commas. The following exmaple is a tree in the correct format:
+-- | Parses a String to a Tree in the following format: A tree consists of a node (a simple character) followed by its subtrees in parantheses, separated by commas. With symbols of rank 0, the parantheses can be ommited. The following exmaple is a tree in the correct format:
 -- @
---      "sigma" [ "alpha" [], "alpha" [] ]
+--      s(g(a),a)
 -- @
--- The integer value is used in a potential error message as line number.
 parseTree :: String -> Either (Tree String) (String)
 parseTree [] = Right counterexampleNothing
 parseTree string = case s of
@@ -42,9 +39,9 @@ parseTree string = case s of
         parseSubTree ""        = Left []
         parseSubTree _         = Right parseErrorLeftBracket
         parseSymbol' :: String -> Either (String,String) String
-        parseSymbol' ('(' : rest) = Right parseErrorInvalidSymbol
-        parseSymbol' (')' : rest) = Right parseErrorInvalidSymbol
-        parseSymbol' ('"' : rest) = Right parseErrorInvalidSymbol
+        parseSymbol' ('(' : _) = Right parseErrorInvalidSymbol
+        parseSymbol' (')' : _) = Right parseErrorInvalidSymbol
+        parseSymbol' ('"' : _) = Right parseErrorInvalidSymbol
         parseSymbol' (c : rest) = Left ([c],rest)
         parseSymbol' [] = Right parseErrorNoTreeNode
           
@@ -67,7 +64,7 @@ separateTrees s = separateTrees' 0 "" s
                     
 
 map' :: (a -> Either b c) -> [a] -> Either [b] c
-map' f [] = Left []
+map' _ [] = Left []
 map' f (a:rest) = case (f a,map' f rest) of
                         (Right c,_) -> Right c
                         (_,Right c) -> Right c
@@ -76,17 +73,17 @@ map' f (a:rest) = case (f a,map' f rest) of
 parsingError :: Int -> String -> String
 parsingError line message = "Parsing Error in Line " ++ show line ++ ": " ++ message
 
--- | Parses an Automaton from the following text format: States are coded as integers, node labels as strings. 
--- The first line consists of a sequence of states in brackets, separated by commas, the final states.
--- All remaining lines consist of transitions in the following format: A sequence of states in brackets, 
--- followed by the node label in quotation marks, followed by the target state. 
+-- | Parses an Bottom-Up Tree Automaton from the following text format: States are coded as integers, node labels as characters. 
+-- The first line consists of a sequence of states in parantheses, separated by commas, the final states.
+-- All remaining lines consist of transitions in the following format: A sequence of states in parantheses, followed by an arrow,
+-- followed by the node label, followed by the target state. 
 -- The following example is in the correct format:
 -- @
---      [1]
---      [] "a" 0
---      [0] "g" 1
---      [1] "g" 1
--- @
+--      (0)
+--      () -> a 0
+--      (0) -> g 1
+--      (1) -> g 1
+-- @ 
 parseAutomaton :: String -> Either (Automaton Int) String
 parseAutomaton s = case (finalstates,_edges) of
                         ((Right err,_),_) -> Right err
@@ -118,7 +115,7 @@ parseEdge (s,l) = case (_from,_label,_to,arrow) of
 
 
 parseArrow :: String -> Int -> (Maybe String,String)
-parseArrow ('-':'>':rest) l = (Nothing,rest)
+parseArrow ('-':'>':rest) _ = (Nothing,rest)
 parseArrow _ l = (Just $ parsingError l parseErrorArrowMissing,"")
                        
 parseList :: String -> Int -> (Either [Int] String,String)
