@@ -106,7 +106,9 @@ displayFileDialog callLearner = do
                                     automat <- parseFile fpath parseAutomaton
                                     case automat of
                                          Left automat' -> callLearner automat'
-                                         Right err -> error $ "hihi" ++ err
+                                         Right err -> do 
+                                            displayDialog err nextStep
+                                            return ()
                    Nothing -> return ()
 
       widgetShowAll dialog
@@ -486,7 +488,7 @@ fillStatus :: Int -> StateT (ObservationTable,GraphicUserInterface) IO ()
 fillStatus n = do
             (obs,GUI (dialog,table,box,statusOld,frameStatus,extractOut)) <- get
             lift $ widgetDestroy statusOld
-            statusNew <- lift $ tableNew 6 1 False
+            statusNew <- lift $ tableNew 7 1 False
             -- recolor status statements
             lift $ addStatus 1 statusNew
             lift $ addStatus 2 statusNew
@@ -498,23 +500,45 @@ fillStatus n = do
             button <- lift $ buttonNew
             lift $ set button [buttonLabel := helpButtonLabel]
 
-            lift $ onClicked button $do dialog2 <- dialogNew
-                                        set dialog2 [windowTitle := infoDialog]
-                                        area <- dialogGetUpper dialog2
-                                        label <- labelNew (Just (helpText n))
+            lift $ onClicked button $ do dialog2 <- dialogNew
+                                         set dialog2 [windowTitle := infoDialog]
+                                         area <- dialogGetUpper dialog2
+                                         label <- labelNew (Just (helpText n))
 
-                                        -- place components
-                                        boxPackStart area label PackNatural 0
+                                         -- place components
+                                         boxPackStart area label PackNatural 0
                                         
-                                        -- display components
-                                        widgetShowAll area
+                                         -- display components
+                                         widgetShowAll area
 
-                                        -- wait for ok
-                                        answer <- dialogRun dialog2
-                                        widgetDestroy dialog2
-                                        return ()
+                                         -- wait for ok
+                                         answer <- dialogRun dialog2
+                                         widgetDestroy dialog2
+                                         return ()
+
+            -- add help button2
+            button2 <- lift $ buttonNew
+            lift $ set button2 [buttonLabel := helpButtonLabel]
+
+            lift $ onClicked button2 $ do dialog2 <- dialogNew
+                                          set dialog2 [windowTitle := infoDialog]
+                                          area <- dialogGetUpper dialog2
+                                          label <- labelNew (Just (helpTextNext n))
+
+                                          -- place components
+                                          boxPackStart area label PackNatural 0
+                                        
+                                          -- display components
+                                          widgetShowAll area
+  
+                                          -- wait for ok
+                                          answer <- dialogRun dialog2
+                                          widgetDestroy dialog2
+                                          return ()
+
 
             lift $ tableAttachDefaults statusNew button 0 1 5 6
+            lift $ tableAttachDefaults statusNew button2 0 1 6 7
 
             lift $ containerAdd frameStatus statusNew
             lift $ widgetShowAll statusNew
