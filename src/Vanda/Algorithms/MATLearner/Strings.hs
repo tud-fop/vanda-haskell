@@ -89,7 +89,7 @@ counterexampleMember      = "Membership is already known and this tree is not a 
 
 parseErrorRightBracket   = "')' missing."
 parseErrorLeftBracket    = "'(' missing."
-parseErrorInvalidSymbol  = "Node symbol can't be any of '(',')',','."
+parseErrorInvalidSymbol  = "Node label can't be any of '(',')' or ','."
 parseErrorNoTreeNode     = "No Tree Node symbol given."
 parseErrorOnlyNumbers    = "States must be integers."
 parseErrorStateSeperator = "States have to be seperated by ','."

@@ -11,7 +11,7 @@ Stability:   unknown
 -}
 module Vanda.Algorithms.MATLearner.Parser (parseFile, parseAutomaton, parseTree, parseStringToTree) where
 
-import Vanda.Algorithms.MATLearner.TreeAutomaton
+import Vanda.Algorithms.MATLearner.TreeAutomaton hiding (getStates)
 import Vanda.Algorithms.MATLearner.Strings
 import Vanda.Hypergraph
 import Data.Tree
@@ -112,17 +112,17 @@ parseAutomaton s = case (finalstates,_edges) of
 
 parseEdge :: (String,Int) -> Either (Hyperedge Int String Int) String
 parseEdge (s,l) = case (_from,_label,_to,arrow) of
+                       (_,Right err,_,_) -> Right err
                        (Right err,_,_,_) -> Right err
                        (_,_,_,Just err) -> Right err
-                       (_,Right err,_,_) -> Right err
                        (_,_,Right err,_) -> Right err
                        (Left from',Left label',Left to',Nothing) -> Left $ Hyperedge to' (V.fromList from') label' 0
-    where (_from,s') = parseList s l
-          (arrow,s'') = parseArrow s' l
-          (_label,s''') = parseSymbol s'' l
-          (_to) = case reads s''' of
-                       [(x,"")] -> Left x
-                       _        -> Right $ parsingError l parseErrorOnlyNumbers
+  where (_label,s') = parseSymbol s l
+        (_from,s'') = parseList s' l
+        (arrow,s''') = parseArrow s'' l
+        (_to) = case reads s''' of
+                     [(x,"")] -> Left x
+                     _        -> Right $ parsingError l parseErrorOnlyNumbers
 
 
 parseArrow :: String -> Int -> (Maybe String,String)
