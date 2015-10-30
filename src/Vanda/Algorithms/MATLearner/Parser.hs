@@ -97,14 +97,14 @@ parsingError line message = "Parsing Error in Line " ++ show line ++ ": " ++ mes
 -- @ 
 parseAutomaton :: String -> Either (Automaton Int) String
 parseAutomaton s = case (finalstates,_edges) of
-                        ((Right err,_),_) -> Right err
-                        (_,Right err) -> Right err
+                        ((Right err,_),_)                   -> Right err
+                        (_,Right err)                       -> Right err
                         ((Left finalstates',_),Left edges') -> Left $ Automaton (EdgeList (states) edges') (S.fromList finalstates')
     where finalstates = parseList (head (lines s)) 1
           _edges = map' parseEdge $ zip (tail $ lines s) [2..]
           states = case (finalstates,_edges) of
                         ((Left finalstates',_),Left edges') -> getStates (S.fromList finalstates') edges'
-                        (_,_) -> S.empty
+                        (_,_)                               -> S.empty
           
           getStates :: S.Set Int -> [Hyperedge Int String Int] -> S.Set Int
           getStates currentStates [] = currentStates 
@@ -114,14 +114,14 @@ parseEdge :: (String,Int) -> Either (Hyperedge Int String Int) String
 parseEdge (s,l) = case (_from,_label,_to,arrow) of
                        (_,Right err,_,_) -> Right err
                        (Right err,_,_,_) -> Right err
-                       (_,_,_,Just err) -> Right err
+                       (_,_,_,Just err)  -> Right err
                        (_,_,Right err,_) -> Right err
                        (Left from',Left label',Left to',Nothing) -> Left $ Hyperedge to' (V.fromList from') label' 0
   where (_label,s') = parseSymbol s l
         (_from,s'') = parseList s' l
         (arrow,s''') = parseArrow s'' l
         (_to) = case reads s''' of
-                     [(x,"")] -> Left x
+                     [(x,_)] -> Left x
                      _        -> Right $ parsingError l parseErrorOnlyNumbers
 
 

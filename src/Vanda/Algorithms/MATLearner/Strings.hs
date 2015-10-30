@@ -100,26 +100,26 @@ isMemberQuestion tree = "Is this tree part of the language?\n" ++ tree
 isMemberYes           = "Yes"
 isMemberNo            = "No"
 
-helpButtonLabel ="?"
-helpButtonLabelOT ="What's this?"
+helpButtonLabel   = "?"
+helpButtonLabelOT = "What's this?"
 
 errNotDeterministic = "The automaton is not deterministic!"
-errNotTotal            = "The automaton is not total!"
+errNotTotal         = "The automaton is not total!"
 
-conjectureTitle = "Conjecture"
-conjectureTextQuestion = "Is this your Automaton?\n"
-conjectureEnterCE = "Please enter a counterexample\n"
+conjectureTitle            = "Conjecture"
+conjectureTextQuestion     = "Is this your Automaton?\n"
+conjectureEnterCE          = "Please enter a counterexample\n"
 conjectureTextNotAutomaton = "This is not the Automaton.\n"
-infoDialog = "MATLearner"
-tryAgain = "Try again."
-automatonLearned = "The following automaton has been learned:\n\n" 
+infoDialog                 = "MATLearner"
+tryAgain                   = "Try again."
+automatonLearned           = "The following automaton has been learned:\n\n" 
 
 -- colors for table
-colorNormal = Color 0 0 0
+colorNormal     = Color 0 0 0
 colorConsistent = Color 65535 0 42668
-colorClosed = Color 0 0 65535
-colorUpdate = Color 65535 0 0
-colorExtract = Color 6592 31310 3756
+colorClosed     = Color 0 0 65535
+colorUpdate     = Color 65535 0 0
+colorExtract    = Color 6592 31310 3756
 
 
 
