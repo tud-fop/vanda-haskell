@@ -128,3 +128,4 @@ getStates :: (Ord a) => Automaton a -> [a]
 getStates (Automaton (EdgeList _ edges) _) = nub (concatMap statesFromEdge edges)
   where
     statesFromEdge (Hyperedge to from _ _) = to : (V.toList from)
+    statesFromEdge _ = errorHere "getStates" "Automaton contains edge without constructor Hyperedge"

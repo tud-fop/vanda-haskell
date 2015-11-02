@@ -8,15 +8,21 @@ License:     Redistribution and use in source and binary forms, with
              COORDINATION with the Chair of Foundations of Programming.
 Maintainer:  markus.napierkowski@mailbox.tu-dresden.de
 Stability:   unknown
--}module Vanda.Algorithms.MATLearner.Teacher where
+-}
+{-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
+module Vanda.Algorithms.MATLearner.Teacher where
 
-import Vanda.Algorithms.MATLearner.TreeAutomaton
+import Vanda.Algorithms.MATLearner.TreeAutomaton hiding (errorHere)
 import Vanda.Algorithms.MATLearner.Parser
-import Vanda.Algorithms.MATLearner.Strings
+import Vanda.Algorithms.MATLearner.Strings hiding (errorHere)
 import Data.Tree
 import Graphics.UI.Gtk
 import Control.Monad
 import System.Exit
+import qualified Control.Error
+
+errorHere :: String -> String -> a
+errorHere = Control.Error.errorHere "Vanda.Algorithms.MATLearner.Teacher"
 
 
 -- | The 'Teacher' class defines three methods which have to be implemented: 
@@ -168,6 +174,7 @@ instance (Ord a, Show a) => Teacher (Automaton' a) where
                                         Just t  -> do
                                                     ce <- askForCounterexample (nicerShow t) automat2
                                                     case ce of 
+                                                      Nothing          -> errorHere "conjecture" "askForCounterexample returned Nothing"
                                                       Just (Right _)   -> return $ ce
                                                       Just (Left tree) -> if accepts automat1 tree == accepts automat2 tree 
                                                         then return $ Just $ Right (counterexampleAutInt $ nicerShow tree)

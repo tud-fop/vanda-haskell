@@ -9,6 +9,8 @@ License:     Redistribution and use in source and binary forms, with
 Maintainer:  markus.napierkowski@mailbox.tu-dresden.de
 Stability:   unknown
 -}
+
+{-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
 module Vanda.Algorithms.MATLearner.MATLearner where
 
 import Prelude hiding (lookup)
@@ -17,16 +19,20 @@ import Control.Monad.State
 import Vanda.Hypergraph.Basic
 import qualified Data.Set as S
 import qualified Data.Vector as V
-import Vanda.Algorithms.MATLearner.TreeAutomaton
-import Vanda.Algorithms.MATLearner.Strings
+import Vanda.Algorithms.MATLearner.TreeAutomaton hiding (errorHere)
+import Vanda.Algorithms.MATLearner.Strings hiding (errorHere)
 import Data.Map hiding (foldr,foldl,map,filter,findIndex)
 import Data.List (elemIndex,find)
 import Data.Maybe
 import Vanda.Algorithms.MATLearner.TreesContexts
 import Vanda.Algorithms.MATLearner.Parser
-import Vanda.Algorithms.MATLearner.Teacher
+import Vanda.Algorithms.MATLearner.Teacher hiding (errorHere)
 import Graphics.UI.Gtk hiding (get)
 import System.Exit
+import qualified Control.Error
+
+errorHere :: String -> String -> a
+errorHere = Control.Error.errorHere "Vanda.Algorithms.MATLearner.MATLearner"
 
 instance Ord a => Ord (Tree a) where
     (<=) t1 t2 = (collapsewlr t1) <= (collapsewlr t2)--(a <= b) || (foldl (\le (t1,t2) -> le || t1 <= t2) False (zip t1s t2s))
@@ -235,7 +241,7 @@ consistify ([s1,s2]:xs) teacher = do
 
         else
             consistify xs teacher
-
+consistify _ _ = errorHere "consistify" "first argument is not a valid list"
 
 -- | check whether a given pair of trees in S with the same row in the observation table is consistent
 -- | insert the two trees into every possible context and check whether they behave in the same way
@@ -284,6 +290,7 @@ checkConsistencyOneContext teacher (x:xs) (y:ys) context (c:cs) s1 s2 s1' s2'
         updateMapping teacher (getAllTrees s sigma [concatContext context c]) -- we only need to ask for memberships for trees inserted into the new context
         
         return False
+checkConsistencyOneContext _ _ _ _ _ _ _ _ _ = errorHere "checkConsistencyOneContext" "invalid arguments"
 
 
 -- | check whether Observation Table is closed and return a closed Observation Table
@@ -366,17 +373,17 @@ correctify teacher = do
 -- | extract subtree that has to be added to the observation table
 extract :: Teacher t => t -> [(Tree String,[Bool])] -> [(Tree String,[Bool])] -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO (Tree String)
 extract teacher s sigmaS counterexample = do
-                                    outputExtractFill1 teacher counterexample sTree
+                                    outputExtractFill1 teacher counterexample sTree0
                                     newcounterexample <- getNewCandidate newCECandidates
                                     if newcounterexample == Nothing
                                         then do
                                             outputExtractFill3 teacher
-                                            return sTree
+                                            return sTree0
                                         else do
                                             outputExtractFill2 teacher (snd $ fromJust newcounterexample)
                                             extract teacher s sigmaS (fst $ fromJust newcounterexample)
     where 
-        (newCECandidates,sTree) = tryReduce counterexample
+        (newCECandidates,sTree0) = tryReduce counterexample
 
         -- check whether for some s' the tree is still a counterexample
         getNewCandidate :: [(Tree String,Tree String)] -> StateT (ObservationTable,GraphicUserInterface) IO (Maybe (Tree String,Tree String))
@@ -398,6 +405,7 @@ extract teacher s sigmaS counterexample = do
                                           insertTrees _      []          _                       = ([],tree)
                                           insertTrees tsLeft (t:tsRight) (([],_    ):tsReplaced) = insertTrees (tsLeft ++ [t]) tsRight tsReplaced
                                           insertTrees tsLeft (_:tsRight) ((tR,sTree):_         ) = ([(Node symbol (tsLeft ++ [t'] ++ tsRight),oldSubtree) | (t',oldSubtree)<-tR],sTree) -- we only need one s but all possible s'
+                                          insertTrees _ _ _ = errorHere "extract.tryReduce.insertTrees" "last argument is empty list"
                                       in
                                         insertTrees [] ts (map tryReduce ts)
             |otherwise              = (map (\(t,_) -> (t,t)) $ filter (\(_,q) -> (snd (fromJust maybeRowOfs) == q)) s,tree) -- the current subtree is in Sigma(S)/S now return all possible s'
@@ -409,7 +417,7 @@ generateAutomaton :: ObservationTable -> [(String,Int)] -> (Automaton Int)
 generateAutomaton (OT (s,contexts,mapping)) sigma = Automaton 
                                                       (EdgeList 
                                                         (S.fromList [0..length rows]) -- all occunring states
-                                                        (map (\(qis,q,s) -> Hyperedge (getIndex q) (V.fromList (map getIndex qis)) s 0) boolTransitions) -- extract hyperedges from boolTransitions
+                                                        (map (\(qis,q,s') -> Hyperedge (getIndex q) (V.fromList (map getIndex qis)) s' 0) boolTransitions) -- extract hyperedges from boolTransitions
                                                       ) 
                                                       (S.fromList (map (getIndex . snd) (filter  (\(_,(q:_)) -> q) rows))) -- final states start with 1
     where
@@ -464,8 +472,8 @@ updateMapping teacher (t:ts) = do
                                  (do
                                     outputUpdateMapping teacher t
                                     (_,out) <- get
-                                    member <- lift $ isMember teacher t
-                                    put(OT (s,contexts,(insert t member mapping)),out)
+                                    member' <- lift $ isMember teacher t
+                                    put(OT (s,contexts,(insert t member' mapping)),out)
                                     outputUpdateMapping teacher t)
                             updateMapping teacher ts
 
@@ -477,8 +485,8 @@ updateMappingExtract teacher t = do
                             when (notMember t mapping)
                                  (do
                                     (_,out) <- get
-                                    member <- lift $ isMember teacher t
-                                    put(OT (s,contexts,(insert t member mapping)),out))
+                                    member' <- lift $ isMember teacher t
+                                    put(OT (s,contexts,(insert t member' mapping)),out))
                             return ()
 -- * Output
 
@@ -521,10 +529,10 @@ fillStatus n = do
             lift $ onClicked button $ do dialog2 <- dialogNew
                                          set dialog2 [windowTitle := infoDialog]
                                          area <- dialogGetUpper dialog2
-                                         label <- labelNew (Just (helpText n))
+                                         label' <- labelNew (Just (helpText n))
 
                                          -- place components
-                                         boxPackStart area label PackNatural 0
+                                         boxPackStart area label' PackNatural 0
                                         
                                          -- display components
                                          widgetShowAll area
@@ -543,18 +551,18 @@ fillStatus n = do
 
             where 
                 addStatus i statusNew = do
-                            label <- labelNew (Just $ status i)
-                            tableAttachDefaults statusNew label 0 1 (i-1) i
+                            label' <- labelNew (Just $ status i)
+                            tableAttachDefaults statusNew label' 0 1 (i-1) i
                             if i > n 
-                                then widgetModifyFg label StateNormal inactiveColor
-                                else widgetModifyFg label StateNormal $ activeColor i
+                                then widgetModifyFg label' StateNormal inactiveColor
+                                else widgetModifyFg label' StateNormal $ activeColor i
 
 
 
 -- | put the labels into the table with the given colors
 fillTableWithOT :: ([(String,Color)],[(String,Color)],[(String,Color)],[[(String,Color)]],[[(String,Color)]]) -> StateT (ObservationTable,GraphicUserInterface) IO ()
 fillTableWithOT (contexts,sigmaTrees,sigmaSTrees,sigmaRows,sigmaSRows) = do
-                            (obs,GUI (dialog,tableOld,box,status,frameStatus,extractOut)) <- get
+                            (obs,GUI (dialog,tableOld,box,status0,frameStatus,extractOut)) <- get
                             lift $ widgetDestroy tableOld
                             table <- lift $ tableNew (3 + (length (sigmaTrees ++ sigmaSTrees))) (2 + (length contexts)) False
                             --tableResize table (3 + (length (sigmaTrees ++ sigmaSTrees))) (2 + (length contexts))
@@ -590,10 +598,10 @@ fillTableWithOT (contexts,sigmaTrees,sigmaSTrees,sigmaRows,sigmaSRows) = do
                             lift $ onClicked button $do dialog2 <- dialogNew
                                                         set dialog2 [windowTitle := infoDialog]
                                                         area <- dialogGetUpper dialog2
-                                                        label <- labelNew (Just (helpTextOT))
+                                                        label' <- labelNew (Just (helpTextOT))
 
                                                         -- place components
-                                                        boxPackStart area label PackNatural 0
+                                                        boxPackStart area label' PackNatural 0
                                                         
                                                         -- display components
                                                         widgetShowAll area
@@ -607,22 +615,22 @@ fillTableWithOT (contexts,sigmaTrees,sigmaSTrees,sigmaRows,sigmaSRows) = do
 
                             lift $ containerAdd box table
                             lift $ widgetShowAll table
-                            put(obs,GUI (dialog,table,box,status,frameStatus,extractOut))
+                            put(obs,GUI (dialog,table,box,status0,frameStatus,extractOut))
 
 
                         where   -- fill table along f
                                 fillOneDim :: Table -> (Int,Int) -> ((Int,Int) -> (Int,Int)) -> [(String,Color)] -> Bool -> IO ()
                                 fillOneDim _     _            _ []               _       = return ()
                                 fillOneDim table (row,column) f ((txt,color):xs) rotated = do
-                                                                                label <- labelNew (Just txt)
+                                                                                label' <- labelNew (Just txt)
                                                                                 -- rotate label only used for contexts
-                                                                                when rotated (labelSetAngle label 90)
+                                                                                when rotated (labelSetAngle label' 90)
                                                                                 -- set color
-                                                                                widgetModifyFg label StateNormal color
-                                                                                tableAttachDefaults table label column (column + 1) row (row + 1)
+                                                                                widgetModifyFg label' StateNormal color
+                                                                                tableAttachDefaults table label' column (column + 1) row (row + 1)
                                                                                 -- change fonts
                                                                                 font <- fontDescriptionFromString fontObservationtable
-                                                                                widgetModifyFont label (Just font)
+                                                                                widgetModifyFont label' (Just font)
 
                                                                                 fillOneDim table (f (row,column)) f xs rotated
 
@@ -740,6 +748,7 @@ outputNotConsistent teacher s1 s2 s1' s2' c' newC = do
                         goCol (c:cs) (r:rs)
                             | c == c'   = (notConsistentColor r) : (map noColor rs)
                             | otherwise = (noColor r) : (goCol cs rs)
+                        goCol _ _ = errorHere "outputNotConsistent.goCol" "input lists have different lengths"
 
                         goContext :: (String,Context String) -> (String,Color)
                         goContext (cStr,c)
@@ -791,6 +800,7 @@ outputUpdateMapping teacher tree = do
                     zipTable :: [a] -> [b] -> [[c]] -> [[(c,a,b)]]
                     zipTable [] _ _ = []
                     zipTable (x:xs) ys (zs:zss) = (zip3 zs (repeat x) ys):(zipTable xs ys zss)
+                    zipTable _ _ _ = errorHere "outputUpdateMapping.zipTable" "last argument is empty list"
 
                     paintEntries :: (String,Tree String,Context String) -> (String,Color)
                     paintEntries (membership,t,c)
@@ -825,7 +835,7 @@ outputExtractInit _ counterexample = do
                 -- begin extraction
                 fillStatus 5
 
-                (obs,GUI (dialog,observationTableOut,box,status,frameStatus,_)) <- get
+                (obs,GUI (dialog,observationTableOut,box,status',frameStatus,_)) <- get
                 dialogExtract <- lift $ dialogNew
                 lift $ set dialogExtract [windowTitle := extractTitle]
 
@@ -873,14 +883,14 @@ outputExtractInit _ counterexample = do
 
                 lift $ onClicked button $do dialog2 <- dialogNew
                                             set dialog2 [windowTitle := infoDialog]
-                                            area <- dialogGetUpper dialog2
-                                            label <- labelNew (Just (helpText 5))
+                                            area' <- dialogGetUpper dialog2
+                                            label' <- labelNew (Just (helpText 5))
 
                                             -- place components
-                                            boxPackStart area label PackNatural 0
+                                            boxPackStart area' label' PackNatural 0
                                             
                                             -- display components
-                                            widgetShowAll area
+                                            widgetShowAll area'
 
                                             -- wait for ok
                                             _ <- dialogRun dialog2
@@ -888,7 +898,7 @@ outputExtractInit _ counterexample = do
                                             return ()
 
                 lift $ widgetShowAll dialogExtract
-                put (obs,GUI (dialog,observationTableOut,box,status,frameStatus,Extract (dialogExtract,vBox1,vBox2,vBox3)))
+                put (obs,GUI (dialog,observationTableOut,box,status',frameStatus,Extract (dialogExtract,vBox1,vBox2,vBox3)))
                 return ()
 
 
@@ -935,25 +945,25 @@ outputExtractFill3 _ = do
 -- | delete the extraction window
 outputExtractDelete :: Teacher t => t -> Tree String -> StateT (ObservationTable,GraphicUserInterface) IO () 
 outputExtractDelete _ extractedTree = do
-                (obs,GUI (dialog,observationTableOut,box,status,frameStatus,Extract (dialogExtract,_,_,_))) <- get
+                (obs,GUI (dialog,observationTableOut,box,status',frameStatus,Extract (dialogExtract,_,_,_))) <- get
 
                 lift $ widgetDestroy dialogExtract
                 lift $ displayDialog (extracted extractedTree) nextStep
 
-                put (obs,GUI (dialog,observationTableOut,box,status,frameStatus,None))
+                put (obs,GUI (dialog,observationTableOut,box,status',frameStatus,None))
                 return ()
 
 
 -- | diplay dialog with the given taxt and destroy it afterwards
 displayDialog :: String -> String -> IO ()
-displayDialog labelText buttonText = do
+displayDialog labelTxt buttonText = do
             dialog <- dialogNew
             set dialog [windowTitle := infoDialog]
             area <- dialogGetUpper dialog
-            label <- labelNew (Just labelText)
+            label' <- labelNew (Just labelTxt)
 
             -- place components
-            boxPackStart area label PackNatural 0
+            boxPackStart area label' PackNatural 0
             dialogAddButton dialog buttonText ResponseOk
 
             -- display components
