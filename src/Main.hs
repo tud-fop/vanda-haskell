@@ -20,6 +20,8 @@
 -- In this module, the local command line definitions are 'remap'ped to provide the unified command line interface. Note that the 'modeNames' of the local 'Mode's are thereby used as names for the sub-commands.
 -----------------------------------------------------------------------------
 
+{-# LANGUAGE CPP #-}
+
 module Main
 ( main
 , mainArgs
@@ -36,6 +38,10 @@ import qualified Vanda.Grammar.NGrams.Main
 import qualified Vanda.Algorithms.IntersectWithNGrams.Main
 import qualified Vanda.Grammar.PCFG.Main
 
+#ifdef VERSION_gtk
+import qualified Vanda.Algorithms.MATLearner.Main
+#endif
+
 import           System.Console.CmdArgs.Explicit
 
 
@@ -47,6 +53,9 @@ data Args
   | NGrams Vanda.Grammar.NGrams.Main.Args
   | XRSNGrams Vanda.Algorithms.IntersectWithNGrams.Main.Args
   | PCFGs Vanda.Grammar.PCFG.Main.Args
+#ifdef VERSION_gtk
+  | MATLearner Vanda.Algorithms.MATLearner.Main.Args
+#endif
   deriving Show
 
 
@@ -59,6 +68,9 @@ cmdArgs
   , remap2 NGrams (\ (NGrams x) -> x) Vanda.Grammar.NGrams.Main.cmdArgs
   , remap2 XRSNGrams (\ (XRSNGrams x) -> x) Vanda.Algorithms.IntersectWithNGrams.Main.cmdArgs
   , remap2 PCFGs (\ (PCFGs x) -> x) Vanda.Grammar.PCFG.Main.cmdArgs
+#ifdef VERSION_gtk
+  , remap2 MATLearner (\ (MATLearner x) -> x) Vanda.Algorithms.MATLearner.Main.cmdArgs
+#endif
   ]
 
 
@@ -74,3 +86,6 @@ mainArgs (LCFRS     x ) = Vanda.Grammar.XRS.LCFRS.Main.mainArgs x
 mainArgs (NGrams    x ) = Vanda.Grammar.NGrams.Main.mainArgs x
 mainArgs (XRSNGrams x ) = Vanda.Algorithms.IntersectWithNGrams.Main.mainArgs x
 mainArgs (PCFGs     x ) = Vanda.Grammar.PCFG.Main.mainArgs x
+#ifdef VERSION_gtk
+mainArgs (MATLearner x) = Vanda.Algorithms.MATLearner.Main.mainArgs x
+#endif

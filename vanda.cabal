@@ -16,6 +16,9 @@ category:       NLP
 tested-with:    GHC
 Build-Type:     Simple
 
+Flag gtk
+  Description: enable tools depending on gtk
+  Default:     False
 
 library
   build-depends:
@@ -150,7 +153,7 @@ executable Vanda
     , filepath
     , hashable
     , heap
-    , log-domain
+    , log-domain == 0.10.2
     , MissingH
     , mtl
     , parallel >= 3.2
@@ -164,11 +167,13 @@ executable Vanda
     , unordered-containers
     , vector
     , zlib
+  if flag(gtk)
+    build-depends: gtk
   hs-source-dirs:  src
   main-is: Main.hs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
-
+  
 -- Test-Suite HUnitTests
 --   type: exitcode-stdio-1.0
 --   main-is: HUnitTests.hs
