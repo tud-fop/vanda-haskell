@@ -20,6 +20,8 @@
 -- In this module, the local command line definitions are 'remap'ped to provide the unified command line interface. Note that the 'modeNames' of the local 'Mode's are thereby used as names for the sub-commands.
 -----------------------------------------------------------------------------
 
+{-# LANGUAGE CPP #-}
+
 module Main
 ( main
 , mainArgs
@@ -35,6 +37,10 @@ import qualified Vanda.Grammar.XRS.LCFRS.Main
 import qualified Vanda.Grammar.NGrams.Main
 import qualified Vanda.Algorithms.IntersectWithNGrams.Main
 
+#ifdef VERSION_gtk
+import qualified Vanda.Algorithms.MATLearner.Main
+#endif
+
 import           System.Console.CmdArgs.Explicit
 
 
@@ -45,6 +51,9 @@ data Args
   | LCFRS Vanda.Grammar.XRS.LCFRS.Main.Args
   | NGrams Vanda.Grammar.NGrams.Main.Args
   | XRSNGrams Vanda.Algorithms.IntersectWithNGrams.Main.Args
+#ifdef VERSION_gtk
+  | MATLearner Vanda.Algorithms.MATLearner.Main.Args
+#endif
   deriving Show
 
 
@@ -56,6 +65,9 @@ cmdArgs
   , remap2 LCFRS (\ (LCFRS x) -> x) Vanda.Grammar.XRS.LCFRS.Main.cmdArgs
   , remap2 NGrams (\ (NGrams x) -> x) Vanda.Grammar.NGrams.Main.cmdArgs
   , remap2 XRSNGrams (\ (XRSNGrams x) -> x) Vanda.Algorithms.IntersectWithNGrams.Main.cmdArgs
+#ifdef VERSION_gtk
+  , remap2 MATLearner (\ (MATLearner x) -> x) Vanda.Algorithms.MATLearner.Main.cmdArgs
+#endif
   ]
 
 
@@ -70,3 +82,6 @@ mainArgs (Dyck      x ) = Vanda.Dyck.Main.mainArgs x
 mainArgs (LCFRS     x ) = Vanda.Grammar.XRS.LCFRS.Main.mainArgs x
 mainArgs (NGrams    x ) = Vanda.Grammar.NGrams.Main.mainArgs x
 mainArgs (XRSNGrams x ) = Vanda.Algorithms.IntersectWithNGrams.Main.mainArgs x
+#ifdef VERSION_gtk
+mainArgs (MATLearner x) = Vanda.Algorithms.MATLearner.Main.mainArgs x
+#endif
