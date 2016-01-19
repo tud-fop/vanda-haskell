@@ -101,7 +101,7 @@ mainArgs (Extract outfile)
       let plcfrs = extractPLCFRSFromNegra $ parseNegra corpus
       BS.writeFile outfile . compress $ B.encode plcfrs
       writeFile (outfile ++ ".readable") $ showPLCFRS plcfrs
-      hPutStrLn stderr $ "Extracted PLCFRS:" ++ niceStatictics plcfrs
+--       hPutStrLn stderr $ "Extracted PLCFRS:" ++ niceStatictics plcfrs
 mainArgs (Binarize strategy infile outfile)
   = do
       plcfrs <- fmap (B.decode . decompress . BS.fromChunks . (:[]))
