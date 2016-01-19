@@ -44,8 +44,8 @@ emptyTreeStack x = TreeStack [(id, Node x [])]
 checkTreeStack :: (a -> Bool) -> TreeStack a -> Bool
 checkTreeStack _ (TreeStack [])
   = error "checkTreeStack: the stack backlog must not be empty"
-checkTreeStack p (TreeStack ((_, Node x _) : _))
-  = p x
+checkTreeStack p ts@(TreeStack ((_, Node x _) : _))
+  = (not $ bottomTreeStack ts) && p x
 
 
 -- | Checks whether the tree only has a root node.

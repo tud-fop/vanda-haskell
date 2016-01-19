@@ -47,7 +47,7 @@ multipleDyckTreeStackAutomaton
   -> (a -> a)                    -- ^ bijection from left to right parentheses
   -> Automaton () a (TreeStack (Maybe a, S.Set a))
 multipleDyckTreeStackAutomaton ass bij
-  = ( ((), emptyTreeStack (error "You must not read the root symbol!"))
+  = ( ((), emptyTreeStack (error "multipleDyckTreeStackAutomaton: You must not read the root symbol!"))
     , τs
     , bottomTreeStack . snd
     )
