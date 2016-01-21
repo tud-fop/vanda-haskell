@@ -148,7 +148,7 @@ cmdArgs
   , (modeEmpty $ CBSM False False False FRMNone 1000 False (pred maxBound) "" [])
     { modeNames = ["cbsm"]
     , modeHelp = "Read-off a grammar from TREEBANKs and generalize it. See \
-        \printcorpora for further information about the TREEBANK arguments."
+        \print-corpora for further information about the TREEBANK arguments."
     , modeArgs = ([], Just flagArgCorpora)
     , modeGroupFlags = toGroup
         [ flagNoneAsForests
