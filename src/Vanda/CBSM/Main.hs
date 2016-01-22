@@ -78,6 +78,7 @@ data Args
     { flagAsForests :: Bool
     , flagDefoliate :: Bool
     , flagPennFilter :: Bool
+    , flagFilterByLeafs :: FilePath
     , flagRestrictMerge :: FlagRestrictMerge
     , flagBeamWidth :: Int
     , flagNormalize :: Bool
@@ -145,7 +146,8 @@ cmdArgs
         , flagOutputFormat
         ]
     }
-  , (modeEmpty $ CBSM False False False FRMNone 1000 False (pred maxBound) "" [])
+  , ( modeEmpty
+        $ CBSM False False False "" FRMNone 1000 False (pred maxBound) "" [])
     { modeNames = ["cbsm"]
     , modeHelp = "Read-off a grammar from TREEBANKs and generalize it. See \
         \print-corpora for further information about the TREEBANK arguments."
@@ -154,6 +156,7 @@ cmdArgs
         [ flagNoneAsForests
         , flagNoneDefoliate
         , flagNonePennFilter
+        , flagReqFilterByLeafs
         , flagReqRestrictMerge
         , flagReqBeamWidth
         , flagNoneNormalize
@@ -360,8 +363,10 @@ mainArgs CBSM{..} = do
     putStrLn $ "Did you mean cbsm-continue?"
     exitFailure
   createDirectoryIfMissing True flagDir
-  (g, tM) <- forestToGrammar
-         <$> readCorpora flagAsForests flagDefoliate flagPennFilter argCorpora
+  (g, tM) <- fmap forestToGrammar
+           $ (if null flagFilterByLeafs then return
+                                        else filterByLeafs flagFilterByLeafs)
+         =<< readCorpora flagAsForests flagDefoliate flagPennFilter argCorpora
   B.encodeFile (filePathIntToTreeMap flagDir) (tM :: BinaryIntToTreeMap)
   withFile (filePathStatistics flagDir) AppendMode $ \ h -> do
     hPutStrLn h
