@@ -372,7 +372,7 @@ mainArgs CBSM{..} = do
     hPutStrLn h
       "CPU time,iteration,rules,states,initial states,beam width,beam index,\
       \candidate index,rule merges,state merges,initial-state merges,\
-      \log likelihood delta,likelihood delta,log evaluation of merge,\
+      \log₂ likelihood delta,likelihood delta,log₂ evaluation of merge,\
       \evaluation of merge"
     safeSaveLastGrammar flagDir h
       $ take (succ flagIterations)
@@ -407,9 +407,9 @@ mainArgs ShowInfo{..} = do
   putStr "state merges        : " >> print (infoMergedStates    info)
   putStr "initial-state merges: " >> print (infoMergedInitials  info)
   putStrLn $ let l = infoLikelihoodDelta info
-      in "likelihood delta    : exp " ++ show (ln l) ++ " = " ++ show l
+      in "likelihood delta    : 2^" ++ show (ln l / log 2) ++ " = " ++ show l
   putStrLn $ let l = infoEvaluation info
-      in "evaluation of merge : exp " ++ show (ln l) ++ " = " ++ show l
+      in "evaluation of merge : 2^" ++ show (ln l / log 2) ++ " = " ++ show l
   putStrLn ""
   putStrLn ""
   putStrLn "merge history:"
@@ -584,9 +584,9 @@ safeSaveLastGrammar dir h xs
             , show infoMergedRules
             , show infoMergedStates
             , show infoMergedInitials
-            , show (ln infoLikelihoodDelta)
+            , show (ln infoLikelihoodDelta / log 2)
             , show infoLikelihoodDelta
-            , show (ln infoEvaluation)
+            , show (ln infoEvaluation / log 2)
             , show infoEvaluation
             ]
           hFlush h
