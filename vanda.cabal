@@ -174,11 +174,17 @@ executable Vanda
   main-is: Main.hs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
-  
--- Test-Suite HUnitTests
---   type: exitcode-stdio-1.0
---   main-is: HUnitTests.hs
--- --  type: detailed-0.9
--- --  test-module: HUnitTests
---   hs-source-dirs: testsuite/tests
---   build-depends: base, Vanda, HUnit
+
+Test-Suite HUnitTests
+  build-depends:
+      base
+    , binary >= 0.6.4
+    , containers >= 0.5.0
+    , HUnit
+    , log-domain
+    , Vanda
+    , vector
+  GHC-Options: -main-is HUnitTests
+  hs-source-dirs: testsuite/tests
+  main-is: HUnitTests.hs
+  type: exitcode-stdio-1.0
