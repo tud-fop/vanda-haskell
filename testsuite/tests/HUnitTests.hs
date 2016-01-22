@@ -1,6 +1,7 @@
 module HUnitTests where
 
-import Control.Monad (void)
+import Control.Monad (when)
+import System.Exit (exitFailure)
 import Test.HUnit
 
 import qualified Control.ErrorTests
@@ -13,7 +14,9 @@ import qualified Vanda.CBSM.ProductOrderTests
 
 
 main :: IO ()
-main = void (runTestTT tests)
+main = do
+  cnts <- runTestTT tests
+  when (errors cnts /= 0 || failures cnts /= 0) exitFailure
 
 
 tests :: Test
