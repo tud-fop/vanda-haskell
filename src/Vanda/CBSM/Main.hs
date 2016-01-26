@@ -317,16 +317,16 @@ cmdArgs
       = flagArg (readUpdate $ \ a x -> x{argCount = a}) "COUNT"
 
 
-filePathGrammar       :: FilePath -> Int -> FilePath
-filePathIntToTreeMap  :: FilePath        -> FilePath
-filePathInfo          :: FilePath -> Int -> FilePath
-filePathLastIteration :: FilePath        -> FilePath
-filePathStatistics    :: FilePath        -> FilePath
-filePathGrammar       dir i = dir </> "grammar-" ++ show0 9 i <.> "bin"
-filePathIntToTreeMap  dir   = dir </> "int2tree"              <.> "bin"
-filePathInfo          dir i = dir </> "info-"    ++ show0 9 i <.> "bin"
-filePathLastIteration dir   = dir </> "last-iteration"        <.> "txt"
-filePathStatistics    dir   = dir </> "statistics"            <.> "csv"
+fileNameGrammar       :: Int -> FilePath
+fileNameIntToTreeMap  ::        FilePath
+fileNameInfo          :: Int -> FilePath
+fileNameLastIteration ::        FilePath
+fileNameStatistics    ::        FilePath
+fileNameGrammar       i = "grammar-" ++ show0 9 i <.> "bin"
+fileNameIntToTreeMap    = "int2tree"              <.> "bin"
+fileNameInfo          i = "info-"    ++ show0 9 i <.> "bin"
+fileNameLastIteration   = "last-iteration"        <.> "txt"
+fileNameStatistics      = "statistics"            <.> "csv"
 
 
 show0 :: Show a => Int -> a -> String
@@ -356,9 +356,9 @@ mainArgs PrintCorpora{..}
   =<< readCorpora flagAsForests flagDefoliate flagPennFilter argCorpora
 
 mainArgs CBSM{..} = do
-  exist <- fileExist (filePathIntToTreeMap flagDir)
+  exist <- fileExist (flagDir </> fileNameIntToTreeMap)
   when exist $ do
-    putStrLn $ "File exists: " ++ filePathIntToTreeMap flagDir
+    putStrLn $ "File exists: " ++ (flagDir </> fileNameIntToTreeMap)
     putStrLn $ "Probably you have run cbsm in this directory before."
     putStrLn $ "Did you mean cbsm-continue?"
     exitFailure
@@ -367,8 +367,8 @@ mainArgs CBSM{..} = do
            $ (if null flagFilterByLeafs then return
                                         else filterByLeafs flagFilterByLeafs)
          =<< readCorpora flagAsForests flagDefoliate flagPennFilter argCorpora
-  B.encodeFile (filePathIntToTreeMap flagDir) (tM :: BinaryIntToTreeMap)
-  withFile (filePathStatistics flagDir) AppendMode $ \ h -> do
+  B.encodeFile (flagDir </> fileNameIntToTreeMap) (tM :: BinaryIntToTreeMap)
+  withFile (flagDir </> fileNameStatistics) AppendMode $ \ h -> do
     hPutStrLn h
       "CPU time,iteration,rules,states,initial states,beam width,beam index,\
       \candidate index,rule merges,state merges,initial-state merges,\
@@ -383,12 +383,13 @@ mainArgs CBSM{..} = do
           (g, initialInfo (cntState g))
 
 mainArgs CBSM_Continue{..} = do
-  it   <- read <$> readFile (filePathLastIteration flagDir) :: IO Int
-  g    <- B.decodeFile (filePathGrammar flagDir it) :: IO BinaryCRTG
-  info <- B.decodeFile (filePathInfo    flagDir it) :: IO BinaryInfo
+  it   <- read <$> readFile (flagDir </> fileNameLastIteration) :: IO Int
+  g    <- B.decodeFile (flagDir </> fileNameGrammar it) :: IO BinaryCRTG
+  info <- B.decodeFile (flagDir </> fileNameInfo    it) :: IO BinaryInfo
   groups <- mergeGroups flagRestrictMerge
-    <$> (B.decodeFile (filePathIntToTreeMap flagDir) :: IO BinaryIntToTreeMap)
-  withFile (filePathStatistics flagDir) AppendMode $ \ h -> do
+    <$> (B.decodeFile (flagDir </> fileNameIntToTreeMap)
+           :: IO BinaryIntToTreeMap)
+  withFile (flagDir </> fileNameStatistics) AppendMode $ \ h -> do
     safeSaveLastGrammar flagDir h
       $ take (succ flagIterations)
       $ cbsm
@@ -602,9 +603,9 @@ safeSaveLastGrammar dir h xs
       let i = infoIteration info
       putStrLnTimestamped $ "Writing result of iteration " ++ show i ++ " ..."
       hFlush stdout
-      B.encodeFile (filePathGrammar dir i) (g    :: BinaryCRTG)
-      B.encodeFile (filePathInfo    dir i) (info :: BinaryInfo)
-      writeFile (filePathLastIteration dir) (show i)
+      B.encodeFile (dir </> fileNameGrammar i) (g    :: BinaryCRTG)
+      B.encodeFile (dir </> fileNameInfo    i) (info :: BinaryInfo)
+      writeFile (dir </> fileNameLastIteration) (show i)
       putStrLnTimestamped
         $ "... done writing result of iteration " ++ show i ++ "."
       hFlush stdout
