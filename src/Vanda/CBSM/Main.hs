@@ -23,6 +23,7 @@ module Vanda.CBSM.Main
 ) where
 
 
+import           Data.List.Extra (groupWithRanges, toRanges)
 import           System.Console.CmdArgs.Explicit.Misc
 import           Vanda.Algorithms.EarleyMonadic
 import qualified Vanda.Algorithms.Earley.WSA as WSA
@@ -58,6 +59,7 @@ import           System.FilePath ((</>), (<.>))
 import           System.IO ( Handle
                            , IOMode(..)
                            , hFlush
+                           , hPutStr
                            , hPutStrLn
                            , stdout
                            , withFile )
@@ -317,16 +319,20 @@ cmdArgs
       = flagArg (readUpdate $ \ a x -> x{argCount = a}) "COUNT"
 
 
-fileNameGrammar       :: Int -> FilePath
-fileNameIntToTreeMap  ::        FilePath
-fileNameInfo          :: Int -> FilePath
-fileNameLastIteration ::        FilePath
-fileNameStatistics    ::        FilePath
-fileNameGrammar       i = "grammar-" ++ show0 9 i <.> "bin"
-fileNameIntToTreeMap    = "int2tree"              <.> "bin"
-fileNameInfo          i = "info-"    ++ show0 9 i <.> "bin"
-fileNameLastIteration   = "last-iteration"        <.> "txt"
-fileNameStatistics      = "statistics"            <.> "csv"
+fileNameGrammar          :: Int -> FilePath
+fileNameIntToTreeMap     ::        FilePath
+fileNameInfo             :: Int -> FilePath
+fileNameLastIteration    ::        FilePath
+fileNameStatistics       ::        FilePath
+fileNameEvaluations      ::        FilePath
+fileNameEquivBeamIndizes ::        FilePath
+fileNameGrammar        i = "grammar-"              ++ show0 9 i <.> "bin"
+fileNameIntToTreeMap     = "int2tree"                           <.> "bin"
+fileNameInfo           i = "info-"                 ++ show0 9 i <.> "bin"
+fileNameLastIteration    = "last-iteration"                     <.> "txt"
+fileNameStatistics       = "statistics"                         <.> "csv"
+fileNameEvaluations      = "statistics-evaluations"             <.> "csv"
+fileNameEquivBeamIndizes = "statistics-equivalent-beam-indizes" <.> "csv"
 
 
 show0 :: Show a => Int -> a -> String
@@ -368,13 +374,18 @@ mainArgs CBSM{..} = do
                                         else filterByLeafs flagFilterByLeafs)
          =<< readCorpora flagAsForests flagDefoliate flagPennFilter argCorpora
   B.encodeFile (flagDir </> fileNameIntToTreeMap) (tM :: BinaryIntToTreeMap)
-  withFile (flagDir </> fileNameStatistics) AppendMode $ \ h -> do
-    hPutStrLn h
+  withFile (flagDir </> fileNameStatistics) AppendMode $ \ hStat ->
+   withFile (flagDir </> fileNameEvaluations) AppendMode $ \ hEvals ->
+   withFile (flagDir </> fileNameEquivBeamIndizes) AppendMode $ \ hBeam -> do
+    hPutStrLn hStat
       "CPU time,iteration,rules,states,initial states,beam width,beam index,\
       \candidate index,rule merges,state merges,initial-state merges,\
       \log₂ likelihood delta,likelihood delta,log₂ evaluation of merge,\
       \evaluation of merge"
-    safeSaveLastGrammar flagDir h
+    hPutStrLn hEvals "iteration,beam index low,beam index high,\
+      \log₂ evaluation of merge,evaluation of merge"
+    hPutStrLn hBeam "iteration,beam index low,beam index high"
+    safeSaveLastGrammar flagDir hStat hEvals hBeam
       $ take (succ flagIterations)
       $ cbsm
           (mergeGroups flagRestrictMerge tM)
@@ -389,8 +400,10 @@ mainArgs CBSM_Continue{..} = do
   groups <- mergeGroups flagRestrictMerge
     <$> (B.decodeFile (flagDir </> fileNameIntToTreeMap)
            :: IO BinaryIntToTreeMap)
-  withFile (flagDir </> fileNameStatistics) AppendMode $ \ h -> do
-    safeSaveLastGrammar flagDir h
+  withFile (flagDir </> fileNameStatistics) AppendMode $ \ hStat ->
+   withFile (flagDir </> fileNameEvaluations) AppendMode $ \ hEvals ->
+   withFile (flagDir </> fileNameEquivBeamIndizes) AppendMode $ \ hBeam ->
+    safeSaveLastGrammar flagDir hStat hEvals hBeam
       $ take (succ flagIterations)
       $ cbsm
           groups
@@ -561,8 +574,14 @@ newline :: String
 newline = unlines [""]
 
 
-safeSaveLastGrammar :: FilePath -> Handle -> [(BinaryCRTG, Info Int)] -> IO ()
-safeSaveLastGrammar dir h xs
+safeSaveLastGrammar
+  :: FilePath
+  -> Handle
+  -> Handle
+  -> Handle
+  -> [(BinaryCRTG, Info Int)]
+  -> IO ()
+safeSaveLastGrammar dir hStat hEvals hBeam xs
   = handleInterrupt worker handler
   where
     worker :: ((BinaryCRTG, BinaryInfo) -> IO ()) -> IO ()
@@ -573,7 +592,7 @@ safeSaveLastGrammar dir h xs
           let rules         = M.size $ cntRule  g
               states        = M.size $ cntState g
               initialStates = M.size $ cntInit  g
-          hPutStrLn h $ intercalate ","
+          hPutStrLn hStat $ intercalate ","
             [ showFixedComma 12 cpuTime  -- pico = 10^-12
             , show infoIteration
             , show rules
@@ -590,7 +609,23 @@ safeSaveLastGrammar dir h xs
             , show (ln infoEvaluation / log 2)
             , show infoEvaluation
             ]
-          hFlush h
+          hPutStr hEvals
+            $ unlines
+            $ map (\ (lo, hi, e) -> show infoIteration ++ ","
+                                 ++ show (succ lo) ++ ","
+                                 ++ show (succ hi) ++ ","
+                                 ++ show (ln (head e) / log 2) ++ ","
+                                 ++ show (head e) )
+            $ groupWithRanges infoEvaluations
+          hPutStr hBeam
+            $ unlines
+            $ map (\ (lo, hi) -> show infoIteration ++ ","
+                              ++ show lo ++ ","
+                              ++ show hi)
+            $ toRanges infoEquivalentBeamIndizes
+          hFlush hStat
+          hFlush hEvals
+          hFlush hBeam
           putStrLnTimestamped
             $ "Iteration " ++ show infoIteration ++ ": "
               ++ show rules         ++ " rules, "

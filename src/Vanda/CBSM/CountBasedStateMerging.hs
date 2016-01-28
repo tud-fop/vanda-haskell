@@ -54,7 +54,8 @@ import           Control.Arrow ((***), first)
 import           Control.Monad.State.Lazy
 import           Control.Parallel.Strategies
 import qualified Data.Binary as B
-import           Data.List (foldl', groupBy, minimumBy, sortBy)
+import           Data.List (foldl', groupBy, sortBy)
+import           Data.List.Extra (minimaBy)
 import           Data.Function (on)
 import qualified Data.Map.Lazy as ML
 import           Data.Map.Strict (Map, (!))
@@ -326,24 +327,26 @@ data Info v = Info
   , infoMergedInitials :: !Int
   , infoLikelihoodDelta :: !(Log Double)
   , infoEvaluation :: !(Log Double)
+  , infoEvaluations :: ![Log Double]
+  , infoEquivalentBeamIndizes :: ![Int]
   , infoMergeTreeMap :: !(MergeHistory v)
   }
 
 
 instance (B.Binary v, Ord v) => B.Binary (Info v) where
-  put (Info a b c d e f g h i j k)
+  put (Info a b c d e f g h i j k l m)
     = B.put a >> B.put b >> B.put c >> B.put d >> B.put e
    >> B.put f >> B.put g >> B.put h >> B.put i >> B.put j
-   >> B.put k
+   >> B.put k >> B.put l >> B.put m
   get = Info
     <$> B.get <*> B.get <*> B.get <*> B.get <*> B.get
     <*> B.get <*> B.get <*> B.get <*> B.get <*> B.get
-    <*> B.get
+    <*> B.get <*> B.get <*> B.get
 
 
 initialInfo :: Map v Int -> Info v
 initialInfo
-  = Info 0 0 0 0 Merge.empty 0 0 0 1 1
+  = Info 0 0 0 0 Merge.empty 0 0 0 1 1 [] []
   . M.mapWithKey State
 
 
@@ -393,13 +396,10 @@ cbsmGo cache mergeGroups evaluate beamWidth prev@(g, info@Info{..})
         liftSat f (x, y, m) = case f m of
           Left  l -> Left  (x, y, l)
           Right r -> Right (x, y, r)
+        minimalCands
+          = minimaBy (comparing (Down . (\ (_, _, _, _, _, _, x) -> x))) cands
         (indB, indC, mrgV, mrg, (mrgR, mrgS, mrgI), lklhdD, evaluation)
-          = minimumBy
-              (comparing (Down . (\ (_, _, _, _, _, _, x) -> x)))
-              cands
-            -- minimumBy returns the first minimum while
-            -- maximumBy would return the last maximum
-            -- but both is not guaranteed by the documentation
+          = head minimalCands
         apply = Merge.apply mrg
         cache'
           = ML.map (Merge.applyMergeToMerge mrg)
@@ -408,6 +408,8 @@ cbsmGo cache mergeGroups evaluate beamWidth prev@(g, info@Info{..})
           $ map (\ (_, _, mv, m, _, _, _) -> (mv, m)) cands
         info'
           = Info n beamWidth indB indC mrg mrgR mrgS mrgI lklhdD evaluation
+                 (map (\ (_, _, _, _, _, _, x) -> x) cands)
+                 (map (\ (i, _, _, _, _, _, _) -> i) minimalCands)
           $ M.map (\ case [x] -> x; xs -> Merge n xs)
           $ mergeKeysWith (++) mrg
           $ M.map (: []) infoMergeTreeMap
