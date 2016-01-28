@@ -52,6 +52,7 @@ library
       CodingConventions
     , Control.Error
     , Data.Interner
+    , Data.List.Extra
     , Data.MultiMap
     , Data.NTT
     , Data.Queue

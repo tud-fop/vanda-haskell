@@ -5,6 +5,7 @@ import System.Exit (exitFailure)
 import Test.HUnit
 
 import qualified Control.ErrorTests
+import qualified Data.List.ExtraTests
 import qualified Data.MultiMapTests
 import qualified Data.RevMapTests
 import qualified Vanda.Algorithms.EarleyTest
@@ -23,6 +24,8 @@ tests :: Test
 tests = TestList
   [ "Control.Error"
     ~: Control.ErrorTests.tests
+  , "Data.List.Extra"
+    ~: Data.List.ExtraTests.tests
   , "Data.MultiMapTests"
     ~: Data.MultiMapTests.tests
   ,   "Data.RevMapTests"
