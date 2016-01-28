@@ -6,6 +6,7 @@
 /.kateproject.d/
 /.project
 /cabal.sandbox.config
+/tags
 build/
 dist/
 report.html
