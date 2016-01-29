@@ -41,6 +41,7 @@ module Vanda.CBSM.CountBasedStateMerging
 
 
 import qualified Control.Error
+import           Data.Maybe.Extra (nothingIf)
 import           Vanda.CBSM.Dovetailing
 import           Vanda.CBSM.Merge (Merge)
 import qualified Vanda.CBSM.Merge as Merge
@@ -600,7 +601,8 @@ sortedCartesianProductWithInternal (?) (>+<) (x0 : xs0) (y0 : ys0)
       -> [(c, (a, b))]
     go2 ((mini, srcM), m)
       = map ((,) mini . fst) (M.elems srcM)
-      ++ go1 (M.foldrWithKey' adjust m srcM)
+      ++ go1 ( M.alter (nothingIf M.null . flip M.difference srcM =<<) mini
+             $ M.foldrWithKey' adjust m srcM )
 
     adjust
       ::            (Int, Int)

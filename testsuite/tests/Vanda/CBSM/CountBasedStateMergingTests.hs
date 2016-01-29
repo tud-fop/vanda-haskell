@@ -4,13 +4,16 @@ import Vanda.CBSM.CountBasedStateMerging
 import qualified Vanda.CBSM.Merge as Merge
 import           Vanda.Corpus.TreeTerm
 
+import           Vanda.Util.Histogram (histogram)
 import           TestUtil (assertRoughly)
 
-import           Data.List (sortBy)
+import           Data.Function (on)
+import           Data.List (groupBy, mapAccumL, sortBy, unfoldr)
 import qualified Data.Map as M
 import           Data.Ord (comparing)
 import           Data.Tree
 import           Numeric.Log (Log(..))
+import           System.Random
 import           Test.HUnit
 
 
@@ -24,6 +27,10 @@ tests = TestList
     , testSortedCartesianProductWith (+) [0 .. 2] [0 .. 2 :: Int]
     , testSortedCartesianProductWith (+) [0, 2, 4] [0 .. 2 :: Int]
     , testSortedCartesianProductWith (+) [0, 2, 4] [0, 5, 10 :: Int]
+    , testSortedCartesianProductWith ((+) `on` snd) [('a', 1), ('b', 1)] [('y', 1), ('z', 2 :: Int)]
+    , testSortedCartesianProductWith (randomEvaluation 10000 :: Int -> Int -> Int) [0 .. 20] [0 .. 20 :: Int]
+    , testSortedCartesianProductWith (randomEvaluation 20000 :: Int -> Int -> Int) [0 .. 20] [0 .. 20 :: Int]
+    , testSortedCartesianProductWith (randomEvaluation 30000 :: Int -> Int -> Int) [0 .. 20] [0 .. 20 :: Int]
     ]
   , "sortedCartesianProductWith'" ~: TestList
     [ testSortedCartesianProductWith' (+) [] ([] :: [Int])
@@ -33,6 +40,10 @@ tests = TestList
     , testSortedCartesianProductWith' (+) [0 .. 2] [0 .. 2 :: Int]
     , testSortedCartesianProductWith' (+) [0, 2, 4] [0 .. 2 :: Int]
     , testSortedCartesianProductWith' (+) [0, 2, 4] [0, 5, 10 :: Int]
+    , testSortedCartesianProductWith' ((+) `on` snd) [('a', 1), ('b', 1)] [('x', 1), ('y', 2), ('z', 3 :: Int)]
+    , testSortedCartesianProductWith' (randomEvaluation 10000 :: Int -> Int -> Int) [0 .. 20] [0 .. 20 :: Int]
+    , testSortedCartesianProductWith' (randomEvaluation 20000 :: Int -> Int -> Int) [0 .. 20] [0 .. 20 :: Int]
+    , testSortedCartesianProductWith' (randomEvaluation 30000 :: Int -> Int -> Int) [0 .. 20] [0 .. 20 :: Int]
     ]
   , "ruleEquivalenceClasses" ~: TestList
     [ ruleEquivalenceClasses (bidiStar rtg0) Merge.empty ~?= M.empty
@@ -104,18 +115,51 @@ tests = TestList
 
 
 testSortedCartesianProductWith
-  :: (Show c, Ord c) => (a -> b -> c) -> [a] -> [b] -> Test
-testSortedCartesianProductWith (>+<) xs ys
-  =   map fst (naiveSortedCartesianProductWithInternal true2 (>+<) xs ys)
-  ~=? map fst (     sortedCartesianProductWith               (>+<) xs ys)
+  :: (Ord a, Ord b, Ord c, Show a, Show b, Show c)
+  => (a -> b -> c) -> [a] -> [b] -> Test
+testSortedCartesianProductWith
+  = testSortedCartesianProductWithHelper sortedCartesianProductWith true2
   where true2 _ _= True
 
 
 testSortedCartesianProductWith'
-  :: (Show c, Ord c) => (a -> b -> c) -> [a] -> [b] -> Test
-testSortedCartesianProductWith' (>+<) xs ys
-  =   map fst (naiveSortedCartesianProductWithInternal  (<=) (>+<) xs ys)
-  ~=? map fst (     sortedCartesianProductWith'              (>+<) xs ys)
+  :: (Ord a, Ord b, Ord c, Show a, Show b, Show c)
+  => (a -> b -> c) -> [a] -> [b] -> Test
+testSortedCartesianProductWith'
+  = testSortedCartesianProductWithHelper sortedCartesianProductWith' (<=)
+
+
+testSortedCartesianProductWithHelper
+  :: (Ord a, Ord b, Ord c, Show a, Show b, Show c)
+  => ((a -> b -> c) -> [a] -> [b] -> [(c, (a, b))])
+  -> (Int -> Int -> Bool)
+  -> (a -> b -> c)
+  -> [a]
+  -> [b]
+  -> Test
+testSortedCartesianProductWithHelper f (?) (>+<) xs ys
+  =   toMultisets (naiveSortedCartesianProductWithInternal (?) (>+<) xs ys)
+  ~=? toMultisets (                                      f     (>+<) xs ys)
+  where
+    toMultisets = map histogram . groupBy ((==) `on` fst)
+
+
+randomEvaluation :: (Num a, Ord a, Random a) => Int -> Int -> Int -> a
+randomEvaluation seed = (!!) . (randomMonotoneMatrix seed !!)
+
+
+randomMonotoneMatrix :: (Num a, Ord a, Random a) => Int -> [[a]]
+randomMonotoneMatrix seed
+  = snd
+  $ mapAccumL (\ xs g -> let r = genRow xs g in (r, r)) (repeat 0)
+  $ unfoldr (Just . split) (mkStdGen seed)
+  where
+    genRow (x0 : xs) g = snd (mapAccumL step (genElem x0 0 g) xs)
+    genRow [] _ = error "randomMonotoneMatrix.genRow"
+
+    step (y, g) x = (genElem x y g, y)
+
+    genElem x y g = let (z, g') = randomR (0, 2) g in (max x y + z, g')
 
 
 naiveSortedCartesianProductWithInternal
