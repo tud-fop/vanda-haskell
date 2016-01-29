@@ -53,6 +53,7 @@ library
     , Control.Error
     , Data.Interner
     , Data.List.Extra
+    , Data.Maybe.Extra
     , Data.MultiMap
     , Data.NTT
     , Data.Queue
