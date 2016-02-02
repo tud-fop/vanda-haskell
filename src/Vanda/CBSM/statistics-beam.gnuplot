@@ -2,8 +2,8 @@
 
 
 # assumed columns in statistics.csv file:
-# 1         2          3      4       5               6           7           8                9            10            11                    12                    13                14                       15
-# CPU time  iteration  rules  states  initial states  beam width  beam index  candidate index  rule merges  state merges  initial-state merges  log likelihood delta  likelihood delta  log evaluation of merge  evaluation of merge
+# 1         2          3      4       5               6            7           8           9                10           11            12                    13                     14                15                        16
+# CPU time  iteration  rules  states  initial states  merge pairs  beam width  beam index  candidate index  rule merges  state merges  initial-state merges  log₂ likelihood delta  likelihood delta  log₂ evaluation of merge  evaluation of merge
 
 # assumed columns in statistics-evaluations.csv
 # 1          2               3                4                         5
@@ -41,7 +41,8 @@ set y2range [GPVAL_DATA_Y_MIN - 0.5 : GPVAL_DATA_Y_MAX + 0.5]
 filename = 'statistics-evaluations'
 set output filename.'.pdf'
 plot filename.'.csv' using (0):(0):($1 - 0.5):($1 + 0.5):($2 - 0.5):($3 + 0.5):(max(-20, min(0, $4))) with boxxy fill solid noborder palette,  \
-     'statistics.csv' using 2:7 with points linecolor 'blue' pointtype 4 pointsize 0.5
+     'statistics.csv' using 2:8 with points linecolor 'blue' pointtype 4 pointsize 0.5,  \
+     '' using 2:6 with histeps
 
 filename = 'statistics-evaluations-ascending'
 ! LC_ALL=C sort -g -k 4,4    -t, statistics-evaluations.csv > @filename.csv
@@ -57,4 +58,5 @@ replot
 set output 'statistics-evaluations-both.pdf'
 plot 'statistics-evaluations-descending.csv' using (0):(0):($1 - 0.5):1:($2 - 0.5):($3 + 0.5):(max(-20, min(0, $4))) with boxxy fill solid noborder palette,  \
      'statistics-evaluations-ascending.csv'  using (0):(0):1:($1 + 0.5):($2 - 0.5):($3 + 0.5):(max(-20, min(0, $4))) with boxxy fill solid noborder palette,  \
-     'statistics.csv' using 2:7 with points linecolor 'blue' pointtype 4 pointsize 0.5
+     'statistics.csv' using 2:8 with points linecolor 'blue' pointtype 4 pointsize 0.5,  \
+     '' using 2:6 with histeps

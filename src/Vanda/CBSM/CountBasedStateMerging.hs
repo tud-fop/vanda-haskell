@@ -51,7 +51,7 @@ import           Vanda.Util.Histogram (histogram)
 import           Vanda.Util.Tree as T
 
 import           Control.Applicative ((<*>), (<$>))
-import           Control.Arrow ((***), first)
+import           Control.Arrow ((***), first, second)
 import           Control.Monad.State.Lazy
 import           Control.Parallel.Strategies
 import qualified Data.Binary as B
@@ -319,6 +319,7 @@ instance Functor MergeTree where
 
 data Info v = Info
   { infoIteration :: !Int
+  , infoMergePairs :: !Int
   , infoBeamWidth :: !Int
   , infoBeamIndex :: !Int
   , infoCandidateIndex :: !Int
@@ -335,19 +336,19 @@ data Info v = Info
 
 
 instance (B.Binary v, Ord v) => B.Binary (Info v) where
-  put (Info a b c d e f g h i j k l m)
+  put (Info a b c d e f g h i j k l m n)
     = B.put a >> B.put b >> B.put c >> B.put d >> B.put e
    >> B.put f >> B.put g >> B.put h >> B.put i >> B.put j
-   >> B.put k >> B.put l >> B.put m
+   >> B.put k >> B.put l >> B.put m >> B.put n
   get = Info
     <$> B.get <*> B.get <*> B.get <*> B.get <*> B.get
     <*> B.get <*> B.get <*> B.get <*> B.get <*> B.get
-    <*> B.get <*> B.get <*> B.get
+    <*> B.get <*> B.get <*> B.get <*> B.get
 
 
 initialInfo :: Map v Int -> Info v
 initialInfo
-  = Info 0 0 0 0 Merge.empty 0 0 0 1 1 [] []
+  = Info 0 0 0 0 0 Merge.empty 0 0 0 1 1 [] []
   . M.mapWithKey State
 
 
@@ -375,16 +376,20 @@ cbsmGo cache mergeGroups evaluate beamWidth prev@(g, info@Info{..})
   $ seq info
   $ let n = infoIteration + 1
         likelihoodDelta' = likelihoodDelta g
-        cands
+        (mergePairs, cands)
+          = sum *** processMergePairs
+          $ unzip
+          $ map (compileMergePairs $ cntState g) mergeGroups
+        processMergePairs
           = take beamWidth  -- TODO: Group?
-          $ zipWith
+          . zipWith
               ( \ i (j, mv, m)
                -> let (l, sizes) = likelihoodDelta' m
                   in (i, j, mv, m, sizes, l, evaluate sizes l)
               ) [1 ..]
-          $ map (untilRight $ liftSat $ saturateMergeStep $ forwardStar $ rules g)
-          $ zipWith (\ j (mv, m) -> (j, mv, m)) [1 ..]
-          $ map ( \ (_, ((v1, _), (v2, _)))
+          . map (untilRight $ liftSat $ saturateMergeStep $ forwardStar $ rules g)
+          . zipWith (\ j (mv, m) -> (j, mv, m)) [1 ..]
+          . map ( \ (_, ((v1, _), (v2, _)))
                  -> (,) (v1, v2)
                   $ saturateMergeInit
                   $ ML.findWithDefault
@@ -392,8 +397,7 @@ cbsmGo cache mergeGroups evaluate beamWidth prev@(g, info@Info{..})
                       (v1, v2)
                       cache
                 )
-          $ foldr1 (mergeSortedLists (comparing fst))
-          $ map (compileMergePairs $ cntState g) mergeGroups
+          . foldr1 (mergeSortedLists (comparing fst))
         liftSat f (x, y, m) = case f m of
           Left  l -> Left  (x, y, l)
           Right r -> Right (x, y, r)
@@ -408,7 +412,8 @@ cbsmGo cache mergeGroups evaluate beamWidth prev@(g, info@Info{..})
           $ ML.fromList
           $ map (\ (_, _, mv, m, _, _, _) -> (mv, m)) cands
         info'
-          = Info n beamWidth indB indC mrg mrgR mrgS mrgI lklhdD evaluation
+          = Info n mergePairs beamWidth
+                 indB indC mrg mrgR mrgS mrgI lklhdD evaluation
                  (map (\ (_, _, _, _, _, _, x) -> x) cands)
                  (map (\ (i, _, _, _, _, _, _) -> i) minimalCands)
           $ M.map (\ case [x] -> x; xs -> Merge n xs)
@@ -428,13 +433,12 @@ cbsmGo cache mergeGroups evaluate beamWidth prev@(g, info@Info{..})
 --     )
 
 compileMergePairs
-  :: Ord v => Map v Int -> Set v -> [(Int, ((v, Int), (v, Int)))]
+  :: Ord v => Map v Int -> Set v -> (Int, [(Int, ((v, Int), (v, Int)))])
 compileMergePairs cntM grpS
-  = sortedCartesianProductWith' ((+) `on` snd) vs (tail vs)
-  where vs = sortBy (comparing snd)
-           $ M.toList
-           $ M.intersection cntM
-           $ M.fromSet (const ()) grpS
+  = n `seq` (n, sortedCartesianProductWith' ((+) `on` snd) vs (tail vs))
+  where n     = let s = M.size cntM' in s * (s - 1) `div` 2
+        vs    = sortBy (comparing snd) (M.toList cntM')
+        cntM' = M.intersection cntM (M.fromSet (const ()) grpS)
 
 
 mergeSortedLists :: (a -> a -> Ordering) -> [a] -> [a] -> [a]

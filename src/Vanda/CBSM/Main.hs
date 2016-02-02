@@ -378,10 +378,10 @@ mainArgs CBSM{..} = do
    withFile (flagDir </> fileNameEvaluations) AppendMode $ \ hEvals ->
    withFile (flagDir </> fileNameEquivBeamIndizes) AppendMode $ \ hBeam -> do
     hPutStrLn hStat
-      "CPU time,iteration,rules,states,initial states,beam width,beam index,\
-      \candidate index,rule merges,state merges,initial-state merges,\
-      \log₂ likelihood delta,likelihood delta,log₂ evaluation of merge,\
-      \evaluation of merge"
+      "CPU time,iteration,rules,states,initial states,merge pairs,beam width,\
+      \beam index,candidate index,rule merges,state merges,\
+      \initial-state merges,log₂ likelihood delta,likelihood delta,\
+      \log₂ evaluation of merge,evaluation of merge"
     hPutStrLn hEvals "iteration,beam index low,beam index high,\
       \log₂ evaluation of merge,evaluation of merge"
     hPutStrLn hBeam "iteration,beam index low,beam index high"
@@ -414,6 +414,7 @@ mainArgs CBSM_Continue{..} = do
 mainArgs ShowInfo{..} = do
   info <- B.decodeFile argInfo :: IO BinaryInfo
   putStr "iteration           : " >> print (infoIteration       info)
+  putStr "merge pairs         : " >> print (infoMergePairs      info)
   putStr "beam width          : " >> print (infoBeamWidth       info)
   putStr "beam index          : " >> print (infoBeamIndex       info)
   putStr "candidate index     : " >> print (infoCandidateIndex  info)
@@ -598,6 +599,7 @@ safeSaveLastGrammar dir hStat hEvals hBeam xs
             , show rules
             , show states
             , show initialStates
+            , show infoMergePairs
             , show infoBeamWidth
             , show infoBeamIndex
             , show infoCandidateIndex
