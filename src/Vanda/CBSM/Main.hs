@@ -593,19 +593,20 @@ safeSaveLastGrammar dir hStat hEvals hBeam xs
           let rules         = M.size $ cntRule  g
               states        = M.size $ cntState g
               initialStates = M.size $ cntInit  g
+              showIfValid x = if x < 0 then "NaN" else show x
           hPutStrLn hStat $ intercalate ","
             [ showFixedComma 12 cpuTime  -- pico = 10^-12
             , show infoIteration
             , show rules
             , show states
             , show initialStates
-            , show infoMergePairs
-            , show infoBeamWidth
-            , show infoBeamIndex
-            , show infoCandidateIndex
-            , show infoMergedRules
-            , show infoMergedStates
-            , show infoMergedInitials
+            , showIfValid infoMergePairs
+            , showIfValid infoBeamWidth
+            , showIfValid infoBeamIndex
+            , showIfValid infoCandidateIndex
+            , showIfValid infoMergedRules
+            , showIfValid infoMergedStates
+            , showIfValid infoMergedInitials
             , show (ln infoLikelihoodDelta / log 2)
             , show infoLikelihoodDelta
             , show (ln infoEvaluation / log 2)

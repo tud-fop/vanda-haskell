@@ -348,7 +348,7 @@ instance (B.Binary v, Ord v) => B.Binary (Info v) where
 
 initialInfo :: Map v Int -> Info v
 initialInfo
-  = Info 0 0 0 0 0 Merge.empty 0 0 0 1 1 [] []
+  = Info 0 (-1) (-1) (-1) (-1) Merge.empty (-1) (-1) (-1) 1 1 [] []
   . M.mapWithKey State
 
 
