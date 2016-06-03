@@ -23,7 +23,7 @@ module Vanda.CBSM.Main
 ) where
 
 
-import           Data.List.Extra (groupWithRanges, toRanges)
+import           Data.List.Extra (groupWithRanges, isSingleton, toRanges)
 import           System.Console.CmdArgs.Explicit.Misc
 import           Vanda.Algorithms.EarleyMonadic
 import qualified Vanda.Algorithms.Earley.WSA as WSA
@@ -40,7 +40,7 @@ import           Vanda.Util.Tree as T
 import           Control.Arrow (second)
 import           Control.Monad
 import qualified Data.Binary as B
-import           Data.List (intercalate)
+import           Data.List (intercalate, nub)
 import           Data.Map ((!))
 import qualified Data.Map as M
 import           Data.Maybe (mapMaybe)
@@ -81,7 +81,7 @@ data Args
     , flagDefoliate :: Bool
     , flagPennFilter :: Bool
     , flagFilterByLeafs :: FilePath
-    , flagRestrictMerge :: FlagRestrictMerge
+    , flagRestrictMerge :: [FlagRestrictMerge]
     , flagBeamWidth :: Int
     , flagNormalize :: Bool
     , flagIterations :: Int
@@ -89,7 +89,7 @@ data Args
     , argCorpora :: [FilePath]
     }
   | CBSM_Continue
-    { flagRestrictMerge :: FlagRestrictMerge
+    { flagRestrictMerge :: [FlagRestrictMerge]
     , flagBeamWidth :: Int
     , flagNormalize :: Bool
     , flagIterations :: Int
@@ -118,7 +118,7 @@ data Args
 data FlagOutputFormat = FOFPretty | FOFPenn | FOFYield deriving (Eq, Show)
 
 data FlagRestrictMerge
-  = FRMNone | FRMLeafs | FRMTerminals | FRMTerminalsAndLeafs
+  = FRMLeafs | FRMTerminals | FRMUnary
   deriving (Eq, Show)
 
 data FlagUnknownWords = FUWStrict | FUWArbitrary deriving (Eq, Show)
@@ -149,7 +149,7 @@ cmdArgs
         ]
     }
   , ( modeEmpty
-        $ CBSM False False False "" FRMNone 1000 False (pred maxBound) "" [])
+        $ CBSM False False False "" [] 1000 False (pred maxBound) "" [])
     { modeNames = ["cbsm"]
     , modeHelp = "Read-off a grammar from TREEBANKs and generalize it. See \
         \print-corpora for further information about the TREEBANK arguments."
@@ -166,7 +166,7 @@ cmdArgs
         , flagReqDir
         ]
     }
-  , (modeEmpty $ CBSM_Continue FRMNone 1000 False (pred maxBound) "")
+  , (modeEmpty $ CBSM_Continue [] 1000 False (pred maxBound) "")
     { modeNames = ["cbsm-continue"]
     , modeHelp = "Continue cbsm training with a grammar."
     , modeGroupFlags = toGroup
@@ -251,16 +251,20 @@ cmdArgs
       $ "one of " ++ optsStr ++ ". The RESTRICTION leafs means that states \
         \producing leafs are not merged with states producing inner nodes. \
         \The restriction terminals means that only states producing the same \
-        \terminal may be merged."
+        \terminal may be merged. The restriction unary prohibits merges of \
+        \unary nodes with nodes of any other arity; this can be useful in \
+        \connection with binarization. If this flag is used more than once, \
+        \all named restrictions are applied simultaneously."
       where
         flag = "restrict-merge"
         err  = flag ++ " expects one of " ++ optsStr
         optsStr = intercalate ", " (map fst opts)
-        opts = [ ("none"           , FRMNone     )
-               , ("leafs"          , FRMLeafs    )
-               , ("terimals"       , FRMTerminals)
-               , ("terminals+leafs", FRMTerminalsAndLeafs) ]
-        update y x = maybe (Left err) (\ z -> Right x{flagRestrictMerge = z})
+        opts = [ ("leafs"    , FRMLeafs    )
+               , ("terminals", FRMTerminals)
+               , ("unary"    , FRMUnary    ) ]
+        update y x = maybe (Left err)
+                       (\ z -> Right x{flagRestrictMerge
+                                                   = z : flagRestrictMerge x})
                    $ lookup y opts
     flagReqUnknownWords
       = flagReq [flag] update "MODE"
@@ -492,26 +496,29 @@ filterByLeafs file ts = do
   return $ filter (all (`S.member` wordS) . yield) ts
 
 
+data RestrictMergeFeature a
+  = RMFLeaf Bool
+  | RMFTerminal a
+  | RMFUnary Bool
+  deriving (Eq, Ord)
+
+
+rmFeature :: Ord a => FlagRestrictMerge -> Tree a -> RestrictMergeFeature a
+rmFeature FRMLeafs     = RMFLeaf . null . subForest
+rmFeature FRMTerminals = RMFTerminal . rootLabel
+rmFeature FRMUnary     = RMFUnary . isSingleton . subForest
+
+
 mergeGroups
-  :: (Ord v, Ord a) => FlagRestrictMerge -> M.Map v (Tree a) -> [S.Set v]
-mergeGroups FRMNone
-  = (: []) . M.keysSet
-mergeGroups FRMLeafs
-  = map M.keysSet
-  . (\ (x, y) -> [x, y])
-  . M.partition (null . subForest)
-mergeGroups FRMTerminals
+  :: (Ord v, Ord a) => [FlagRestrictMerge] -> M.Map v (Tree a) -> [S.Set v]
+mergeGroups flags
   = map S.fromList
   . M.elems
   . M.fromListWith (++)
-  . map (\ (v, t) -> (rootLabel t, [v]))
+  . map (\ (v, t) -> (map ($ t) features, [v]))
   . M.toList
-mergeGroups FRMTerminalsAndLeafs
-  = map S.fromList
-  . M.elems
-  . M.fromListWith (++)
-  . map (\ (v, Node x ts) -> ((x, null ts), [v]))
-  . M.toList
+  where
+    features = map rmFeature (nub flags)
 
 
 createWSA
