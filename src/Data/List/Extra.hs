@@ -17,7 +17,9 @@
 {-# LANGUAGE BangPatterns #-}
 
 module Data.List.Extra
-( -- * Sublists
+( -- * Basic functions
+  isSingleton
+, -- * Sublists
   -- ** Extracting sublists
   spanWithLength
 , groupWithRanges
@@ -33,6 +35,12 @@ where
 
 
 import Data.List (foldl')
+
+
+-- | Test whether a list contains exactly one element.
+isSingleton :: [a] -> Bool
+isSingleton [_] = True
+isSingleton  _  = False
 
 
 -- | Like 'span', but the length of the prefix is returned additionally.

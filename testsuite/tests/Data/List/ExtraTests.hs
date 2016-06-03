@@ -9,7 +9,13 @@ import Test.HUnit
 
 tests :: Test
 tests = TestList
-  [ "spanWithLength" ~: TestList
+  [ "isSingleton" ~: TestList
+    [ isSingleton []           ~?= False
+    , isSingleton [()]         ~?= True
+    , isSingleton [(), ()]     ~?= False
+    , isSingleton [(), (), ()] ~?= False
+    ]
+  , "spanWithLength" ~: TestList
     [ spanWithLength undefined ([] :: [()]) ~?= ([], 0, [])
     , spanWithLength (5 >) [1 .. 9 :: Int] ~?= ([1 .. 4], 4, [5 .. 9])
     ]
