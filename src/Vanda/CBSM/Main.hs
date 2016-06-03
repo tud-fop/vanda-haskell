@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, DeriveDataTypeable, RecordWildCards #-}
+{-# LANGUAGE BangPatterns, RecordWildCards #-}
 -- for convenient cmdargs definitions:
 {-# OPTIONS_GHC -fno-warn-incomplete-record-updates #-}
 -----------------------------------------------------------------------------
@@ -88,7 +88,7 @@ data Args
     , flagDir :: FilePath
     , argCorpora :: [FilePath]
     }
-  | CBSM_Continue
+  | CBSMContinue
     { flagRestrictMerge :: [FlagRestrictMerge]
     , flagBeamWidth :: Int
     , flagNormalize :: Bool
@@ -166,7 +166,7 @@ cmdArgs
         , flagReqDir
         ]
     }
-  , (modeEmpty $ CBSM_Continue [] 1000 False (pred maxBound) "")
+  , (modeEmpty $ CBSMContinue [] 1000 False (pred maxBound) "")
     { modeNames = ["cbsm-continue"]
     , modeHelp = "Continue cbsm training with a grammar."
     , modeGroupFlags = toGroup
@@ -369,8 +369,8 @@ mainArgs CBSM{..} = do
   exist <- fileExist (flagDir </> fileNameIntToTreeMap)
   when exist $ do
     putStrLn $ "File exists: " ++ (flagDir </> fileNameIntToTreeMap)
-    putStrLn $ "Probably you have run cbsm in this directory before."
-    putStrLn $ "Did you mean cbsm-continue?"
+    putStrLn   "Probably you have run cbsm in this directory before."
+    putStrLn   "Did you mean cbsm-continue?"
     exitFailure
   createDirectoryIfMissing True flagDir
   (g, tM) <- fmap forestToGrammar
@@ -397,7 +397,7 @@ mainArgs CBSM{..} = do
           flagBeamWidth
           (g, initialInfo (cntState g))
 
-mainArgs CBSM_Continue{..} = do
+mainArgs CBSMContinue{..} = do
   it   <- read <$> readFile (flagDir </> fileNameLastIteration) :: IO Int
   g    <- B.decodeFile (flagDir </> fileNameGrammar it) :: IO BinaryCRTG
   info <- B.decodeFile (flagDir </> fileNameInfo    it) :: IO BinaryInfo
@@ -439,7 +439,7 @@ mainArgs ShowInfo{..} = do
           $ infoMergeTreeMap info
        else do tM <- B.decodeFile flagIntToTreeMap :: IO BinaryIntToTreeMap
                return
-                $ M.map (fmap $ (tM !))
+                $ M.map (fmap (tM !))
                 $ infoMergeTreeMap info
   let mergeTree2Tree (State t c ) = Node (colorTTY [96] ("count: " ++ show c))
                                          [mapLeafs (colorTTY [93]) t]
@@ -462,8 +462,8 @@ mainArgs Parse{..} = do
     let inis' = M.mapKeys (\ k -> (0, k, length sent)) inis
     printWeightedTrees flagOutputFormat flagMessageNoParse
       $ take argCount
-      $ map (second $ unknownWordOutput flagUnknownWordOutput sent)
-      $ map (second $ fmap H.label)
+      $ map (second $ unknownWordOutput flagUnknownWordOutput sent
+                    . fmap H.label)
       $ bestsIni hg' feature (V.singleton 1) inis'
     hFlush stdout
 
@@ -479,8 +479,8 @@ mainArgs Bests{..} = do
 readCorpora :: Bool -> Bool -> Bool -> [FilePath] -> IO (Forest String)
 readCorpora asForests doDefoliate doPennFilter corpora
     = (if doDefoliate  then map T.defoliate         else id)
-  <$> (if doPennFilter then mapMaybe stripAll       else id)
-  <$> (if asForests    then concatMap SExp.toForest else map SExp.toTree)
+    . (if doPennFilter then mapMaybe stripAll       else id)
+    . (if asForests    then concatMap SExp.toForest else map SExp.toTree)
   <$> if null corpora
         then SExp.parse SExp.pSExpressions "stdin"
           <$> getContents
@@ -492,7 +492,7 @@ readCorpora asForests doDefoliate doPennFilter corpora
 
 filterByLeafs :: FilePath -> [Tree String] -> IO [Tree String]
 filterByLeafs file ts = do
-  wordS <- S.fromList <$> words <$> readFile file
+  wordS <- S.fromList . words <$> readFile file
   return $ filter (all (`S.member` wordS) . yield) ts
 
 
@@ -554,7 +554,7 @@ printWeightedTrees
   => FlagOutputFormat -> String -> [(a, Tree String)] -> IO ()
 printWeightedTrees _ msg [] = putStrLn msg
 printWeightedTrees fmt _ xs =
-  forM_ (zip [1 :: Int ..] xs) $ \ (i, (w, t)) -> do
+  forM_ (zip [1 :: Int ..] xs) $ \ (i, (w, t)) ->
     putStrLn
       $ drawTreeFormatted fmt (show i ++ ": " ++ show w) t
 
@@ -595,12 +595,12 @@ safeSaveLastGrammar dir hStat hEvals hBeam xs
     worker :: ((BinaryCRTG, BinaryInfo) -> IO ()) -> IO ()
     worker update
       = forM_ xs $ \ x@(!g, Info{..}) -> do
-          update $ x
+          update x
           cpuTime <- getCPUTime
           let rules         = M.size $ cntRule  g
               states        = M.size $ cntState g
               initialStates = M.size $ cntInit  g
-              showIfValid x = if x < 0 then "NaN" else show x
+              showIfValid n = if n < 0 then "NaN" else show n
           hPutStrLn hStat $ intercalate ","
             [ showFixedComma 12 cpuTime  -- pico = 10^-12
             , show infoIteration
