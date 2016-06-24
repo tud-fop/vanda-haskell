@@ -365,7 +365,9 @@ mainArgs (Help cs) = putStr cs
 mainArgs PrintCorpora{..}
     = putStr
     . unlines
-    . zipWith (drawTreeFormatted flagOutputFormat . show) [1 :: Int ..]
+    . zipWith ( drawTreeFormatted flagBinarization flagOutputFormat
+              . show
+              ) [1 :: Int ..]
     . map (flaggedBinarization flagBinarization)
   =<< (if null flagFilterByLeafs then return
                                  else filterByLeafs flagFilterByLeafs)
@@ -563,21 +565,40 @@ printWeightedTrees _ msg [] = putStrLn msg
 printWeightedTrees fmt _ xs =
   forM_ (zip [1 :: Int ..] xs) $ \ (i, (w, t)) ->
     putStrLn
-      $ drawTreeFormatted fmt (show i ++ ": " ++ show w) t
+      $ drawTreeFormatted FBNone fmt (show i ++ ": " ++ show w) t
 
 
-drawTreeFormatted :: FlagOutputFormat -> String -> Tree String -> String
-drawTreeFormatted FOFPretty cs t = cs ++ newline
-                                ++ unwords (yield t) ++ newline
-                                ++ drawTreeColored t
-drawTreeFormatted FOFPenn   _  t = treeToPenn id t
-drawTreeFormatted FOFYield  _  t = unwords (yield t)
+drawTreeFormatted
+  :: FlagBinarization
+  -> FlagOutputFormat
+  -> String
+  -> Tree String
+  -> String
+drawTreeFormatted b FOFPretty cs t = cs ++ newline
+                                  ++ unwords (binarizedYield b t) ++ newline
+                                  ++ drawTreeColored b t
+drawTreeFormatted _ FOFPenn   _  t = treeToPenn id t
+drawTreeFormatted b FOFYield  _  t = unwords (binarizedYield b t)
 
 
-drawTreeColored :: Tree String -> String
-drawTreeColored
+drawTreeColored :: FlagBinarization -> Tree String -> String
+drawTreeColored b
   = drawTree' (drawstyleCompact2 0 "")
-  . mapLeafs (colorTTY [93])
+  . mapWithSubtrees (\ x ts -> if binarizedLeafCheck b ts
+                               then colorTTY [93] x
+                               else x
+                    )
+
+
+binarizedYield :: FlagBinarization -> Tree a -> [a]
+binarizedYield b = filterTree (const $ binarizedLeafCheck b)
+
+
+binarizedLeafCheck :: FlagBinarization -> Forest a -> Bool
+binarizedLeafCheck b = \ ts -> case b of
+  FBNone -> null ts
+  FBFcns -> case ts of { [Node _ [], Node _ []] -> True; _ -> False }
+  FBLeftbranching  ->  case ts of { [Node _ []] -> True; _ -> False }
 
 
 colorTTY :: [Int] -> String -> String
