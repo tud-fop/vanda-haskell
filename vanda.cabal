@@ -80,6 +80,7 @@ library
     , Vanda.CFTG.CFTG
     , Vanda.CFTG.Examples
     , Vanda.Corpus.Binarization
+    , Vanda.Corpus.Binarization.CmdArgs
     , Vanda.Corpus.Negra
     , Vanda.Corpus.Negra.Binary
     , Vanda.Corpus.Negra.NFData
