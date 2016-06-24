@@ -583,7 +583,7 @@ drawTreeFormatted b FOFYield  _  t = unwords (binarizedYield b t)
 
 drawTreeColored :: FlagBinarization -> Tree String -> String
 drawTreeColored b
-  = drawTree' (drawstyleCompact2 0 "")
+  = drawTree' (drawstyleCompact1 "─")
   . mapWithSubtrees (\ x ts -> if binarizedLeafCheck b ts
                                then colorTTY [93] x
                                else x
