@@ -198,12 +198,12 @@ defoliate (Node x xs)
 
 -- Map -----------------------------------------------------------------------
 
--- | Apply a funtion to all leaves.
+-- | Apply a function to all leaves.
 mapLeafs :: (a -> a) -> Tree a -> Tree a
 mapLeafs g = mapInnersAndLeafs id g
 
 
--- | Apply a funtion to all inner nodes, i.e. nodes which are not leaves.
+-- | Apply a function to all inner nodes, i.e. nodes which are not leaves.
 mapInners :: (a -> a) -> Tree a -> Tree a
 mapInners f = mapInnersAndLeafs f id
 
