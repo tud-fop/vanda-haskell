@@ -33,7 +33,12 @@ module Vanda.Util.Tree
 , -- * Manipulation
   defoliate
 , -- * Map
-  mapLeafs, mapInners, mapInnersAndLeafs, mapAccumLLeafs, zipLeafsWith
+  mapLeafs
+, mapInners
+, mapInnersAndLeafs
+, mapWithSubtrees
+, mapAccumLLeafs
+, zipLeafsWith
 ) where
 
 
@@ -203,6 +208,12 @@ mapInnersAndLeafs
   -> Tree b
 mapInnersAndLeafs f g = go
   where go (Node x ts) = Node (if null ts then g x else f x) (map go ts)
+
+
+-- | Like 'fmap', but the mapped function also gets the subtrees.
+mapWithSubtrees :: (a -> Forest a -> b) -> Tree a -> Tree b
+mapWithSubtrees f = go
+  where go (Node x ts) = Node (f x ts) (map go ts)
 
 
 -- | Like 'mapAccumL', but on the leaves of a tree.
