@@ -28,6 +28,7 @@ import           System.Console.CmdArgs.Explicit.Misc
 import           Vanda.Algorithms.EarleyMonadic
 import qualified Vanda.Algorithms.Earley.WSA as WSA
 import           Vanda.CBSM.CountBasedStateMerging
+import           Vanda.Corpus.Binarization.CmdArgs
 import           Vanda.Corpus.Penn.Filter
 import           Vanda.Corpus.Penn.Text (treeToPenn)
 import           Vanda.Corpus.SExpression as SExp
@@ -71,6 +72,7 @@ data Args
   | PrintCorpora
     { flagAsForests :: Bool
     , flagPennFilter :: Bool
+    , flagBinarization :: FlagBinarization
     , flagDefoliate :: Bool
     , flagFilterByLeafs :: FilePath
     , flagOutputFormat :: FlagOutputFormat
@@ -78,6 +80,7 @@ data Args
     }
   | CBSM
     { flagAsForests :: Bool
+    , flagBinarization :: FlagBinarization
     , flagDefoliate :: Bool
     , flagPennFilter :: Bool
     , flagFilterByLeafs :: FilePath
@@ -130,7 +133,7 @@ data FlagUnknownWordOutput
 cmdArgs :: Mode Args
 cmdArgs
   = modes "cbsm" (Help $ defaultHelp cmdArgs) "Count-Based State Merging"
-  [ (modeEmpty $ PrintCorpora False False False "" FOFPretty [])
+  [ (modeEmpty $ PrintCorpora False False FBNone False "" FOFPretty [])
     { modeNames = ["print-corpora"]
     , modeHelp =
         "Print trees from TREEBANKs. Can be used to check for parsing \
@@ -143,19 +146,21 @@ cmdArgs
     , modeGroupFlags = toGroup
         [ flagNoneAsForests
         , flagNonePennFilter
+        , flagReqBinarization (\ b x -> x{flagBinarization = b})
         , flagNoneDefoliate
         , flagReqFilterByLeafs
         , flagOutputFormat
         ]
     }
   , ( modeEmpty
-        $ CBSM False False False "" [] 1000 False (pred maxBound) "" [])
+        $ CBSM False FBNone False False "" [] 1000 False (pred maxBound) "" [])
     { modeNames = ["cbsm"]
     , modeHelp = "Read-off a grammar from TREEBANKs and generalize it. See \
         \print-corpora for further information about the TREEBANK arguments."
     , modeArgs = ([], Just flagArgCorpora)
     , modeGroupFlags = toGroup
         [ flagNoneAsForests
+        , flagReqBinarization (\ b x -> x{flagBinarization = b})
         , flagNoneDefoliate
         , flagNonePennFilter
         , flagReqFilterByLeafs
@@ -253,8 +258,8 @@ cmdArgs
         \The restriction terminals means that only states producing the same \
         \terminal may be merged. The restriction unary prohibits merges of \
         \unary nodes with nodes of any other arity; this can be useful in \
-        \connection with binarization. If this flag is used more than once, \
-        \all named restrictions are applied simultaneously."
+        \connection with some binarizations. If this flag is used more than \
+        \once, all named restrictions are applied simultaneously."
       where
         flag = "restrict-merge"
         err  = flag ++ " expects one of " ++ optsStr
@@ -361,6 +366,7 @@ mainArgs PrintCorpora{..}
     = putStr
     . unlines
     . zipWith (drawTreeFormatted flagOutputFormat . show) [1 :: Int ..]
+    . map (flaggedBinarization flagBinarization)
   =<< (if null flagFilterByLeafs then return
                                  else filterByLeafs flagFilterByLeafs)
   =<< readCorpora flagAsForests flagDefoliate flagPennFilter argCorpora
@@ -373,7 +379,8 @@ mainArgs CBSM{..} = do
     putStrLn   "Did you mean cbsm-continue?"
     exitFailure
   createDirectoryIfMissing True flagDir
-  (g, tM) <- fmap forestToGrammar
+  (g, tM) <- fmap ( forestToGrammar
+                  . map (flaggedBinarization flagBinarization) )
            $ (if null flagFilterByLeafs then return
                                         else filterByLeafs flagFilterByLeafs)
          =<< readCorpora flagAsForests flagDefoliate flagPennFilter argCorpora
