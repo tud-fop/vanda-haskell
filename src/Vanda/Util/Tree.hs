@@ -30,6 +30,7 @@ module Vanda.Util.Tree
   flattenRanked
 , subTrees
 , yield
+, filterTree
 , -- * Manipulation
   defoliate
 , -- * Map
@@ -177,6 +178,13 @@ yield :: Tree a -> [a]
 yield t = go t []                               -- idea from Data.Tree.flatten
   where go (Node x []) xs = x : xs
         go (Node _ ts) xs = foldr go xs ts
+
+
+-- | Get those node labels in preorder where the predicate on the label and
+-- the subtrees matches.
+filterTree :: (a -> Forest a -> Bool) -> Tree a -> [a]
+filterTree p t = go t []                             -- idea from Data.Tree.flatten
+  where go (Node x ts) xs = (if p x ts then (x :) else id) (foldr go xs ts)
 
 
 -- Manipulation --------------------------------------------------------------
