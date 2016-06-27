@@ -22,7 +22,7 @@
 --
 -- import qualified "Control.Error"
 --
--- errorHere :: String -> String -> String
+-- errorHere :: String -> String -> a
 -- errorHere = "Control.Error".'errorHere' \"Data.Example\"
 -- @
 -----------------------------------------------------------------------------
