@@ -28,6 +28,7 @@ import           System.Console.CmdArgs.Explicit.Misc
 import           Vanda.Algorithms.EarleyMonadic
 import qualified Vanda.Algorithms.Earley.WSA as WSA
 import           Vanda.CBSM.CountBasedStateMerging
+import           Vanda.Corpus.Binarization (Nodetype(..))
 import           Vanda.Corpus.Binarization.CmdArgs
 import           Vanda.Corpus.Penn.Filter
 import           Vanda.Corpus.Penn.Text (treeToPenn)
@@ -368,7 +369,7 @@ mainArgs PrintCorpora{..}
     . zipWith ( drawTreeFormatted flagBinarization flagOutputFormat
               . show
               ) [1 :: Int ..]
-    . map (flaggedBinarization flagBinarization)
+    . map (encodeByFlag flagBinarization)
   =<< (if null flagFilterByLeafs then return
                                  else filterByLeafs flagFilterByLeafs)
   =<< readCorpora flagAsForests flagDefoliate flagPennFilter argCorpora
@@ -382,7 +383,7 @@ mainArgs CBSM{..} = do
     exitFailure
   createDirectoryIfMissing True flagDir
   (g, tM) <- fmap ( forestToGrammar
-                  . map (flaggedBinarization flagBinarization) )
+                  . map (encodeByFlag flagBinarization) )
            $ (if null flagFilterByLeafs then return
                                         else filterByLeafs flagFilterByLeafs)
          =<< readCorpora flagAsForests flagDefoliate flagPennFilter argCorpora
@@ -575,30 +576,20 @@ drawTreeFormatted
   -> Tree String
   -> String
 drawTreeFormatted b FOFPretty cs t = cs ++ newline
-                                  ++ unwords (binarizedYield b t) ++ newline
+                                  ++ unwords (yieldByFlag b t) ++ newline
                                   ++ drawTreeColored b t
 drawTreeFormatted _ FOFPenn   _  t = treeToPenn id t
-drawTreeFormatted b FOFYield  _  t = unwords (binarizedYield b t)
+drawTreeFormatted b FOFYield  _  t = unwords (yieldByFlag b t)
 
 
 drawTreeColored :: FlagBinarization -> Tree String -> String
 drawTreeColored b
   = drawTree' (drawstyleCompact1 "─")
-  . mapWithSubtrees (\ x ts -> if binarizedLeafCheck b ts
-                               then colorTTY [93] x
-                               else x
+  . mapWithSubtrees (\ t@(Node x _) -> case nodetypeByFlag b t of
+                              Leaf  -> colorTTY [93] x
+                              Meta  -> colorTTY [90] x
+                              Inner -> x
                     )
-
-
-binarizedYield :: FlagBinarization -> Tree a -> [a]
-binarizedYield b = filterTree (const $ binarizedLeafCheck b)
-
-
-binarizedLeafCheck :: FlagBinarization -> Forest a -> Bool
-binarizedLeafCheck b = \ ts -> case b of
-  FBNone -> null ts
-  FBFcns -> case ts of { [Node _ [], Node _ []] -> True; _ -> False }
-  FBLeftbranching  ->  case ts of { [Node _ []] -> True; _ -> False }
 
 
 colorTTY :: [Int] -> String -> String

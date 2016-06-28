@@ -12,6 +12,7 @@ import qualified Vanda.Algorithms.EarleyTest
 import qualified Vanda.CBSM.CountBasedStateMergingTests
 import qualified Vanda.CBSM.DovetailingTests
 import qualified Vanda.CBSM.ProductOrderTests
+import qualified Vanda.Corpus.BinarizationTests
 
 
 main :: IO ()
@@ -38,4 +39,6 @@ tests = TestList
     ~: Vanda.CBSM.DovetailingTests.tests
   ,   "Vanda.CBSM.ProductOrder"
     ~: Vanda.CBSM.ProductOrderTests.tests
+  ,   "Vanda.Corpus.Binarization"
+    ~: Vanda.Corpus.BinarizationTests.tests
   ]

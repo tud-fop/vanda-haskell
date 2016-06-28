@@ -180,11 +180,11 @@ yield t = go t []                               -- idea from Data.Tree.flatten
         go (Node _ ts) xs = foldr go xs ts
 
 
--- | Get those node labels in preorder where the predicate on the label and
--- the subtrees matches.
-filterTree :: (a -> Forest a -> Bool) -> Tree a -> [a]
-filterTree p t = go t []                             -- idea from Data.Tree.flatten
-  where go (Node x ts) xs = (if p x ts then (x :) else id) (foldr go xs ts)
+-- | Get those node labels in preorder where the predicate for the respective
+-- subtree holds.
+filterTree :: (Tree a -> Bool) -> Tree a -> [a]
+filterTree p = flip go []                       -- idea from Data.Tree.flatten
+  where go t@(Node x ts) xs = (if p t then (x :) else id) (foldr go xs ts)
 
 
 -- Manipulation --------------------------------------------------------------
@@ -218,10 +218,10 @@ mapInnersAndLeafs f g = go
   where go (Node x ts) = Node (if null ts then g x else f x) (map go ts)
 
 
--- | Like 'fmap', but the mapped function also gets the subtrees.
-mapWithSubtrees :: (a -> Forest a -> b) -> Tree a -> Tree b
+-- | Like 'fmap', but the mapped function gets the whole subtrees.
+mapWithSubtrees :: (Tree a -> b) -> Tree a -> Tree b
 mapWithSubtrees f = go
-  where go (Node x ts) = Node (f x ts) (map go ts)
+  where go t@(Node _ ts) = Node (f t) (map go ts)
 
 
 -- | Like 'mapAccumL', but on the leaves of a tree.
