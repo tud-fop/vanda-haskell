@@ -72,6 +72,7 @@ fileNameGrammar          :: Int -> FilePath
 fileNameIntToTreeMap     ::        FilePath
 fileNameInfo             :: Int -> FilePath
 fileNameLastIteration    ::        FilePath
+fileNameOptions          ::        FilePath
 fileNameStatistics       ::        FilePath
 fileNameEvaluations      ::        FilePath
 fileNameEquivBeamIndizes ::        FilePath
@@ -79,6 +80,7 @@ fileNameGrammar        i = "grammar-"              ++ show0 9 i <.> "bin"
 fileNameIntToTreeMap     = "int2tree"                           <.> "bin"
 fileNameInfo           i = "info-"                 ++ show0 9 i <.> "bin"
 fileNameLastIteration    = "last-iteration"                     <.> "txt"
+fileNameOptions          = "options"                            <.> "bin"
 fileNameStatistics       = "statistics"                         <.> "csv"
 fileNameEvaluations      = "statistics-evaluations"             <.> "csv"
 fileNameEquivBeamIndizes = "statistics-equivalent-beam-indizes" <.> "csv"
@@ -113,14 +115,15 @@ mainArgs PrintCorpora{..}
                                  else filterByLeafs flagFilterByLeafs)
   =<< readCorpora flagAsForests flagDefoliate flagPennFilter argCorpora
 
-mainArgs CBSM{..} = do
-  exist <- fileExist (flagDir </> fileNameIntToTreeMap)
+mainArgs opts@CBSM{..} = do
+  exist <- fileExist (flagDir </> fileNameOptions)
   when exist $ do
-    putStrLn $ "File exists: " ++ (flagDir </> fileNameIntToTreeMap)
+    putStrLn $ "File exists: " ++ (flagDir </> fileNameOptions)
     putStrLn   "Probably you have run cbsm in this directory before."
     putStrLn   "Did you mean cbsm-continue?"
     exitFailure
   createDirectoryIfMissing True flagDir
+  writeFile (flagDir </> fileNameOptions) (show opts)
   (g, tM) <- fmap ( forestToGrammar
                   . map (encodeByFlag flagBinarization) )
            $ (if null flagFilterByLeafs then return
@@ -147,10 +150,11 @@ mainArgs CBSM{..} = do
           (g, initialInfo (cntState g))
 
 mainArgs CBSMContinue{..} = do
+  opts <- read <$> readFile (flagDir </> fileNameOptions) :: IO Args
   it   <- read <$> readFile (flagDir </> fileNameLastIteration) :: IO Int
   g    <- B.decodeFile (flagDir </> fileNameGrammar it) :: IO BinaryCRTG
   info <- B.decodeFile (flagDir </> fileNameInfo    it) :: IO BinaryInfo
-  groups <- mergeGroups FBNone flagRestrictMerge
+  groups <- mergeGroups (flagBinarization opts) (flagRestrictMerge opts)
     <$> (B.decodeFile (flagDir </> fileNameIntToTreeMap)
            :: IO BinaryIntToTreeMap)
   withFile (flagDir </> fileNameStatistics) AppendMode $ \ hStat ->
@@ -160,7 +164,9 @@ mainArgs CBSMContinue{..} = do
       $ take (succ flagIterations)
       $ cbsm
           groups
-          (if flagNormalize then normalizeLklhdByMrgdStates else flip const)
+          ( if flagNormalize opts
+            then normalizeLklhdByMrgdStates
+            else flip const )
           flagBeamWidth
           (g, info)
 

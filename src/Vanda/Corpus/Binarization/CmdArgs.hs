@@ -45,7 +45,7 @@ data FlagBinarization
   | FBFcns
   | FBLeftbranching0
   | FBLeftbranching1
-  deriving (Eq, Show)
+  deriving (Eq, Read, Show)
 
 
 -- | Define command line flag @binarization@ with the required options @none@,

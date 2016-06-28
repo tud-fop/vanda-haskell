@@ -50,9 +50,7 @@ data Args
     , argCorpora :: [FilePath]
     }
   | CBSMContinue
-    { flagRestrictMerge :: [FlagRestrictMerge]
-    , flagBeamWidth :: Int
-    , flagNormalize :: Bool
+    { flagBeamWidth :: Int
     , flagIterations :: Int
     , flagDir :: FilePath
     }
@@ -73,19 +71,20 @@ data Args
     , argGrammar :: FilePath
     , argCount :: Int
     }
-  deriving Show
+  deriving (Read, Show)
 
 
-data FlagOutputFormat = FOFPretty | FOFPenn | FOFYield deriving (Eq, Show)
+data FlagOutputFormat
+  = FOFPretty | FOFPenn | FOFYield deriving (Eq, Read, Show)
 
 data FlagRestrictMerge
   = FRMBinLeaf | FRMBinMeta | FRMLeafs | FRMTerminals | FRMUnary
-  deriving (Eq, Show)
+  deriving (Eq, Read, Show)
 
-data FlagUnknownWords = FUWStrict | FUWArbitrary deriving (Eq, Show)
+data FlagUnknownWords = FUWStrict | FUWArbitrary deriving (Eq, Read, Show)
 
 data FlagUnknownWordOutput
-       = FUWOOriginal | FUWOReplacement | FUWOBoth deriving (Eq, Show)
+       = FUWOOriginal | FUWOReplacement | FUWOBoth deriving (Eq, Read, Show)
 
 
 cmdArgs :: Mode Args
@@ -129,13 +128,11 @@ cmdArgs
         , flagReqDir
         ]
     }
-  , (modeEmpty $ CBSMContinue [] 1000 False (pred maxBound) "")
+  , (modeEmpty $ CBSMContinue 1000 (pred maxBound) "")
     { modeNames = ["cbsm-continue"]
     , modeHelp = "Continue cbsm training with a grammar."
     , modeGroupFlags = toGroup
-        [ flagReqRestrictMerge
-        , flagReqBeamWidth
-        , flagNoneNormalize
+        [ flagReqBeamWidth
         , flagReqIterations
         , flagReqDir
         ]
