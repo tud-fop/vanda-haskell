@@ -122,7 +122,7 @@ data Args
 data FlagOutputFormat = FOFPretty | FOFPenn | FOFYield deriving (Eq, Show)
 
 data FlagRestrictMerge
-  = FRMLeafs | FRMTerminals | FRMUnary
+  = FRMBinLeaf | FRMBinMeta | FRMLeafs | FRMTerminals | FRMUnary
   deriving (Eq, Show)
 
 data FlagUnknownWords = FUWStrict | FUWArbitrary deriving (Eq, Show)
@@ -253,19 +253,23 @@ cmdArgs
         update y x = maybe (Left err) (\ z -> Right x{flagOutputFormat = z})
                    $ lookup y opts
     flagReqRestrictMerge
-      = flagReq [flag] update "RESTRICTION"
-      $ "one of " ++ optsStr ++ ". The RESTRICTION leafs means that states \
-        \producing leafs are not merged with states producing inner nodes. \
-        \The restriction terminals means that only states producing the same \
-        \terminal may be merged. The restriction unary prohibits merges of \
-        \unary nodes with nodes of any other arity; this can be useful in \
-        \connection with some binarizations. If this flag is used more than \
-        \once, all named restrictions are applied simultaneously."
+      = flagReq [flag] update "OPT"
+      $ unlines
+          [ "one of " ++ optsStr ++ "."
+          , "If this flag is used more than once, all named OPTs are applied simultaneously."
+          , "binleaf: states producing nodes that were leafs before binarization are not merged with other states."
+          , "binmeta: states producing nodes that were introduced by binarization are not merged with other states."
+          , "leafs: states producing leafs are not merged with other states."
+          , "terminals: only states producing the same terminal may be merged."
+          , "unary: states producing unary nodes are not merged with other states."
+          ]
       where
         flag = "restrict-merge"
         err  = flag ++ " expects one of " ++ optsStr
         optsStr = intercalate ", " (map fst opts)
-        opts = [ ("leafs"    , FRMLeafs    )
+        opts = [ ("binleaf"  , FRMBinLeaf  )
+               , ("binmeta"  , FRMBinMeta  )
+               , ("leafs"    , FRMLeafs    )
                , ("terminals", FRMTerminals)
                , ("unary"    , FRMUnary    ) ]
         update y x = maybe (Left err)
@@ -402,7 +406,7 @@ mainArgs CBSM{..} = do
     safeSaveLastGrammar flagDir hStat hEvals hBeam
       $ take (succ flagIterations)
       $ cbsm
-          (mergeGroups flagRestrictMerge tM)
+          (mergeGroups flagBinarization flagRestrictMerge tM)
           (if flagNormalize then normalizeLklhdByMrgdStates else flip const)
           flagBeamWidth
           (g, initialInfo (cntState g))
@@ -411,7 +415,7 @@ mainArgs CBSMContinue{..} = do
   it   <- read <$> readFile (flagDir </> fileNameLastIteration) :: IO Int
   g    <- B.decodeFile (flagDir </> fileNameGrammar it) :: IO BinaryCRTG
   info <- B.decodeFile (flagDir </> fileNameInfo    it) :: IO BinaryInfo
-  groups <- mergeGroups flagRestrictMerge
+  groups <- mergeGroups FBNone flagRestrictMerge
     <$> (B.decodeFile (flagDir </> fileNameIntToTreeMap)
            :: IO BinaryIntToTreeMap)
   withFile (flagDir </> fileNameStatistics) AppendMode $ \ hStat ->
@@ -507,28 +511,40 @@ filterByLeafs file ts = do
 
 
 data RestrictMergeFeature a
-  = RMFLeaf Bool
+  = RMFBinLeaf Bool
+  | RMFBinMeta Bool
+  | RMFLeaf Bool
   | RMFTerminal a
   | RMFUnary Bool
   deriving (Eq, Ord)
 
 
-rmFeature :: Ord a => FlagRestrictMerge -> Tree a -> RestrictMergeFeature a
-rmFeature FRMLeafs     = RMFLeaf . null . subForest
-rmFeature FRMTerminals = RMFTerminal . rootLabel
-rmFeature FRMUnary     = RMFUnary . isSingleton . subForest
+rmFeature
+  :: FlagBinarization
+  -> FlagRestrictMerge
+  -> Tree String
+  -> RestrictMergeFeature String
+rmFeature b FRMBinLeaf   = RMFBinLeaf . (Leaf ==) . nodetypeByFlag b
+rmFeature b FRMBinMeta   = RMFBinMeta . (Meta ==) . nodetypeByFlag b
+rmFeature _ FRMLeafs     = RMFLeaf . null . subForest
+rmFeature _ FRMTerminals = RMFTerminal . rootLabel
+rmFeature _ FRMUnary     = RMFUnary . isSingleton . subForest
 
 
 mergeGroups
-  :: (Ord v, Ord a) => [FlagRestrictMerge] -> M.Map v (Tree a) -> [S.Set v]
-mergeGroups flags
+  :: Ord v
+  => FlagBinarization
+  -> [FlagRestrictMerge]
+  -> M.Map v (Tree String)
+  -> [S.Set v]
+mergeGroups b flags
   = map S.fromList
   . M.elems
   . M.fromListWith (++)
   . map (\ (v, t) -> (map ($ t) features, [v]))
   . M.toList
   where
-    features = map rmFeature (nub flags)
+    features = map (rmFeature b) (nub flags)
 
 
 createWSA
