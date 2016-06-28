@@ -61,13 +61,15 @@ data Args
   | Parse
     { flagUnknownWords :: FlagUnknownWords
     , flagUnknownWordOutput :: FlagUnknownWordOutput
+    , flagBinarization :: FlagBinarization
     , flagOutputFormat :: FlagOutputFormat
     , flagMessageNoParse :: String
     , argGrammar :: FilePath
     , argCount :: Int
     }
   | Bests
-    { flagOutputFormat :: FlagOutputFormat
+    { flagBinarization :: FlagBinarization
+    , flagOutputFormat :: FlagOutputFormat
     , argGrammar :: FilePath
     , argCount :: Int
     }
@@ -150,7 +152,7 @@ cmdArgs
         [ flagReqIntToTreeMap
         ]
     }
-  , (modeEmpty $ Parse FUWStrict FUWOOriginal FOFPretty "" "" 1)
+  , (modeEmpty $ Parse FUWStrict FUWOOriginal FBNone FOFPretty "" "" 1)
     { modeNames = ["parse"]
     , modeHelp = "Parse newline-separated sentences from standard input."
     , modeArgs =
@@ -162,11 +164,12 @@ cmdArgs
     , modeGroupFlags = toGroup
         [ flagReqUnknownWords
         , flagReqUnknownWordOutput
+        , flagReqBinarization (\ b x -> x{flagBinarization = b})
         , flagReqOutputFormat
         , flagReqMessageNoParse
         ]
     }
-  , (modeEmpty $ Bests FOFPretty "" 1)
+  , (modeEmpty $ Bests FBNone FOFPretty "" 1)
     { modeNames = ["bests"]
     , modeHelp = "View best trees of a grammar."
     , modeArgs =
@@ -176,7 +179,8 @@ cmdArgs
         , Nothing
         )
     , modeGroupFlags = toGroup
-        [ flagReqOutputFormat
+        [ flagReqBinarization (\ b x -> x{flagBinarization = b})
+        , flagReqOutputFormat
         ]
     }
   ]
