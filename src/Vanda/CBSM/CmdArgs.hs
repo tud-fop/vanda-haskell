@@ -62,6 +62,7 @@ data Args
     { flagUnknownWords :: FlagUnknownWords
     , flagUnknownWordOutput :: FlagUnknownWordOutput
     , flagBinarization :: FlagBinarization
+    , flagUnbinarize :: Bool
     , flagOutputFormat :: FlagOutputFormat
     , flagMessageNoParse :: String
     , argGrammar :: FilePath
@@ -69,6 +70,7 @@ data Args
     }
   | Bests
     { flagBinarization :: FlagBinarization
+    , flagUnbinarize :: Bool
     , flagOutputFormat :: FlagOutputFormat
     , argGrammar :: FilePath
     , argCount :: Int
@@ -152,7 +154,7 @@ cmdArgs
         [ flagReqIntToTreeMap
         ]
     }
-  , (modeEmpty $ Parse FUWStrict FUWOOriginal FBNone FOFPretty "" "" 1)
+  , (modeEmpty $ Parse FUWStrict FUWOOriginal FBNone False FOFPretty "" "" 1)
     { modeNames = ["parse"]
     , modeHelp = "Parse newline-separated sentences from standard input."
     , modeArgs =
@@ -165,11 +167,12 @@ cmdArgs
         [ flagReqUnknownWords
         , flagReqUnknownWordOutput
         , flagReqBinarization (\ b x -> x{flagBinarization = b})
+        , flagNoneUnbinarize
         , flagReqOutputFormat
         , flagReqMessageNoParse
         ]
     }
-  , (modeEmpty $ Bests FBNone FOFPretty "" 1)
+  , (modeEmpty $ Bests FBNone False FOFPretty "" 1)
     { modeNames = ["bests"]
     , modeHelp = "View best trees of a grammar."
     , modeArgs =
@@ -180,6 +183,7 @@ cmdArgs
         )
     , modeGroupFlags = toGroup
         [ flagReqBinarization (\ b x -> x{flagBinarization = b})
+        , flagNoneUnbinarize
         , flagReqOutputFormat
         ]
     }
@@ -201,6 +205,10 @@ cmdArgs
       = flagReq ["filter-by-leafs"] (\ a x -> Right x{flagFilterByLeafs = a})
           "FILE"
           "only use trees whose leafs occur in FILE"
+    flagNoneUnbinarize
+      = flagNone ["unbinarize"] (\ x -> x{flagUnbinarize = True})
+          "Undo the binarization before the output. Might fail if a tree is \
+          \no result of a binarization."
     flagReqOutputFormat
       = flagReq [flag] update "FORMAT" ("one of " ++ optsStr)
       where

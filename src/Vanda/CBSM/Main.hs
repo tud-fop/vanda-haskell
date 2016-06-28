@@ -215,7 +215,8 @@ mainArgs Parse{..} = do
     let wsa = createWSA flagUnknownWords hg sent
     let (hg', _) = earley' (asBackwardStar hg) comp wsa (M.keys inis)
     let inis' = M.mapKeys (\ k -> (0, k, length sent)) inis
-    printWeightedTrees flagBinarization flagOutputFormat flagMessageNoParse
+    printWeightedTrees
+        flagBinarization flagUnbinarize flagOutputFormat flagMessageNoParse
       $ take argCount
       $ map (second $ unknownWordOutput flagUnknownWordOutput sent
                     . fmap H.label)
@@ -225,7 +226,8 @@ mainArgs Parse{..} = do
 mainArgs Bests{..} = do
   (hg, inis) <- toHypergraph <$> (B.decodeFile argGrammar :: IO BinaryCRTG)
   let feature = F.Feature (\ _ i xs -> i * product xs) V.singleton
-  printWeightedTrees flagBinarization flagOutputFormat "language empty"
+  printWeightedTrees
+      flagBinarization flagUnbinarize flagOutputFormat "language empty"
     $ take argCount
       $ map (second $ fmap H.label)
     $ bestsIni (asBackwardStar hg) feature (V.singleton 1) inis
@@ -319,15 +321,20 @@ unknownWordOutput FUWOBoth s t
 printWeightedTrees
   :: Show a
   => FlagBinarization
+  -> Bool              -- ^ undo binarization before output
   -> FlagOutputFormat
   -> String
   -> [(a, Tree String)]
   -> IO ()
-printWeightedTrees _ _ msg [] = putStrLn msg
-printWeightedTrees b fmt _ xs =
+printWeightedTrees _ _ _ msg [] = putStrLn msg
+printWeightedTrees b unbin fmt _ xs =
   forM_ (zip [1 :: Int ..] xs) $ \ (i, (w, t)) ->
     putStrLn
-      $ drawTreeFormatted b fmt (show i ++ ": " ++ show w) t
+      $ drawTreeFormatted
+          (if unbin then FBNone else b)
+          fmt
+          (show i ++ ": " ++ show w)
+      $ if unbin then decodeByFlag b t else t
 
 
 drawTreeFormatted
