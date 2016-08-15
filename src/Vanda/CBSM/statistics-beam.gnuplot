@@ -35,7 +35,10 @@ set colorbox user origin (1 - 0.1 / aspect), 0.05 size (0.05 / aspect), 0.85
 set rmargin at screen (1 - 0.2 / aspect)
 
 set tics out
-set x2tics
+set xtics 0, 100
+set mxtics 10
+set x2tics 0, 100
+set mx2tics 10
 set y2tics
 
 set xrange  [GPVAL_DATA_X_MIN - 0.5 : GPVAL_DATA_X_MAX + 0.5]
