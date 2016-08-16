@@ -24,12 +24,18 @@ module Data.List.Extra
   spanWithLength
 , groupWithRanges
 , toRanges
+, -- * Special lists
+  -- ** Ordered lists
+  merge
+, mergeLists
 , -- * Generalized functions
   -- ** The “By” operations
   -- *** User-supplied equality (replacing an Eq context)
   groupByWithRanges
 , -- *** User-supplied comparison (replacing an Ord context)
-  minimaBy
+  mergeBy
+, mergeListsBy
+, minimaBy
 )
 where
 
@@ -74,6 +80,16 @@ toRanges (x : xs) = go x x xs
                         else (lo, hi) : go y y ys
 
 
+-- | Merge two sorted lists to a single sorted list.
+merge :: Ord a => [a] -> [a] -> [a]
+merge = mergeBy compare
+
+
+-- | Merge sorted lists to a single sorted list.
+mergeLists :: Ord a => [[a]] -> [a]
+mergeLists = mergeListsBy compare
+
+
 -- | Like 'Data.List.groupBy', but the start and end indices of the groups
 -- returned additionally. For example
 --
@@ -85,6 +101,30 @@ groupByWithRanges eq = go 0
     go !i (x : xs) = (i, i + l, x : ys) : go (i + l + 1) zs
       where (ys, !l, zs) = spanWithLength (eq x) xs
     go _ [] = []
+
+
+-- | Merge two sorted lists to a single sorted list.
+mergeBy :: (a -> a -> Ordering) -> [a] -> [a] -> [a]
+mergeBy cmp = go
+  where
+    go xs@(x:xs') ys@(y:ys')
+      = case x `cmp` y of
+          GT ->  y : go xs  ys'
+          _  ->  x : go xs' ys
+    go [] ys = ys
+    go xs [] = xs
+
+
+-- | Merge sorted lists to a single sorted list.
+mergeListsBy :: (a -> a -> Ordering) -> [[a]] -> [a]
+mergeListsBy cmp = go
+  where
+    go [] = []
+    go [xs] = xs
+    go xss = go (pairwise xss)
+
+    pairwise (xs1 : xs2 : xss) = mergeBy cmp xs1 xs2 : pairwise xss
+    pairwise xss = xss
 
 
 -- | Like 'Data.List.minimumBy', but returns all least elements in their

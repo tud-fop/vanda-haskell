@@ -28,6 +28,16 @@ tests = TestList
     , toRanges [1 .. 9 :: Int] ~?= [(1, 9)]
     , toRanges [1, 2, 3, 5, 6, 7, 2, 4, 5 :: Int] ~?= [(1, 3), (5, 7), (2, 2), (4, 5)]
     ]
+  , "merge" ~: TestList
+    [ merge [  ] [()] ~?= [()]
+    , merge [()] [  ] ~?= [()]
+    , merge [()] [()] ~?= [(), ()]
+    , merge [0, 2 .. 8] [1, 3 .. 9] ~?= [0 .. 9 :: Int]
+    ]
+  , "mergeLists" ~: TestList
+    [ mergeLists [] ~?= ([] :: [()])
+    , mergeLists [[i, i + 10  .. 99] | i <- [0 .. 9]] ~?= [0 .. 99 :: Int]
+    ]
   , "groupByWithRanges" ~: TestList
     [ groupByWithRanges undefined ([] :: [()]) ~?= []
     , groupByWithRanges ((==) `on` head) ["a1", "a2", "b1", "c1", "c2", "c3", "a3", "a4", "b2"]
