@@ -93,8 +93,8 @@ minimaBy :: (a -> a -> Ordering) -> [a] -> [a]
 minimaBy _   []       = []
 minimaBy cmp (x : xs) = reverse $ uncurry (:) $ foldl' step (x, []) xs
   where
-    step (m, ms) y
+    step p@(m, ms) y
       = case cmp m y of
-          LT -> (m, ms)
+          LT -> p
           EQ -> (y, m : ms)
           GT -> (y, [])

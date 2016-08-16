@@ -35,6 +35,7 @@ tests = TestList
     ]
   , "minimaBy" ~: TestList
     [ minimaBy undefined [] ~?= ([] :: [()])
+    , minimaBy compare [()] ~?= [()]
     , minimaBy (comparing head) ["d1", "b2", "d2", "b1", "a2", "c1", "a1", "b3", "a3", "c2"] ~?= ["a2", "a1", "a3"]
     ]
   ]
