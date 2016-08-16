@@ -17,23 +17,34 @@
 {-# LANGUAGE BangPatterns #-}
 
 module Data.List.Extra
-( -- * Basic functions
+(
+-- * Basic functions
   isSingleton
-, -- * Sublists
-  -- ** Extracting sublists
-  spanWithLength
+
+-- * Sublists
+
+-- ** Extracting sublists
+, spanWithLength
 , groupWithRanges
 , toRanges
-, -- * Special lists
-  -- ** Ordered lists
-  merge
+
+-- * Special lists
+
+-- ** Ordered lists
+, merge
 , mergeLists
-, -- * Generalized functions
-  -- ** The “By” operations
-  -- *** User-supplied equality (replacing an Eq context)
-  groupByWithRanges
-, -- *** User-supplied comparison (replacing an Ord context)
-  mergeBy
+
+-- * Generalized functions
+
+-- ** The “@By@” operations
+
+-- *** User-supplied equality (replacing an @Eq@ context)
+-- | The predicate is assumed to define an equivalence.
+, groupByWithRanges
+
+-- *** User-supplied comparison (replacing an @Ord@ context)
+-- | The function is assumed to define a total ordering.
+, mergeBy
 , mergeListsBy
 , minimaBy
 )
