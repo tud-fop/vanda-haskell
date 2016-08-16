@@ -56,7 +56,7 @@ import           Control.Monad.State.Lazy
 import           Control.Parallel.Strategies
 import qualified Data.Binary as B
 import           Data.List (foldl', groupBy, sortBy)
-import           Data.List.Extra (minimaBy)
+import           Data.List.Extra (mergeListsBy, minimaBy)
 import           Data.Function (on)
 import qualified Data.Map.Lazy as ML
 import           Data.Map.Strict (Map, (!))
@@ -163,7 +163,7 @@ toHypergraph CRTG{..}
 
 bests :: (Ord v, Eq l) => CRTG v l -> [(Double, H.Derivation v l Double)]
 bests g
-  = mergesBy (comparing (Down . fst))
+  = mergeListsBy (comparing (Down . fst))
   $ M.elems
   $ M.intersectionWith (\ w' -> map (\ (F.Candidate w d _) -> (w' * w, d))) ini
 --   $ M.map (map (\ (F.Candidate w d _) -> (w, d)))
@@ -175,21 +175,6 @@ bests g
 
 asBackwardStar :: H.BackwardStar v l i -> H.BackwardStar v l i
 asBackwardStar = id
-
-
--- | Merge sorted lists to a single sorted list.
-mergesBy :: (a -> a -> Ordering) -> [[a]] -> [a]
-mergesBy cmp = foldl (mergeBy cmp) []
-
-
--- | Merge two sorted lists to a single sorted list.
-mergeBy :: (a -> a -> Ordering) -> [a] -> [a] -> [a]
-mergeBy cmp xs@(x:xs') ys@(y:ys')
-  = case x `cmp` y of
-      GT ->  y : mergeBy cmp xs  ys'
-      _  ->  x : mergeBy cmp xs' ys
-mergeBy _ [] ys = ys
-mergeBy _ xs [] = xs
 
 
 {-
