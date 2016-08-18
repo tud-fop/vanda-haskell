@@ -28,6 +28,7 @@ import           Vanda.Algorithms.EarleyMonadic
 import qualified Vanda.Algorithms.Earley.WSA as WSA
 import           Vanda.CBSM.CmdArgs
 import           Vanda.CBSM.CountBasedStateMerging
+import           Vanda.CBSM.StatisticsRenderer
 import           Vanda.Corpus.Binarization (Nodetype(..))
 import           Vanda.Corpus.Binarization.CmdArgs
 import           Vanda.Corpus.Penn.Filter
@@ -231,6 +232,9 @@ mainArgs Bests{..} = do
     $ take argCount
       $ map (second $ fmap H.label)
     $ bestsIni (asBackwardStar hg) feature (V.singleton 1) inis
+
+mainArgs RenderBeam{..} = do
+  renderBeam argRenderBeamInput argRenderBeamOutput
 
 
 readCorpora :: Bool -> Bool -> Bool -> [FilePath] -> IO (Forest String)

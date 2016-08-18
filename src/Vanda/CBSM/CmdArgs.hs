@@ -75,6 +75,10 @@ data Args
     , argGrammar :: FilePath
     , argCount :: Int
     }
+  | RenderBeam
+    { argRenderBeamInput :: FilePath
+    , argRenderBeamOutput :: FilePath
+    }
   deriving (Read, Show)
 
 
@@ -187,6 +191,16 @@ cmdArgs
         , flagReqOutputFormat
         ]
     }
+  , (modeEmpty $ RenderBeam "" "")
+    { modeNames = ["render-beam"]
+    , modeHelp = "Render statistics-evaluations.csv into a png image."
+    , modeArgs =
+        ( [ flagArgRenderBeamInput{argRequire = True}
+          , flagArgRenderBeamOutput{argRequire = True}
+          ]
+        , Nothing
+        )
+    }
   ]
   where
     flagNoneAsForests
@@ -297,3 +311,7 @@ cmdArgs
       = flagArg (\ a x -> Right x{argGrammar = a}) "GRAMMAR-FILE"
     flagArgCount
       = flagArg (readUpdate $ \ a x -> x{argCount = a}) "COUNT"
+    flagArgRenderBeamInput
+      = flagArg (\ a x -> Right x{argRenderBeamInput = a}) "CSV-FILE"
+    flagArgRenderBeamOutput
+      = flagArg (\ a x -> Right x{argRenderBeamOutput = a}) "PNG-FILE"

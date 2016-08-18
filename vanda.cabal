@@ -34,6 +34,7 @@ library
     , filepath
     , hashable
     , heap
+    , JuicyPixels
     , log-domain
     , MissingH
     , mtl
@@ -77,6 +78,7 @@ library
     , Vanda.CBSM.Main
     , Vanda.CBSM.Merge
     , Vanda.CBSM.ProductOrder
+    , Vanda.CBSM.StatisticsRenderer
     , Vanda.CFTG.CFTG
     , Vanda.CFTG.Examples
     , Vanda.Corpus.Binarization
@@ -158,6 +160,7 @@ executable Vanda
     , filepath
     , hashable
     , heap
+    , JuicyPixels
     , log-domain >= 0.10.2
     , MissingH
     , mtl
