@@ -23,7 +23,7 @@
 --   formatted as in this module,
 -- * (required) haddock documentation for the module,
 -- * (optional)
---   [file-header pragmas](https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/pragmas.html);
+--   [file-header pragmas](https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/glasgow_exts.html#pragmas);
 --   alphabetically ordered; at most one pragma per line; as soon as you need
 --   a line break, split up the pragma into several ones,
 -- * (required) @module@ keyword and module name,
