@@ -42,6 +42,7 @@ library
     , parsec >= 3.1.2
     , pretty
     , QuickCheck
+    , random
     , split
     , text
     , time
@@ -54,6 +55,7 @@ library
     , Control.Error
     , Data.Interner
     , Data.List.Extra
+    , Data.List.Shuffle
     , Data.Maybe.Extra
     , Data.MultiMap
     , Data.NTT

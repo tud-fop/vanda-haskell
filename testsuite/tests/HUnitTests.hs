@@ -6,6 +6,7 @@ import Test.HUnit
 
 import qualified Control.ErrorTests
 import qualified Data.List.ExtraTests
+import qualified Data.List.ShuffleTests
 import qualified Data.MultiMapTests
 import qualified Data.RevMapTests
 import qualified Vanda.Algorithms.EarleyTest
@@ -27,6 +28,8 @@ tests = TestList
     ~: Control.ErrorTests.tests
   , "Data.List.Extra"
     ~: Data.List.ExtraTests.tests
+  ,   "Data.List.Shuffle"
+    ~: Data.List.ShuffleTests.tests
   , "Data.MultiMapTests"
     ~: Data.MultiMapTests.tests
   ,   "Data.RevMapTests"
