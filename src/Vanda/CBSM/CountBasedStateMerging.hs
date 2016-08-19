@@ -56,7 +56,7 @@ import           Control.Monad.State.Lazy
 import           Control.Parallel.Strategies
 import qualified Data.Binary as B
 import           Data.List (foldl', groupBy, sortBy)
-import           Data.List.Extra (mergeListsBy, minimaBy)
+import           Data.List.Extra (mergeBy, mergeListsBy, minimaBy)
 import           Data.Function (on)
 import qualified Data.Map.Lazy as ML
 import           Data.Map.Strict (Map, (!))
@@ -382,7 +382,7 @@ cbsmGo cache mergeGroups evaluate beamWidth prev@(g, info@Info{..})
                       (v1, v2)
                       cache
                 )
-          . foldr1 (mergeSortedLists (comparing fst))
+          . foldr1 (mergeBy (comparing fst))
         liftSat f (x, y, m) = case f m of
           Left  l -> Left  (x, y, l)
           Right r -> Right (x, y, r)
@@ -424,17 +424,6 @@ compileMergePairs cntM grpS
   where n     = let s = M.size cntM' in s * (s - 1) `div` 2
         vs    = sortBy (comparing snd) (M.toList cntM')
         cntM' = M.intersection cntM (M.fromSet (const ()) grpS)
-
-
-mergeSortedLists :: (a -> a -> Ordering) -> [a] -> [a] -> [a]
-mergeSortedLists cmp = merge
-  where
-    merge xs@(x : xs') ys@(y : ys')
-      = case x `cmp` y of
-          GT -> y : merge xs  ys'
-          _  -> x : merge xs' ys
-    merge [] ys         = ys
-    merge xs []         = xs
 
 
 normalizeLklhdByMrgdStates :: (Int, Int, Int) -> Log Double -> Log Double
