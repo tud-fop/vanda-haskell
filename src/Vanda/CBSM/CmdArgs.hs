@@ -44,6 +44,8 @@ data Args
     , flagFilterByLeafs :: FilePath
     , flagRestrictMerge :: [FlagRestrictMerge]
     , flagBeamWidth :: Int
+    , flagBeamRandomize :: Bool
+    , flagSeed :: Int
     , flagNormalize :: Bool
     , flagIterations :: Int
     , flagDir :: FilePath
@@ -117,8 +119,21 @@ cmdArgs
         , flagReqOutputFormat
         ]
     }
-  , ( modeEmpty
-        $ CBSM False FBNone False False "" [] 1000 False (pred maxBound) "" [])
+  , ( modeEmpty CBSM
+        { flagAsForests     = False
+        , flagBinarization  = FBNone
+        , flagDefoliate     = False
+        , flagPennFilter    = False
+        , flagFilterByLeafs = ""
+        , flagRestrictMerge = []
+        , flagBeamWidth     = 1000
+        , flagBeamRandomize = False
+        , flagSeed          = 0
+        , flagNormalize     = False
+        , flagIterations    = (pred maxBound)
+        , flagDir           = ""
+        , argCorpora        = []
+        })
     { modeNames = ["cbsm"]
     , modeHelp = "Read-off a grammar from TREEBANKs and generalize it. See \
         \print-corpora for further information about the TREEBANK arguments."
@@ -131,6 +146,8 @@ cmdArgs
         , flagReqFilterByLeafs
         , flagReqRestrictMerge
         , flagReqBeamWidth
+        , flagNoneBeamRandomize
+        , flagReqSeed
         , flagNoneNormalize
         , flagReqIterations
         , flagReqDir
@@ -206,6 +223,10 @@ cmdArgs
     flagNoneAsForests
       = flagNone ["as-forests"] (\ x -> x{flagAsForests = True})
           "the TREEBANKs contain forests instead of trees"
+    flagNoneBeamRandomize
+      = flagNone ["randomize-beam"] (\ x -> x{flagBeamRandomize = True})
+          "randomize the order of merge candidates that are equivalent \
+          \w.r.t. the heuristics"
     flagNoneDefoliate
       = flagNone ["defoliate"] (\ x -> x{flagDefoliate = True})
           "remove leaves from trees in TREEBANKs"
@@ -287,6 +308,12 @@ cmdArgs
                 "BEAMWIDTH"
                 "Larger values refine the search for the best merge \
                 \candidate"
+    flagReqSeed
+      = flagReq ["seed"]
+                (readUpdate $ \ a x -> x{flagSeed = a})
+                "SEED"
+                "an Int used for initialization of the pseudo random number \
+                \generator"
     flagReqIterations
       = flagReq ["iterations"]
                 (readUpdate $ \ a x -> x{flagIterations = a})

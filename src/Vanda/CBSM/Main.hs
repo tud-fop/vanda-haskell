@@ -23,6 +23,7 @@ module Vanda.CBSM.Main
 
 
 import           Data.List.Extra (groupWithRanges, isSingleton, toRanges)
+import           Data.List.Shuffle (shuffle)
 import           System.Console.CmdArgs.Explicit.Misc
 import           Vanda.Algorithms.EarleyMonadic
 import qualified Vanda.Algorithms.Earley.WSA as WSA
@@ -67,6 +68,7 @@ import           System.IO ( Handle
                            , stdout
                            , withFile )
 import           System.Posix.Files (fileExist)
+import           System.Random (StdGen, mkStdGen)
 
 
 fileNameGrammar          :: Int -> FilePath
@@ -94,7 +96,7 @@ show0 l i = replicate (l - length cs) '0' ++ cs
 
 type BinaryCRTG = CRTG Int String
 type BinaryIntToTreeMap = M.Map Int (Tree String)
-type BinaryInfo = Info Int
+type BinaryInfo = Info StdGen Int
 
 
 main :: IO ()
@@ -148,7 +150,8 @@ mainArgs opts@CBSM{..} = do
           (mergeGroups flagBinarization flagRestrictMerge tM)
           (if flagNormalize then normalizeLklhdByMrgdStates else flip const)
           flagBeamWidth
-          (g, initialInfo (cntState g))
+          (if flagBeamRandomize then shuffle else (,))
+          (g, initialInfo (mkStdGen flagSeed) (cntState g))
 
 mainArgs CBSMContinue{..} = do
   opts <- read <$> readFile (flagDir </> fileNameOptions) :: IO Args
@@ -169,11 +172,13 @@ mainArgs CBSMContinue{..} = do
             then normalizeLklhdByMrgdStates
             else flip const )
           flagBeamWidth
+          (if flagBeamRandomize opts then shuffle else (,))
           (g, info)
 
 mainArgs ShowInfo{..} = do
   info <- B.decodeFile argInfo :: IO BinaryInfo
   putStr "iteration           : " >> print (infoIteration       info)
+  putStr "prng state          : " >> print (infoRandomGen       info)
   putStr "merge pairs         : " >> print (infoMergePairs      info)
   putStr "beam width          : " >> print (infoBeamWidth       info)
   putStr "beam index          : " >> print (infoBeamIndex       info)
@@ -378,7 +383,7 @@ safeSaveLastGrammar
   -> Handle
   -> Handle
   -> Handle
-  -> [(BinaryCRTG, Info Int)]
+  -> [(BinaryCRTG, Info StdGen Int)]
   -> IO ()
 safeSaveLastGrammar dir hStat hEvals hBeam xs
   = handleInterrupt worker handler
@@ -431,7 +436,8 @@ safeSaveLastGrammar dir hStat hEvals hBeam xs
             $ "Iteration " ++ show infoIteration ++ ": "
               ++ show rules         ++ " rules, "
               ++ show states        ++ " states, "
-              ++ show initialStates ++ " initial states."
+              ++ show initialStates ++ " initial states, "
+              ++ show infoMergePairs ++ " possible merges."
           hFlush stdout
 
     handler :: (BinaryCRTG, BinaryInfo) -> IO ()

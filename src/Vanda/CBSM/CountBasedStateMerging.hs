@@ -1,4 +1,4 @@
-{-# LANGUAGE LambdaCase, RecordWildCards, ScopedTypeVariables #-}
+{-# LANGUAGE LambdaCase, Rank2Types, RecordWildCards, ScopedTypeVariables #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -69,6 +69,7 @@ import           Data.Tree
 import           Data.Tuple (swap)
 import qualified Data.Vector as V
 import           Numeric.Log (Log(..))
+import           System.Random (RandomGen, split)
 
 import Debug.Trace
 
@@ -302,8 +303,9 @@ instance Functor MergeTree where
   fmap f (Merge i xs) = Merge i (fmap (fmap f) xs)
 
 
-data Info v = Info
+data Info g v = Info
   { infoIteration :: !Int
+  , infoRandomGen :: g
   , infoMergePairs :: !Int
   , infoBeamWidth :: !Int
   , infoBeamIndex :: !Int
@@ -320,51 +322,58 @@ data Info v = Info
   }
 
 
-instance (B.Binary v, Ord v) => B.Binary (Info v) where
-  put (Info a b c d e f g h i j k l m n)
-    = B.put a >> B.put b >> B.put c >> B.put d >> B.put e
+instance (B.Binary v, Ord v, Read g, Show g) => B.Binary (Info g v) where
+  put (Info it gen a b c d e f g h i j k l m)
+    = B.put it >> B.put (show gen)
+   >> B.put a >> B.put b >> B.put c >> B.put d >> B.put e
    >> B.put f >> B.put g >> B.put h >> B.put i >> B.put j
-   >> B.put k >> B.put l >> B.put m >> B.put n
+   >> B.put k >> B.put l >> B.put m
   get = Info
-    <$> B.get <*> B.get <*> B.get <*> B.get <*> B.get
+    <$> B.get <*> (read <$> B.get)
     <*> B.get <*> B.get <*> B.get <*> B.get <*> B.get
-    <*> B.get <*> B.get <*> B.get <*> B.get
+    <*> B.get <*> B.get <*> B.get <*> B.get <*> B.get
+    <*> B.get <*> B.get <*> B.get
 
 
-initialInfo :: Map v Int -> Info v
-initialInfo
-  = Info 0 (-1) (-1) (-1) (-1) Merge.empty (-1) (-1) (-1) 1 1 [] []
+initialInfo :: RandomGen g => g -> Map v Int -> Info g v
+initialInfo gen
+  = Info 0 gen (-1) (-1) (-1) (-1) Merge.empty (-1) (-1) (-1) 1 1 [] []
   . M.mapWithKey State
 
 
 cbsm
-  :: (Ord v, Ord l)
+  :: (Ord v, Ord l, RandomGen g)
   => [Set v]
   -> ((Int, Int, Int) -> Log Double -> Log Double)
   -> Int
-  ->  (CRTG v l, Info v)
-  -> [(CRTG v l, Info v)]
+  -> (forall a. [a] -> g -> ([a], g))
+  ->  (CRTG v l, Info g v)
+  -> [(CRTG v l, Info g v)]
 cbsm = cbsmGo M.empty
 
 
 cbsmGo
-  :: (Ord v, Ord l)
+  :: (Ord v, Ord l, RandomGen g)
   => Map (v, v) (Merge v)
   -> [Set v]
   -> ((Int, Int, Int) -> Log Double -> Log Double)
   -> Int
-  ->  (CRTG v l, Info v)
-  -> [(CRTG v l, Info v)]
-cbsmGo cache mergeGroups evaluate beamWidth prev@(g, info@Info{..})
+  -> (forall a. [a] -> g -> ([a], g))
+  ->  (CRTG v l, Info g v)
+  -> [(CRTG v l, Info g v)]
+cbsmGo cache mergeGroups evaluate beamWidth shuffle prev@(g, info@Info{..})
   = (prev :)
   $ seq g
   $ seq info
   $ let n = infoIteration + 1
         likelihoodDelta' = likelihoodDelta g
+        (gen1, gen2) = split infoRandomGen
         (mergePairs, cands)
           = sum *** processMergePairs
           $ unzip
-          $ map (compileMergePairs $ cntState g) mergeGroups
+          $ zipWith (\ grpS -> fst . compileMergePairs (cntState g) grpS shuffle)
+              mergeGroups
+              (evalState (sequence $ repeat $ state $ split) gen1)
         processMergePairs
           = take beamWidth  -- TODO: Group?
           . zipWith
@@ -397,7 +406,7 @@ cbsmGo cache mergeGroups evaluate beamWidth prev@(g, info@Info{..})
           $ ML.fromList
           $ map (\ (_, _, mv, m, _, _, _) -> (mv, m)) cands
         info'
-          = Info n mergePairs beamWidth
+          = Info n gen2 mergePairs beamWidth
                  indB indC mrg mrgR mrgS mrgI lklhdD evaluation
                  (map (\ (_, _, _, _, _, _, x) -> x) cands)
                  (map (\ (i, _, _, _, _, _, _) -> i) minimalCands)
@@ -406,7 +415,7 @@ cbsmGo cache mergeGroups evaluate beamWidth prev@(g, info@Info{..})
           $ M.map (: []) infoMergeTreeMap
     in if null cands
        then []
-       else cbsmGo cache' mergeGroups evaluate beamWidth
+       else cbsmGo cache' mergeGroups evaluate beamWidth shuffle
                    (mergeCRTG mrg g, info')
 --   = g
 --   : ( g `seq` case refineRanking $ enrichRanking $ mergeRanking g of
@@ -418,12 +427,23 @@ cbsmGo cache mergeGroups evaluate beamWidth prev@(g, info@Info{..})
 --     )
 
 compileMergePairs
-  :: Ord v => Map v Int -> Set v -> (Int, [(Int, ((v, Int), (v, Int)))])
-compileMergePairs cntM grpS
-  = n `seq` (n, sortedCartesianProductWith' ((+) `on` snd) vs (tail vs))
+  :: (Ord v, RandomGen g)
+  => Map v Int
+  -> Set v
+  -> (forall a. [a] -> g -> ([a], g))
+  -> g
+  -> ((Int, [(Int, ((v, Int), (v, Int)))]), g)
+compileMergePairs cntM grpS shuffle g
+  = n `seq` ((n, sortedCartesianProductWith' ((+) `on` snd) vs (tail vs)), g')
   where n     = let s = M.size cntM' in s * (s - 1) `div` 2
-        vs    = sortBy (comparing snd) (M.toList cntM')
         cntM' = M.intersection cntM (M.fromSet (const ()) grpS)
+        (vs, g')
+          = flip runState g
+          $ fmap concat
+          $ mapM (state . shuffle)
+          $ groupBy ((==) `on` snd)
+          $ sortBy (comparing snd)
+          $ M.toList cntM'
 
 
 normalizeLklhdByMrgdStates :: (Int, Int, Int) -> Log Double -> Log Double
