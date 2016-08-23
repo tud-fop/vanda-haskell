@@ -142,6 +142,7 @@ library
     , Vanda.Util.Histogram
     , Vanda.Util.IO
     , Vanda.Util.Memorysavers
+    , Vanda.Util.PrettyPrint
     , Vanda.Util.Timestamps
     , Vanda.Util.Tree
   hs-source-dirs:  src
