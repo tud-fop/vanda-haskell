@@ -211,7 +211,7 @@ cmdArgs
           "remove leaves from trees in TREEBANKs"
     flagNoneNormalize
       = flagNone ["normalize"] (\ x -> x{flagNormalize = True})
-          "normalize likelihood deltas by number of merged states"
+          "normalize log likelihood deltas by number of merged states"
     flagNonePennFilter
       = flagNone ["penn-filter"] (\ x -> x{flagPennFilter = True})
           "remove predicate argument structure annotations from TREEBANKs"
