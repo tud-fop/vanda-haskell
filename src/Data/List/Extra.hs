@@ -28,6 +28,12 @@ module Data.List.Extra
 , groupWithRanges
 , toRanges
 
+-- * Indexing lists
+-- | These functions treat a list @xs@ as a indexed collection,
+-- with indices ranging from 0 to @'length' xs - 1@.
+
+, at
+
 -- * Special lists
 
 -- ** Ordered lists
@@ -89,6 +95,18 @@ toRanges (x : xs) = go x x xs
     go lo hi (y : ys) = if succ hi == y
                         then go lo y ys
                         else (lo, hi) : go y y ys
+
+
+-- | List index (subscript) operator, starting from 0.
+-- The result is 'Nothing' if the index is out of range.
+at :: [a] -> Int -> Maybe a
+{-# INLINABLE at #-}
+at xs n  -- based on Data.List.!!
+  | n < 0     = Nothing
+  | otherwise = foldr (\x r k -> case k of
+                                   0 -> Just x
+                                   _ -> r (k-1)
+                      ) (\ _ -> Nothing) xs n
 
 
 -- | Merge two sorted lists to a single sorted list.
