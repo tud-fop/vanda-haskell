@@ -22,7 +22,7 @@ module Vanda.CBSM.Main
 ) where
 
 
-import           Data.List.Extra (groupWithRanges, isSingleton, toRanges)
+import           Data.List.Extra (at, groupWithRanges, isSingleton, toRanges)
 import           Data.List.Shuffle (shuffle)
 import           System.Console.CmdArgs.Explicit.Misc
 import           Vanda.Algorithms.EarleyMonadic
@@ -182,32 +182,29 @@ mainArgs ShowGrammar{..}
 
 
 mainArgs ShowInfo{..} = do
-  info <- B.decodeFile argInfo :: IO BinaryInfo
-  putStr "iteration           : " >> print (infoIteration       info)
-  putStr "prng state          : " >> print (infoRandomGen       info)
-  putStr "merge pairs         : " >> print (infoMergePairs      info)
-  putStr "beam width          : " >> print (infoBeamWidth       info)
-  putStr "beam index          : " >> print (infoBeamIndex       info)
-  putStr "candidate index     : " >> print (infoCandidateIndex  info)
-  putStr "rule merges         : " >> print (infoMergedRules     info)
-  putStr "state merges        : " >> print (infoMergedStates    info)
-  putStr "initial-state merges: " >> print (infoMergedInitials  info)
-  putStrLn $ let l = infoLikelihoodDelta info
-      in "likelihood delta    : 2^" ++ show (ln l / log 2) ++ " = " ++ show l
-  putStrLn $ let l = infoEvaluation info
-      in "evaluation of merge : 2^" ++ show (ln l / log 2) ++ " = " ++ show l
+  Info{..} <- B.decodeFile argInfo :: IO BinaryInfo
+  putStr "iteration           : " >> print infoIteration
+  putStr "prng state          : " >> print infoRandomGen
+  putStr "merge pairs         : " >> print infoMergePairs
+  putStr "beam width          : " >> print infoBeamWidth
+  putStr "beam index          : " >> print infoBeamIndex
+  case infoBeam `at` pred infoBeamIndex of
+    Nothing -> return ()
+    Just (BeamEntry{..}) -> do
+      putStr "rule merges         : " >> print beMergedRules
+      putStr "state merges        : " >> print beMergedStates
+      putStr "initial-state merges: " >> print beMergedInitials
+      let showLogValue x = "2^" ++ show (ln x / log 2) ++ " = " ++ show x
+      putStrLn $ "likelihood delta    : " ++ showLogValue beLikelihoodDelta
+      putStrLn $ "evaluation of merge : " ++ showLogValue beEvaluation
   putStrLn ""
   putStrLn ""
   putStrLn "merge history:"
   putStrLn ""
   m <- if null flagIntToTreeMap
-       then return
-          $ M.map (fmap $ \ x -> Node (show x) [])
-          $ infoMergeTreeMap info
+       then return $ M.map (fmap $ \ x -> Node (show x) []) infoMergeTreeMap
        else do tM <- B.decodeFile flagIntToTreeMap :: IO BinaryIntToTreeMap
-               return
-                $ M.map (fmap (tM !))
-                $ infoMergeTreeMap info
+               return $ M.map (fmap (tM !)) infoMergeTreeMap
   let mergeTree2Tree (State t c ) = Node (colorTTY [96] ("count: " ++ show c))
                                          [mapLeafs (colorTTY [93]) t]
       mergeTree2Tree (Merge i ms) = Node (colorTTY [7, 96] $ show i)
@@ -404,23 +401,27 @@ safeSaveLastGrammar dir hStat hEvals hBeam xs
               initialStates = M.size $ cntInit  g
               showIfValid n = if n < 0 then "NaN" else show n
           hPutStrLn hStat $ intercalate ","
-            [ showFixedComma 12 cpuTime  -- pico = 10^-12
-            , show infoIteration
-            , show rules
-            , show states
-            , show initialStates
-            , showIfValid infoMergePairs
-            , showIfValid infoBeamWidth
-            , showIfValid infoBeamIndex
-            , showIfValid infoCandidateIndex
-            , showIfValid infoMergedRules
-            , showIfValid infoMergedStates
-            , showIfValid infoMergedInitials
-            , show (ln infoLikelihoodDelta / log 2)
-            , show infoLikelihoodDelta
-            , show (ln infoEvaluation / log 2)
-            , show infoEvaluation
-            ]
+            $ [ showFixedComma 12 cpuTime  -- pico = 10^-12
+              , show infoIteration
+              , show rules
+              , show states
+              , show initialStates
+              , showIfValid infoMergePairs
+              , showIfValid infoBeamWidth
+              , showIfValid infoBeamIndex
+              , "NaN"
+              ]
+            ++ case infoBeam `at` pred infoBeamIndex of
+                 Just (BeamEntry{..})
+                         -> [ show beMergedRules
+                            , show beMergedStates
+                            , show beMergedInitials
+                            , show (ln beLikelihoodDelta / log 2)
+                            , show beLikelihoodDelta
+                            , show (ln beEvaluation / log 2)
+                            , show beEvaluation
+                            ]
+                 Nothing -> ["NaN", "NaN", "NaN" , "0.0", "1.0", "0.0", "1.0"]
           hPutStr hEvals
             $ unlines
             $ map (\ (lo, hi, e) -> show infoIteration ++ ","
@@ -428,7 +429,8 @@ safeSaveLastGrammar dir hStat hEvals hBeam xs
                                  ++ show (succ hi) ++ ","
                                  ++ show (ln (head e) / log 2) ++ ","
                                  ++ show (head e) )
-            $ groupWithRanges infoEvaluations
+            $ groupWithRanges
+            $ map beEvaluation infoBeam
           hPutStr hBeam
             $ unlines
             $ map (\ (lo, hi) -> show infoIteration ++ ","

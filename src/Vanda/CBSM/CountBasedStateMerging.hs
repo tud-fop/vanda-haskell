@@ -20,6 +20,7 @@ module Vanda.CBSM.CountBasedStateMerging
 , MergeTree(..)
 , forestToGrammar
 , Info(..)
+, BeamEntry(..)
 , initialInfo
 , cbsm
 , normalizeLklhdByMrgdStates
@@ -347,41 +348,66 @@ instance Functor MergeTree where
 
 
 data Info g v = Info
-  { infoIteration :: !Int
-  , infoRandomGen :: g
-  , infoMergePairs :: !Int
-  , infoBeamWidth :: !Int
-  , infoBeamIndex :: !Int
-  , infoCandidateIndex :: !Int
-  , infoMerge :: !(Merge v)
-  , infoMergedRules :: !Int
-  , infoMergedStates :: !Int
-  , infoMergedInitials :: !Int
-  , infoLikelihoodDelta :: !(Log Double)
-  , infoEvaluation :: !(Log Double)
-  , infoEvaluations :: ![Log Double]
+  { infoRandomGen             :: !g
+  , infoIteration             :: !Int
+  , infoMergePairs            :: !Int
+  , infoBeamWidth             :: !Int
+  , infoBeamIndex             :: !Int
+  , infoBeam                  :: ![BeamEntry v]
   , infoEquivalentBeamIndizes :: ![Int]
-  , infoMergeTreeMap :: !(MergeHistory v)
+  , infoMergeTreeMap          :: !(MergeHistory v)
+  }
+
+
+data BeamEntry v = BeamEntry
+  { beIndex           :: !Int
+  , beHeuristic       :: !Int
+  , beEvaluation      :: !(Log Double)
+  , beLikelihoodDelta :: !(Log Double)
+  , beFactorRules     :: !(Log Double)
+  , beFactorStates    :: !(Log Double)
+  , beFactorInitials  :: !(Log Double)
+  , beMergedRules     :: !Int
+  , beMergedStates    :: !Int
+  , beMergedInitials  :: !Int
+  , beMergeSaturated  :: !(Merge v)
+  , beMergeSeed       :: !(v, v)
   }
 
 
 instance (B.Binary v, Ord v, Read g, Show g) => B.Binary (Info g v) where
-  put (Info it gen a b c d e f g h i j k l m)
-    = B.put it >> B.put (show gen)
+  put (Info gen a b c d e f g)
+    = B.put (show gen)
    >> B.put a >> B.put b >> B.put c >> B.put d >> B.put e
+   >> B.put f >> B.put g
+  get = Info <$> (read <$> B.get)
+    <*> B.get <*> B.get <*> B.get <*> B.get <*> B.get
+    <*> B.get <*> B.get
+
+
+instance (B.Binary v, Ord v) => B.Binary (BeamEntry v) where
+  put (BeamEntry a b c d e f g h i j k l)
+    = B.put a >> B.put b >> B.put c >> B.put d >> B.put e
    >> B.put f >> B.put g >> B.put h >> B.put i >> B.put j
-   >> B.put k >> B.put l >> B.put m
-  get = Info
-    <$> B.get <*> (read <$> B.get)
+   >> B.put k >> B.put l
+  get = BeamEntry
+    <$> B.get <*> B.get <*> B.get <*> B.get <*> B.get
     <*> B.get <*> B.get <*> B.get <*> B.get <*> B.get
-    <*> B.get <*> B.get <*> B.get <*> B.get <*> B.get
-    <*> B.get <*> B.get <*> B.get
+    <*> B.get <*> B.get
 
 
-initialInfo :: RandomGen g => g -> Map v Int -> Info g v
-initialInfo gen
-  = Info 0 gen (-1) (-1) (-1) (-1) Merge.empty (-1) (-1) (-1) 1 1 [] []
-  . M.mapWithKey State
+initialInfo :: g -> Map v Int -> Info g v
+initialInfo gen m
+  = Info
+      { infoRandomGen             = gen
+      , infoIteration             = 0
+      , infoMergePairs            = -1
+      , infoBeamWidth             = -1
+      , infoBeamIndex             = -1
+      , infoBeam                  = []
+      , infoEquivalentBeamIndizes = []
+      , infoMergeTreeMap          = M.mapWithKey State m
+      }
 
 
 cbsm
@@ -419,43 +445,51 @@ cbsmGo cache mergeGroups evaluate beamWidth shuffle prev@(g, info@Info{..})
               (evalState (sequence $ repeat $ state $ split) gen1)
         processMergePairs
           = take beamWidth  -- TODO: Group?
-          . zipWith
-              ( \ i (j, mv, m)
-               -> let (l, sizes) = likelihoodDelta' m
-                  in (i, j, mv, m, sizes, l, evaluate sizes l)
-              ) [1 ..]
-          . map (untilRight $ liftSat $ saturateMergeStep $ forwardStar $ rules g)
-          . zipWith (\ j (mv, m) -> (j, mv, m)) [1 ..]
-          . map ( \ (_, ((v1, _), (v2, _)))
-                 -> (,) (v1, v2)
-                  $ saturateMergeInit
-                  $ ML.findWithDefault
-                      (Merge.fromLists [[v1, v2]])
-                      (v1, v2)
-                      cache
-                )
+          . zipWith ( \ i (h, ((v1, _), (v2, _)))
+                      -> processMergePair i h (v1, v2)
+                    ) [1 ..]
           . foldr1 (mergeBy (comparing fst))
-        liftSat f (x, y, m) = case f m of
-          Left  l -> Left  (x, y, l)
-          Right r -> Right (x, y, r)
+        processMergePair i h pair@(v1, v2)
+          = BeamEntry
+              { beIndex           = i
+              , beHeuristic       = h
+              , beEvaluation      = evaluate sizes l
+              , beLikelihoodDelta = l
+              , beFactorRules     = rw
+              , beFactorStates    = vw
+              , beFactorInitials  = iw
+              , beMergedRules     = rc
+              , beMergedStates    = vc
+              , beMergedInitials  = ic
+              , beMergeSaturated  = m
+              , beMergeSeed       = pair
+              }
+          where (l, (rw, vw, iw), sizes@(rc, vc, ic)) = likelihoodDelta' m
+                m = saturateMerge (forwardStar $ rules g)
+                  $ ML.findWithDefault (Merge.fromLists [[v1, v2]]) pair cache
         minimalCands
-          = minimaBy (comparing (Down . (\ (_, _, _, _, _, _, x) -> x))) cands
-        (indB, indC, mrgV, mrg, (mrgR, mrgS, mrgI), lklhdD, evaluation)
-          = head minimalCands
+          = minimaBy (comparing (Down . beEvaluation)) cands
+        mrg = beMergeSaturated (head minimalCands)
         apply = Merge.apply mrg
         cache'
           = ML.map (Merge.applyMergeToMerge mrg)
           $ ML.mapKeysWith Merge.union (apply *** apply)
           $ ML.fromList
-          $ map (\ (_, _, mv, m, _, _, _) -> (mv, m)) cands
-        info'
-          = Info n gen2 mergePairs beamWidth
-                 indB indC mrg mrgR mrgS mrgI lklhdD evaluation
-                 (map (\ (_, _, _, _, _, _, x) -> x) cands)
-                 (map (\ (i, _, _, _, _, _, _) -> i) minimalCands)
-          $ M.map (\ case [x] -> x; xs -> Merge n xs)
-          $ mergeKeysWith (++) mrg
-          $ M.map (: []) infoMergeTreeMap
+          $ map (\ BeamEntry{..} -> (beMergeSeed, beMergeSaturated))
+                cands
+        info' = Info
+                  { infoRandomGen             = gen2
+                  , infoIteration             = n
+                  , infoMergePairs            = mergePairs
+                  , infoBeamWidth             = beamWidth
+                  , infoBeamIndex             = beIndex (head minimalCands)
+                  , infoBeam                  = cands
+                  , infoEquivalentBeamIndizes = map beIndex minimalCands
+                  , infoMergeTreeMap
+                      = M.map (\ case [x] -> x; xs -> Merge n xs)
+                      $ mergeKeysWith (++) mrg
+                      $ M.map (: []) infoMergeTreeMap
+                  }
     in if null cands
        then []
        else cbsmGo cache' mergeGroups evaluate beamWidth shuffle
@@ -470,7 +504,7 @@ cbsmGo cache mergeGroups evaluate beamWidth shuffle prev@(g, info@Info{..})
 --     )
 
 compileMergePairs
-  :: (Ord v, RandomGen g)
+  :: Ord v
   => Map v Int
   -> Set v
   -> (forall a. [a] -> g -> ([a], g))
@@ -505,7 +539,7 @@ cbsmStep2 g
 cbsmStep1
   :: (Ord v, Ord l)
   => CRTG v l
-  -> [((Int, ((v, Int), (v, Int))), ([[v]], (Log Double, (Int, Int, Int))))]
+  -> [((Int, ((v, Int), (v, Int))), ([[v]], (Log Double, (Log Double, Log Double, Log Double), (Int, Int, Int))))]
 cbsmStep1 g
   = map (\ x@(_, ((v1, _), (v2, _))) ->
         (,) x
@@ -527,7 +561,12 @@ refineRanking
 enrichRanking
   :: (Ord v, Ord l)
   => ([(a, ((v, b), (v, c)))], CRTG v l)
-  -> [((a, ((v, b), (v, c))), (Merge v, (Log Double, (Int, Int, Int))))]
+  -> [ ( (a, ((v, b), (v, c)))
+       , ( Merge v
+         , (Log Double, (Log Double, Log Double, Log Double) , (Int, Int, Int))
+         )
+       )
+     ]
 enrichRanking (xs, g)
   = map (\ x@(_, ((v1, _), (v2, _))) ->
           ( x
@@ -558,6 +597,7 @@ saturateMerge g mrgs
   = untilRight (saturateMergeStep g) (saturateMergeInit mrgs)
 
 
+saturateMergeInit :: Merge a -> (Set a, Merge a)
 saturateMergeInit mrgs = (Merge.elemS mrgs, mrgs)
 
 
@@ -670,7 +710,11 @@ sortedCartesianProductWithInternal (?) (>+<) (x0 : xs0) (y0 : ys0)
 sortedCartesianProductWithInternal _ _ _ _ = []
 
 
-likelihoodDelta :: (Ord l, Ord v) => CRTG v l -> Merge v -> (Log Double, (Int, Int, Int))
+likelihoodDelta
+  :: (Ord l, Ord v)
+  => CRTG v l
+  -> Merge v
+  -> (Log Double, (Log Double, Log Double, Log Double), (Int, Int, Int))
 likelihoodDelta g@CRTG{..} = \ mrgs ->
   let (rw, rc) = productAndSum  -- rules
                $ map ( (\ (pr, su, si) -> (p su / pr, si))
@@ -695,7 +739,7 @@ likelihoodDelta g@CRTG{..} = \ mrgs ->
                $ filter ((1 <) . M.size)
                $ map (M.intersection cntInit . M.fromSet (const ()))
                $ Merge.equivalenceClasses mrgs
-  in (rw * vw * iw, (rc, vc, ic))
+  in (rw * vw * iw, (rw, vw, iw), (rc, vc, ic))
   where
     bidiStar' = bidiStar (rules g)
 
