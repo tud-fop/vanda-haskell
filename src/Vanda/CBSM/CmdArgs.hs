@@ -56,6 +56,9 @@ data Args
     , flagIterations :: Int
     , flagDir :: FilePath
     }
+  | ShowGrammar
+    { argGrammar :: FilePath
+    }
   | ShowInfo
     { flagIntToTreeMap :: FilePath
     , argInfo :: FilePath
@@ -161,6 +164,15 @@ cmdArgs
         , flagReqIterations
         , flagReqDir
         ]
+    }
+  , (modeEmpty $ ShowGrammar "")
+    { modeNames = ["show-grammar"]
+    , modeHelp = "Pretty print a trained grammar."
+    , modeArgs =
+        ( [ flagArgGrammar{argRequire = True}
+          ]
+        , Nothing
+        )
     }
   , (modeEmpty $ ShowInfo "" "")
     { modeNames = ["show-info"]

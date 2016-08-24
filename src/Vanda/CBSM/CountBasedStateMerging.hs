@@ -23,6 +23,7 @@ module Vanda.CBSM.CountBasedStateMerging
 , initialInfo
 , cbsm
 , normalizeLklhdByMrgdStates
+, prettyPrintCRTG
 , toHypergraph
 , asBackwardStar
 , bests
@@ -48,6 +49,7 @@ import qualified Vanda.CBSM.Merge as Merge
 import qualified Vanda.Features as F
 import qualified Vanda.Hypergraph as H
 import           Vanda.Util.Histogram (histogram)
+import           Vanda.Util.PrettyPrint (columnize)
 import           Vanda.Util.Tree as T
 
 import           Control.Applicative ((<*>), (<$>))
@@ -55,7 +57,7 @@ import           Control.Arrow ((***), first, second)
 import           Control.Monad.State.Lazy
 import           Control.Parallel.Strategies
 import qualified Data.Binary as B
-import           Data.List (foldl', groupBy, sortBy)
+import           Data.List (foldl', groupBy, sortBy, transpose)
 import           Data.List.Extra (mergeBy, mergeListsBy, minimaBy)
 import           Data.Function (on)
 import qualified Data.Map.Lazy as ML
@@ -148,6 +150,47 @@ unionRuleSets
 unionRuleSets (bw1 :-> fw1) (bw2 :-> fw2)
   = (S.union bw1 bw2 :-> S.union fw1 fw2)
 -}
+
+prettyPrintCRTG :: (Ord v, Show v, Show l) => CRTG v l -> String
+prettyPrintCRTG CRTG{..}
+  = unlines
+      [ columnize ["  "]
+        $ transpose
+        $ (["state", "count"] :)
+        $ map (\ (v, c) -> [show v, show c])
+        $ M.assocs cntState
+      , columnize ["  "]
+        $ transpose
+        $ (["initial", "count", "probability", "log₂ probability"] :)
+        $ map (\ (v, c) -> let s = sum (M.elems cntInit) in
+            [ show v
+            , show c
+            , show      (fromIntegral c / fromIntegral s :: Double)
+            , show $ ln (fromIntegral c / fromIntegral s :: Log Double)
+                      / log 2
+            ])
+        $ M.assocs cntInit
+      , columnize [" -> ", " ", "  #  ", "  ", "  "]
+        $ transpose
+        $ ( [ "state"
+            , "terminal"
+            , "states"
+            , "count"
+            , "probability"
+            , "log₂ probability"
+            ] : )
+        $ map (\ (Rule{..}, cR) -> let cTo = cntState M.! to in
+            [ show to
+            , show label
+            , show from
+            , show cR
+            , show      (fromIntegral cR / fromIntegral cTo :: Double)
+            , show $ ln (fromIntegral cR / fromIntegral cTo :: Log Double)
+                      / log 2
+            ])
+        $ M.assocs cntRule
+      ]
+
 
 toHypergraph
   :: (H.Hypergraph h, Ord v) => CRTG v l -> (h v l Double, Map v Double)

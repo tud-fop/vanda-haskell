@@ -175,6 +175,12 @@ mainArgs CBSMContinue{..} = do
           (if flagBeamRandomize opts then shuffle else (,))
           (g, info)
 
+mainArgs ShowGrammar{..}
+  = putStrLn
+  . prettyPrintCRTG
+  =<< (B.decodeFile argGrammar :: IO BinaryCRTG)
+
+
 mainArgs ShowInfo{..} = do
   info <- B.decodeFile argInfo :: IO BinaryInfo
   putStr "iteration           : " >> print (infoIteration       info)
