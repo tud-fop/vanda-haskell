@@ -59,7 +59,7 @@ import           System.Directory ( createDirectoryIfMissing
                                   , doesDirectoryExist
                                   , getDirectoryContents )
 import           System.Exit (exitFailure)
-import           System.FilePath ((</>), (<.>))
+import           System.FilePath ((</>))
 import           System.IO ( Handle
                            , IOMode(..)
                            , hFlush
@@ -69,29 +69,6 @@ import           System.IO ( Handle
                            , withFile )
 import           System.Posix.Files (fileExist)
 import           System.Random (StdGen, mkStdGen)
-
-
-fileNameGrammar          :: Int -> FilePath
-fileNameIntToTreeMap     ::        FilePath
-fileNameInfo             :: Int -> FilePath
-fileNameLastIteration    ::        FilePath
-fileNameOptions          ::        FilePath
-fileNameStatistics       ::        FilePath
-fileNameEvaluations      ::        FilePath
-fileNameEquivBeamIndizes ::        FilePath
-fileNameGrammar        i = "grammar-"              ++ show0 9 i <.> "bin"
-fileNameIntToTreeMap     = "int2tree"                           <.> "bin"
-fileNameInfo           i = "info-"                 ++ show0 9 i <.> "bin"
-fileNameLastIteration    = "last-iteration"                     <.> "txt"
-fileNameOptions          = "options"                            <.> "bin"
-fileNameStatistics       = "statistics"                         <.> "csv"
-fileNameEvaluations      = "statistics-evaluations"             <.> "csv"
-fileNameEquivBeamIndizes = "statistics-equivalent-beam-indizes" <.> "csv"
-
-
-show0 :: Show a => Int -> a -> String
-show0 l i = replicate (l - length cs) '0' ++ cs
-  where cs = show i
 
 
 type BinaryCRTG = CRTG Int String

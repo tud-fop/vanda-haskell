@@ -22,7 +22,32 @@ import           Data.List (intercalate)
 import           System.Console.CmdArgs.Explicit
 
 import           System.Console.CmdArgs.Explicit.Misc
+import           System.FilePath ((<.>))
 import           Vanda.Corpus.Binarization.CmdArgs
+
+
+fileNameGrammar          :: Int -> FilePath
+fileNameIntToTreeMap     ::        FilePath
+fileNameInfo             :: Int -> FilePath
+fileNameLastIteration    ::        FilePath
+fileNameOptions          ::        FilePath
+fileNameStatistics       ::        FilePath
+fileNameEvaluations      ::        FilePath
+fileNameEquivBeamIndizes ::        FilePath
+fileNameLogBeamVerbose   ::        FilePath
+fileNameGrammar        i = "grammar-"              ++ show0 9 i <.> "bin"
+fileNameIntToTreeMap     = "int2tree"                           <.> "bin"
+fileNameInfo           i = "info-"                 ++ show0 9 i <.> "bin"
+fileNameLastIteration    = "last-iteration"                     <.> "txt"
+fileNameOptions          = "options"                            <.> "bin"
+fileNameStatistics       = "statistics"                         <.> "csv"
+fileNameEvaluations      = "statistics-evaluations"             <.> "csv"
+fileNameEquivBeamIndizes = "statistics-equivalent-beam-indizes" <.> "csv"
+
+
+show0 :: Show a => Int -> a -> String
+show0 l i = replicate (l - length cs) '0' ++ cs
+  where cs = show i
 
 
 data Args
@@ -222,7 +247,7 @@ cmdArgs
     }
   , (modeEmpty $ RenderBeam "" "")
     { modeNames = ["render-beam"]
-    , modeHelp = "Render statistics-evaluations.csv into a png image."
+    , modeHelp = "Render " ++ fileNameEvaluations ++ " into a png image."
     , modeArgs =
         ( [ flagArgRenderBeamInput{argRequire = True}
           , flagArgRenderBeamOutput{argRequire = True}
