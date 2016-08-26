@@ -185,7 +185,7 @@ mainArgs ShowInfo{..} = do
       putStr "rule merges         : " >> print beMergedRules
       putStr "state merges        : " >> print beMergedStates
       putStr "initial-state merges: " >> print beMergedInitials
-      let showLogValue x = "2^" ++ show (ln x / log 2) ++ " = " ++ show x
+      let showLogValue x = "2^" ++ show (ld x) ++ " = " ++ show x
       putStrLn $ "likelihood delta    : " ++ showLogValue beLikelihoodDelta
       putStrLn $ "evaluation of merge : " ++ showLogValue beEvaluation
   putStrLn ""
@@ -408,9 +408,9 @@ safeSaveLastGrammar dir hStat hEvals hBeam mhLogBeamVerbose xs
                             , show beMergedRules
                             , show beMergedStates
                             , show beMergedInitials
-                            , show (ln beLikelihoodDelta / log 2)
+                            , show (ld beLikelihoodDelta)
                             , show beLikelihoodDelta
-                            , show (ln beEvaluation / log 2)
+                            , show (ld beEvaluation)
                             , show beEvaluation
                             ]
                  Nothing -> ["NaN", "NaN", "NaN", "NaN" , "0.0", "1.0", "0.0", "1.0"]
@@ -419,7 +419,7 @@ safeSaveLastGrammar dir hStat hEvals hBeam mhLogBeamVerbose xs
             $ map (\ (lo, hi, e) -> show infoIteration ++ ","
                                  ++ show (succ lo) ++ ","
                                  ++ show (succ hi) ++ ","
-                                 ++ show (ln (head e) / log 2) ++ ","
+                                 ++ show (ld (head e)) ++ ","
                                  ++ show (head e) )
             $ groupWithRanges
             $ map beEvaluation infoBeam
