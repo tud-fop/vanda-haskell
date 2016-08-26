@@ -12,6 +12,8 @@
 -- Portability :  portable
 -----------------------------------------------------------------------------
 
+{-# LANGUAGE BangPatterns #-}
+
 module Vanda.CBSM.Dovetailing where
 
 
@@ -35,8 +37,13 @@ dovetail step = go1 []
                       in rs ++ go2 ls
 
 
-untilRight :: (a -> Either a b) -> a -> b
-untilRight f a
-  = case f a of
-      Left a' -> untilRight f a'
-      Right b -> b
+-- | Iterate function application as long the intermediate results are wrapped
+-- in 'Left' and finally return a result as soon as it is wrapped in 'Right'.
+-- Additionally the number of iterations is returned.
+untilRight :: (a -> Either a b) -> a -> (b, Int)
+untilRight f = go 1
+  where
+    go !i a
+      = case f a of
+          Left a' -> go (succ i) a'
+          Right b -> (b, i)

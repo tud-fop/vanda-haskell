@@ -370,8 +370,9 @@ data BeamEntry v = BeamEntry
   , beMergedRules     :: !Int
   , beMergedStates    :: !Int
   , beMergedInitials  :: !Int
-  , beMergeSaturated  :: !(Merge v)
   , beMergeSeed       :: !(v, v)
+  , beSaturationSteps :: !Int
+  , beMergeSaturated  :: !(Merge v)
   }
 
 
@@ -386,14 +387,14 @@ instance (B.Binary v, Ord v, Read g, Show g) => B.Binary (Info g v) where
 
 
 instance (B.Binary v, Ord v) => B.Binary (BeamEntry v) where
-  put (BeamEntry a b c d e f g h i j k l)
+  put (BeamEntry a b c d e f g h i j k l m)
     = B.put a >> B.put b >> B.put c >> B.put d >> B.put e
    >> B.put f >> B.put g >> B.put h >> B.put i >> B.put j
-   >> B.put k >> B.put l
+   >> B.put k >> B.put l >> B.put m
   get = BeamEntry
     <$> B.get <*> B.get <*> B.get <*> B.get <*> B.get
     <*> B.get <*> B.get <*> B.get <*> B.get <*> B.get
-    <*> B.get <*> B.get
+    <*> B.get <*> B.get <*> B.get
 
 
 initialInfo :: g -> Map v Int -> Info g v
@@ -461,11 +462,13 @@ cbsmGo cache mergeGroups evaluate beamWidth shuffle prev@(g, info@Info{..})
               , beMergedRules     = rc
               , beMergedStates    = vc
               , beMergedInitials  = ic
-              , beMergeSaturated  = m
               , beMergeSeed       = pair
+              , beSaturationSteps = pred saturationIterations
+              , beMergeSaturated  = m
               }
           where (l, (rw, vw, iw), sizes@(rc, vc, ic)) = likelihoodDelta' m
-                m = saturateMerge (forwardStar $ rules g)
+                (m, saturationIterations)
+                  = saturateMerge (forwardStar $ rules g)
                   $ ML.findWithDefault (Merge.fromLists [[v1, v2]]) pair cache
         minimalCands
           = minimaBy (comparing (Down . beEvaluation)) cands
@@ -532,7 +535,7 @@ normalizeLklhdByMrgdStates (_, mrgS, _) (Exp l)
 cbsmStep2 :: (Ord v, Ord l) => CRTG v l -> CRTG v l
 cbsmStep2 g
   = flip mergeCRTG g
-  $ (\ ((_, ((v1, _), (v2, _))) : _) -> saturateMerge (forwardStar (rules g)) (Merge.fromLists [[v1, v2]]))
+  $ (\ ((_, ((v1, _), (v2, _))) : _) -> fst $ saturateMerge (forwardStar (rules g)) (Merge.fromLists [[v1, v2]]))
   $ fst $ mergeRanking g
 
 
@@ -543,7 +546,7 @@ cbsmStep1
 cbsmStep1 g
   = map (\ x@(_, ((v1, _), (v2, _))) ->
         (,) x
-      $ let mrg = saturateMerge (forwardStar (rules g)) (Merge.fromLists [[v1, v2]]) in
+      $ let mrg = fst $ saturateMerge (forwardStar (rules g)) (Merge.fromLists [[v1, v2]]) in
         (map S.toList $ Merge.equivalenceClasses mrg, likelihoodDelta g mrg)
       )
   $ fst $ mergeRanking g
@@ -575,7 +578,7 @@ enrichRanking (xs, g)
         ) )
   $ xs
   where lklhdDelta = likelihoodDelta g
-        satMrg = saturateMerge (forwardStar (rules g))
+        satMrg = fst . saturateMerge (forwardStar (rules g))
 
 
 mergeRanking :: CRTG v l -> ([(Int, ((v, Int), (v, Int)))], CRTG v l)
@@ -592,7 +595,7 @@ saturateMerge
   .  (Ord s, Ord t)
   => ForwardStar s t
   -> Merge s  -- ^ merges (must be an equivalence relation)
-  -> Merge s
+  -> (Merge s, Int)
 saturateMerge g mrgs
   = untilRight (saturateMergeStep g) (saturateMergeInit mrgs)
 
