@@ -43,6 +43,7 @@ fileNameOptions          = "options"                            <.> "bin"
 fileNameStatistics       = "statistics"                         <.> "csv"
 fileNameEvaluations      = "statistics-evaluations"             <.> "csv"
 fileNameEquivBeamIndizes = "statistics-equivalent-beam-indizes" <.> "csv"
+fileNameLogBeamVerbose   = "statistics-beam-verbose"            <.> "csv"
 
 
 show0 :: Show a => Int -> a -> String
@@ -74,6 +75,7 @@ data Args
     , flagNormalize :: Bool
     , flagIterations :: Int
     , flagDir :: FilePath
+    , flagLogBeamVerbose :: Bool
     , argCorpora :: [FilePath]
     }
   | CBSMContinue
@@ -148,19 +150,20 @@ cmdArgs
         ]
     }
   , ( modeEmpty CBSM
-        { flagAsForests     = False
-        , flagBinarization  = FBNone
-        , flagDefoliate     = False
-        , flagPennFilter    = False
-        , flagFilterByLeafs = ""
-        , flagRestrictMerge = []
-        , flagBeamWidth     = 1000
-        , flagBeamRandomize = False
-        , flagSeed          = 0
-        , flagNormalize     = False
-        , flagIterations    = (pred maxBound)
-        , flagDir           = ""
-        , argCorpora        = []
+        { flagAsForests      = False
+        , flagBinarization   = FBNone
+        , flagDefoliate      = False
+        , flagPennFilter     = False
+        , flagFilterByLeafs  = ""
+        , flagRestrictMerge  = []
+        , flagBeamWidth      = 1000
+        , flagBeamRandomize  = False
+        , flagSeed           = 0
+        , flagNormalize      = False
+        , flagIterations     = (pred maxBound)
+        , flagDir            = ""
+        , flagLogBeamVerbose = False
+        , argCorpora         = []
         })
     { modeNames = ["cbsm"]
     , modeHelp = "Read-off a grammar from TREEBANKs and generalize it. See \
@@ -179,6 +182,7 @@ cmdArgs
         , flagNoneNormalize
         , flagReqIterations
         , flagReqDir
+        , flagNoneLogBeamVerbose
         ]
     }
   , (modeEmpty $ CBSMContinue 1000 (pred maxBound) "")
@@ -281,6 +285,10 @@ cmdArgs
       = flagNone ["unbinarize"] (\ x -> x{flagUnbinarize = True})
           "Undo the binarization before the output. Might fail if a tree is \
           \no result of a binarization."
+    flagNoneLogBeamVerbose
+      = flagNone ["log-beam-verbose"] (\ x -> x{flagLogBeamVerbose = True})
+          (  "Write all information about the search beam to "
+          ++ fileNameLogBeamVerbose   ++ "." )
     flagReqOutputFormat
       = flagReq [flag] update "FORMAT" ("one of " ++ optsStr)
       where

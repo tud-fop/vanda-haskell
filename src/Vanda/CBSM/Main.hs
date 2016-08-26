@@ -53,7 +53,7 @@ import qualified Data.Set as S
 import           Data.Tree
 import qualified Data.Vector as V
 import           Numeric.Log (Log(..))
-import           System.Console.CmdArgs.Explicit
+import           System.Console.CmdArgs.Explicit (processArgs)
 import           System.CPUTime
 import           System.Directory ( createDirectoryIfMissing
                                   , doesDirectoryExist
@@ -112,7 +112,9 @@ mainArgs opts@CBSM{..} = do
   B.encodeFile (flagDir </> fileNameIntToTreeMap) (tM :: BinaryIntToTreeMap)
   withFile (flagDir </> fileNameStatistics) AppendMode $ \ hStat ->
    withFile (flagDir </> fileNameEvaluations) AppendMode $ \ hEvals ->
-   withFile (flagDir </> fileNameEquivBeamIndizes) AppendMode $ \ hBeam -> do
+   withFile (flagDir </> fileNameEquivBeamIndizes) AppendMode $ \ hBeam ->
+   withFileIf flagLogBeamVerbose (flagDir </> fileNameLogBeamVerbose)
+              AppendMode $ \ mhLogBeamVerbose -> do
     hPutStrLn hStat
       "CPU time,iteration,rules,states,initial states,merge pairs,beam width,\
       \beam index,saturation steps,rule merges,state merges,\
@@ -121,7 +123,17 @@ mainArgs opts@CBSM{..} = do
     hPutStrLn hEvals "iteration,beam index low,beam index high,\
       \log₂ evaluation of merge,evaluation of merge"
     hPutStrLn hBeam "iteration,beam index low,beam index high"
-    safeSaveLastGrammar flagDir hStat hEvals hBeam
+    whenJust mhLogBeamVerbose $ \ h -> hPutStrLn h
+      "iteration,\
+      \beam index,\
+      \heuristic,\
+      \log₂ evaluation,\
+      \log₂ Δ likelihood,\
+      \log₂ factor rules,log₂ factor states,log₂ factor initial,\
+      \rule merges,state merges,initial merges,\
+      \seed state 1,seed state 2,\
+      \saturation steps"
+    safeSaveLastGrammar flagDir hStat hEvals hBeam mhLogBeamVerbose
       $ take (succ flagIterations)
       $ cbsm
           (mergeGroups flagBinarization flagRestrictMerge tM)
@@ -141,7 +153,9 @@ mainArgs CBSMContinue{..} = do
   withFile (flagDir </> fileNameStatistics) AppendMode $ \ hStat ->
    withFile (flagDir </> fileNameEvaluations) AppendMode $ \ hEvals ->
    withFile (flagDir </> fileNameEquivBeamIndizes) AppendMode $ \ hBeam ->
-    safeSaveLastGrammar flagDir hStat hEvals hBeam
+   withFileIf (flagLogBeamVerbose opts) (flagDir </> fileNameLogBeamVerbose)
+              AppendMode $ \ mhLogBeamVerbose ->
+    safeSaveLastGrammar flagDir hStat hEvals hBeam mhLogBeamVerbose
       $ take (succ flagIterations)
       $ cbsm
           groups
@@ -363,9 +377,10 @@ safeSaveLastGrammar
   -> Handle
   -> Handle
   -> Handle
+  -> Maybe Handle
   -> [(BinaryCRTG, Info StdGen Int)]
   -> IO ()
-safeSaveLastGrammar dir hStat hEvals hBeam xs
+safeSaveLastGrammar dir hStat hEvals hBeam mhLogBeamVerbose xs
   = handleInterrupt worker handler
   where
     worker :: ((BinaryCRTG, BinaryInfo) -> IO ()) -> IO ()
@@ -414,6 +429,26 @@ safeSaveLastGrammar dir hStat hEvals hBeam xs
                               ++ show lo ++ ","
                               ++ show hi)
             $ toRanges infoEquivalentBeamIndizes
+          whenJust mhLogBeamVerbose $ \ h -> do
+            forM_ infoBeam $ \ BeamEntry{..} ->
+              hPutStrLn h
+                $ intercalate ","
+                $ [ show infoIteration
+                  , show beIndex
+                  , show beHeuristic
+                  , show (ld beEvaluation)
+                  , show (ld beLikelihoodDelta)
+                  , show (ld beFactorRules)
+                  , show (ld beFactorStates)
+                  , show (ld beFactorInitials)
+                  , show beMergedRules
+                  , show beMergedStates
+                  , show beMergedInitials
+                  , show (fst beMergeSeed)
+                  , show (snd beMergeSeed)
+                  , show beSaturationSteps
+                  ]
+            hFlush h
           hFlush hStat
           hFlush hEvals
           hFlush hBeam
@@ -495,3 +530,20 @@ ifM :: Monad m => m Bool -> m b -> m b -> m b
 ifM predicateM thn els = do
   b <- predicateM
   if b then thn else els
+
+
+withFileIf :: Bool -> FilePath -> IOMode -> (Maybe Handle -> IO r) -> IO r
+withFileIf True  name mode act = withFile name mode (act . Just)
+withFileIf False _    _    act = act Nothing
+
+
+whenJust :: Applicative f => Maybe a -> (a -> f ()) -> f ()
+whenJust (Just x) act = act x
+whenJust Nothing  _   = pure ()
+
+
+ld :: Log Double -> Double
+ld (Exp x) = invLog2 * x
+
+invLog2 :: Double
+invLog2 = 1 / log 2
