@@ -1,7 +1,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Vanda.Util.IO
--- Copyright   :  (c) Technische Universität Dresden 2014
+-- Copyright   :  (c) Technische Universität Dresden 2014-2016
 -- License     :  Redistribution and use in source and binary forms, with
 --                or without modification, is ONLY permitted for teaching
 --                purposes at Technische Universität Dresden AND IN
@@ -16,30 +16,51 @@
 module Vanda.Util.IO where
 
 
-import Control.Concurrent.MVar
-import Control.Exception (catch, SomeException)
+import Control.Concurrent
+import Control.Exception (finally)
+import Control.Monad
+import Data.Foldable (for_, traverse_)
+import Data.Traversable (for)
 import System.Posix.Signals
 
 
--- | Calls worker with an action to fix/update a (partial) result.
--- Calls handler on completion of worker, 'sigUSR1', or any exception in
--- worker, including 'sigINT', if the worker fixed a result. A result is
--- removed after it was passed to handler. It is guaranteed that there is only
--- one thread in handler.
-handleInterrupt
-  :: ((a -> IO ()) -> IO ())  -- ^ worker
+-- | The call @handleOnDemand mn mt signals worker handler@ runs @worker@ and
+-- passes an action to fix/update a (partial) result. If there currently is a
+-- fixed result, then @handler@ is called with that result on the following
+-- events:
+--
+-- * termination of worker,
+-- * if @mn = 'Just' n@, then for every @n@-th fixed result,
+-- * if @mt = 'Just' t@, then every @t@ microseconds,
+-- * any 'Signal' from @signals@,
+-- * exception in worker (the exception is reraised); this includes 'sigINT',
+--   if it is not handled by @worker@ and it is not element of @signals@.
+--
+-- For each result @handler@ is called at most once.
+-- It is guaranteed that there is only one thread in @handler@.
+handleOnDemand
+  :: Maybe Int                -- ^ handler interval in number of results
+  -> Maybe Int                -- ^ handler interval in microseconds
+  -> [Signal]                 -- ^ signals on which handler is called
+  -> ((a -> IO ()) -> IO ())  -- ^ worker
   -> (a -> IO ())             -- ^ handler
   -> IO ()
-handleInterrupt worker handler = do
+handleOnDemand mn mt signals worker handler = do
   varResult <- newEmptyMVar
+  varCount <- newMVar (1 :: Int)  -- this also acts as mutex in update
   mutex <- newMVar ()
-  let handler' = do
-        maybeResult <- tryTakeMVar varResult
-        case maybeResult of
-          Nothing -> putStrLn "There is currently no (new) result."
-          Just result -> withMVar mutex (const (handler result))
-  let update result = tryTakeMVar varResult >> putMVar varResult result
-  _ <- installHandler sigUSR1 (Catch handler') Nothing
-  catch (worker update) $ \ e ->
-    putStr "Worker: " >> print (e :: SomeException)
-  handler'
+  let handlerMutexed = withMVar mutex . const . handler
+  let handlerVar = tryTakeMVar varResult >>= traverse_ handlerMutexed
+  let update result = do
+        i <- takeMVar varCount
+        _ <- tryTakeMVar varResult
+        if maybe False ((0 ==) . (i `mod`)) mn
+          then void $ forkIO $ handlerMutexed result
+          else putMVar varResult result
+        putMVar varCount $! succ i
+  for_ signals $ \ s -> installHandler s (Catch handlerVar) Nothing
+  mtidTimer <- for mt $ \ t ->
+    forkIO $ forever $ void $ threadDelay t >> forkIO handlerVar
+  finally (worker update) $ do
+    for_ mtidTimer killThread
+    handlerVar

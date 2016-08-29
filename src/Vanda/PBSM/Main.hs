@@ -44,6 +44,8 @@ import qualified Data.Vector as V
 import System.Console.CmdArgs
 import System.Directory
 import System.FilePath ((</>), (<.>))
+import System.Posix.Signals (sigUSR1)
+
 
 import Debug.Trace
 
@@ -172,7 +174,7 @@ main = do
             encodeFile (fileWeights <.> "tmp") (ws' :: FileWeights)
             renameFile (fileWeights <.> "tmp") fileWeights
             putStrLn $ "   ... result of EM step " ++ show i ++ " saved."
-      handleInterrupt worker {-handler-}(\ _ -> return ())
+      handleOnDemand Nothing Nothing [sigUSR1] worker {-handler-}(\ _ -> return ())
 
     Parse { .. } -> do
       g <- decodeFile fileGrammar :: IO FileGrammar

@@ -68,6 +68,7 @@ import           System.IO ( Handle
                            , stdout
                            , withFile )
 import           System.Posix.Files (fileExist)
+import           System.Posix.Signals (sigUSR1)
 import           System.Random (StdGen, mkStdGen)
 
 
@@ -381,7 +382,7 @@ safeSaveLastGrammar
   -> [(BinaryCRTG, Info StdGen Int)]
   -> IO ()
 safeSaveLastGrammar dir hStat hEvals hBeam mhLogBeamVerbose xs
-  = handleInterrupt worker handler
+  = handleOnDemand Nothing Nothing [sigUSR1] worker handler
   where
     worker :: ((BinaryCRTG, BinaryInfo) -> IO ()) -> IO ()
     worker update
