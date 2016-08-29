@@ -44,6 +44,7 @@ import           Vanda.Util.Tree as T
 import           Control.Arrow (second)
 import           Control.Monad
 import qualified Data.Binary as B
+import           Data.Foldable (for_)
 import           Data.List (intercalate, nub)
 import           Data.Map ((!))
 import qualified Data.Map as M
@@ -124,7 +125,7 @@ mainArgs opts@CBSM{..} = do
     hPutStrLn hEvals "iteration,beam index low,beam index high,\
       \log₂ evaluation of merge,evaluation of merge"
     hPutStrLn hBeam "iteration,beam index low,beam index high"
-    whenJust mhLogBeamVerbose $ \ h -> hPutStrLn h
+    for_ mhLogBeamVerbose $ \ h -> hPutStrLn h
       "iteration,\
       \beam index,\
       \heuristic,\
@@ -435,7 +436,7 @@ safeSaveLastGrammar
                               ++ show lo ++ ","
                               ++ show hi)
             $ toRanges infoEquivalentBeamIndizes
-          whenJust mhLogBeamVerbose $ \ h -> do
+          for_ mhLogBeamVerbose $ \ h -> do
             forM_ infoBeam $ \ BeamEntry{..} ->
               hPutStrLn h
                 $ intercalate ","
@@ -541,11 +542,6 @@ ifM predicateM thn els = do
 withFileIf :: Bool -> FilePath -> IOMode -> (Maybe Handle -> IO r) -> IO r
 withFileIf True  name mode act = withFile name mode (act . Just)
 withFileIf False _    _    act = act Nothing
-
-
-whenJust :: Applicative f => Maybe a -> (a -> f ()) -> f ()
-whenJust (Just x) act = act x
-whenJust Nothing  _   = pure ()
 
 
 ld :: Log Double -> Double
