@@ -76,6 +76,8 @@ data Args
     , flagIterations :: Int
     , flagDir :: FilePath
     , flagLogBeamVerbose :: Bool
+    , flagSaveCounter :: Maybe Int
+    , flagSaveTimer :: Maybe Int
     , argCorpora :: [FilePath]
     }
   | CBSMContinue
@@ -163,6 +165,8 @@ cmdArgs
         , flagIterations     = (pred maxBound)
         , flagDir            = ""
         , flagLogBeamVerbose = False
+        , flagSaveCounter    = Nothing
+        , flagSaveTimer      = Nothing
         , argCorpora         = []
         })
     { modeNames = ["cbsm"]
@@ -183,6 +187,8 @@ cmdArgs
         , flagReqIterations
         , flagReqDir
         , flagNoneLogBeamVerbose
+        , flagReqSaveCounter
+        , flagReqSaveTimer
         ]
     }
   , (modeEmpty $ CBSMContinue 1000 (pred maxBound) "")
@@ -364,6 +370,16 @@ cmdArgs
                 (readUpdate $ \ a x -> x{flagIterations = a})
                 "ITERATIONS"
                 "limit number of iterations"
+    flagReqSaveCounter
+      = flagReq ["save-counter"]
+                (readUpdate $ \ a x -> x{flagSaveCounter = Just a})
+                "N"
+                "Save result every N-th iteration."
+    flagReqSaveTimer
+      = flagReq ["save-timer"]
+                (readUpdate $ \ a x -> x{flagSaveTimer = Just (1000000 * a)})
+                "N"
+                "Save result every N seconds."
     flagReqMessageNoParse
       = flagReq ["message-no-parse"]
           (\ a x -> Right x{flagMessageNoParse = a})

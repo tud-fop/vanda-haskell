@@ -134,7 +134,8 @@ mainArgs opts@CBSM{..} = do
       \rule merges,state merges,initial merges,\
       \seed state 1,seed state 2,\
       \saturation steps"
-    safeSaveLastGrammar flagDir hStat hEvals hBeam mhLogBeamVerbose
+    safeSaveLastGrammar flagSaveCounter flagSaveTimer
+                        flagDir hStat hEvals hBeam mhLogBeamVerbose
       $ take (succ flagIterations)
       $ cbsm
           (mergeGroups flagBinarization flagRestrictMerge tM)
@@ -156,7 +157,8 @@ mainArgs CBSMContinue{..} = do
    withFile (flagDir </> fileNameEquivBeamIndizes) AppendMode $ \ hBeam ->
    withFileIf (flagLogBeamVerbose opts) (flagDir </> fileNameLogBeamVerbose)
               AppendMode $ \ mhLogBeamVerbose ->
-    safeSaveLastGrammar flagDir hStat hEvals hBeam mhLogBeamVerbose
+    safeSaveLastGrammar (flagSaveCounter opts) (flagSaveTimer opts)
+                        flagDir hStat hEvals hBeam mhLogBeamVerbose
       $ take (succ flagIterations)
       $ cbsm
           groups
@@ -374,15 +376,18 @@ newline = unlines [""]
 
 
 safeSaveLastGrammar
-  :: FilePath
+  :: Maybe Int
+  -> Maybe Int
+  -> FilePath
   -> Handle
   -> Handle
   -> Handle
   -> Maybe Handle
   -> [(BinaryCRTG, Info StdGen Int)]
   -> IO ()
-safeSaveLastGrammar dir hStat hEvals hBeam mhLogBeamVerbose xs
-  = handleOnDemand Nothing Nothing [sigUSR1] worker handler
+safeSaveLastGrammar
+  saveCounter saveTimer dir hStat hEvals hBeam mhLogBeamVerbose xs
+  = handleOnDemand saveCounter saveTimer [sigUSR1] worker handler
   where
     worker :: ((BinaryCRTG, BinaryInfo) -> IO ()) -> IO ()
     worker update
