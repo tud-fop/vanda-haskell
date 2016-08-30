@@ -64,3 +64,4 @@ handleOnDemand mn mt signals worker handler = do
   finally (worker update) $ do
     for_ mtidTimer killThread
     handlerVar
+    takeMVar mutex  -- wait for handlers to finish
