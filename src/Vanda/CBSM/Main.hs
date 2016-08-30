@@ -393,7 +393,6 @@ safeSaveLastGrammar
     worker :: ((BinaryCRTG, BinaryInfo) -> IO ()) -> IO ()
     worker update
       = forM_ xs $ \ x@(!g, Info{..}) -> do
-          update x
           cpuTime <- getCPUTime
           let rules         = M.size $ cntRule  g
               states        = M.size $ cntState g
@@ -466,6 +465,7 @@ safeSaveLastGrammar
               ++ show initialStates ++ " initial states, "
               ++ show infoMergePairs ++ " possible merges."
           hFlush stdout
+          update x
 
     handler :: (BinaryCRTG, BinaryInfo) -> IO ()
     handler (g, info) = do
