@@ -37,6 +37,7 @@ import           Data.MultiMap (MultiMap)
 import qualified Data.RevMap as RM
 import           Data.RevMap (RevMap)
 
+import           Control.DeepSeq (NFData(rnf))
 import qualified Data.Binary as B
 import           Data.List (foldl')
 import           Data.Map.Lazy (Map)
@@ -56,6 +57,10 @@ newtype Merge a = Merge (RevMap a a)
 instance (B.Binary a, Ord a) => B.Binary (Merge a) where
   put (Merge m) = B.put m
   get           = fmap Merge B.get
+
+
+instance NFData a => NFData (Merge a) where
+  rnf (Merge m) = rnf m
 
 
 empty :: Merge a

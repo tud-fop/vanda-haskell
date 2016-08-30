@@ -40,6 +40,7 @@ import qualified Data.MultiMap as MM
 import           Data.MultiMap (MultiMap)
 
 
+import           Control.DeepSeq (NFData(rnf))
 import qualified Data.Binary as B
 import           Data.List (foldl')
 import qualified Data.Map as M
@@ -58,6 +59,10 @@ data RevMap k v = RevMap
 instance (B.Binary k, B.Binary v, Ord k, Ord v) => B.Binary (RevMap k v) where
   put (RevMap f _) = B.put f
   get = fmap fromMap B.get
+
+
+instance (NFData k, NFData v) => NFData (RevMap k v) where
+  rnf (RevMap f b) = rnf f `seq` rnf b
 
 
 empty :: RevMap k v

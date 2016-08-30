@@ -55,6 +55,7 @@ import           Vanda.Util.Tree as T
 
 import           Control.Applicative ((<*>), (<$>))
 import           Control.Arrow ((***), first, second)
+import           Control.DeepSeq (NFData(rnf))
 import           Control.Monad.State.Lazy
 import           Control.Parallel.Strategies
 import qualified Data.Binary as B
@@ -94,6 +95,9 @@ instance (B.Binary v, B.Binary l) => B.Binary (Rule v l) where
   put (Rule x y z) = B.put x >> B.put y >> B.put z
   get = Rule <$> B.get <*> B.get <*> B.get
 
+instance (NFData s, NFData t) => NFData (Rule s t) where
+  rnf Rule{..} = rnf to `seq` rnf from `seq` rnf label
+
 
 -- | Count RTG
 data CRTG v l = CRTG
@@ -105,6 +109,9 @@ data CRTG v l = CRTG
 instance (B.Binary v, B.Binary l) => B.Binary (CRTG v l) where
   put (CRTG x y z) = B.put x >> B.put y >> B.put z
   get = CRTG <$> B.get <*> B.get <*> B.get
+
+instance (NFData l, NFData v) => NFData (CRTG v l) where
+  rnf CRTG{..} = rnf cntState `seq` rnf cntInit `seq` rnf cntRule
 
 
 rules :: CRTG v l -> [Rule v l]
@@ -342,6 +349,11 @@ instance B.Binary a => B.Binary (MergeTree a) where
              _ -> errorHere "get/MergeTree" "invalid binary data"
 
 
+instance NFData v => NFData (MergeTree v) where
+  rnf (State v c) = rnf v `seq` rnf c
+  rnf (Merge i t) = rnf i `seq` rnf t
+
+
 instance Functor MergeTree where
   fmap f (State v i ) = State (f v) i
   fmap f (Merge i xs) = Merge i (fmap (fmap f) xs)
@@ -395,6 +407,14 @@ instance (B.Binary v, Ord v) => B.Binary (BeamEntry v) where
     <$> B.get <*> B.get <*> B.get <*> B.get <*> B.get
     <*> B.get <*> B.get <*> B.get <*> B.get <*> B.get
     <*> B.get <*> B.get <*> B.get
+
+instance NFData v => NFData (Info g v) where
+  rnf Info{..} = rnf infoBeam
+           `seq` rnf infoEquivalentBeamIndizes
+           `seq` rnf infoMergeTreeMap
+
+instance NFData v => NFData (BeamEntry v) where
+  rnf BeamEntry{..} = rnf beMergeSeed `seq` rnf beMergeSaturated
 
 
 initialInfo :: g -> Map v Int -> Info g v
