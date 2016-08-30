@@ -29,6 +29,7 @@ module Vanda.CBSM.Merge
 , apply
 , applyMaybe
 , applyMergeToMerge
+, prettyPrintMerge
 ) where
 
 
@@ -158,3 +159,11 @@ applyMergeToMerge
   -> Merge a
   -> Merge a
 applyMergeToMerge m = fromSets . map (S.map (apply m)) . equivalenceClasses
+
+
+prettyPrintMerge :: Show a => Merge a -> String
+prettyPrintMerge
+  = unlines
+  . map (\ (k, vS) -> show k ++ " <- " ++ show (S.toList vS))
+  . M.toList
+  . backward
