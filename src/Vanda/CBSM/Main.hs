@@ -29,6 +29,7 @@ import           Vanda.Algorithms.EarleyMonadic
 import qualified Vanda.Algorithms.Earley.WSA as WSA
 import           Vanda.CBSM.CmdArgs
 import           Vanda.CBSM.CountBasedStateMerging
+import           Vanda.CBSM.Merge (prettyPrintMerge)
 import           Vanda.CBSM.StatisticsRenderer
 import           Vanda.Corpus.Binarization (Nodetype(..))
 import           Vanda.Corpus.Binarization.CmdArgs
@@ -186,12 +187,22 @@ mainArgs ShowInfo{..} = do
   case infoBeam `at` pred infoBeamIndex of
     Nothing -> return ()
     Just (BeamEntry{..}) -> do
-      putStr "rule merges         : " >> print beMergedRules
-      putStr "state merges        : " >> print beMergedStates
-      putStr "initial-state merges: " >> print beMergedInitials
       let showLogValue x = "2^" ++ show (ld x) ++ " = " ++ show x
-      putStrLn $ "likelihood delta    : " ++ showLogValue beLikelihoodDelta
-      putStrLn $ "evaluation of merge : " ++ showLogValue beEvaluation
+      putStrLn $ "heuristic           : " ++ show beHeuristic
+      putStrLn $ "evaluation          : " ++ showLogValue beEvaluation
+      putStrLn $ "Δ likelihood        : " ++ showLogValue beLikelihoodDelta
+      putStrLn $ "factor rules        : " ++ showLogValue beFactorRules
+      putStrLn $ "factor states       : " ++ showLogValue beFactorStates
+      putStrLn $ "factor initial      : " ++ showLogValue beFactorInitials
+      putStrLn $ "rule merges         : " ++ show beMergedRules
+      putStrLn $ "state merges        : " ++ show beMergedStates
+      putStrLn $ "initial merges      : " ++ show beMergedInitials
+      putStrLn $ "seed state 1        : " ++ show (fst beMergeSeed)
+      putStrLn $ "seed state 2        : " ++ show (snd beMergeSeed)
+      putStrLn $ "saturation steps    : " ++ show beSaturationSteps
+      putStrLn ""
+      putStrLn "saturated merge: "
+      putStr (prettyPrintMerge beMergeSaturated)
   putStrLn ""
   putStrLn ""
   putStrLn "merge history:"
