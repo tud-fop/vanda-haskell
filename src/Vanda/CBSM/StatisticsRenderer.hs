@@ -26,6 +26,7 @@ module Vanda.CBSM.StatisticsRenderer
 import           Codec.Picture  -- package JuicyPixels
 import qualified Data.ByteString.Lazy.Char8 as C
 import           Data.List (foldl', isInfixOf)
+import qualified Data.Map.Lazy as M
 
 import qualified Control.Error
 import           Vanda.Util.Timestamps (putStrLnTimestamped, putStrLnTimestamped')
@@ -43,11 +44,13 @@ errorHere = Control.Error.errorHere "Vanda.CBSM.StatisticsRenderer"
 renderBeam
   :: Bool      -- ^ run length encoding used?
   -> Int       -- ^ after-index (!) column to use (0-based)
+  -> Double    -- ^ value mapped to the minimum color
+  -> Double    -- ^ value mapped to the maximum color
   -> FilePath  -- ^ input csv file
   -> FilePath  -- ^ output png file
   -> IO ()
-renderBeam rle col -- log_2 evaluation of merge = first column/col=0
-  = renderBeamWith rle col normalReader colormap
+renderBeam rle col minval maxval -- log_2 evaluation of merge = first column/col=0
+  = renderBeamWith rle col normalReader (colormap minval maxval)
   where
     stateReader iter bs = (unsafeReadDouble bs - 1000.0) / 50.0
     normalReader = const unsafeReadDouble
@@ -161,14 +164,16 @@ unsafeReadDouble = read . C.unpack  -- TODO: read is awfully slow!
 --             36: 2*x - 1
 --           * negative numbers mean inverted=negative colour component
 --           * thus the ranges in `set pm3d rgbformulae' are -36..36
-colormap :: Double -> PixelRGB8
-colormap x
+
+colormap :: Double -> Double -> Double -> PixelRGB8
+colormap minval maxval x
   = PixelRGB8
       (round $ 0xFF * sqrt p)
       (round $ 0xFF * p ^ (3 :: Int))
       (round $ 0xFF * (0 `max` sin (2 * pi * p)))
   where
-    p = (((-20) `max` x `min` 0) + 20) / 20
+    p = ((minval `max` x `min` maxval) - minval) / range
+    range = maxval - minval
 
 
 {-

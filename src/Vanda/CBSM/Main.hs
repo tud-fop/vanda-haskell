@@ -271,7 +271,12 @@ mainArgs Bests{..} = do
     $ bestsIni (asBackwardStar hg) feature (V.singleton 1) inis
 
 mainArgs RenderBeam{..} = do
-  renderBeam flagRunLengthEncoding argColumn argRenderBeamInput argRenderBeamOutput
+  renderBeam flagRunLengthEncoding
+             argColumn
+             flagColormapMin
+             flagColormapMax
+             argRenderBeamInput
+             argRenderBeamOutput
 
 mainArgs RenderBeamInfo{..} = do
   renderBeamInfo argRenderBeamInput argInfo argIntToTreeMap argRenderBeamOutput

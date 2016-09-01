@@ -115,6 +115,8 @@ data Args
     , argRenderBeamOutput :: FilePath
     , flagRunLengthEncoding :: Bool
     , argColumn :: Int
+    , flagColormapMin :: Double
+    , flagColormapMax :: Double
     }
   | RenderBeamInfo
     { argRenderBeamInput :: FilePath
@@ -268,7 +270,7 @@ cmdArgs
         , flagReqOutputFormat
         ]
     }
-  , (modeEmpty $ RenderBeam "" "" False (-1))
+  , (modeEmpty $ RenderBeam "" "" False (-1) 0 1)
     { modeNames = ["render-beam"]
     , modeHelp = "Render " ++ fileNameEvaluations ++ " into a png image."
     , modeArgs =
@@ -280,6 +282,8 @@ cmdArgs
         )
     , modeGroupFlags = toGroup
         [ flagNoneRunLengthEncoding
+        , flagReqColormapMin
+        , flagReqColormapMax
         ]
     }
   , (modeEmpty $ RenderBeamInfo "" "" "" "")
@@ -462,3 +466,9 @@ cmdArgs
           "candidates of an iteration are run-length-encoding-compressed"
     flagArgColumn
       = flagArg (readUpdate $ \ a x -> x{argColumn = a}) "COLUMN"
+    flagReqColormapMin
+      = flagReq ["colormapmin"] (readUpdate $ \ a x -> x{flagColormapMin = a})
+                "COLORMAPMIN" "value mapped to the minimum color (default 0.0)"
+    flagReqColormapMax
+      = flagReq ["colormapmax"] (readUpdate $ \ a x -> x{flagColormapMax = a})
+                "COLORMAPMAX" "value mapped to the maximum color (default 1.0)"
