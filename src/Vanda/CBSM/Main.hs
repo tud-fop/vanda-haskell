@@ -43,6 +43,8 @@ import           Vanda.Util.Timestamps
 import           Vanda.Util.Tree as T
 
 import           Control.Arrow (second)
+import           Control.Concurrent (forkIO, threadDelay)
+import           Control.Concurrent (getNumCapabilities)
 import           Control.Monad
 import qualified Data.Binary as B
 import           Data.Foldable (for_)
@@ -113,6 +115,8 @@ mainArgs opts@CBSM{..} = do
                                         else filterByLeafs flagFilterByLeafs)
          =<< readCorpora flagAsForests flagDefoliate flagPennFilter argCorpora
   B.encodeFile (flagDir </> fileNameIntToTreeMap) (tM :: BinaryIntToTreeMap)
+  numCapabilities <- getNumCapabilities
+  putStrLnTimestamped $ "numCapabilities: " ++ show numCapabilities
   withFile (flagDir </> fileNameStatistics) AppendMode $ \ hStat ->
    withFile (flagDir </> fileNameEvaluations) AppendMode $ \ hEvals ->
    withFile (flagDir </> fileNameEquivBeamIndizes) AppendMode $ \ hBeam ->
@@ -140,6 +144,7 @@ mainArgs opts@CBSM{..} = do
                         flagDir hStat hEvals hBeam mhLogBeamVerbose
       $ take (succ flagIterations)
       $ cbsm
+          numCapabilities
           (mergeGroups flagBinarization flagRestrictMerge tM)
           (if flagNormalize then normalizeLklhdByMrgdStates else flip const)
           flagBeamWidth
@@ -154,6 +159,8 @@ mainArgs CBSMContinue{..} = do
   groups <- mergeGroups (flagBinarization opts) (flagRestrictMerge opts)
     <$> (B.decodeFile (flagDir </> fileNameIntToTreeMap)
            :: IO BinaryIntToTreeMap)
+  numCapabilities <- getNumCapabilities
+  putStrLnTimestamped $ "numCapabilities: " ++ show numCapabilities
   withFile (flagDir </> fileNameStatistics) AppendMode $ \ hStat ->
    withFile (flagDir </> fileNameEvaluations) AppendMode $ \ hEvals ->
    withFile (flagDir </> fileNameEquivBeamIndizes) AppendMode $ \ hBeam ->
@@ -163,6 +170,7 @@ mainArgs CBSMContinue{..} = do
                         flagDir hStat hEvals hBeam mhLogBeamVerbose
       $ take (succ flagIterations)
       $ cbsm
+          numCapabilities
           groups
           ( if flagNormalize opts
             then normalizeLklhdByMrgdStates

@@ -433,7 +433,8 @@ initialInfo gen m
 
 cbsm
   :: (Ord v, Ord l, RandomGen g)
-  => [Set v]
+  => Int  -- ^ result of 'getNumCapabilities' for parallelization, 1 for none
+  -> [Set v]
   -> ((Int, Int, Int) -> Log Double -> Log Double)
   -> Int
   -> (forall a. [a] -> g -> ([a], g))
@@ -445,13 +446,14 @@ cbsm = cbsmGo M.empty
 cbsmGo
   :: (Ord v, Ord l, RandomGen g)
   => Map (v, v) (Merge v)
+  -> Int  -- ^ result of 'getNumCapabilities' for parallelization, 1 for none
   -> [Set v]
   -> ((Int, Int, Int) -> Log Double -> Log Double)
   -> Int
   -> (forall a. [a] -> g -> ([a], g))
   ->  (CRTG v l, Info g v)
   -> [(CRTG v l, Info g v)]
-cbsmGo cache mergeGroups evaluate beamWidth shuffle prev@(g, info@Info{..})
+cbsmGo cache numCapabilities mergeGroups evaluate beamWidth shuffle prev@(g, info@Info{..})
   = (prev :)
   $ seq g
   $ seq info
@@ -465,7 +467,10 @@ cbsmGo cache mergeGroups evaluate beamWidth shuffle prev@(g, info@Info{..})
               mergeGroups
               (evalState (sequence $ repeat $ state $ split) gen1)
         processMergePairs
-          = take beamWidth  -- TODO: Group?
+          = ( if numCapabilities > 1
+              then withStrategy (parListChunk (beamWidth `div` (2 * numCapabilities)) rseq)
+              else id )
+          . take beamWidth  -- TODO: Group?
           . zipWith ( \ i (h, ((v1, _), (v2, _)))
                       -> processMergePair i h (v1, v2)
                     ) [1 ..]
@@ -515,7 +520,7 @@ cbsmGo cache mergeGroups evaluate beamWidth shuffle prev@(g, info@Info{..})
                   }
     in if null cands
        then []
-       else cbsmGo cache' mergeGroups evaluate beamWidth shuffle
+       else cbsmGo cache' numCapabilities mergeGroups evaluate beamWidth shuffle
                    (mergeCRTG mrg g, info')
 --   = g
 --   : ( g `seq` case refineRanking $ enrichRanking $ mergeRanking g of
