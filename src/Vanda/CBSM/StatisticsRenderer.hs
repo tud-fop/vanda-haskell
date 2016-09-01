@@ -19,16 +19,19 @@
 
 module Vanda.CBSM.StatisticsRenderer
 ( renderBeam
+, renderBeamInfo
 ) where
 
 
 import           Codec.Picture  -- package JuicyPixels
 import qualified Data.ByteString.Lazy.Char8 as C
-import           Data.List (foldl')
+import           Data.List (foldl', isInfixOf)
 
 import qualified Control.Error
-import           Vanda.Util.Timestamps (putStrLnTimestamped)
+import           Vanda.Util.Timestamps (putStrLnTimestamped, putStrLnTimestamped')
 
+
+import Debug.Trace
 
 errorHere :: String -> String -> a
 errorHere = Control.Error.errorHere "Vanda.CBSM.StatisticsRenderer"
@@ -38,101 +41,98 @@ errorHere = Control.Error.errorHere "Vanda.CBSM.StatisticsRenderer"
 --
 -- The input file is usually called @statistics-evaluations.csv@.
 renderBeam
-  :: FilePath  -- ^ input csv file
+  :: Bool      -- ^ run length encoding used?
+  -> Int       -- ^ after-index (!) column to use (0-based)
+  -> FilePath  -- ^ input csv file
   -> FilePath  -- ^ output png file
   -> IO ()
-renderBeam fileIn fileOut = do
-  putStrLnTimestamped "Analyzing data …"
-  (w, h) <- getDimensions <$> readCSV fileIn
-  putStrLnTimestamped
+renderBeam rle col -- log_2 evaluation of merge = first column/col=0
+  = renderBeamWith rle col normalReader colormap
+  where
+    stateReader iter bs = (unsafeReadDouble bs - 1000.0) / 50.0
+    normalReader = const unsafeReadDouble
+
+renderBeamInfo
+  :: FilePath  -- ^ input csv file
+  -> FilePath  -- ^ info file
+  -> FilePath  -- ^ int2tree map file
+  -> FilePath  -- ^ output png file
+  -> IO ()
+renderBeamInfo = undefined
+
+
+renderBeamWith
+  :: Bool                       -- ^ run length encoding used?
+  -> Int                        -- ^ after-index (!) column to use (0-based)
+  -> (Int -> C.ByteString -> a) -- ^ read function for the column
+  -> (a -> PixelRGB8)           -- ^ render function for the column
+  -> FilePath                   -- ^ input csv file
+  -> FilePath                   -- ^ output png file
+  -> IO ()
+renderBeamWith rle col reader renderer fileIn fileOut = do
+  putStrLnTimestamped "Starting …"
+  let getIter = (\ (i,_,_) -> i + 1)
+      getBeam = (\ (_,i,_) -> i + 1)
+      getWidth = getBeam . last . takeWhile ((==1) . getIter)
+  w <- getWidth . parseCSVData rle col reader <$> readCSV fileIn
+  h <- unsafeReadInt . head . last            <$> readCSV fileIn
+  putStrLnTimestamped'
     $ "Writing image of dimensions " ++ show w ++ "×" ++ show h ++ " …"
   writePng fileOut
-    .   toImage w h
+    .   toImage w h renderer
+    .   parseCSVData rle col reader
     =<< readCSV fileIn
   putStrLnTimestamped "Done."
 
-
-getDimensions :: [[C.ByteString]] -> (Int, Int)
-getDimensions
-  =   foldl' step (0, 0)
-  .   map parseRow
-  .   tail
-  where
-    step (!w, !h) (i, _, hi, _, _) = (max w hi, max h i)
-
-
-toImage :: Int -> Int -> [[C.ByteString]] -> Image PixelRGB8
-toImage w h
+toImage :: Int -> Int -> (a -> PixelRGB8) -> [(Int, Int, a)] -> Image PixelRGB8
+toImage w h renderer
   = snd
-  . (\ acc -> generateFoldImage step acc w h)
-  . concatMap (expand . parseRow)
-  . tail
+  . (\ acc -> generateFoldImage step acc w h) -- we're really rather mapping
   where
-    expand :: (Int, Int, Int, Double, Double) -> [(Int, Int, Double)]
-    expand (i, bl, bh, e, _)
-      = [(pred i, b, e) | b <- [pred bl .. pred bh]]
-
     step ((y1, x1, e) : as) x2 y2
-      | x1 == x2  &&  y1 == y2  =  (as, colormap e)
-    step as _ _  =  (as, errCol)
-
-    errCol = PixelRGB8 0xFF 0xFF 0xFF
-
-
-{-
-toImage :: Int -> Int -> [[C.ByteString]] -> Image PixelRGB8
-toImage w h
-  = snd
-  . (\ acc -> generateFoldImage step acc w h)
-  . map (decr . parseRow)
-  . tail
-  where
-    decr (i, bl, bh, e1, e2) = (pred i, pred bl, pred bh, e1, e2)
-
-    step as@((i, bl, bh, e, _) : as') x y
-      = if bl <= x && y == i
-        then case compare x bh of
-               LT -> (as , colormap1 e)
-               EQ -> (as', colormap1 e)
-               GT -> step as' x y
-        else (as, errCol)
-    step [] _ _ = ([], errCol)
-
-    errCol = PixelRGB8 0xFF 0xFF 0xFF
--}
+      | x1 == x2  &&  y1 == y2  =  (as, renderer e)
+    step as _ _  =  let errCol = PixelRGB8 0xFF 0xFF 0xFF in (as, errCol)
 
 
 readCSV :: FilePath -> IO [[C.ByteString]]
 readCSV file
-  =   map (C.split ',')
+  =   tail -- remove header row
+  .   map (C.split ',')
   .   C.lines
   <$> C.readFile file
 
-
--- expected columns:
---   * iteration
---   * beam index low
---   * beam index high
---   * log₂ evaluation of merge
---   * evaluation of merge
-parseRow :: [C.ByteString] -> (Int, Int, Int, Double, Double)
-parseRow [x1, x2, x3, x4, x5]
-  = ( unsafeReadInt x1
-    , unsafeReadInt x2
-    , unsafeReadInt x3
-    , unsafeRead    x4
-    , unsafeRead    x5
-    )
+parseCSVData
+  :: Bool                       -- ^ run length encoding used?
+  -> Int                        -- ^ after-index (!) column to use (0-based)
+  -> (Int -> C.ByteString -> a) -- ^ read function for the column
+  -> [[C.ByteString]]           -- ^ full CSV
+  -> [(Int, Int, a)]
+parseCSVData rle col reader
+  = map (\(i, b, x) -> (pred i, pred b, x)) -- ^ zero-base index values
+  . concatMap (parseCSVRow rle col reader)
   where
-    unsafeRead = read . C.unpack  -- TODO: read is awfully slow!
-    unsafeReadInt x
-      = case C.readInt x of
-          Just (i, y) -> if C.null y then i else err
-          _           -> err
-      where
-        err = errorHere "parseRow.unsafeReadInt" "No parse."
-parseRow _
-  = error "parseRow" "Wrong number of columns."
+    parseCSVRow True col reader (rawIter:bl:bh:values)
+      = let iter = unsafeReadInt rawIter
+        in [ ( iter
+             , b
+             , reader iter (values !! col)
+             )
+             | b <- [unsafeReadInt bl .. unsafeReadInt bh]
+           ]
+    parseCSVRow False col reader (iter:rawb:values)
+      = parseCSVRow True col reader (iter:rawb:rawb:values)
+
+unsafeReadInt :: C.ByteString -> Int
+unsafeReadInt x
+  = case C.readInt x of
+      Just (i, y) -> if C.null y then i else err
+      _           -> err
+  where
+    err = errorHere "unsafeReadInt" $ "No parse for: " ++ show x
+
+unsafeReadDouble :: C.ByteString -> Double
+unsafeReadDouble = read . C.unpack  -- TODO: read is awfully slow!
+
 
 
 -- gnuplot> show palette

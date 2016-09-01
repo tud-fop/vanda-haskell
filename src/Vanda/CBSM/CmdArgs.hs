@@ -113,6 +113,14 @@ data Args
   | RenderBeam
     { argRenderBeamInput :: FilePath
     , argRenderBeamOutput :: FilePath
+    , flagRunLengthEncoding :: Bool
+    , argColumn :: Int
+    }
+  | RenderBeamInfo
+    { argRenderBeamInput :: FilePath
+    , argInfo :: FilePath
+    , argIntToTreeMap :: FilePath
+    , argRenderBeamOutput :: FilePath
     }
   deriving (Read, Show)
 
@@ -260,11 +268,27 @@ cmdArgs
         , flagReqOutputFormat
         ]
     }
-  , (modeEmpty $ RenderBeam "" "")
+  , (modeEmpty $ RenderBeam "" "" False (-1))
     { modeNames = ["render-beam"]
     , modeHelp = "Render " ++ fileNameEvaluations ++ " into a png image."
     , modeArgs =
         ( [ flagArgRenderBeamInput{argRequire = True}
+          , flagArgColumn{argRequire = True}
+          , flagArgRenderBeamOutput{argRequire = True}
+          ]
+        , Nothing
+        )
+    , modeGroupFlags = toGroup
+        [ flagNoneRunLengthEncoding
+        ]
+    }
+  , (modeEmpty $ RenderBeamInfo "" "" "" "")
+    { modeNames = ["render-beam-info"]
+    , modeHelp = "Render " ++ fileNameLogBeamVerbose ++ " into a png image."
+    , modeArgs =
+        ( [ flagArgRenderBeamInput{argRequire = True}
+          , flagArgMergeTreeMap{argRequire = True}
+          , flagArgIntToTreeMap{argRequire = True}
           , flagArgRenderBeamOutput{argRequire = True}
           ]
         , Nothing
@@ -423,6 +447,8 @@ cmdArgs
       = flagArg (\ a x -> Right x{argCorpora = argCorpora x ++ [a]}) "TREEBANK"
     flagArgMergeTreeMap
       = flagArg (\ a x -> Right x{argInfo = a}) "INFO-FILE"
+    flagArgIntToTreeMap
+      = flagArg (\ a x -> Right x{argIntToTreeMap = a}) "INT2TREE-FILE"
     flagArgGrammar
       = flagArg (\ a x -> Right x{argGrammar = a}) "GRAMMAR-FILE"
     flagArgCount
@@ -431,3 +457,8 @@ cmdArgs
       = flagArg (\ a x -> Right x{argRenderBeamInput = a}) "CSV-FILE"
     flagArgRenderBeamOutput
       = flagArg (\ a x -> Right x{argRenderBeamOutput = a}) "PNG-FILE"
+    flagNoneRunLengthEncoding
+      = flagNone ["rle"] (\ x -> x{flagRunLengthEncoding = True})
+          "candidates of an iteration are run-length-encoding-compressed"
+    flagArgColumn
+      = flagArg (readUpdate $ \ a x -> x{argColumn = a}) "COLUMN"

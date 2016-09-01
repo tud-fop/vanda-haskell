@@ -271,7 +271,10 @@ mainArgs Bests{..} = do
     $ bestsIni (asBackwardStar hg) feature (V.singleton 1) inis
 
 mainArgs RenderBeam{..} = do
-  renderBeam argRenderBeamInput argRenderBeamOutput
+  renderBeam flagRunLengthEncoding argColumn argRenderBeamInput argRenderBeamOutput
+
+mainArgs RenderBeamInfo{..} = do
+  renderBeamInfo argRenderBeamInput argInfo argIntToTreeMap argRenderBeamOutput
 
 
 readCorpora :: Bool -> Bool -> Bool -> [FilePath] -> IO (Forest String)
