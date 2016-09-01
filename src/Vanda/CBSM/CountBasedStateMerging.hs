@@ -459,6 +459,7 @@ cbsmGo cache numCapabilities mergeGroups evaluate beamWidth shuffle prev@(g, inf
   $ seq info
   $ let n = infoIteration + 1
         likelihoodDelta' = likelihoodDelta g
+        saturateMerge' = saturateMerge $ forwardStar $ rules g
         (gen1, gen2) = split infoRandomGen
         (mergePairs, cands)
           = sum *** processMergePairs
@@ -493,7 +494,7 @@ cbsmGo cache numCapabilities mergeGroups evaluate beamWidth shuffle prev@(g, inf
               }
           where (l, (rw, vw, iw), sizes@(rc, vc, ic)) = likelihoodDelta' m
                 (m, saturationIterations)
-                  = saturateMerge (forwardStar $ rules g)
+                  = saturateMerge'
                   $ ML.findWithDefault (Merge.fromLists [[v1, v2]]) pair cache
         minimalCands
           = minimaBy (comparing (Down . beEvaluation)) cands
