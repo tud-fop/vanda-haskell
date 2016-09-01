@@ -126,7 +126,7 @@ mainArgs opts@CBSM{..} = do
       "CPU time,iteration,rules,states,initial states,merge pairs,beam width,\
       \beam index,saturation steps,rule merges,state merges,\
       \initial-state merges,log₂ likelihood delta,likelihood delta,\
-      \log₂ evaluation of merge,evaluation of merge"
+      \log₂ evaluation of merge,evaluation of merge,total saturation steps"
     hPutStrLn hEvals "iteration,beam index low,beam index high,\
       \log₂ evaluation of merge,evaluation of merge"
     hPutStrLn hBeam "iteration,beam index low,beam index high"
@@ -439,6 +439,7 @@ safeSaveLastGrammar
                             , show beEvaluation
                             ]
                  Nothing -> ["NaN", "NaN", "NaN", "NaN" , "0.0", "1.0", "0.0", "1.0"]
+            ++ [ show $ sum $ map beSaturationSteps infoBeam ]
           hPutStr hEvals
             $ unlines
             $ map (\ (lo, hi, e) -> show infoIteration ++ ","
