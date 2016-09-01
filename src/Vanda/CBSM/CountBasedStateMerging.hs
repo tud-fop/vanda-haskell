@@ -32,7 +32,6 @@ module Vanda.CBSM.CountBasedStateMerging
 , refineRanking
 , mergeRanking
 , enrichRanking
-, ruleEquivalenceClasses
 , forwardStar
 , bidiStar
 , likelihoodDelta
@@ -58,6 +57,7 @@ import           Control.Arrow ((***), first, second)
 import           Control.DeepSeq (NFData(rnf))
 import           Control.Monad.State.Lazy
 import           Control.Parallel.Strategies
+import qualified Data.Array as A
 import qualified Data.Binary as B
 import           Data.List (foldl', groupBy, sortBy, transpose)
 import           Data.List.Extra (mergeBy, mergeListsBy, minimaBy)
@@ -69,6 +69,7 @@ import           Data.Maybe
 import           Data.Ord (comparing, Down(..))
 import qualified Data.Set as S
 import           Data.Set (Set)
+import qualified Data.IntSet as IS
 import           Data.Tree
 import           Data.Tuple (swap)
 import qualified Data.Vector as V
@@ -748,10 +749,15 @@ likelihoodDelta g@CRTG{..} = \ mrgs ->
   let (rw, rc) = productAndSum  -- rules
                $ map ( (\ (pr, su, si) -> (p su / pr, si))
                      . productPAndSumAndSize
-                     . map (cntRule M.!)
                      )
+               $ filter notSingle
                $ M.elems
-               $ ruleEquivalenceClasses bidiStar' mrgs
+               $ M.fromListWith (++)
+               $ map ((mergeRule mrgs *** (: [])) . (ruleA A.!))
+               $ (IS.toList . IS.fromList)
+               $ concat
+               $ M.elems
+               $ M.intersection stateToRuleIxM (Merge.forward mrgs)
       (vw, vc) = productAndSum  -- states
                $ map ( (\ (pr, su, si) -> (pr / p su, si))
                      . productPAndSumAndSize
@@ -770,7 +776,14 @@ likelihoodDelta g@CRTG{..} = \ mrgs ->
                $ Merge.equivalenceClasses mrgs
   in (rw * vw * iw, (rw, vw, iw), (rc, vc, ic))
   where
-    bidiStar' = bidiStar (rules g)
+    ruleA = A.listArray (0, M.size cntRule - 1) (M.assocs cntRule)
+
+    stateToRuleIxM = M.fromListWith (++) $ concatMap step $ A.assocs ruleA
+      where step (i, (Rule v vs _, _)) = map (\ v' -> (v', [i]))
+                                       $ (S.toList . S.fromList) (v : vs)
+
+    notSingle [_] = False
+    notSingle  _  = True
 
     -- | power with itself
     p :: Int -> Log Double
@@ -794,23 +807,9 @@ likelihoodDelta g@CRTG{..} = \ mrgs ->
     getCnt m k = M.findWithDefault 0 k m
 
 
-ruleEquivalenceClasses
-  :: (Ord l, Ord v) => BidiStar v l -> Merge v -> Map (Rule v l) [Rule v l]
-ruleEquivalenceClasses g mrgs
-  = M.filter notSingle
-  $ M.fromListWith (++)
-  $ map (\ r -> (mergeRule mrgs r, [r]))
-  $ (S.toList . S.fromList)
-  $ concat
-  $ M.elems
-  $ M.intersection g (Merge.forward mrgs)
-  where
-    notSingle [_] = False
-    notSingle  _  = True
-
-
 mergeRule :: Ord v => Merge v -> Rule v l -> Rule v l
-mergeRule mrgs Rule{..} = Rule (mrg to) (map mrg from `using` evalList rseq) label
+mergeRule mrgs
+  = \ Rule{..} -> Rule (mrg to) (map mrg from `using` evalList rseq) label
   where mrg = Merge.apply mrgs
 
 
