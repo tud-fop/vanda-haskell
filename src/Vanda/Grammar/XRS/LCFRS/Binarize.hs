@@ -17,6 +17,7 @@ module Vanda.Grammar.XRS.LCFRS.Binarize
 , binarizeRuleSubset
 ) where
 
+import qualified Control.Error
 import           Control.Exception.Base (assert)
 import           Control.Monad.State.Strict
 import qualified Data.Array as A
@@ -31,6 +32,9 @@ import           Data.NTT
 import           Vanda.Util.Memorysavers (invertMap)
 
 import           Vanda.Grammar.XRS.LCFRS
+
+errorHere :: String -> String -> a
+errorHere = Control.Error.errorHere "Vanda.Grammar.XRS.LCFRS.Binarize"
 
 
 {------------------------------------------------------------------------------
@@ -98,6 +102,7 @@ getNTPosOfVar fanoutAnnotatedRHS v
   = let searchWorker i ((pos, fo) : xs) = if i + fo > v
                                           then pos
                                           else searchWorker (i + fo) xs
+        searchWorker _ [] = errorHere "getNTPosOfVar.searchWorker" "the rhs should not be empty"
     in searchWorker 0 $ zip [0..] $ fanoutAnnotatedRHS
 
 data TriState = Yes | Perhaps | No deriving Show
@@ -173,6 +178,7 @@ fuseInRule (((lhs, rhs), h'), d) (posBa, posBb) = (fusionRule, remRule)
             offsetAtTheInnerNT v
               | getNTPosOfVar' v == posB1 = offset1
               | getNTPosOfVar' v == posB2 = offset1 + offset2
+              | otherwise                 = errorHere "fuseInRule.inspect.offsetAtTheInnerNT" "position does not match"
             intoInner xs
               = case maybeNTT of
                   (Just (NT v))
@@ -255,15 +261,16 @@ overlaps (s1:e1:eps1) (s2:e2:eps2)
   | s1 >= e2 = overlaps (s1:e1:eps1) eps2
   | s2 >= e1 = overlaps eps1 (s2:e2:eps2)
   | otherwise = True
+overlaps _ _ = errorHere "overlaps" "odd number of endpoints"
 
 -- Union minus intersection. Doesn't check for overlap!
 merge :: Endpoints -> Endpoints -> Endpoints
 merge eps [] = eps
 merge [] eps = eps
 merge (e1:eps1) (e2:eps2)
-  | e1 == e2 = merge eps1 eps2
-  | e1 < e2 = e1 : merge eps1 (e2:eps2)
-  | e1 > e2 = e2 : merge (e1:eps1) eps2
+  | e1 == e2  = merge eps1 eps2
+  | e1 < e2   = e1 : merge eps1 (e2:eps2)
+  | otherwise = e2 : merge (e1:eps1) eps2
 
 -- merges if sets are fo-adjacent, otherwise returns 'Nothing'
 tryMerge :: Int -> Endpoints -> Endpoints -> Maybe Endpoints
@@ -469,6 +476,7 @@ binarizeByAdjacency fanouts r@(((_, rhs), h'), _)
                 : indexRule (repeat undefined) newInn
                 : oldInners
                , newlyCreatedNTIndex)
+        binarizer _ _ [] = errorHere "binarizeByAdjacency.mergeCandidates.binarizer" "third argument should not be empty"
     -- Now use the rule to evaluate the root - it's time to fully evaluate
     -- all these functions in the inner nodes!
     crunchRule :: NTTree -> [(ProtoRule, Double)]
@@ -482,6 +490,8 @@ binarizeByAdjacency fanouts r@(((_, rhs), h'), _)
         in assert (   getRk uselessRule == 1
                    && getFo uselessRule == getFo firstRule) $
            newFirstRule : rules
+    crunchRule (NTTreeLeaf _)
+      = errorHere "binarizeByAdjacency.crunchRule" "argument must not be NTTreeLeaf"
 
 binarizeUsing
   :: (A.Array Int Int -> (Rule, Double) -> [(ProtoRule, Double)]) -- ^ binarizer

@@ -23,6 +23,7 @@ import Control.Arrow ( first )
 import Control.Monad ( unless, liftM2 )
 import Control.Monad.ST
 import Control.Seq
+import qualified Control.Error
 import qualified Data.Array as A ( array, elems )
 import qualified Data.Map as M
 import qualified Data.Map.Strict as MS
@@ -36,6 +37,9 @@ import qualified Data.Vector.Unboxed as V
 import Vanda.Hypergraph
 import qualified Vanda.Algorithms.Earley.WSA as WSA
 import Vanda.Util
+
+errorHere :: String -> String -> a
+errorHere = Control.Error.errorHere "Vanda.Algorithms.EarleyMonadic"
 
 -- Item: [iHead -> ??? * bRight] 
 -- statelist contains states of a wsa. 
@@ -178,7 +182,7 @@ iter back comp wsa vs0 _
       let enqueue is
             = (is `using` seqList rseq) `seq` modifySTRef' iq $ Q.enqList is
           modifycm = modifySTRef' cm
-          predscan it@Item{ stateList = p : _ }
+          predscan it@Item{ stateList = p : _}
             = case bRight it of
                 Left i : _ -> let pv = (p, edge it `deref` i) in do
                   b <- readSTRefWith (S.member pv) pvs
@@ -187,6 +191,8 @@ iter back comp wsa vs0 _
                     enqueue $ predItem pv
                 Right t : _ -> enqueue $ scanItem it (p, t)
                 _ -> return ()
+          predscan Item{ stateList = [] }
+            = errorHere "iter.predscan" "stateList should not be empty"
           complete it@Item{ stateList = p':_, iHead = v, firstState = p }
             = case bRight it of
                 Left i : _ -> let pv = (p', edge it `deref` i) in do
@@ -204,6 +210,8 @@ iter back comp wsa vs0 _
                       enqueue $ map (compItem p') is
                       modifycm $ MS.adjust (first' (S.insert p')) pv
                 _ -> return ()
+          complete Item{ stateList = [] }
+            = errorHere "iter.complete" "stateList should not be empty"
           mapw w = do
             mb <- readSTRefWith (M.lookup w) ws
             case mb of
@@ -239,8 +247,12 @@ iter back comp wsa vs0 _
     scanItem it@Item{ bRight = _ : bs, stateList = ps, weight = w } pt
       = [ it{ bRight = bs, stateList = p : ps, weight = w' * w }
         | (p, w') <- M.findWithDefault [] pt scanMap ]
+    scanItem Item{ bRight = [] } _
+      = errorHere "iter.scanItem" "bRight should not be empty"
     compItem p' i@Item{ stateList = ps, bRight = _:bright' }
       = i{ stateList = p' : ps, bRight = bright' }
+    compItem _ Item{ bRight = [] }
+      = errorHere "iter.compItem" "bRight should not be empty"
     scanMap
       = M.fromListWith (++)
           [ ( (WSA.transStateIn t, WSA.transTerminal t)

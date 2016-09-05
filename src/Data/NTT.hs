@@ -3,9 +3,13 @@ module Data.NTT (NTT (..), Var (..), tt, nt, var) where
 import qualified Data.Vector as V
 
 import Control.DeepSeq (NFData, rnf)
+import qualified Control.Error
 import Control.Seq
 import qualified Data.Binary as B
 import Data.Hashable ( Hashable (..) )
+
+errorHere :: String -> String -> a
+errorHere = Control.Error.errorHere "Data.NTT"
 
 data NTT = NT !Int | T !Int deriving (Eq, Ord, Show, Read)
 
@@ -21,7 +25,7 @@ instance B.Binary NTT where
   get = do
           x <- B.getWord8
           y <- B.get :: B.Get Int
-          return $! case x of { 0 -> nt y ; 1 -> tt y }
+          return $! case x of { 0 -> nt y ; 1 -> tt y ; _ -> errorHere "get" $ "unexpected word " ++ show x }
   put (NT x) = B.putWord8 0 >> B.put x
   put (T x) = B.putWord8 1 >> B.put x
 

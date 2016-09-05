@@ -75,11 +75,10 @@ subForest t = case t of
                 Node{ .. } -> _subForest
 
 mapChildren :: (Tree l -> Tree l) -> Tree l -> Tree l
-mapChildren f t = case t of
-                    Nullary{} -> t
-                    Unary{ .. } -> t{ sub1 = f sub1 }
-                    Binary{ .. } -> t{ sub1 = f sub1, sub2 = f sub2 }
-                    Node{ .. } -> t{ _subForest = map f _subForest }
+mapChildren _ Nullary{..} = Nullary rootLabel
+mapChildren f Unary{..}   = Unary   rootLabel (f sub1)
+mapChildren f Binary{..}  = Binary  rootLabel (f sub1) (f sub2)
+mapChildren f Node{..}    = Node    rootLabel (map f _subForest)
 
 front :: Tree l -> [l]
 front Nullary{ .. } = [rootLabel]

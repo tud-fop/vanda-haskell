@@ -22,6 +22,7 @@ module Vanda.Grammar.XRS.Text
   ) where
 
 import Control.Applicative ( many )
+import qualified Control.Error
 import Control.Monad ( forM_, forM )
 import Control.Monad.ST
 import Control.Seq
@@ -43,6 +44,9 @@ import Vanda.Util
 import Data.Interner
 
 import Debug.Trace ( traceShow )
+
+errorHere :: String -> String -> a
+errorHere = Control.Error.errorHere "Vanda.Grammar.XRS.Text"
 
 data XRSRule
   = XRSRule
@@ -253,6 +257,7 @@ toString' ta na e = go
       = T.concat [gs i, lrb, go t1, spa, go t2, rrb]
     go (T.Node (T i) sF)
       = T.concat [gs i, lrb, T.unwords (map go sF), rrb]
+    go _ = errorHere "toString'.go" "NTs should only occur at nullary nodes"
 
 
 prettyPrintNTT :: TokenArray -> NTT -> T.Text
@@ -306,7 +311,7 @@ prettyPrintJoshua'
   -> (i -> Double)
   -> Hyperedge l i
   -> T.Text
-prettyPrintJoshua' ea fa na h1 h2 w e
+prettyPrintJoshua' ea fa _ h1 h2 w e
   = let l = label e
         lhs = h2 l
         -- lhs /= [NT 0]

@@ -15,6 +15,7 @@ module Vanda.Grammar.XRS.Binarize ( binarizeXRS ) where
 
 import Prelude hiding ( sequence )
 
+import qualified Control.Error
 import Control.Monad ( forM_, forM )
 import Control.Monad.ST
 import qualified Data.Array as A
@@ -35,6 +36,9 @@ import qualified Vanda.Hypergraph.Tree as T
 import Vanda.Util
 
 -- import Debug.Trace ( traceShow )
+
+errorHere :: String -> String -> a
+errorHere = Control.Error.errorHere "Vanda.Grammar.XRS.Binarize"
 
 
 -- myshow WTA { .. } = "Final state: " ++ show finalState ++ "\nTransitions:\n"
@@ -250,6 +254,7 @@ decompose t
                   fin = freshen (revar IM.!) mg
               in T.node (NV fin, foldl' IS.union IS.empty (map (snd . T.rootLabel . snd) ts'))
                    (map snd sorted)
+      Var _ -> errorHere "decompose" "rootLabel must not be a variable"
 
 
 mkHom :: (t -> t') -> M.Map t Int -> V.Vector t'

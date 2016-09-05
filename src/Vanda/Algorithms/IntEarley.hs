@@ -18,6 +18,7 @@
 
 module Vanda.Algorithms.IntEarley ( earley, NTT (..), toBackwardStar, Trie ) where
 
+import qualified Control.Error
 import Control.Monad ( unless, liftM3, forM_ )
 import Control.Monad.ST
 import Control.Seq
@@ -36,6 +37,9 @@ import qualified Data.Vector.Unboxed as VU
 import Vanda.Hypergraph.IntHypergraph hiding ( weight )
 import qualified Vanda.Algorithms.Earley.WSA as WSA
 import Vanda.Util
+
+errorHere :: String -> String -> a
+errorHere = Control.Error.errorHere "Vanda.Algorithms.IntEarley"
 
 
 data Trie l i
@@ -155,6 +159,8 @@ iter back comp wsa mki' v0
                 unless b $ do
                   modifySTRef' pvs $ S.insert pv
                   enqueue $ predItem pv
+          predict Item{ stateList = [] } _
+            = errorHere "predict" "stateList should not be empty"
           scan it@Item{ stateList = ps, trie = Trie{ nextT = nxt }, weight = w } (t, p', w')
             = case IMS.lookup t nxt of
                 Nothing -> return ()

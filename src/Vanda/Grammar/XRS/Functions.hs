@@ -1,6 +1,8 @@
 {-# LANGUAGE RecordWildCards #-}
 module Vanda.Grammar.XRS.Functions where
 
+import qualified Control.Error
+
 import Codec.Compression.GZip ( decompress )
 
 import qualified Data.Array as A
@@ -21,6 +23,9 @@ import Vanda.Grammar.XRS.IRTG
 import Vanda.Hypergraph.IntHypergraph
 import qualified Vanda.Hypergraph.Tree as T
 import Vanda.Token
+
+errorHere :: String -> String -> a
+errorHere = Control.Error.errorHere "Vanda.Grammar.XRS.Functions"
 
 
 loadText :: String -> IO String
@@ -108,6 +113,7 @@ getTree' comp n
     subst (T.Nullary (NT i)) = ts !! i
     subst t = case T.rootLabel t of
                 T i -> T.node i (map subst (T.subForest t))
+                NT _ -> errorHere "getTree'.subst" "NTs should not occur as rootLabel"
 
 toString :: TokenArray -> [T.Tree Int] -> T.Text
 toString _ [] = T.pack "(no parse)"
