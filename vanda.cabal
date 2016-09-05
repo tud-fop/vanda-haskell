@@ -146,8 +146,8 @@ library
     , Vanda.Util.Timestamps
     , Vanda.Util.Tree
   hs-source-dirs:  src
-  GHC-Options: -O -funbox-strict-fields -optc-O3 -fexcess-precision -optc-ffast-math -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-  ghc-prof-options: -O -funbox-strict-fields -optc-O3 -fexcess-precision -optc-ffast-math -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind -fprof-auto -fprof-cafs -fprof-auto-calls
+  GHC-Options:      -Wall -fwarn-incomplete-record-updates
+  ghc-prof-options: -Wall -fwarn-incomplete-record-updates
 
 executable Vanda
   build-depends:
@@ -183,8 +183,8 @@ executable Vanda
     build-depends: gtk
   hs-source-dirs:  src
   main-is: Main.hs
-  GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
-  ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
+  GHC-Options:      -rtsopts -Wall -fwarn-incomplete-record-updates
+  ghc-prof-options: -rtsopts -Wall -fwarn-incomplete-record-updates
 
 Test-Suite HUnitTests
   build-depends:
