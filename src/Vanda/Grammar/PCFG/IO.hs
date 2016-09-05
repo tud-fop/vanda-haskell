@@ -64,7 +64,7 @@ import qualified Vanda.Util.Memorysavers as I
 import qualified Control.Error
 errorHere :: String -> String -> a
 errorHere = Control.Error.errorHere "Vanda.Grammar.PCFG.IO" 
-  
+
 -- | Read a grammar from the given text format, or from a binary format.
 readGrammar 
   :: Bool -- ^ Read from a binary format
@@ -73,11 +73,11 @@ readGrammar
 readGrammar bin
   | bin         = readGrammarBinary
   | otherwise   = readGrammarText
-  
+
 
 -- | Write a grammar to the given text format, or to a binary format.
-writeGrammar 
-  :: (Ord a, Show a, Ord b, Show b, ToString a b, Binary a, Binary b) 
+writeGrammar
+  :: ToString a b
     => Bool -- ^ Read from a binary format
     -> FilePath -- ^ Path to the file
     -> PCFG a b -- ^ The grammar to be written
@@ -328,10 +328,10 @@ readGrammarBinary fp = do
                           (restoreEL m1 m2 (IH.edges hg))) 
                 (map (restoreSS m1) ss) 
                 (V.fromList w)
-                
+
 restoreSS :: A.Array Int a -> (Int,Double) -> (a,Double)
 restoreSS m (x,y) = (m A.! x,y)
-        
+
 restoreEL  :: A.Array Int a 
             -> A.Array Int b 
             -> [IH.Hyperedge [Either Int Int] Int] 
@@ -343,29 +343,29 @@ restoreEL m1 m2 (he:rest) =
                 (restoreLabel m2 (IH.label he)) 
                 (IH.ident he)
   : restoreEL m1 m2 rest
-  
+
 restoreLabel :: A.Array Int a -> [Either Int Int] -> [Either Int a]
 restoreLabel _ [] = []
 restoreLabel m2 (Left i:rest) = Left i : restoreLabel m2 rest
 restoreLabel m2 (Right i:rest) = 
   Right (m2 A.! i) : restoreLabel m2 rest
 
-          
+
 -- ** Binary Output
 -- | Write a grammar to a binary format
-writeGrammarBinary 
-  :: (Ord a, Ord b, Binary a, Binary b, ToString a b, Show a, Show b) 
-  => FilePath 
-  -> PCFG a b 
+writeGrammarBinary
+  :: ToString a b
+  => FilePath
+  -> PCFG a b
   -> IO ()
-writeGrammarBinary fp g = 
+writeGrammarBinary fp g =
   let (hg,ss,(m1,m2)) = intifyGrammar (toStringPCFG g) in do
     createDirectoryIfMissing True fp
     encodeFile (fp++"/" ++ startsymbolPath) ss
     encodeFile (fp++"/" ++ weightsPath) $ V.toList (weights g)
     encodeFile (fp++"/" ++ mappingsPath) (I.invertMap m1,I.invertMap m2)
     encodeFile (fp++"/" ++ hypergraphPath) hg
-  
+
 -- | Dismantle a PCFG and return an 'IH.Hypergraph', a new List of 
 -- Startsymbols and Mappings from (non-)terminals to 'Int'. 
 intifyGrammar :: (Ord a, Ord b) 

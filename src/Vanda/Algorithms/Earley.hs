@@ -122,7 +122,7 @@ second3 f (a, b, c) = (a, f b, c)
 -- The first component of each 'Hyperedge'’s 'ident' is the 'ident' from the
 -- original 'Hyperedge' it was constructed from.
 earley
-  :: (Ord p, Ord i, Ord t, Show p, Show i, Show t, Hypergraph h)
+  :: (Ord p, Ord t, Show i, Hypergraph h)
   => h Int l i              -- ^ 'Hypergraph'
   -> (l -> [Either Int t])  -- ^ composition operations for the 'Hyperedge's
   -> WSA.WSA p t Double
@@ -140,8 +140,7 @@ earley hg comp wsa v0
 
 
 extract
-  :: (Show v, Show p, Show i, Show t)
-  => (Hyperedge v l i -> [Either Int t])
+  :: (Hyperedge v l i -> [Either Int t])
   -> Item v l i t p
   -> Maybe (Hyperedge (p, v, p) l i, Double)
 extract
@@ -186,7 +185,7 @@ extract _ _ = Nothing
 
 iter
   :: forall a i l p t
-  .  (Ord p, Ord t, Ord i, Show p, Show t, Show i)
+  .  (Ord p, Ord t, Show i)
   => (Int -> [Hyperedge Int l i]) 
   -> (Hyperedge Int l i -> [Either Int t])
   -> WSA.WSA p t Double

@@ -91,7 +91,7 @@ seqHyperedge sv sl si he
 
 
 earley
-  :: (Ord p, Ord v, Ord i, Ord t, Show p, Show v, Show i, Show t, Hypergraph h)
+  :: (Ord p, Ord v, Ord t, Show i, Hypergraph h)
   => h v l i
   -> (l -> [Either Int t])
   -> WSA.WSA p t Double
@@ -101,7 +101,7 @@ earley hg comp wsa v0 = earley' hg (comp . label) wsa [v0]
 
 
 earley'
-  :: (Ord p, Ord v, Ord i, Ord t, Show p, Show v, Show i, Show t, Hypergraph h)
+  :: (Ord p, Ord v, Ord t, Show i, Hypergraph h)
   => h v l i
   -> (Hyperedge v l i -> [Either Int t])
   -> WSA.WSA p t Double
@@ -119,8 +119,7 @@ earley' hg comp wsa vs0
 
 
 extract
-  :: (Show v, Show p, Show i, Show t)
-  => (Hyperedge v l i -> [Either Int t])
+  :: (Hyperedge v l i -> [Either Int t])
   -> Item v l i t p
   -> Maybe (Hyperedge (p, v, p) l i, Double)
 extract
@@ -164,7 +163,7 @@ extract _ _ = Nothing
 
 
 iter
-  :: (Ord p, Ord v, Ord t, Ord i, Show p, Show v, Show t, Show i)
+  :: (Ord p, Ord v, Ord t, Show i)
   => (v -> [Hyperedge v l i]) 
   -> (Hyperedge v l i -> [Either Int t])
   -> WSA.WSA p t Double

@@ -25,7 +25,7 @@ import Vanda.Grammar.AutomataStorage.TreeStackStorage
 --   given partitioning of parentheses using an 'Automaton' with 'TreeStack'-
 --   storage.
 isMultipleDyck
-  :: (Eq a, Ord a)
+  :: Ord a
   => [a]                                        -- ^ list of separator symbols
   -> [a]               -- ^ list of left parentheses partitioned by separators
   -> [a]       -- ^ list of right parentheses symbols (separators are ignored)

@@ -28,7 +28,7 @@ import Vanda.Hypergraph.Basic
 
 -- mkHyperedge' x1 x2 x3 x4 = mkHyperedge x1 (x2 `using` seqList rseq) x3 x4
 
-instance (NFData v, NFData l, NFData i, B.Binary v, B.Binary l, B.Binary i, Ord v)
+instance (NFData v, NFData l, NFData i, B.Binary v, B.Binary l, B.Binary i)
   => B.Binary (Hyperedge v l i) where
   put e = do
     B.put (to e)
@@ -43,7 +43,7 @@ instance (NFData v, NFData l, NFData i, B.Binary v, B.Binary l, B.Binary i, Ord 
     x4 <- x3 `deepseq` B.get
     x4 `deepseq` return $! mkHyperedge x1 x2 x3 x4
 
-instance (NFData v, NFData l, NFData i, B.Binary v, B.Binary l, B.Binary i, Ord v)
+instance (NFData v, NFData l, NFData i, B.Binary v, B.Binary l, B.Binary i)
   => B.Binary (EdgeList v l i) where
   put (EdgeList vs es) = do
     B.put (S.toAscList vs)

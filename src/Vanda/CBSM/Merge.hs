@@ -103,7 +103,7 @@ insert new old
 
 -- | Find maximum and return it and the remainding list.
 -- /Caution:/ The returned list may have another order.
-cutMaximumBy :: Ord a => (a -> a -> Ordering) -> [a] -> (a, [a])
+cutMaximumBy :: (a -> a -> Ordering) -> [a] -> (a, [a])
 cutMaximumBy cmp (x : xs) = go x xs
   where
     go m []       = (m, [])

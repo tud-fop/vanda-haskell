@@ -135,7 +135,7 @@ forwardStar
 type BidiStar v l = Map v [Rule v l]
 
 
-bidiStar :: (Ord v, Ord l) => [Rule v l] -> BidiStar v l
+bidiStar :: Ord v => [Rule v l] -> BidiStar v l
 bidiStar = M.fromListWith (++) . concatMap step
   where
     step r@(Rule v vs _)

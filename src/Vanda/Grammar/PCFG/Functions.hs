@@ -33,7 +33,7 @@ import Vanda.Hypergraph
 -- * Extraction from Treebank
 -- | Extracts a PCFG from a list of derivations, calculating the probability 
 -- for a rule by counting their occurences in the corpus.
-extractPCFG :: (NFData a, Eq a, Ord a) => [Deriv a a] -> PCFG a a
+extractPCFG :: (NFData a, Ord a) => [Deriv a a] -> PCFG a a
 extractPCFG l = let PCFG p s w = extractPCFG' l in 
   PCFG p s (VG.convert 
            (normalize (map snd . partition $ edgesEL p) (VG.convert w)))
@@ -116,7 +116,7 @@ sentences2edges (DLeaf _ : rest) = sentences2edges rest
 -- | Check if mapping which maps from components of a hyperedge to an 
 -- identifier already contains this combination of components, and if it
 -- does, return the identifier of the already existing one.
-contains :: (Eq a, Ord a) 
+contains :: Ord a
          => a  -- ^ 'to' node of a Hyperedge
          -> [a] -- ^ 'from' list of a Hyperedge
          -> [Either Int a] -- ^ 'label' of a Hyperedge
@@ -132,7 +132,7 @@ contains a b l m = case M.lookup (a,b,l) m of
 
 -- | Computes the intersection of a PCFG and a 
 -- Terminal String, using 'earley''
-intersect :: (Ord a, Show a, Ord b, Show b) 
+intersect :: (Ord a, Ord b)
           => PCFG a b 
           -> [b] 
           -> PCFG (Int,a,Int) b
@@ -150,7 +150,7 @@ intersect p s =
 
 -- | Trains a PCFG with the EM algorithm on a given corpus 
 -- and with a maximum number of iterations.
-train :: (Eq a, Ord a, Show a, Ord b, Show b) 
+train :: (Ord a, Ord b)
       => PCFG a b 
       -> [[b]] 
       -> Int 
@@ -165,7 +165,7 @@ train pcfg corpus n = let pcfg'@(PCFG prod ss weight') = toSingleSS pcfg in
                      ident 
                      (\ _ x -> x <= n) 
                      (VG.convert weight')))
-  where intersect' :: (Ord a, Show a, Ord b, Show b) 
+  where intersect' :: (Ord a, Ord b)
                    => PCFG a b 
                    -> [b] 
                    -> ( (Int,a,Int)

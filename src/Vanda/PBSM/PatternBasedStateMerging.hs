@@ -160,7 +160,7 @@ descend merger g = go True
         merges = [S.insert n nS | (n, _, nS) <- holes]
 
 
-merge :: (Ord n, Ord t) => ([n] -> n) -> RTG n t -> [S.Set n] -> RTG n t
+merge :: Ord n => ([n] -> n) -> RTG n t -> [S.Set n] -> RTG n t
 merge merger g nsS
   = mapNonterminals' mapState g
   where

@@ -64,7 +64,7 @@ import Vanda.Hypergraph.Basic
   , EdgeList(..)
   , Simulation(..) )
 
-edgeCount :: Ord v => BackwardStar v l i -> Int
+edgeCount :: BackwardStar v l i -> Int
 edgeCount (BackwardStar vs b _) = sum $ map (length . b) (S.toList vs)
 
 filterEdges
@@ -85,7 +85,7 @@ fromEdgeList (EdgeList vs es) = BackwardStar vs (flip (M.findWithDefault []) a) 
         -- A.accumArray (flip (:)) [] vs lst
 
 mapNodes
-  :: (Ord v, Ord v')
+  :: Ord v'
   => (v -> v') -> BackwardStar v l i -> BackwardStar v' l i
 mapNodes f (BackwardStar vs b _)
   = BackwardStar vs' (a M.!) True
@@ -108,7 +108,7 @@ memoize bs@(BackwardStar vs b mem)
     a = M.fromList [ (v, b v) | v <- S.toList vs ]
         -- A.array vs [ (v, b v) | v <- Ix.range vs ]
 
-toEdgeList :: Ord v => BackwardStar v l i -> EdgeList v l i
+toEdgeList :: BackwardStar v l i -> EdgeList v l i
 toEdgeList (BackwardStar vs b _)
   = EdgeList vs $ concatMap b (S.toList vs)
 

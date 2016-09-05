@@ -38,7 +38,7 @@ exampleTrivAutomaton = ((0, ()), τs, flip S.member final . fst)
 -- | Runs a given 'Automaton' on a given word and returns the 'L.List' of
 --   accepting 'Configuration's.
 runAutomaton
-  :: (Eq q, Eq σ, Ord q, Ord σ)
+  :: (Ord q, Ord σ)
   => Automaton q σ s
   -> [σ]
   -> [Configuration q s]
@@ -60,8 +60,7 @@ type Configuration q s = (q, s)
 
 -- | Applies the given 'Transition' to the given 'Configuration'.
 apply
-  :: (Eq q, Eq σ)
-  => Configuration q s            -- ^ 'Configuration' before the 'Transition'
+  :: Configuration q s            -- ^ 'Configuration' before the 'Transition'
   -> Transition q σ s                  -- ^ 'Transition' that is being applied
   -> [Configuration q s]           -- ^ 'Configuration' after the 'Transition'
 apply (_, s) (_, _, p, f, q)
@@ -70,8 +69,7 @@ apply (_, s) (_, _, p, f, q)
 -- | Reads the given word applying a 'L.List' of 'Transition's starting from
 --   the given 'Configuration'.
 runTransitions
-  :: (Eq q, Eq σ)
-  => ((q, σ) -> [Transition q σ s])
+  :: ((q, σ) -> [Transition q σ s])
                        -- ^ 'L.List' of 'Transition's for some terminal symbol
   -> Configuration q s                            -- ^ initial 'Configuration'
   -> [σ]                                                  -- ^ word to be read

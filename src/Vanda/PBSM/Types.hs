@@ -150,13 +150,13 @@ mapTerminals f (RTG inS rM)
   $ M.mapKeysWith (M.unionWith S.union) (first f) rM
 
 
-mapNonterminals :: (Ord m, Ord n, Ord t) => (m -> n) -> RTG m t -> RTG n t
+mapNonterminals :: Ord n => (m -> n) -> RTG m t -> RTG n t
 mapNonterminals f (RTG inS rM)
   = RTG (S.map f inS)
   $ M.map (M.mapKeysWith S.union f . M.map (S.map (map f))) rM
 
 
-mapNonterminals' :: (Ord m, Ord n, Ord t) => (m -> n) -> RTG m t -> RTG n t
+mapNonterminals' :: Ord n => (m -> n) -> RTG m t -> RTG n t
 mapNonterminals' f g
   = mapNonterminals f g
   `using`
@@ -165,7 +165,7 @@ mapNonterminals' f g
       (seqMap r0 (seqMap rseq (seqFoldable (seqList rseq))))
 
 
-intifyNonterminals :: (Ord n, Ord t) => RTG n t -> (RTG Int t, M.Map n Int)
+intifyNonterminals :: Ord n => RTG n t -> (RTG Int t, M.Map n Int)
 intifyNonterminals g
   = (mapNonterminals intify g, mapping)
   where

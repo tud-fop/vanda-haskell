@@ -100,7 +100,7 @@ mapState f1 f2 (Binary a b)
 
 -- | Intersects IRTG and n-gram model.
 intersect
-  :: (LM.LM a, WTA.State s, Eq (s Int), Hashable (s Int))
+  :: (Eq (s Int), Hashable (s Int))
   => (a -> (Int, I.StrictIntPair)
         -> (HI.Hyperedge I.StrictIntPair Int -> Double)
         -> (HI.Hyperedge I.StrictIntPair Int -> [NTT])
@@ -131,7 +131,7 @@ intersect intersect' lm I.XRS{ .. }
       xrs'         = I.XRS irtg' mu'                              -- build XRS
 
 ioProduct
-  :: (LM.LM a, WTA.State s, Eq (s Int), Hashable (s Int))
+  :: (Eq (s Int), Hashable (s Int))
   => ( a -> (Int, I.StrictIntPair)
          -> [Int]
          -> (HI.Hyperedge I.StrictIntPair Int -> Double)
@@ -183,8 +183,7 @@ itemsToHypergraph xs
 
 -- | reorders/inserts the given 'NState's according to the given reordering/insertion
 doReordering
-  :: WTA.State s
-  => WTA.WTA Int (s Int)            -- ^ language model
+  :: WTA.WTA Int (s Int)            -- ^ language model
   -> [NTT]                          -- ^ reordering/insertion
   -> [s Int]                        -- ^ original states
   -> [([s Int], Double)]            -- ^ processed states
@@ -213,8 +212,7 @@ integerize' vtx is
 -- | Adds some 'Item's such that 'Item's produced from the former final state
 --   are connected to the new final state.
 makeSingleEndState
-  :: WTA.State s
-  => WTA.WTA i (s i)                   -- ^ language model
+  :: WTA.WTA i (s i)                   -- ^ language model
   -> (State (s i) i -> Bool)           -- ^ is a end state
   -> State (s i) i                     -- ^ new end state
   -> l                                 -- ^ label of new rules
@@ -229,8 +227,7 @@ makeSingleEndState lm p vInit lbl es
 -- | Adds some 'Item's such that 'Item's produced from the former final state
 --   are connected to the new final state.
 makeSingleEndState'
-  :: WTA.State s
-  => WTA.WTA i (s i)                       -- ^ language model
+  :: WTA.WTA i (s i)                       -- ^ language model
   -> (IOPState s1 i (s i) -> Bool)         -- ^ is a end state
   -> IOPState s1 i (s i)                   -- ^ new end state
   -> l                                     -- ^ label of new rules

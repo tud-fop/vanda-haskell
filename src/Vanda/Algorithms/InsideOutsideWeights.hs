@@ -37,7 +37,7 @@ import qualified Data.Set as S
 
 -- | Computes the inside and outside weights for a given 'Hypergraph'.
 insideOutside
-  :: (Ord v, Converging w, Show v, Num w, Hypergraph h)
+  :: (Ord v, Converging w, Num w, Hypergraph h)
   => (Hyperedge v l i -> w)
                 -- ^ this function is used do get the weight of an 'Hyperedge'
   -> v          -- ^ target node
@@ -50,7 +50,7 @@ insideOutside w v g = insideOutside' converged w v g
 -- iteration can be finished using two consecutive values in the fixpoint
 -- iteration must be given.
 insideOutside'
-  :: (Ord v, Num w, Show v, Hypergraph h)
+  :: (Ord v, Num w, Hypergraph h)
   => (w -> w -> Bool)
   -> (Hyperedge v l i -> w)
   -> v
@@ -68,7 +68,7 @@ insideOutside' c w target g
 
 -- | Computes the inside weights for a given 'Hypergraph'.
 inside
-  :: (Ord v, Show v, Converging w, Num w, Hypergraph h)
+  :: (Ord v, Converging w, Num w, Hypergraph h)
   => (Hyperedge v l i -> w) -> h v l i -> M.Map v w
 inside w g = inside' converged g w
 
@@ -77,7 +77,7 @@ inside w g = inside' converged g w
 -- iteration can be finished using two consecutive values in the fixpoint
 -- iteration must be given.
 inside'
-  :: (Ord v, Show v, Num w, Hypergraph h)
+  :: (Ord v, Num w, Hypergraph h)
   => (w -> w -> Bool)
   -> h v l i
   -> (Hyperedge v l i -> w)
@@ -118,7 +118,7 @@ insideStep g w m
 
 -- | Computes the outside weights of a given 'Hypergraph'.
 outside
-  :: (Ord v, Converging w, Num w, Hypergraph h, Show v)
+  :: (Ord v, Converging w, Num w, Hypergraph h)
   => (Hyperedge v l i -> w)
   -> M.Map v w         -- ^ inside weights
   -> v                 -- ^ target node
@@ -131,7 +131,7 @@ outside = outside' converged
 -- iteration can be finished using two consecutive values in the fixpoint
 -- iteration must be given.
 outside'
-  :: (Ord v, Num w, Hypergraph h, Show v)
+  :: (Ord v, Num w, Hypergraph h)
   => (w -> w -> Bool)
   -> (Hyperedge v l i -> w)
   -> M.Map v w
@@ -278,7 +278,7 @@ instance Converging a => Converging (Viterbi a) where
   a `converged` b = unViterbi a `converged` unViterbi b
 
 viterbiInsideOutside
-  :: (Ord v, Converging w, Ord w, Num w, Hypergraph h, Show v)
+  :: (Ord v, Converging w, Ord w, Num w, Hypergraph h)
   => (Hyperedge v l i -> w)
                 -- ^ this function is used do get the weight of an 'Hyperedge'
   -> v          -- ^ target node

@@ -23,7 +23,7 @@ import Text.Parsec.Text.Lazy
 import Vanda.Hypergraph.Basic ( Hyperedge, mkHyperedge )
 
 parseBerkeleyMap
-  :: (NFData v, NFData l, NFData ul, NFData uv)
+  :: (NFData v, NFData l)
   => (ul -> String -> (ul, l))-- ^ symbol mapping function, e.g. 'updateToken'
   -> ul                       -- ^ initial token structure
   -> (uv -> String -> (uv, v))-- ^ node mapping function, e.g. 'updateToken'

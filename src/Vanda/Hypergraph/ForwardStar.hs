@@ -31,7 +31,7 @@ import qualified Data.Map as M
 
 import Vanda.Hypergraph.Basic
 
-edgeCount :: Ord v => ForwardStar v l i -> Int
+edgeCount :: ForwardStar v l i -> Int
 edgeCount (ForwardStar sts lst f _)
   = (length lst+) $ sum $ map (length . f) (S.toList sts)
 
@@ -63,7 +63,7 @@ mapLabels g (ForwardStar vs lst f _)
   = ForwardStar vs (map g lst) (map g . f) False
 
 mapNodes
-  :: (Ord v, Ord v')
+  :: Ord v'
   => (v -> v') -> ForwardStar v l i -> ForwardStar v' l i
 mapNodes g (ForwardStar vs lst f _)
   = ForwardStar vs' (map (mapHE g) lst) (a M.!) True
@@ -80,7 +80,7 @@ memoize fs@(ForwardStar vs lst f mem)
     a = M.fromListWith (++) [ (v, f v) | v <- S.toList vs ]
         -- A.array vs [ (v, f v) | v <- Ix.range vs ]
 
-toEdgeList :: Ord v => ForwardStar v l i -> EdgeList v l i
+toEdgeList :: ForwardStar v l i -> EdgeList v l i
 toEdgeList (ForwardStar vs lst f _)
   = EdgeList vs $ lst ++ concatMap f (S.toList vs)
 

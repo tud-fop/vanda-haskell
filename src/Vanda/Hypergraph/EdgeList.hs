@@ -63,7 +63,7 @@ mapLabels
   -> EdgeList v l' i'
 mapLabels f (EdgeList vs es) = EdgeList vs (map f es)
 
-mapNodes :: (Ord v, Ord v') => (v -> v') -> EdgeList v l i -> EdgeList v' l i
+mapNodes :: Ord v' => (v -> v') -> EdgeList v l i -> EdgeList v' l i
 mapNodes f (EdgeList vs es) 
   = EdgeList (S.fromList $ map f $ S.toList vs) (map (mapHE f) es)
 
@@ -159,7 +159,7 @@ updateHe f he = do
 
 
 dropNonproducing
-  :: forall v l i. (Ord v, Show l, Show v, Show i)
+  :: forall v l i. Ord v
   => EdgeList v l i
   -> EdgeList v l i
 dropNonproducing (EdgeList _ es)

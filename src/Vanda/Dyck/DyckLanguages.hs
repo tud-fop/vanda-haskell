@@ -27,7 +27,7 @@ import Vanda.Grammar.AutomataStorage.PushdownStorage
 
 
 -- | Checks whether a string is well-bracketed.
-_isDyck :: (Eq a, Ord a) => [a] -> [a] -> [a] -> Bool
+_isDyck :: Ord a => [a] -> [a] -> [a] -> Bool
 _isDyck l r x =
   foldl (\ x' a -> x' >>= step a) (Just []) x == Just []
   where
@@ -47,7 +47,7 @@ _isDyck l r x =
 -- | Checks whether a string is well-bracketed using an 'Automaton' with
 --   pushdown storage.
 isDyck
-  :: (Eq a, Ord a)
+  :: Ord a
   => [a]                                         -- ^ list of left parentheses
   -> [a]                                        -- ^ list of right parentheses
   -> [a]                             -- ^ word whose membership is in question

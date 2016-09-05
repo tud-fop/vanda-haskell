@@ -292,8 +292,7 @@ initRule' mu h1 h2 lm word he
 -- | Combines 'Item's by a rule. The 'Item's and the rule must
 --   match (not checked).
 blowRule
-  :: WTA.State s
-  => (HI.Hyperedge l i1 -> Double)       -- ^ rule weights
+  :: (HI.Hyperedge l i1 -> Double)       -- ^ rule weights
   -> (HI.Hyperedge l i1 -> [NTT])        -- ^ tree to string homomorphism
   -> WTA.WTA Int (s Int)                 -- ^ language model
   -> HI.Hyperedge l i1                   -- ^ rule
@@ -311,8 +310,7 @@ blowRule mu h1 wta he xs
             ) qss
 
 blowRule'
-  :: WTA.State s
-  => (HI.Hyperedge l i1 -> Double)        -- ^ rule weights
+  :: (HI.Hyperedge l i1 -> Double)        -- ^ rule weights
   -> (HI.Hyperedge l i1 -> [NTT])         -- ^ tree to tree homomorphism
   -> (HI.Hyperedge l i1 -> [NTT])         -- ^ tree to string homomorphism
   -> WTA.WTA Int (s Int)                  -- ^ language model
