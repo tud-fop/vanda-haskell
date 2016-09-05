@@ -43,7 +43,6 @@ import           Vanda.Util.Timestamps
 import           Vanda.Util.Tree as T
 
 import           Control.Arrow (second)
-import           Control.Concurrent (forkIO, threadDelay)
 import           Control.Concurrent (getNumCapabilities)
 import           Control.Monad
 import qualified Data.Binary as B

@@ -44,7 +44,6 @@ module Vanda.Util.Tree
 
 
 import Control.Arrow (second)
-import Data.Functor
 import Data.List (mapAccumL)
 import Data.Tree
 

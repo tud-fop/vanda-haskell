@@ -36,7 +36,6 @@ module Vanda.Corpus.SExpression
 ) where
 
 
-import Control.Applicative
 import Control.Monad.State.Lazy
 import Data.Char
 import Data.Tree

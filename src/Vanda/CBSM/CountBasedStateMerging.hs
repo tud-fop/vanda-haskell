@@ -53,7 +53,7 @@ import           Vanda.Util.PrettyPrint (columnize)
 import           Vanda.Util.Tree as T
 
 import           Control.Applicative ((<*>), (<$>))
-import           Control.Arrow ((***), first, second)
+import           Control.Arrow ((***), first)
 import           Control.DeepSeq (NFData(rnf))
 import           Control.Monad.State.Lazy
 import           Control.Parallel.Strategies
@@ -63,7 +63,7 @@ import           Data.List (foldl', groupBy, sortBy, transpose)
 import           Data.List.Extra (mergeBy, mergeListsBy, minimaBy)
 import           Data.Function (on)
 import qualified Data.Map.Lazy as ML
-import           Data.Map.Strict (Map, (!))
+import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.Maybe
 import           Data.Ord (comparing, Down(..))

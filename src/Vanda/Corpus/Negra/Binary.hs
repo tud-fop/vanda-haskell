@@ -5,7 +5,6 @@
 
 module Vanda.Corpus.Negra.Binary where
 
-import Control.Applicative
 import qualified Data.Binary as B
 import Data.Word ( Word8 )
 

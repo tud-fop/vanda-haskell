@@ -3,10 +3,8 @@ module Vanda.Hypergraph.Tree where
 
 import qualified Data.Binary as B
 import Data.Hashable ( Hashable (..) )
-import Data.Traversable
 import Data.Foldable ( Foldable, foldMap )
 import Data.Monoid ( mappend )
-import Control.Applicative
 import Data.List ( intercalate )
 
 data Tree l

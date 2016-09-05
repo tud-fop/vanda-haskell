@@ -31,8 +31,6 @@ import qualified Data.ByteString as SBS
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.Text.Lazy.IO as TIO
 
-import           System.IO (hPutStrLn, stderr)
-
 import           Vanda.Corpus.Negra.Text (parseNegra)
 import           Vanda.Grammar.XRS.LCFRS (showPLCFRS, niceStatictics, PLCFRS)
 import           Vanda.Grammar.XRS.LCFRS.Binarize (binarizeNaively, binarizeByAdjacency, binarizeHybrid, binarizeUsing)

@@ -31,7 +31,6 @@ import Prelude hiding ( product )
 
 import Control.Arrow ( (&&&) )
 import Control.DeepSeq ( NFData )
-import qualified Data.Ix as Ix
 import qualified Data.Vector as V
 import qualified Data.Map as M
 import qualified Data.Set as S
