@@ -22,6 +22,7 @@ module Vanda.CBSM.Main
 ) where
 
 
+import qualified Control.Error
 import           Data.List.Extra (at, groupWithRanges, isSingleton, toRanges)
 import           Data.List.Shuffle (shuffle)
 import           System.Console.CmdArgs.Explicit.Misc
@@ -43,9 +44,11 @@ import           Vanda.Util.Timestamps
 import           Vanda.Util.Tree as T
 
 import           Control.Arrow (second)
+import qualified Codec.Compression.GZip as GZip
 import           Control.Concurrent (getNumCapabilities)
 import           Control.Monad
 import qualified Data.Binary as B
+import qualified Data.ByteString.Lazy as BS
 import           Data.Foldable (for_)
 import           Data.List (intercalate, nub)
 import           Data.Map ((!))
@@ -62,7 +65,7 @@ import           System.Directory ( createDirectoryIfMissing
                                   , doesDirectoryExist
                                   , getDirectoryContents )
 import           System.Exit (exitFailure)
-import           System.FilePath ((</>))
+import           System.FilePath ((</>), (<.>), takeExtension)
 import           System.IO ( Handle
                            , IOMode(..)
                            , hFlush
@@ -73,6 +76,10 @@ import           System.IO ( Handle
 import           System.Posix.Files (fileExist)
 import           System.Posix.Signals (sigUSR1)
 import           System.Random (StdGen, mkStdGen)
+
+
+errorHere :: String -> String -> a
+errorHere = Control.Error.errorHere "Vanda.CBSM.Main"
 
 
 type BinaryCRTG = CRTG Int String
@@ -113,7 +120,7 @@ mainArgs opts@CBSM{..} = do
            $ (if null flagFilterByLeafs then return
                                         else filterByLeafs flagFilterByLeafs)
          =<< readCorpora flagAsForests flagDefoliate flagPennFilter argCorpora
-  B.encodeFile (flagDir </> fileNameIntToTreeMap) (tM :: BinaryIntToTreeMap)
+  encodeFile (flagDir </> fileNameIntToTreeMap) (tM :: BinaryIntToTreeMap)
   numCapabilities <- getNumCapabilities
   putStrLnTimestamped $ "numCapabilities: " ++ show numCapabilities
   withFile (flagDir </> fileNameStatistics) AppendMode $ \ hStat ->
@@ -153,10 +160,10 @@ mainArgs opts@CBSM{..} = do
 mainArgs CBSMContinue{..} = do
   opts <- read <$> readFile (flagDir </> fileNameOptions) :: IO Args
   it   <- read <$> readFile (flagDir </> fileNameLastIteration) :: IO Int
-  g    <- B.decodeFile (flagDir </> fileNameGrammar it) :: IO BinaryCRTG
-  info <- B.decodeFile (flagDir </> fileNameInfo    it) :: IO BinaryInfo
+  g    <- decodeFile (flagDir </> fileNameGrammar it) :: IO BinaryCRTG
+  info <- decodeFile (flagDir </> fileNameInfo    it) :: IO BinaryInfo
   groups <- mergeGroups (flagBinarization opts) (flagRestrictMerge opts)
-    <$> (B.decodeFile (flagDir </> fileNameIntToTreeMap)
+    <$> (decodeFile (flagDir </> fileNameIntToTreeMap)
            :: IO BinaryIntToTreeMap)
   numCapabilities <- getNumCapabilities
   putStrLnTimestamped $ "numCapabilities: " ++ show numCapabilities
@@ -181,11 +188,11 @@ mainArgs CBSMContinue{..} = do
 mainArgs ShowGrammar{..}
   = putStrLn
   . prettyPrintCRTG
-  =<< (B.decodeFile argGrammar :: IO BinaryCRTG)
+  =<< (decodeFile argGrammar :: IO BinaryCRTG)
 
 
 mainArgs ShowInfo{..} = do
-  Info{..} <- B.decodeFile argInfo :: IO BinaryInfo
+  Info{..} <- decodeFile argInfo :: IO BinaryInfo
   putStr "iteration           : " >> print infoIteration
   putStr "prng state          : " >> print infoRandomGen
   putStr "merge pairs         : " >> print infoMergePairs
@@ -216,7 +223,7 @@ mainArgs ShowInfo{..} = do
   putStrLn ""
   m <- if null flagIntToTreeMap
        then return $ M.map (fmap $ \ x -> Node (show x) []) infoMergeTreeMap
-       else do tM <- B.decodeFile flagIntToTreeMap :: IO BinaryIntToTreeMap
+       else do tM <- decodeFile flagIntToTreeMap :: IO BinaryIntToTreeMap
                return $ M.map (fmap (tM !)) infoMergeTreeMap
   let mergeTree2Tree (State t c ) = Node (colorTTY [96] ("count: " ++ show c))
                                          [mapLeafs (colorTTY [93]) t]
@@ -227,7 +234,7 @@ mainArgs ShowInfo{..} = do
     putStrLn $ drawTree' (drawstyleCompact2 1 "") $ mergeTree2Tree t
 
 mainArgs Parse{..} = do
-  (hg, inis) <- toHypergraph <$> (B.decodeFile argGrammar :: IO BinaryCRTG)
+  (hg, inis) <- toHypergraph <$> (decodeFile argGrammar :: IO BinaryCRTG)
   let comp e | a == 0    = [Right (H.label e)]
               | otherwise = map Left [0 .. a - 1]
         where a = H.arity e
@@ -246,7 +253,7 @@ mainArgs Parse{..} = do
     hFlush stdout
 
 mainArgs Bests{..} = do
-  (hg, inis) <- toHypergraph <$> (B.decodeFile argGrammar :: IO BinaryCRTG)
+  (hg, inis) <- toHypergraph <$> (decodeFile argGrammar :: IO BinaryCRTG)
   let feature = F.Feature (\ _ i xs -> i * product xs) V.singleton
   printWeightedTrees
       flagBinarization flagUnbinarize flagOutputFormat "language empty"
@@ -491,8 +498,8 @@ safeSaveLastGrammar
       let i = infoIteration info
       putStrLnTimestamped $ "Writing result of iteration " ++ show i ++ " ..."
       hFlush stdout
-      B.encodeFile (dir </> fileNameGrammar i) (g    :: BinaryCRTG)
-      B.encodeFile (dir </> fileNameInfo    i) (info :: BinaryInfo)
+      encodeFile (dir </> fileNameGrammar i) (g    :: BinaryCRTG)
+      encodeFile (dir </> fileNameInfo    i) (info :: BinaryInfo)
       writeFile (dir </> fileNameLastIteration) (show i)
       putStrLnTimestamped
         $ "... done writing result of iteration " ++ show i ++ "."
@@ -568,3 +575,23 @@ ld (Exp x) = invLog2 * x
 
 invLog2 :: Double
 invLog2 = 1 / log 2
+
+
+-- TODO: Remove file extension hack.
+decodeFile :: B.Binary a => FilePath -> IO a
+decodeFile file
+  = if takeExtension file == ".gz"
+     then decodeGZip file
+     else ifM (fileExist file)
+              (B.decodeFile file)
+              (ifM (fileExist  (file <.> "gz"))
+                   (decodeGZip (file <.> "gz"))
+                   (errorHere "decodeFile" $ "File does not exist: " ++ file)
+              )
+  where
+    decodeGZip f = B.decode . GZip.decompress <$> BS.readFile f
+
+
+-- TODO: Remove file extension hack.
+encodeFile :: B.Binary a => FilePath -> a -> IO ()
+encodeFile file = BS.writeFile (file <.> "gz") . GZip.compress . B.encode
