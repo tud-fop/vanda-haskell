@@ -29,14 +29,14 @@ data TreeNode l
     { label :: l
     , span :: S.Set Int
     , clos :: Maybe (Int, Int)
-    , idx :: Int
+    , _idx :: Int
     }
   deriving Show
 
 data TreeNode2 l
   = TreeNode2
     { treeNode :: TreeNode l
-    , complSpan :: S.Set Int
+    , _complSpan :: S.Set Int
     , frontier :: Bool
     }
   deriving Show

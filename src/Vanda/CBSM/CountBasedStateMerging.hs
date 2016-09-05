@@ -745,7 +745,7 @@ likelihoodDelta
   => CRTG v l
   -> Merge v
   -> (Log Double, (Log Double, Log Double, Log Double), (Int, Int, Int))
-likelihoodDelta g@CRTG{..} = \ mrgs ->
+likelihoodDelta CRTG{..} = \ mrgs ->
   let (rw, rc) = productAndSum  -- rules
                $ map ( (\ (pr, su, si) -> (p su / pr, si))
                      . productPAndSumAndSize

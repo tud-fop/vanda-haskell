@@ -47,7 +47,6 @@ import qualified Vanda.Hypergraph.IntHypergraph as HI
 import qualified Vanda.Hypergraph.Tree as T
 
 import Data.Hashable
-import qualified Vanda.Grammar.LM as LM
 import Data.NTT
 
 data State s i

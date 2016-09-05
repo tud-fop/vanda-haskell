@@ -290,12 +290,12 @@ smallest (WTA fs _ tr)
   = fmap (fmap label . deriv) $ listToMaybe
   $ (A.! fs) $ knuth tr (\ _ _ _ -> 1.0)
 
-
-smallestLeftHeavy :: WTA l -> Maybe (T.Tree l)
-smallestLeftHeavy (WTA fs _ tr)
-  = fmap (fmap label . deriv) $ listToMaybe
-  $ (A.! fs) $ knuth tr
-  $ \ _ _ ds -> foldl' (\ x (y, z) -> x - y * z) 0.0 (zip [1..] ds)
+-- -- unused
+-- smallestLeftHeavy :: WTA l -> Maybe (T.Tree l)
+-- smallestLeftHeavy (WTA fs _ tr)
+--   = fmap (fmap label . deriv) $ listToMaybe
+--   $ (A.! fs) $ knuth tr
+--   $ \ _ _ ds -> foldl' (\ x (y, z) -> x - y * z) 0.0 (zip [1..] ds)
 
 
 binarizeXRS :: IRTG Int -> IRTG Int
