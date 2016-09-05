@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances #-}
+
 module Data.NTT (NTT (..), Var (..), tt, nt, var) where
 
 import qualified Data.Vector as V
@@ -32,6 +34,9 @@ instance B.Binary NTT where
 instance Hashable NTT where
   hashWithSalt salt (NT i) = hashWithSalt salt (Left i :: Either Int Int)
   hashWithSalt salt (T i) = hashWithSalt salt (Right i :: Either Int Int)
+
+instance Hashable (V.Vector NTT) where
+  hashWithSalt salt = hashWithSalt salt . V.toList
 
 data Var l = Var Int | NV l deriving (Eq, Ord, Show)
 

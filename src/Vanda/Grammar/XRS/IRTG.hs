@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, FlexibleInstances, RecordWildCards #-}
+{-# LANGUAGE BangPatterns, RecordWildCards #-}
 
 module Vanda.Grammar.XRS.IRTG
  ( StrictIntPair (..)
@@ -8,7 +8,6 @@ module Vanda.Grammar.XRS.IRTG
 
 import Control.DeepSeq ( NFData, rnf )
 import qualified Data.Binary as B
-import Data.Hashable ( Hashable (..) )
 import Data.NTT
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
@@ -54,9 +53,6 @@ data XRS
     { irtg :: IRTG Int
     , weights :: VU.Vector Double
     }
-
-instance Hashable (V.Vector NTT) where
-  hashWithSalt salt = hashWithSalt salt . V.toList
 
 instance Show XRS where
   show (XRS (IRTG hg _ h1 h2) w)
