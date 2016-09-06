@@ -22,6 +22,7 @@ module Vanda.CBSM.CountBasedStateMerging
 , Info(..)
 , BeamEntry(..)
 , initialInfo
+, ConfigCBSM(..)
 , cbsm
 , normalizeLklhdByMrgdStates
 , prettyPrintCRTG
@@ -432,14 +433,28 @@ initialInfo gen m
       }
 
 
+data ConfigCBSM g v = ConfigCBSM
+  { confNumCapabilities :: Int
+  -- ^ result of 'getNumCapabilities' for parallelization, 1 for none
+  , confMergeGroups     :: [Set v]
+  -- ^ partition on the states; only states from the same equivalence class
+  --   will be merged
+  , confEvaluate        :: (Int, Int, Int) -> Log Double -> Log Double
+  -- ^ evaluation function for a merge given number of merged rules, states,
+  --   and initial states, and the loss of likelihood
+  , confBeamWidth       :: Int
+  -- ^ beam width
+  , confShuffle         :: forall a. [a] -> g -> ([a], g)
+  -- ^ function to optionally randomize the order of states with the same
+  --   count; may be @(,)@ for no randomization
+  }
+
+
 cbsm
   :: (Ord v, Ord l, RandomGen g)
-  => Int  -- ^ result of 'getNumCapabilities' for parallelization, 1 for none
-  -> [Set v]
-  -> ((Int, Int, Int) -> Log Double -> Log Double)
-  -> Int
-  -> (forall a. [a] -> g -> ([a], g))
+  => ConfigCBSM g v
   ->  (CRTG v l, Info g v)
+  -- ^ starting point; is returned as the first element of the resulting list
   -> [(CRTG v l, Info g v)]
 cbsm = cbsmGo M.empty
 
@@ -447,14 +462,10 @@ cbsm = cbsmGo M.empty
 cbsmGo
   :: (Ord v, Ord l, RandomGen g)
   => Map (v, v) (Merge v)
-  -> Int  -- ^ result of 'getNumCapabilities' for parallelization, 1 for none
-  -> [Set v]
-  -> ((Int, Int, Int) -> Log Double -> Log Double)
-  -> Int
-  -> (forall a. [a] -> g -> ([a], g))
+  -> ConfigCBSM g v
   ->  (CRTG v l, Info g v)
   -> [(CRTG v l, Info g v)]
-cbsmGo cache numCapabilities mergeGroups evaluate beamWidth shuffle prev@(g, info@Info{..})
+cbsmGo cache conf@ConfigCBSM{..} prev@(g, info@Info{..})
   = (prev :)
   $ seq g
   $ seq info
@@ -465,14 +476,14 @@ cbsmGo cache numCapabilities mergeGroups evaluate beamWidth shuffle prev@(g, inf
         (mergePairs, cands)
           = sum *** processMergePairs
           $ unzip
-          $ zipWith (\ grpS -> fst . compileMergePairs (cntState g) grpS shuffle)
-              mergeGroups
+          $ zipWith (\ grpS -> fst . compileMergePairs (cntState g) grpS confShuffle)
+              confMergeGroups
               (evalState (sequence $ repeat $ state $ split) gen1)
         processMergePairs
-          = ( if numCapabilities > 1
-              then withStrategy (parListChunk (beamWidth `div` (2 * numCapabilities)) rseq)
+          = ( if confNumCapabilities > 1
+              then withStrategy (parListChunk (confBeamWidth `div` (2 * confNumCapabilities)) rseq)
               else id )
-          . take beamWidth  -- TODO: Group?
+          . take confBeamWidth  -- TODO: Group?
           . zipWith ( \ i (h, ((v1, _), (v2, _)))
                       -> processMergePair i h (v1, v2)
                     ) [1 ..]
@@ -481,7 +492,7 @@ cbsmGo cache numCapabilities mergeGroups evaluate beamWidth shuffle prev@(g, inf
           = BeamEntry
               { beIndex           = i
               , beHeuristic       = h
-              , beEvaluation      = evaluate sizes l
+              , beEvaluation      = confEvaluate sizes l
               , beLikelihoodDelta = l
               , beFactorRules     = rw
               , beFactorStates    = vw
@@ -511,7 +522,7 @@ cbsmGo cache numCapabilities mergeGroups evaluate beamWidth shuffle prev@(g, inf
                   { infoRandomGen             = gen2
                   , infoIteration             = n
                   , infoMergePairs            = mergePairs
-                  , infoBeamWidth             = beamWidth
+                  , infoBeamWidth             = confBeamWidth
                   , infoBeamIndex             = beIndex (head minimalCands)
                   , infoBeam                  = cands
                   , infoEquivalentBeamIndizes = map beIndex minimalCands
@@ -522,8 +533,7 @@ cbsmGo cache numCapabilities mergeGroups evaluate beamWidth shuffle prev@(g, inf
                   }
     in if null cands
        then []
-       else cbsmGo cache' numCapabilities mergeGroups evaluate beamWidth shuffle
-                   (mergeCRTG mrg g, info')
+       else cbsmGo cache' conf (mergeCRTG mrg g, info')
 --   = g
 --   : ( g `seq` case refineRanking $ enrichRanking $ mergeRanking g of
 --         ((_, ((v1, _), (v2, _))), _) : _

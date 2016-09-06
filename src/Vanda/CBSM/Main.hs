@@ -150,11 +150,15 @@ mainArgs opts@CBSM{..} = do
                         flagDir hStat hEvals hBeam mhLogBeamVerbose
       $ take (succ flagIterations)
       $ cbsm
-          numCapabilities
-          (mergeGroups flagBinarization flagRestrictMerge tM)
-          (if flagNormalize then normalizeLklhdByMrgdStates else flip const)
-          flagBeamWidth
-          (if flagBeamRandomize then shuffle else (,))
+          ConfigCBSM
+            { confNumCapabilities = numCapabilities
+            , confMergeGroups     = mergeGroups flagBinarization flagRestrictMerge tM
+            , confEvaluate        = if flagNormalize
+                                    then normalizeLklhdByMrgdStates
+                                    else flip const
+            , confBeamWidth       = flagBeamWidth
+            , confShuffle         = if flagBeamRandomize then shuffle else (,)
+            }
           (g, initialInfo (mkStdGen flagSeed) (cntState g))
 
 mainArgs CBSMContinue{..} = do
@@ -176,13 +180,15 @@ mainArgs CBSMContinue{..} = do
                         flagDir hStat hEvals hBeam mhLogBeamVerbose
       $ take (succ flagIterations)
       $ cbsm
-          numCapabilities
-          groups
-          ( if flagNormalize opts
-            then normalizeLklhdByMrgdStates
-            else flip const )
-          flagBeamWidth
-          (if flagBeamRandomize opts then shuffle else (,))
+          ConfigCBSM
+            { confNumCapabilities = numCapabilities
+            , confMergeGroups     = groups
+            , confEvaluate        = if flagNormalize opts
+                                    then normalizeLklhdByMrgdStates
+                                    else flip const
+            , confBeamWidth       = flagBeamWidth
+            , confShuffle         = if flagBeamRandomize opts then shuffle else (,)
+            }
           (g, info)
 
 mainArgs ShowGrammar{..}
