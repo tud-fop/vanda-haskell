@@ -24,7 +24,6 @@ module Vanda.CBSM.Main
 
 import qualified Control.Error
 import           Data.List.Extra (at, groupWithRanges, isSingleton, toRanges)
-import           Data.List.Shuffle (shuffle)
 import           System.Console.CmdArgs.Explicit.Misc
 import           Vanda.Algorithms.EarleyMonadic
 import qualified Vanda.Algorithms.Earley.WSA as WSA
@@ -157,7 +156,8 @@ mainArgs opts@CBSM{..} = do
                                     then normalizeLklhdByMrgdStates
                                     else flip const
             , confBeamWidth       = flagBeamWidth
-            , confShuffle         = if flagBeamRandomize then shuffle else (,)
+            , confShuffleStates   = flagShuffle == FSStates
+            , confShuffleMerges   = flagShuffle == FSMerges
             }
           (g, initialInfo (mkStdGen flagSeed) (cntState g))
 
@@ -187,7 +187,8 @@ mainArgs CBSMContinue{..} = do
                                     then normalizeLklhdByMrgdStates
                                     else flip const
             , confBeamWidth       = flagBeamWidth
-            , confShuffle         = if flagBeamRandomize opts then shuffle else (,)
+            , confShuffleStates   = flagShuffle opts == FSStates
+            , confShuffleMerges   = flagShuffle opts == FSMerges
             }
           (g, info)
 

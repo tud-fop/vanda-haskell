@@ -70,7 +70,7 @@ data Args
     , flagFilterByLeafs :: FilePath
     , flagRestrictMerge :: [FlagRestrictMerge]
     , flagBeamWidth :: Int
-    , flagBeamRandomize :: Bool
+    , flagShuffle :: FlagShuffle
     , flagSeed :: Int
     , flagNormalize :: Bool
     , flagIterations :: Int
@@ -116,6 +116,8 @@ data Args
   deriving (Read, Show)
 
 
+data FlagShuffle = FSNone | FSStates | FSMerges deriving (Eq, Read, Show)
+
 data FlagOutputFormat
   = FOFPretty | FOFPenn | FOFYield deriving (Eq, Read, Show)
 
@@ -159,7 +161,7 @@ cmdArgs
         , flagFilterByLeafs  = ""
         , flagRestrictMerge  = []
         , flagBeamWidth      = 1000
-        , flagBeamRandomize  = False
+        , flagShuffle        = FSNone
         , flagSeed           = 0
         , flagNormalize      = False
         , flagIterations     = (pred maxBound)
@@ -181,7 +183,7 @@ cmdArgs
         , flagReqFilterByLeafs
         , flagReqRestrictMerge
         , flagReqBeamWidth
-        , flagNoneBeamRandomize
+        , flagReqShuffle
         , flagReqSeed
         , flagNoneNormalize
         , flagReqIterations
@@ -270,10 +272,6 @@ cmdArgs
     flagNoneAsForests
       = flagNone ["as-forests"] (\ x -> x{flagAsForests = True})
           "the TREEBANKs contain forests instead of trees"
-    flagNoneBeamRandomize
-      = flagNone ["randomize-beam"] (\ x -> x{flagBeamRandomize = True})
-          "randomize the order of merge candidates that are equivalent \
-          \w.r.t. the heuristics"
     flagNoneDefoliate
       = flagNone ["defoliate"] (\ x -> x{flagDefoliate = True})
           "remove leaves from trees in TREEBANKs"
@@ -352,6 +350,27 @@ cmdArgs
                , ("both", FUWOBoth) ]
         update y x = maybe (Left err)
                            (\ z -> Right x{flagUnknownWordOutput = z})
+                   $ lookup y opts
+    flagReqShuffle
+      = flagReq [flag] update "MODE"
+      $ unlines
+          [ "one of " ++ optsStr ++ "."
+          , "This flag allows to shuffle the order of merge candidates on \
+            \the search beam."
+          , "none: disable shuffling."
+          , "states: shuffle states with the same count."
+          , "merges: shuffle merges with the same heuristic value."
+          , "Shuffling merges subsumes shuffling of states."
+          ]
+      where
+        flag = "shuffle"
+        err  = flag ++ " expects one of " ++ optsStr
+        optsStr = intercalate ", " (map fst opts)
+        opts = [ ("none"  , FSNone  )
+               , ("states", FSStates)
+               , ("merges", FSMerges) ]
+        update y x = maybe (Left err)
+                           (\ z -> Right x{flagShuffle = z})
                    $ lookup y opts
     flagReqBeamWidth
       = flagReq ["beam-width"]

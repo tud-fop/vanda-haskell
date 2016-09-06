@@ -43,6 +43,7 @@ module Vanda.CBSM.CountBasedStateMerging
 
 
 import qualified Control.Error
+import           Data.List.Shuffle (shuffle)
 import           Data.Maybe.Extra (nothingIf)
 import           Vanda.CBSM.Dovetailing
 import           Vanda.CBSM.Merge (Merge)
@@ -54,7 +55,7 @@ import           Vanda.Util.PrettyPrint (columnize)
 import           Vanda.Util.Tree as T
 
 import           Control.Applicative ((<*>), (<$>))
-import           Control.Arrow ((***), first)
+import           Control.Arrow ((***), first, second)
 import           Control.DeepSeq (NFData(rnf))
 import           Control.Monad.State.Lazy
 import           Control.Parallel.Strategies
@@ -444,9 +445,10 @@ data ConfigCBSM g v = ConfigCBSM
   --   and initial states, and the loss of likelihood
   , confBeamWidth       :: Int
   -- ^ beam width
-  , confShuffle         :: forall a. [a] -> g -> ([a], g)
-  -- ^ function to optionally randomize the order of states with the same
-  --   count; may be @(,)@ for no randomization
+  , confShuffleStates   :: Bool
+  -- ^ optionally randomize the order of states with the same count
+  , confShuffleMerges   :: Bool
+  -- ^ optionally randomize the order of merges with the same heuristic value
   }
 
 
@@ -472,13 +474,13 @@ cbsmGo cache conf@ConfigCBSM{..} prev@(g, info@Info{..})
   $ let n = infoIteration + 1
         likelihoodDelta' = likelihoodDelta g
         saturateMerge' = saturateMerge $ forwardStar $ rules g
-        (gen1, gen2) = split infoRandomGen
+        (genNext, (genState, genMerge)) = second split $ split infoRandomGen
         (mergePairs, cands)
           = sum *** processMergePairs
           $ unzip
-          $ zipWith (\ grpS -> fst . compileMergePairs (cntState g) grpS confShuffle)
+          $ zipWith (\ grpS -> fst . compileMergePairs (cntState g) grpS confShuffleStates)
               confMergeGroups
-              (evalState (sequence $ repeat $ state $ split) gen1)
+              (evalState (sequence $ repeat $ state $ split) genState)
         processMergePairs
           = ( if confNumCapabilities > 1
               then withStrategy (parListChunk (confBeamWidth `div` (2 * confNumCapabilities)) rseq)
@@ -487,6 +489,10 @@ cbsmGo cache conf@ConfigCBSM{..} prev@(g, info@Info{..})
           . zipWith ( \ i (h, ((v1, _), (v2, _)))
                       -> processMergePair i h (v1, v2)
                     ) [1 ..]
+          . ( if confShuffleMerges
+              then \ xs -> fst $ shuffleGroupsBy ((==) `on` fst) xs genMerge
+              else id
+            )
           . foldr1 (mergeBy (comparing fst))
         processMergePair i h pair@(v1, v2)
           = BeamEntry
@@ -519,7 +525,7 @@ cbsmGo cache conf@ConfigCBSM{..} prev@(g, info@Info{..})
           $ map (\ BeamEntry{..} -> (beMergeSeed, beMergeSaturated))
                 cands
         info' = Info
-                  { infoRandomGen             = gen2
+                  { infoRandomGen             = genNext
                   , infoIteration             = n
                   , infoMergePairs            = mergePairs
                   , infoBeamWidth             = confBeamWidth
@@ -544,23 +550,32 @@ cbsmGo cache conf@ConfigCBSM{..} prev@(g, info@Info{..})
 --     )
 
 compileMergePairs
-  :: Ord v
+  :: (Ord v, RandomGen g)
   => Map v Int
   -> Set v
-  -> (forall a. [a] -> g -> ([a], g))
+  -> Bool
+  -- ^ optionally randomize the order of states with the same count
   -> g
   -> ((Int, [(Int, ((v, Int), (v, Int)))]), g)
-compileMergePairs cntM grpS shuffle g
+compileMergePairs cntM grpS doShuffle g
   = n `seq` ((n, sortedCartesianProductWith' ((+) `on` snd) vs (tail vs)), g')
   where n     = let s = M.size cntM' in s * (s - 1) `div` 2
         cntM' = M.intersection cntM (M.fromSet (const ()) grpS)
         (vs, g')
-          = flip runState g
-          $ fmap concat
-          $ mapM (state . shuffle)
-          $ groupBy ((==) `on` snd)
+          = ( if doShuffle
+              then \ xs -> shuffleGroupsBy ((==) `on` snd) xs g
+              else \ xs -> (xs, g)
+            )
           $ sortBy (comparing snd)
           $ M.toList cntM'
+
+
+shuffleGroupsBy :: RandomGen g => (a -> a -> Bool) -> [a] -> g -> ([a], g)
+shuffleGroupsBy eq xs g
+  = flip runState g
+  . fmap concat
+  . mapM (state . shuffle)
+  $ groupBy eq xs
 
 
 normalizeLklhdByMrgdStates :: (Int, Int, Int) -> Log Double -> Log Double
