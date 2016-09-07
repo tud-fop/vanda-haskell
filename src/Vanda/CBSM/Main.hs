@@ -50,6 +50,7 @@ import qualified Data.Binary as B
 import qualified Data.ByteString.Lazy as BS
 import           Data.Foldable (for_)
 import           Data.List (intercalate, nub)
+import           Data.List.Split (wordsBy)
 import           Data.Map ((!))
 import qualified Data.Map as M
 import           Data.Maybe (mapMaybe)
@@ -273,13 +274,21 @@ mainArgs Bests{..} = do
 mainArgs RenderBeam{..} = do
   renderBeam flagRunLengthEncoding
              argColumn
+             (wordsBy (==',') flagSortFormatString) -- TODO: unless it occurs in a mixedness mapper format string...
              flagColormapMin
              flagColormapMax
              argRenderBeamInput
              argRenderBeamOutput
 
 mainArgs RenderBeamInfo{..} = do
-  renderBeamInfo argRenderBeamInput argInfo argIntToTreeMap argRenderBeamOutput
+  Info{..} <- B.decodeFile argInfo :: IO BinaryInfo
+  int2tree <- B.decodeFile argIntToTreeMap :: IO BinaryIntToTreeMap
+  renderBeamInfo argRenderBeamInput
+                 argRenderableCats
+                 (wordsBy (==',') flagSortFormatString) -- TODO: unless it occurs in a mixedness mapper format string...
+                 infoMergeTreeMap
+                 int2tree
+                 argRenderBeamOutput
 
 
 readCorpora :: Bool -> Bool -> Bool -> [FilePath] -> IO (Forest String)

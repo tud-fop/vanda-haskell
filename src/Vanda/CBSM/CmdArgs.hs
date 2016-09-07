@@ -115,11 +115,14 @@ data Args
     , argRenderBeamOutput :: FilePath
     , flagRunLengthEncoding :: Bool
     , argColumn :: Int
+    , flagSortFormatString :: String
     , flagColormapMin :: Double
     , flagColormapMax :: Double
     }
   | RenderBeamInfo
     { argRenderBeamInput :: FilePath
+    , argRenderableCats :: String
+    , flagSortFormatString :: String
     , argInfo :: FilePath
     , argIntToTreeMap :: FilePath
     , argRenderBeamOutput :: FilePath
@@ -270,7 +273,7 @@ cmdArgs
         , flagReqOutputFormat
         ]
     }
-  , (modeEmpty $ RenderBeam "" "" False (-1) 0 1)
+  , (modeEmpty $ RenderBeam "" "" False (-1) "" 0 1)
     { modeNames = ["render-beam"]
     , modeHelp = "Render " ++ fileNameEvaluations ++ " into a png image."
     , modeArgs =
@@ -282,21 +285,26 @@ cmdArgs
         )
     , modeGroupFlags = toGroup
         [ flagNoneRunLengthEncoding
+        , flagReqSortFormatString
         , flagReqColormapMin
         , flagReqColormapMax
         ]
     }
-  , (modeEmpty $ RenderBeamInfo "" "" "" "")
+  , (modeEmpty $ RenderBeamInfo "" "" "" "" "" "")
     { modeNames = ["render-beam-info"]
     , modeHelp = "Render " ++ fileNameLogBeamVerbose ++ " into a png image."
     , modeArgs =
         ( [ flagArgRenderBeamInput{argRequire = True}
+          , flagArgRenderableCats{argRequire = True}
           , flagArgMergeTreeMap{argRequire = True}
           , flagArgIntToTreeMap{argRequire = True}
           , flagArgRenderBeamOutput{argRequire = True}
           ]
         , Nothing
         )
+    , modeGroupFlags = toGroup
+        [ flagReqSortFormatString
+        ]
     }
   ]
   where
@@ -461,11 +469,17 @@ cmdArgs
       = flagArg (\ a x -> Right x{argRenderBeamInput = a}) "CSV-FILE"
     flagArgRenderBeamOutput
       = flagArg (\ a x -> Right x{argRenderBeamOutput = a}) "PNG-FILE"
+    flagArgRenderableCats
+      = flagArg (\ a x -> Right x{argRenderableCats = a}) "RENDERABLE-CATEGORIES"
     flagNoneRunLengthEncoding
       = flagNone ["rle"] (\ x -> x{flagRunLengthEncoding = True})
           "candidates of an iteration are run-length-encoding-compressed"
     flagArgColumn
       = flagArg (readUpdate $ \ a x -> x{argColumn = a}) "COLUMN"
+    flagReqSortFormatString
+      = flagReq ["sorting"] (\ a x -> Right x{flagSortFormatString = a})
+                "SORTING-FORMAT-STRING"
+                "comma-separated descriptors like '0a,m(NP|S|*|-),3d', where '|*|-' (all other pure merges|all mixed merges) are always implied as the last categories"
     flagReqColormapMin
       = flagReq ["colormapmin"] (readUpdate $ \ a x -> x{flagColormapMin = a})
                 "COLORMAPMIN" "value mapped to the minimum color (default 0.0)"
