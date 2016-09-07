@@ -68,17 +68,17 @@ plot '' using 2:6 with histeps,  \
 
 
 # http://psy.swansea.ac.uk/staff/carter/gnuplot/gnuplot_frequency.htm
-bin_width = (beamindex_max - beamindex_min + 1) / 10;
+bin_width = 0.1;
 bin_number(x) = floor(x/bin_width)
 rounded(x) = bin_width * ( bin_number(x) + 0.5 )
-set xrange  [beamindex_min : beamindex_max]
-set x2range [beamindex_min : beamindex_max]
+set boxwidth bin_width
+set xrange  [0 : 1]
+set x2range [0 : 1]
+set xtics 0, bin_width
 set yrange  [iteration_min : iteration_max]
 set y2range [iteration_min : iteration_max]
-plot '' using 6:2 with lines title 'merge pairs (transposed)',  \
-     '' using 7:2 with lines title 'beam width (transposed)',  \
-     '' using (rounded($8)):(1) smooth frequency with boxes fillstyle transparent solid 0.25 title 'histogram for beam index',  \
-     '' using 8:2 with points pointtype 5 pointsize 0.1 axes x1y2 title 'beam index (transposed)'
+plot '' using (rounded(($8 - 1) / $7)):(1) smooth frequency with boxes fillstyle transparent solid 0.25 title 'histogram for relative beam index',  \
+     '' using (($8 - 1) / $7):2 with points pointtype 5 pointsize 0.1 axes x1y2 title 'beam index relative to beam width (transposed)'
 
 
 ### End ###
