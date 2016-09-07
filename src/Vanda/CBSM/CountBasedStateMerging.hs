@@ -435,19 +435,24 @@ initialInfo gen m
 
 
 data ConfigCBSM g v = ConfigCBSM
-  { confNumCapabilities :: Int
+  { confNumCapabilities  :: Int
   -- ^ result of 'getNumCapabilities' for parallelization, 1 for none
-  , confMergeGroups     :: [Set v]
+  , confMergeGroups      :: [Set v]
   -- ^ partition on the states; only states from the same equivalence class
   --   will be merged
-  , confEvaluate        :: (Int, Int, Int) -> Log Double -> Log Double
+  , confEvaluate         :: (Int, Int, Int) -> Log Double -> Log Double
   -- ^ evaluation function for a merge given number of merged rules, states,
   --   and initial states, and the loss of likelihood
-  , confBeamWidth       :: Int
+  , confBeamWidth        :: Int
   -- ^ beam width
-  , confShuffleStates   :: Bool
+  , confDynamicBeamWidth :: Bool
+  -- ^ actual beam width is at least 'confBeamWidth', but if
+  --   @'confDynamicBeamWidth' == 'True'@, then the actual beam width is
+  --   extended to capture all candidates that have a heuristic value that is
+  --   as good as for candidates within 'confBeamWidth'
+  , confShuffleStates    :: Bool
   -- ^ optionally randomize the order of states with the same count
-  , confShuffleMerges   :: Bool
+  , confShuffleMerges    :: Bool
   -- ^ optionally randomize the order of merges with the same heuristic value
   }
 
@@ -485,10 +490,13 @@ cbsmGo cache conf@ConfigCBSM{..} prev@(g, info@Info{..})
           = ( if confNumCapabilities > 1
               then withStrategy (parListChunk (confBeamWidth `div` (2 * confNumCapabilities)) rseq)
               else id )
-          . take confBeamWidth  -- TODO: Group?
           . zipWith ( \ i (h, ((v1, _), (v2, _)))
                       -> processMergePair i h (v1, v2)
                     ) [1 ..]
+          . ( if confDynamicBeamWidth
+              then takeAtLeastOn fst confBeamWidth
+              else take confBeamWidth
+            )
           . ( if confShuffleMerges
               then \ xs -> fst $ shuffleGroupsBy ((==) `on` fst) xs genMerge
               else id
@@ -528,7 +536,7 @@ cbsmGo cache conf@ConfigCBSM{..} prev@(g, info@Info{..})
                   { infoRandomGen             = genNext
                   , infoIteration             = n
                   , infoMergePairs            = mergePairs
-                  , infoBeamWidth             = confBeamWidth
+                  , infoBeamWidth             = length cands
                   , infoBeamIndex             = beIndex (head minimalCands)
                   , infoBeam                  = cands
                   , infoEquivalentBeamIndizes = map beIndex minimalCands
@@ -557,6 +565,9 @@ compileMergePairs
   -- ^ optionally randomize the order of states with the same count
   -> g
   -> ((Int, [(Int, ((v, Int), (v, Int)))]), g)
+  -- ^ ((length of list,
+  --     [(heuristic value, ((state 1, count 1), (state 2, count 2)))]),
+  --    updated RandomGen state)
 compileMergePairs cntM grpS doShuffle g
   = n `seq` ((n, sortedCartesianProductWith' ((+) `on` snd) vs (tail vs)), g')
   where n     = let s = M.size cntM' in s * (s - 1) `div` 2
@@ -576,6 +587,25 @@ shuffleGroupsBy eq xs g
   . fmap concat
   . mapM (state . shuffle)
   $ groupBy eq xs
+
+
+takeAtLeastOn :: Eq b => (a -> b) -> Int -> [a] -> [a]
+takeAtLeastOn project = sanitize
+  where
+    sanitize n = if n < 1 then const [] else takeAtLeast n
+
+    takeAtLeast _ [] = []
+    takeAtLeast n (x : xs)
+      = x : if n > 1
+            then takeAtLeast (pred n) xs
+            else takeOn (project x) xs
+
+    takeOn _ [] = []
+    takeOn px (y : ys)
+      = if px == py
+        then y : takeOn py ys
+        else []
+      where py = project y
 
 
 normalizeLklhdByMrgdStates :: (Int, Int, Int) -> Log Double -> Log Double

@@ -70,6 +70,7 @@ data Args
     , flagFilterByLeafs :: FilePath
     , flagRestrictMerge :: [FlagRestrictMerge]
     , flagBeamWidth :: Int
+    , flagDynamicBeamWidth :: Bool
     , flagShuffle :: FlagShuffle
     , flagSeed :: Int
     , flagNormalize :: Bool
@@ -154,22 +155,23 @@ cmdArgs
         ]
     }
   , ( modeEmpty CBSM
-        { flagAsForests      = False
-        , flagBinarization   = FBNone
-        , flagDefoliate      = False
-        , flagPennFilter     = False
-        , flagFilterByLeafs  = ""
-        , flagRestrictMerge  = []
-        , flagBeamWidth      = 1000
-        , flagShuffle        = FSNone
-        , flagSeed           = 0
-        , flagNormalize      = False
-        , flagIterations     = (pred maxBound)
-        , flagDir            = ""
-        , flagLogBeamVerbose = False
-        , flagSaveCounter    = Nothing
-        , flagSaveTimer      = Nothing
-        , argCorpora         = []
+        { flagAsForests        = False
+        , flagBinarization     = FBNone
+        , flagDefoliate        = False
+        , flagPennFilter       = False
+        , flagFilterByLeafs    = ""
+        , flagRestrictMerge    = []
+        , flagBeamWidth        = 1000
+        , flagDynamicBeamWidth = False
+        , flagShuffle          = FSNone
+        , flagSeed             = 0
+        , flagNormalize        = False
+        , flagIterations       = (pred maxBound)
+        , flagDir              = ""
+        , flagLogBeamVerbose   = False
+        , flagSaveCounter      = Nothing
+        , flagSaveTimer        = Nothing
+        , argCorpora           = []
         })
     { modeNames = ["cbsm"]
     , modeHelp = "Read-off a grammar from TREEBANKs and generalize it. See \
@@ -183,6 +185,7 @@ cmdArgs
         , flagReqFilterByLeafs
         , flagReqRestrictMerge
         , flagReqBeamWidth
+        , flagNoneDynamicBeamWidth
         , flagReqShuffle
         , flagReqSeed
         , flagNoneNormalize
@@ -275,6 +278,12 @@ cmdArgs
     flagNoneDefoliate
       = flagNone ["defoliate"] (\ x -> x{flagDefoliate = True})
           "remove leaves from trees in TREEBANKs"
+    flagNoneDynamicBeamWidth
+      = flagNone ["dynamic-beam-width"] (\ x -> x{flagDynamicBeamWidth = True})
+          "The actual beam width is at least as defined by --beam-width, but \
+          \if this flag is enabled, then the actual beam width is extended \
+          \to capture all candidates that have a heuristic value that is as \
+          \good as for candidates within --beam-width"
     flagNoneNormalize
       = flagNone ["normalize"] (\ x -> x{flagNormalize = True})
           "normalize log likelihood deltas by number of merged states"

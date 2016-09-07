@@ -150,14 +150,15 @@ mainArgs opts@CBSM{..} = do
       $ take (succ flagIterations)
       $ cbsm
           ConfigCBSM
-            { confNumCapabilities = numCapabilities
-            , confMergeGroups     = mergeGroups flagBinarization flagRestrictMerge tM
-            , confEvaluate        = if flagNormalize
-                                    then normalizeLklhdByMrgdStates
-                                    else flip const
-            , confBeamWidth       = flagBeamWidth
-            , confShuffleStates   = flagShuffle == FSStates
-            , confShuffleMerges   = flagShuffle == FSMerges
+            { confNumCapabilities  = numCapabilities
+            , confMergeGroups      = mergeGroups flagBinarization flagRestrictMerge tM
+            , confEvaluate         = if flagNormalize
+                                     then normalizeLklhdByMrgdStates
+                                     else flip const
+            , confBeamWidth        = flagBeamWidth
+            , confDynamicBeamWidth = flagDynamicBeamWidth
+            , confShuffleStates    = flagShuffle == FSStates
+            , confShuffleMerges    = flagShuffle == FSMerges
             }
           (g, initialInfo (mkStdGen flagSeed) (cntState g))
 
@@ -181,14 +182,15 @@ mainArgs CBSMContinue{..} = do
       $ take (succ flagIterations)
       $ cbsm
           ConfigCBSM
-            { confNumCapabilities = numCapabilities
-            , confMergeGroups     = groups
-            , confEvaluate        = if flagNormalize opts
-                                    then normalizeLklhdByMrgdStates
-                                    else flip const
-            , confBeamWidth       = flagBeamWidth
-            , confShuffleStates   = flagShuffle opts == FSStates
-            , confShuffleMerges   = flagShuffle opts == FSMerges
+            { confNumCapabilities  = numCapabilities
+            , confMergeGroups      = groups
+            , confEvaluate         = if flagNormalize opts
+                                     then normalizeLklhdByMrgdStates
+                                     else flip const
+            , confBeamWidth        = flagBeamWidth
+            , confDynamicBeamWidth = flagDynamicBeamWidth opts
+            , confShuffleStates    = flagShuffle opts == FSStates
+            , confShuffleMerges    = flagShuffle opts == FSMerges
             }
           (g, info)
 
