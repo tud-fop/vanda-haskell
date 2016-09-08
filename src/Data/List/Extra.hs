@@ -20,6 +20,7 @@ module Data.List.Extra
 (
 -- * Basic functions
   isSingleton
+, isMultiton
 
 -- * Sublists
 
@@ -64,6 +65,13 @@ import Data.List (foldl')
 isSingleton :: [a] -> Bool
 isSingleton [_] = True
 isSingleton  _  = False
+
+
+-- | Test whether a list contains at least two elements.
+isMultiton :: [a] -> Bool
+isMultiton [ ] = False
+isMultiton [_] = False
+isMultiton  _  = True
 
 
 -- | Like 'span', but the length of the prefix is returned additionally.
