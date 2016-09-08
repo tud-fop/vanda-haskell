@@ -43,6 +43,7 @@ module Vanda.CBSM.CountBasedStateMerging
 
 
 import qualified Control.Error
+import           Data.List.Extra (isMultiton)
 import           Data.List.Shuffle (shuffle)
 import           Data.Maybe.Extra (nothingIf)
 import           Vanda.CBSM.Dovetailing
@@ -703,6 +704,7 @@ saturateMergeStep g (todo, mrgs)
           . map (\ Rule{..} -> ( map (Merge.apply mrgs) from
                                , S.singleton (Merge.apply mrgs to)))
           )
+        $ filter isMultiton
         $ M.elems
         $ M.unionsWith (flip (++))  -- bring together rules with same terminal
         $ M.elems
