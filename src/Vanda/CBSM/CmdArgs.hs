@@ -118,6 +118,7 @@ data Args
     , flagSortFormatString :: String
     , flagColormapMin :: Double
     , flagColormapMax :: Double
+    , flagChunkSize :: Int
     }
   | RenderBeamInfo
     { argRenderBeamInput :: FilePath
@@ -125,6 +126,7 @@ data Args
     , flagSortFormatString :: String
     , argInfo :: FilePath
     , argIntToTreeMap :: FilePath
+    , flagChunkSize :: Int
     , argRenderBeamOutput :: FilePath
     }
   deriving (Read, Show)
@@ -273,7 +275,7 @@ cmdArgs
         , flagReqOutputFormat
         ]
     }
-  , (modeEmpty $ RenderBeam "" "" False (-1) "" 0 1)
+  , (modeEmpty $ RenderBeam "" "" False (-1) "" 0 1 1)
     { modeNames = ["render-beam"]
     , modeHelp = "Render " ++ fileNameEvaluations ++ " into a png image."
     , modeArgs =
@@ -288,9 +290,10 @@ cmdArgs
         , flagReqSortFormatString
         , flagReqColormapMin
         , flagReqColormapMax
+        , flagReqChunkSize
         ]
     }
-  , (modeEmpty $ RenderBeamInfo "" "" "" "" "" "")
+  , (modeEmpty $ RenderBeamInfo "" "" "" "" "" 1 "")
     { modeNames = ["render-beam-info"]
     , modeHelp = "Render " ++ fileNameLogBeamVerbose ++ " into a png image."
     , modeArgs =
@@ -304,6 +307,7 @@ cmdArgs
         )
     , modeGroupFlags = toGroup
         [ flagReqSortFormatString
+        , flagReqChunkSize
         ]
     }
   ]
@@ -339,7 +343,7 @@ cmdArgs
           (  "Write all information about the search beam to "
           ++ fileNameLogBeamVerbose   ++ "." )
     flagReqOutputFormat
-      = flagReq [flag] update "FORMAT" ("one of " ++ optsStr)
+      = flagReq [flag] update "FORMAT" ("one of " ++ optsStr ++ ". Default: pretty.")
       where
         flag = "output-format"
         err  = flag ++ " expects one of " ++ optsStr
@@ -375,7 +379,7 @@ cmdArgs
       = flagReq [flag] update "MODE"
       $ "one of " ++ optsStr ++ ". The MODE strict accepts only known \
         \words for parsing. The MODE arbitrary accepts any known word \
-        \as replacment for an unknown word."
+        \as replacment for an unknown word. Default: strict."
       where
         flag = "unknown-words"
         err  = flag ++ " expects one of " ++ optsStr
@@ -385,7 +389,7 @@ cmdArgs
                    $ lookup y opts
     flagReqUnknownWordOutput
       = flagReq [flag] update "MODE"
-      $ "one of " ++ optsStr
+      $ "one of " ++ optsStr ++  ". Default: original."
       where
         flag = "unknown-word-output"
         err  = flag ++ " expects one of " ++ optsStr
@@ -486,3 +490,6 @@ cmdArgs
     flagReqColormapMax
       = flagReq ["colormapmax"] (readUpdate $ \ a x -> x{flagColormapMax = a})
                 "COLORMAPMAX" "value mapped to the maximum color (default 1.0)"
+    flagReqChunkSize
+      = flagReq ["chunksize"] (readUpdate $ \ a x -> x{flagChunkSize = a})
+                "CHUNKSIZE" "chunk size (default 1)"

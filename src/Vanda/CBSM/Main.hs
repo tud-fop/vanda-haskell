@@ -277,6 +277,7 @@ mainArgs RenderBeam{..} = do
              (wordsBy (==',') flagSortFormatString) -- TODO: unless it occurs in a mixedness mapper format string...
              flagColormapMin
              flagColormapMax
+             flagChunkSize
              argRenderBeamInput
              argRenderBeamOutput
 
@@ -288,6 +289,7 @@ mainArgs RenderBeamInfo{..} = do
                  (wordsBy (==',') flagSortFormatString) -- TODO: unless it occurs in a mixedness mapper format string...
                  infoMergeTreeMap
                  int2tree
+                 flagChunkSize
                  argRenderBeamOutput
 
 

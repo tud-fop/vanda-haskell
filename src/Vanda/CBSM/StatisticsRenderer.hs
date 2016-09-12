@@ -26,11 +26,11 @@ module Vanda.CBSM.StatisticsRenderer
 import           Codec.Picture  -- package JuicyPixels
 import qualified Data.Binary as B
 import qualified Data.ByteString.Lazy.Char8 as C
-import           Data.List (foldl', intercalate, sortOn, groupBy, elemIndex, sort)
-import           Data.List.Split (splitOn)
+import           Data.List (foldl', intercalate, sortOn, groupBy, elemIndex, sort, minimumBy)
+import           Data.List.Split (splitOn, chunksOf)
 import qualified Data.Map.Lazy as M
 import           Data.Maybe (fromMaybe)
-import           Data.Ord (Down(..))
+import           Data.Ord (Down(..), comparing)
 import qualified Data.Set as S
 import qualified Data.Tree as T
 
@@ -108,11 +108,12 @@ renderBeam
   -> [String]  -- ^ sorting format string (already split)
   -> Double    -- ^ value mapped to the minimum color
   -> Double    -- ^ value mapped to the maximum color
+  -> Int       -- ^ chunk size for scaling the beam
   -> FilePath  -- ^ input csv file
   -> FilePath  -- ^ output png file
   -> IO ()
-renderBeam rle col sortformats minval maxval
-  = renderBeamWith rle reader sorter renderer
+renderBeam rle col sortformats minval maxval chunkSize
+  = renderBeamWith rle reader sorter renderer chunkSize
   where
     getMixedness = errorHere "renderBeam" "tried to access a getMixedness function!"
     iter         = errorHere "renderBeam" "tried to access the iteration!"
@@ -132,9 +133,10 @@ renderBeamInfo
   -> [String]                            -- ^ sorting format string (already split)
   -> M.Map IntState (MergeTree IntState) -- ^ merge tree (history)
   -> M.Map IntState (T.Tree String)      -- ^ int2tree map
+  -> Int                                 -- ^ chunk size for scaling the beam
   -> FilePath                            -- ^ output png file
   -> IO ()
-renderBeamInfo fileIn renderableCats sortformats infoMergeTreeMap int2tree fileOut = do
+renderBeamInfo fileIn renderableCats sortformats infoMergeTreeMap int2tree chunkSize fileOut = do
   let allTreesTilNow = M.elems infoMergeTreeMap
       megaMergeTree = if length allTreesTilNow == 1
                         then head allTreesTilNow
@@ -204,7 +206,7 @@ renderBeamInfo fileIn renderableCats sortformats infoMergeTreeMap int2tree fileO
   --mapM_ putStrLn $ sort $ allTerms
   --print $ getTermsOfStateAt 0 $ C.pack "5"
   
-  renderBeamWith False reader sorter renderer fileIn fileOut
+  renderBeamWith False reader sorter renderer chunkSize fileIn fileOut
   where
     getTerms
       :: (Int, [IntState])
@@ -238,30 +240,33 @@ flattenMergeTree :: MergeTree v -> [v]
 flattenMergeTree (State x _) = [x]
 flattenMergeTree (Merge iter cs) = concatMap flattenMergeTree cs
 
-
 renderBeamWith
-  :: Bool                         -- ^ run length encoding used?
+  :: Ord a -- ^ we use Ord instead of Eq to use Maps for lookup...
+  => Bool                         -- ^ run length encoding used?
   -> (Int -> [C.ByteString] -> a) -- ^ read function for row after indices
   -> ([a] -> [a])                 -- ^ intra-iteration sort function
   -> (a -> PixelRGB8)             -- ^ render function for the column
+  -> Int                          -- ^ chunk size for scaling the beam
   -> FilePath                     -- ^ input csv file
   -> FilePath                     -- ^ output png file
   -> IO ()
-renderBeamWith rle reader sorter renderer fileIn fileOut = do
+renderBeamWith rle reader sorter renderer chunkSize fileIn fileOut = do
   putStrLnTimestamped "Starting …"
   let getIter = (\ (i,_,_) -> i + 1)
       getBeam = (\ (_,i,_) -> i + 1)
       getWidth = getBeam . last . takeWhile ((==1) . getIter)
   w <- getWidth . parseCSVData rle reader <$> readCSV fileIn
   h <- unsafeReadInt . head . last        <$> readCSV fileIn
+  let chunkedW = (w `divUp` chunkSize)
   putStrLnTimestamped'
-    $ "Writing image of dimensions " ++ show w ++ "×" ++ show h ++ " …"
+    $ "Writing image of dimensions " ++ show chunkedW ++ "×" ++ show h ++ " …"
   writePng fileOut
-    .   toImage w h renderer
+    .   toImage chunkedW h renderer
     .   map traceMe
     -- Intra-iter sorting
     .   concat
-    .   map ((\ (x,y,z) -> zip3 x y $ sorter z) . unzip3)
+    .   map crunchChunky
+    .   map ((\ (x,y,z) -> zip3 x y $ sorter z) . unzip3) -- sort
     .   groupBy (\ (a,_,_) (b,_,_) -> a == b)
     -- Parsing
     .   parseCSVData rle reader
@@ -272,6 +277,23 @@ renderBeamWith rle reader sorter renderer fileIn fileOut = do
       | iter `mod` 10 == 0 = traceShow iter t
       | otherwise = t
     traceMe t = t
+    divUp x y = case quotRem x y of
+                  (i,0) -> i
+                  (i,_) -> i+1
+    crunchChunky :: Ord a => [(Int, Int, a)] -> [(Int, Int, a)]
+    crunchChunky
+      = renumber 0
+      . map chooseRarest
+      . chunksOf chunkSize
+      where
+        chooseRarest xs
+          = fst
+          $ minimumBy (comparing snd)
+          $ M.toList
+          $ M.fromListWith (+)
+          $ zip xs (repeat 1)
+        renumber _ [] = []
+        renumber i ((iter, _, val):xs) = (iter, i, val) : renumber (i+1) xs
 
 toImage :: Int -> Int -> (a -> PixelRGB8) -> [(Int, Int, a)] -> Image PixelRGB8
 toImage w h renderer
