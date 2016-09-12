@@ -44,6 +44,11 @@ import Debug.Trace
 errorHere :: String -> String -> a
 errorHere = Control.Error.errorHere "Vanda.CBSM.StatisticsRenderer"
 
+divUp :: Int -> Int -> Int
+divUp x y = case quotRem x y of
+              (i,0) -> i
+              (i,_) -> i+1
+
 safeMapping
   :: Eq s
   => [s]     -- ^ list containing values we want to map to their index
@@ -103,17 +108,18 @@ genSorter s rowdata _ _
 --
 -- The input file is usually called @statistics-evaluations.csv@.
 renderBeam
-  :: Bool      -- ^ run length encoding used?
-  -> Int       -- ^ after-index (!) column to render (0-based)
-  -> [String]  -- ^ sorting format string (already split)
-  -> Double    -- ^ value mapped to the minimum color
-  -> Double    -- ^ value mapped to the maximum color
-  -> Int       -- ^ chunk size for scaling the beam
-  -> FilePath  -- ^ input csv file
-  -> FilePath  -- ^ output png file
+  :: Bool                 -- ^ run length encoding used?
+  -> Int                  -- ^ after-index (!) column to render (0-based)
+  -> [String]             -- ^ sorting format string (already split)
+  -> Double               -- ^ value mapped to the minimum color
+  -> Double               -- ^ value mapped to the maximum color
+  -> Int                  -- ^ chunk size for scaling the beam
+  -> ([Double] -> Double) -- ^ combining chunk candidates
+  -> FilePath             -- ^ input csv file
+  -> FilePath             -- ^ output png file
   -> IO ()
-renderBeam rle col sortformats minval maxval chunkSize
-  = renderBeamWith rle reader sorter renderer chunkSize
+renderBeam rle col sortformats minval maxval
+  = renderBeamWith rle reader renderer
   where
     getMixedness = errorHere "renderBeam" "tried to access a getMixedness function!"
     iter         = errorHere "renderBeam" "tried to access the iteration!"
@@ -121,10 +127,7 @@ renderBeam rle col sortformats minval maxval chunkSize
       = let sortable = [genSorter s rowdata getMixedness iter | s <- sortformats]
             renderable = unsafeReadDouble $ rowdata !! col
         in (sortable, renderable)
-    sorter
-      | null sortformats = id
-      | otherwise = sortOn fst
-    renderer (_, x) = colormap minval maxval x
+    renderer = colormap minval maxval
 
 type IntState = Int
 renderBeamInfo
@@ -134,9 +137,10 @@ renderBeamInfo
   -> M.Map IntState (MergeTree IntState) -- ^ merge tree (history)
   -> M.Map IntState (T.Tree String)      -- ^ int2tree map
   -> Int                                 -- ^ chunk size for scaling the beam
+  -> ([Maybe String] -> Maybe String)    -- ^ combining chunk candidates
   -> FilePath                            -- ^ output png file
   -> IO ()
-renderBeamInfo fileIn renderableCats sortformats infoMergeTreeMap int2tree chunkSize fileOut = do
+renderBeamInfo fileIn renderableCats sortformats infoMergeTreeMap int2tree chunkSize combiner fileOut = do
   let allTreesTilNow = M.elems infoMergeTreeMap
       megaMergeTree = if length allTreesTilNow == 1
                         then head allTreesTilNow
@@ -169,18 +173,6 @@ renderBeamInfo fileIn renderableCats sortformats infoMergeTreeMap int2tree chunk
               sortable = [genSorter s rowdata getMixedness iter | s <- sortformats]
               renderable = getMixedness iter (s1, s2)
           in (sortable, renderable)
-      sorter
-        | null sortformats = id
-        | otherwise = sortOn fst
-      {-
-      mixednessRenderer (_, (Just _)) = PixelRGB8   0 255   0
-      mixednessRenderer (_, Nothing ) = PixelRGB8   0   0   0
-      renderer (Just "NP") = PixelRGB8   0 255   0
-      renderer (Just "VP") = PixelRGB8 255   0   0
-      renderer (Just "S" ) = PixelRGB8 255 255   0
-      renderer (Just _   ) = PixelRGB8   0   0 255
-      renderer Nothing     = PixelRGB8 128 128 128
-      -}
       
       -- thanks to colorbrewer2 :)
       colorList = [ PixelRGB8 166 206 227
@@ -201,12 +193,12 @@ renderBeamInfo fileIn renderableCats sortformats infoMergeTreeMap int2tree chunk
       wildcardPos = fromMaybe remainderPos $ "*" `elemIndex` unsafeCats
       nothingPos  = fromMaybe remainderPos $ "-" `elemIndex` unsafeCats
       colorMapper = safeMapping unsafeCats wildcardPos nothingPos
-      renderer = (colorList!!) . colorMapper . snd
+      renderer = (colorList!!) . colorMapper
   
   --mapM_ putStrLn $ sort $ allTerms
   --print $ getTermsOfStateAt 0 $ C.pack "5"
   
-  renderBeamWith False reader sorter renderer chunkSize fileIn fileOut
+  renderBeamWith False reader renderer chunkSize combiner fileIn fileOut
   where
     getTerms
       :: (Int, [IntState])
@@ -241,16 +233,16 @@ flattenMergeTree (State x _) = [x]
 flattenMergeTree (Merge iter cs) = concatMap flattenMergeTree cs
 
 renderBeamWith
-  :: Ord a -- ^ we use Ord instead of Eq to use Maps for lookup...
-  => Bool                         -- ^ run length encoding used?
-  -> (Int -> [C.ByteString] -> a) -- ^ read function for row after indices
-  -> ([a] -> [a])                 -- ^ intra-iteration sort function
-  -> (a -> PixelRGB8)             -- ^ render function for the column
-  -> Int                          -- ^ chunk size for scaling the beam
-  -> FilePath                     -- ^ input csv file
-  -> FilePath                     -- ^ output png file
+  :: Ord a
+  => Bool                                       -- ^ run length encoding used?
+  -> (Int -> [C.ByteString] -> ([Sortable], a)) -- ^ read function for row after indices
+  -> (a -> PixelRGB8)                           -- ^ render function for the column
+  -> Int                                        -- ^ chunk size for scaling the beam
+  -> ([a] -> a)                                 -- ^ combining chunk candidates
+  -> FilePath                                   -- ^ input csv file
+  -> FilePath                                   -- ^ output png file
   -> IO ()
-renderBeamWith rle reader sorter renderer chunkSize fileIn fileOut = do
+renderBeamWith rle reader renderer chunkSize combiner fileIn fileOut = do
   putStrLnTimestamped "Starting …"
   let getIter = (\ (i,_,_) -> i + 1)
       getBeam = (\ (_,i,_) -> i + 1)
@@ -263,11 +255,8 @@ renderBeamWith rle reader sorter renderer chunkSize fileIn fileOut = do
   writePng fileOut
     .   toImage chunkedW h renderer
     .   map traceMe
-    -- Intra-iter sorting
-    .   concat
-    .   map crunchChunky
-    .   map ((\ (x,y,z) -> zip3 x y $ sorter z) . unzip3) -- sort
-    .   groupBy (\ (a,_,_) (b,_,_) -> a == b)
+    -- Intra-iter sorting and combining
+    .   processPerIter
     -- Parsing
     .   parseCSVData rle reader
     =<< readCSV fileIn
@@ -277,23 +266,18 @@ renderBeamWith rle reader sorter renderer chunkSize fileIn fileOut = do
       | iter `mod` 10 == 0 = traceShow iter t
       | otherwise = t
     traceMe t = t
-    divUp x y = case quotRem x y of
-                  (i,0) -> i
-                  (i,_) -> i+1
-    crunchChunky :: Ord a => [(Int, Int, a)] -> [(Int, Int, a)]
-    crunchChunky
-      = renumber 0
-      . map chooseRarest
-      . chunksOf chunkSize
-      where
-        chooseRarest xs
-          = fst
-          $ minimumBy (comparing snd)
-          $ M.toList
-          $ M.fromListWith (+)
-          $ zip xs (repeat 1)
-        renumber _ [] = []
-        renumber i ((iter, _, val):xs) = (iter, i, val) : renumber (i+1) xs
+    --processPerIter :: [(Int, Int, ([Sortable], a))] -> [(Int, Int, a)]
+    processPerIter
+      = concat 
+      . map (processIntraIter . unzip3)
+      . groupBy (\ (a,_,_) (b,_,_) -> a == b)
+    --processIntraIter :: ([Int], [Int] , [([Sortable], a)]) -> [(Int, Int, a)]
+    processIntraIter ((iter:_), _, cands)
+      = zipWith (\ pos val -> (iter, pos, val)) [0..]
+      $ map combiner
+      $ chunksOf chunkSize
+      $ map snd . sortOn fst
+      $ cands
 
 toImage :: Int -> Int -> (a -> PixelRGB8) -> [(Int, Int, a)] -> Image PixelRGB8
 toImage w h renderer

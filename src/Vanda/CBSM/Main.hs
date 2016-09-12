@@ -49,7 +49,7 @@ import           Control.Monad
 import qualified Data.Binary as B
 import qualified Data.ByteString.Lazy as BS
 import           Data.Foldable (for_)
-import           Data.List (intercalate, nub)
+import           Data.List (intercalate, nub, minimumBy, maximumBy, sort)
 import           Data.List.Split (wordsBy)
 import           Data.Map ((!))
 import qualified Data.Map as M
@@ -278,6 +278,7 @@ mainArgs RenderBeam{..} = do
              flagColormapMin
              flagColormapMax
              flagChunkSize
+             (chunkCruncher flagChunkCruncher)
              argRenderBeamInput
              argRenderBeamOutput
 
@@ -290,7 +291,24 @@ mainArgs RenderBeamInfo{..} = do
                  infoMergeTreeMap
                  int2tree
                  flagChunkSize
+                 (chunkCruncher flagChunkCruncher)
                  argRenderBeamOutput
+
+chunkCruncher :: Ord a => FlagChunkCruncher -> [a] -> a
+chunkCruncher FCCMaximum xs
+  = maximum xs
+chunkCruncher FCCMinimum xs
+  = minimum xs
+chunkCruncher FCCMajority xs
+  = fst
+  $ maximumBy (comparing snd)
+  $ M.toList $ M.fromListWith (+) $ zip xs (repeat 1)
+chunkCruncher FCCMinority xs
+  = fst
+  $ minimumBy (comparing snd)
+  $ M.toList $ M.fromListWith (+) $ zip xs (repeat 1)
+chunkCruncher FCCMedian xs
+  = head $ drop (length xs `div` 2) $ sort xs
 
 
 readCorpora :: Bool -> Bool -> Bool -> [FilePath] -> IO (Forest String)

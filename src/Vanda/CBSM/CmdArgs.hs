@@ -119,6 +119,7 @@ data Args
     , flagColormapMin :: Double
     , flagColormapMax :: Double
     , flagChunkSize :: Int
+    , flagChunkCruncher :: FlagChunkCruncher
     }
   | RenderBeamInfo
     { argRenderBeamInput :: FilePath
@@ -127,10 +128,14 @@ data Args
     , argInfo :: FilePath
     , argIntToTreeMap :: FilePath
     , flagChunkSize :: Int
+    , flagChunkCruncher :: FlagChunkCruncher
     , argRenderBeamOutput :: FilePath
     }
   deriving (Read, Show)
 
+data FlagChunkCruncher
+  = FCCMinimum | FCCMaximum | FCCMinority | FCCMajority | FCCMedian
+  deriving (Eq, Read, Show)
 
 data FlagShuffle = FSNone | FSStates | FSMerges deriving (Eq, Read, Show)
 
@@ -275,7 +280,7 @@ cmdArgs
         , flagReqOutputFormat
         ]
     }
-  , (modeEmpty $ RenderBeam "" "" False (-1) "" 0 1 1)
+  , (modeEmpty $ RenderBeam "" "" False (-1) "" 0 1 1 FCCMedian)
     { modeNames = ["render-beam"]
     , modeHelp = "Render " ++ fileNameEvaluations ++ " into a png image."
     , modeArgs =
@@ -291,9 +296,10 @@ cmdArgs
         , flagReqColormapMin
         , flagReqColormapMax
         , flagReqChunkSize
+        , flagReqChunkCruncher
         ]
     }
-  , (modeEmpty $ RenderBeamInfo "" "" "" "" "" 1 "")
+  , (modeEmpty $ RenderBeamInfo "" "" "" "" "" 1 FCCMedian "")
     { modeNames = ["render-beam-info"]
     , modeHelp = "Render " ++ fileNameLogBeamVerbose ++ " into a png image."
     , modeArgs =
@@ -308,6 +314,7 @@ cmdArgs
     , modeGroupFlags = toGroup
         [ flagReqSortFormatString
         , flagReqChunkSize
+        , flagReqChunkCruncher
         ]
     }
   ]
@@ -493,3 +500,27 @@ cmdArgs
     flagReqChunkSize
       = flagReq ["chunksize"] (readUpdate $ \ a x -> x{flagChunkSize = a})
                 "CHUNKSIZE" "chunk size (default 1)"
+    flagReqChunkCruncher
+      = flagReq [flag] update "MODE"
+      $ unlines
+          [ "one of " ++ optsStr ++ "."
+          , "Determines candidate choice within a chunk."
+          , "minimum/maximum: (according to Ord instance)."
+          , "majority: most common element in chunk."
+          , "minority: rarest element in chunk."
+          , "median: middle element of ordering (second of these for even chunksize)"
+          , "DEFAULT: median"
+          ]
+      where
+        flag = "chunkcruncher"
+        err  = flag ++ " expects one of " ++ optsStr
+        optsStr = intercalate ", " (map fst opts)
+        opts = [ ("minimum" , FCCMinimum)
+               , ("maximum" , FCCMaximum)
+               , ("minority", FCCMinority)
+               , ("majority", FCCMajority)
+               , ("median"  , FCCMedian) ]
+        update y x = maybe (Left err)
+                           (\ z -> Right x{flagChunkCruncher = z})
+                   $ lookup y opts
+    
