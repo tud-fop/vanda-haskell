@@ -161,12 +161,10 @@ renderBeamInfo fileIn renderableCats sortformats infoMergeTreeMap int2tree chunk
                             then Just x
                             else Nothing
             _          -> Nothing
-      {-
       allTerms = S.toAscList
                $ S.fromList
-               $ concatMap (getTermsOfStateAt 0 . C.pack . show)
+               $ concatMap (getTermsOfStateAt 0)
                $ [0..(maximum $ M.keys termsOverTime)]
-      -}
       reader iter rowdata
         = let s1 = unsafeReadInt $ rowdata !! 9
               s2 = unsafeReadInt $ rowdata !! 10
@@ -189,16 +187,18 @@ renderBeamInfo fileIn renderableCats sortformats infoMergeTreeMap int2tree chunk
                   , PixelRGB8 177  89  40
                   ] ++ repeat (PixelRGB8 0 0 0)
       unsafeCats = readCats renderableCats
-      remainderPos = length unsafeCats
-      wildcardPos = fromMaybe remainderPos $ "*" `elemIndex` unsafeCats
-      nothingPos  = fromMaybe remainderPos $ "-" `elemIndex` unsafeCats
-      colorMapper = safeMapping unsafeCats wildcardPos nothingPos
-      renderer = (colorList!!) . colorMapper
+      wildcardPos = maxBound-1 :: Int
+      nothingPos  = maxBound :: Int
+      indexMapper = safeMapping unsafeCats wildcardPos nothingPos
+      colorMapper i
+        | i ==  maxBound    = PixelRGB8  95  95  95
+        | i == (maxBound-1) = PixelRGB8 160 160 160
+        | otherwise = colorList !! i
   
-  --mapM_ putStrLn $ sort $ allTerms
+  putStrLnTimestamped' $ "All terminal symbols: " ++ show allTerms
   --print $ getTermsOfStateAt 0 $ C.pack "5"
   
-  renderBeamWith False reader renderer chunkSize combiner fileIn fileOut
+  renderBeamWith False reader (colorMapper . indexMapper) chunkSize combiner fileIn fileOut
   where
     getTerms
       :: (Int, [IntState])
@@ -266,12 +266,12 @@ renderBeamWith rle reader renderer chunkSize combiner fileIn fileOut = do
       | iter `mod` 10 == 0 = traceShow iter t
       | otherwise = t
     traceMe t = t
-    --processPerIter :: [(Int, Int, ([Sortable], a))] -> [(Int, Int, a)]
+    -- processPerIter :: Ord a => [(Int, Int, ([Sortable], a))] -> [(Int, Int, a)]
     processPerIter
-      = concat 
+      = concat
       . map (processIntraIter . unzip3)
       . groupBy (\ (a,_,_) (b,_,_) -> a == b)
-    --processIntraIter :: ([Int], [Int] , [([Sortable], a)]) -> [(Int, Int, a)]
+    -- processIntraIter :: Ord a => ([Int], [Int] , [([Sortable], a)]) -> [(Int, Int, a)]
     processIntraIter ((iter:_), _, cands)
       = zipWith (\ pos val -> (iter, pos, val)) [0..]
       $ map combiner
