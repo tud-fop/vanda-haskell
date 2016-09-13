@@ -102,6 +102,7 @@ mainArgs PrintCorpora{..}
               . show
               ) [1 :: Int ..]
     . map (encodeByFlag flagBinarization)
+    . filterByLength flagFilterByLength
   =<< (if null flagFilterByLeafs then return
                                  else filterByLeafs flagFilterByLeafs)
   =<< readCorpora flagAsForests flagDefoliate flagPennFilter argCorpora
@@ -330,6 +331,11 @@ filterByLeafs file ts = do
   wordS <- S.fromList . words <$> readFile file
   return $ filter (all (`S.member` wordS) . yield) ts
 
+filterByLength :: Int -> [Tree String] -> [Tree String]
+filterByLength l
+  | l <= 0 = id
+  | l == 1 = errorHere "filterByLength" "Lengths smaller than 1 doesn't make any sense."
+  | otherwise = filter ((<l) . length . yield)
 
 data RestrictMergeFeature a
   = RMFBinLeaf Bool

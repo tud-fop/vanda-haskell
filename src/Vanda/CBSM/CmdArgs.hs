@@ -59,6 +59,7 @@ data Args
     , flagBinarization :: FlagBinarization
     , flagDefoliate :: Bool
     , flagFilterByLeafs :: FilePath
+    , flagFilterByLength :: Int
     , flagOutputFormat :: FlagOutputFormat
     , argCorpora :: [FilePath]
     }
@@ -155,7 +156,7 @@ data FlagUnknownWordOutput
 cmdArgs :: Mode Args
 cmdArgs
   = modes "cbsm" (Help $ defaultHelp cmdArgs) "Count-Based State Merging"
-  [ (modeEmpty $ PrintCorpora False False FBNone False "" FOFPretty [])
+  [ (modeEmpty $ PrintCorpora False False FBNone False "" (-1) FOFPretty [])
     { modeNames = ["print-corpora"]
     , modeHelp =
         "Print trees from TREEBANKs. Can be used to check for parsing \
@@ -163,7 +164,7 @@ cmdArgs
         \are traversed recursively. If no TREEBANK is given, the trees are \
         \read from standard input. \
         \The filters (if used) apply in the order penn-filter, defoliate, \
-        \and filter-by-leafs."
+        \filter-by-leafs and finally filter-by-length."
     , modeArgs = ([], Just flagArgCorpora)
     , modeGroupFlags = toGroup
         [ flagNoneAsForests
@@ -171,6 +172,7 @@ cmdArgs
         , flagReqBinarization (\ b x -> x{flagBinarization = b})
         , flagNoneDefoliate
         , flagReqFilterByLeafs
+        , flagReqFilterByLength
         , flagReqOutputFormat
         ]
     }
@@ -341,6 +343,10 @@ cmdArgs
       = flagReq ["filter-by-leafs"] (\ a x -> Right x{flagFilterByLeafs = a})
           "FILE"
           "only use trees whose leafs occur in FILE"
+    flagReqFilterByLength
+      = flagReq ["filter-by-length"] (readUpdate $ \ a x -> x{flagFilterByLength = a})
+          "LENGTH"
+          "only output trees with a yield shorter than LENGTH (default -1 = no restriction)"
     flagNoneUnbinarize
       = flagNone ["unbinarize"] (\ x -> x{flagUnbinarize = True})
           "Undo the binarization before the output. Might fail if a tree is \

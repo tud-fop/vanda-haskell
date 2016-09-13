@@ -164,7 +164,7 @@ renderBeamInfo fileIn renderableCats sortformats infoMergeTreeMap int2tree chunk
       allTerms = S.toAscList
                $ S.fromList
                $ concatMap (getTermsOfStateAt 0)
-               $ [0..(maximum $ M.keys termsOverTime)]
+               $ M.keys termsOverTime
       reader iter rowdata
         = let s1 = unsafeReadInt $ rowdata !! 9
               s2 = unsafeReadInt $ rowdata !! 10
