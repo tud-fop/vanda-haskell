@@ -156,7 +156,7 @@ renderBeamInfo fileIn renderableCats sortformats infoMergeTreeMap int2tree chunk
                              . (termsOverTime M.!)
       getMixedness :: Int -> (IntState, IntState) -> Maybe String
       getMixedness iter (s1, s2)
-        = case (getTermsOfStateAt iter s1, getTermsOfStateAt iter s1) of
+        = case (getTermsOfStateAt iter s1, getTermsOfStateAt iter s2) of
             ([x], [y]) -> if x == y
                             then Just x
                             else Nothing
@@ -191,8 +191,8 @@ renderBeamInfo fileIn renderableCats sortformats infoMergeTreeMap int2tree chunk
       nothingPos  = maxBound :: Int
       indexMapper = safeMapping unsafeCats wildcardPos nothingPos
       colorMapper i
-        | i ==  maxBound    = PixelRGB8  95  95  95
         | i == (maxBound-1) = PixelRGB8 160 160 160
+        | i ==  maxBound    = PixelRGB8  95  95  95
         | otherwise = colorList !! i
   
   putStrLnTimestamped' $ "All terminal symbols: " ++ show allTerms
