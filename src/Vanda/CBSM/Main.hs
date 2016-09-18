@@ -38,6 +38,7 @@ import           Vanda.Corpus.Penn.Text (treeToPenn)
 import           Vanda.Corpus.SExpression as SExp
 import qualified Vanda.Features as F
 import qualified Vanda.Hypergraph as H
+import           Vanda.Hypergraph.Recognize
 import           Vanda.Util.IO
 import           Vanda.Util.Timestamps
 import           Vanda.Util.Tree as T
@@ -76,7 +77,6 @@ import           System.IO ( Handle
 import           System.Posix.Files (fileExist)
 import           System.Posix.Signals (sigUSR1)
 import           System.Random (StdGen, mkStdGen)
-
 
 errorHere :: String -> String -> a
 errorHere = Control.Error.errorHere "Vanda.CBSM.Main"
@@ -294,6 +294,16 @@ mainArgs RenderBeamInfo{..} = do
                  flagChunkSize
                  (chunkCruncher flagChunkCruncher)
                  argRenderBeamOutput
+
+mainArgs RecognizeTree{..} = do
+  binGrammar <- decodeFile argGrammar :: IO BinaryCRTG
+  let (hg, initsMap) = toHypergraph binGrammar :: (H.ForwardStar Int String Double, M.Map Int Double)
+  
+  trees <- readCorpora False False False [argTreeFile]
+  
+  let prob = map (totalProbOfTree (hg, initsMap)) trees
+  mapM_ (putStrLn . ("Total prob: "++)  . show) prob
+  putStrLn $ "===>" ++ show (product prob)
 
 chunkCruncher :: Ord a => FlagChunkCruncher -> [a] -> a
 chunkCruncher FCCMaximum xs
