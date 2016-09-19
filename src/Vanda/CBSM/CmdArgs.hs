@@ -135,6 +135,7 @@ data Args
   | RecognizeTrees
     { argGrammar :: FilePath
     , argTreesFile :: FilePath
+    , flagPrintRecognizable :: Bool
     }
   deriving (Read, Show)
 
@@ -323,7 +324,7 @@ cmdArgs
         , flagReqChunkCruncher
         ]
     }
-  , (modeEmpty $ RecognizeTrees "" "")
+  , (modeEmpty $ RecognizeTrees "" "" False)
     { modeNames = ["recognize-trees"]
     , modeHelp = "Recognize trees using some grammar. Output: NUMBER-OF-STATES \
                  \LIKELIHOOD NONZERO-TREE-COUNT GEOM-MEAN-LIKELIHOOD (all \
@@ -334,6 +335,9 @@ cmdArgs
           ]
         , Nothing
         )
+    , modeGroupFlags = toGroup
+        [ flagNonePrintRecognizable
+        ]
     }
   ]
   where
@@ -498,6 +502,9 @@ cmdArgs
       = flagArg (\ a x -> Right x{argGrammar = a}) "GRAMMAR-FILE"
     flagArgTreesFile
       = flagArg (\ a x -> Right x{argTreesFile = a}) "TREES-FILE"
+    flagNonePrintRecognizable
+      = flagNone ["print-recognizable"] (\ x -> x{flagPrintRecognizable = True})
+          "also print all recognizable trees out again"
     flagArgCount
       = flagArg (readUpdate $ \ a x -> x{argCount = a}) "COUNT"
     flagArgRenderBeamInput

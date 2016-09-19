@@ -302,8 +302,9 @@ mainArgs RecognizeTrees{..} = do
   let (hg, initsMap) = toHypergraph binGrammar :: (H.ForwardStar Int String Double, M.Map Int Double)
       logProbs = map (logBase 2 . totalProbOfTree (hg, initsMap)) trees
       stateCount = S.size $ H.nodes hg
-      nonZeroLogProbs = filter (/=logBase 2 0) logProbs
-      nonZeroCount = length nonZeroLogProbs
+      nonZeros = filter ((/=logBase 2 0) . snd) $ zip trees logProbs
+      nonZeroLogProbs = map snd nonZeros
+      nonZeroCount = length nonZeros
       meanLogProb = (sum nonZeroLogProbs) / (fromIntegral nonZeroCount)
   
   putStrLn $ intercalate "\t" [ show stateCount
@@ -311,6 +312,13 @@ mainArgs RecognizeTrees{..} = do
                               , show nonZeroCount
                               , show meanLogProb
                               ]
+  when flagPrintRecognizable
+    $ putStr
+    $ unlines
+    $ zipWith ( drawTreeFormatted FBNone FOFPenn
+              . show
+              ) [1 :: Int ..]
+    $ map fst nonZeros
 
 chunkCruncher :: Ord a => FlagChunkCruncher -> [a] -> a
 chunkCruncher FCCMaximum xs
