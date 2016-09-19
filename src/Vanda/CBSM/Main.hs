@@ -295,15 +295,16 @@ mainArgs RenderBeamInfo{..} = do
                  (chunkCruncher flagChunkCruncher)
                  argRenderBeamOutput
 
-mainArgs RecognizeTree{..} = do
+mainArgs RecognizeTrees{..} = do
   binGrammar <- decodeFile argGrammar :: IO BinaryCRTG
   let (hg, initsMap) = toHypergraph binGrammar :: (H.ForwardStar Int String Double, M.Map Int Double)
   
-  trees <- readCorpora False False False [argTreeFile]
+  trees <- readCorpora False False False [argTreesFile]
   
-  let prob = map (totalProbOfTree (hg, initsMap)) trees
-  mapM_ (putStrLn . ("Total prob: "++)  . show) prob
-  putStrLn $ "===>" ++ show (product prob)
+  let logProbs = map (logBase 2 . totalProbOfTree (hg, initsMap)) trees
+  
+  --mapM_ (putStrLn . ("Tree prob: "++)  . show) logProbs
+  putStrLn $ (show $ S.size $ H.nodes hg) ++ "\t" ++ show (sum logProbs)
 
 chunkCruncher :: Ord a => FlagChunkCruncher -> [a] -> a
 chunkCruncher FCCMaximum xs

@@ -132,9 +132,9 @@ data Args
     , flagChunkCruncher :: FlagChunkCruncher
     , argRenderBeamOutput :: FilePath
     }
-  | RecognizeTree
+  | RecognizeTrees
     { argGrammar :: FilePath
-    , argTreeFile :: FilePath
+    , argTreesFile :: FilePath
     }
   deriving (Read, Show)
 
@@ -323,12 +323,13 @@ cmdArgs
         , flagReqChunkCruncher
         ]
     }
-  , (modeEmpty $ RecognizeTree "" "")
-    { modeNames = ["recognize-tree"]
-    , modeHelp = "Recognize trees using some grammar."
+  , (modeEmpty $ RecognizeTrees "" "")
+    { modeNames = ["recognize-trees"]
+    , modeHelp = "Recognize trees using some grammar. Outputs number of states \
+                 \and likelihood of a given corpus."
     , modeArgs =
         ( [ flagArgGrammar{argRequire = True}
-          , flagArgTreeFile{argRequire = True}
+          , flagArgTreesFile{argRequire = True}
           ]
         , Nothing
         )
@@ -494,8 +495,8 @@ cmdArgs
       = flagArg (\ a x -> Right x{argIntToTreeMap = a}) "INT2TREE-FILE"
     flagArgGrammar
       = flagArg (\ a x -> Right x{argGrammar = a}) "GRAMMAR-FILE"
-    flagArgTreeFile
-      = flagArg (\ a x -> Right x{argTreeFile = a}) "TREES-FILE"
+    flagArgTreesFile
+      = flagArg (\ a x -> Right x{argTreesFile = a}) "TREES-FILE"
     flagArgCount
       = flagArg (readUpdate $ \ a x -> x{argCount = a}) "COUNT"
     flagArgRenderBeamInput

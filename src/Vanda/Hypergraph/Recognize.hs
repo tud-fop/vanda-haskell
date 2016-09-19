@@ -114,4 +114,5 @@ totalProbOfTree (hg, inits) t
   where
     scoreTree t
       = (*(inits M.! (H.to $ rootLabel t)))
-      $ foldl' (\ acc he -> acc * H.ident he) 1 t
+      $ foldl' (\ acc he -> acc * H.ident he) 1
+      $ t
