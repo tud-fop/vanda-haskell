@@ -325,8 +325,9 @@ cmdArgs
     }
   , (modeEmpty $ RecognizeTrees "" "")
     { modeNames = ["recognize-trees"]
-    , modeHelp = "Recognize trees using some grammar. Outputs number of states \
-                 \and likelihood of a given corpus."
+    , modeHelp = "Recognize trees using some grammar. Output: NUMBER-OF-STATES \
+                 \LIKELIHOOD NONZERO-TREE-COUNT GEOM-MEAN-LIKELIHOOD (all \
+                 \likelihoods log_2)"
     , modeArgs =
         ( [ flagArgGrammar{argRequire = True}
           , flagArgTreesFile{argRequire = True}

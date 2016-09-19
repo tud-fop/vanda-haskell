@@ -297,14 +297,20 @@ mainArgs RenderBeamInfo{..} = do
 
 mainArgs RecognizeTrees{..} = do
   binGrammar <- decodeFile argGrammar :: IO BinaryCRTG
-  let (hg, initsMap) = toHypergraph binGrammar :: (H.ForwardStar Int String Double, M.Map Int Double)
-  
   trees <- readCorpora False False False [argTreesFile]
   
-  let logProbs = map (logBase 2 . totalProbOfTree (hg, initsMap)) trees
+  let (hg, initsMap) = toHypergraph binGrammar :: (H.ForwardStar Int String Double, M.Map Int Double)
+      logProbs = map (logBase 2 . totalProbOfTree (hg, initsMap)) trees
+      stateCount = S.size $ H.nodes hg
+      nonZeroLogProbs = filter (/=logBase 2 0) logProbs
+      nonZeroCount = length nonZeroLogProbs
+      meanLogProb = (sum nonZeroLogProbs) / (fromIntegral nonZeroCount)
   
-  --mapM_ (putStrLn . ("Tree prob: "++)  . show) logProbs
-  putStrLn $ (show $ S.size $ H.nodes hg) ++ "\t" ++ show (sum logProbs)
+  putStrLn $ intercalate "\t" [ show stateCount
+                              , show (sum logProbs)
+                              , show nonZeroCount
+                              , show meanLogProb
+                              ]
 
 chunkCruncher :: Ord a => FlagChunkCruncher -> [a] -> a
 chunkCruncher FCCMaximum xs
