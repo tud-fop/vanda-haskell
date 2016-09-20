@@ -181,6 +181,14 @@ renderBeamInfo fileIn renderableCats sortformats infoMergeTreeMap int2tree chunk
                          $ map (getTermsOfStateAt iter)
                          $ filter (stateIsRepresentantAt iter)
                          $ M.keys turnedMegaMergeTree
+      mergeStatesAt :: Int -> Int
+      mergeStatesAt iter = mergeStatesAt' iter megaMergeTree
+        where
+          mergeStatesAt' iter (State _ _) = 0
+          mergeStatesAt' iter (Merge i cs)
+            | i <= iter = 1
+            | otherwise = sum (map (mergeStatesAt' iter) cs)
+      mixedStateCountInfo iter = (mixedStatesAt iter, mergeStatesAt iter)
   
   let reader iter rowdata
         = let s1 = unsafeReadInt $ rowdata !! 9
@@ -215,7 +223,7 @@ renderBeamInfo fileIn renderableCats sortformats infoMergeTreeMap int2tree chunk
   putStrLnTimestamped' $ "All terminal symbols: " ++ show allTerms
   putStrLnTimestamped' $ "Total #states: " ++ show (M.size turnedMegaMergeTree)
   putStrLnTimestamped' $ "Total #iterations: " ++ show (firstMergeIter - 1) ++ " to " ++ show lastProperIter
-  putStrLnTimestamped' $ "Mixedness over time: " ++ show (map mixedStatesAt [(firstMergeIter - 1)..lastProperIter])
+  putStrLnTimestamped' $ "Mixedness over time: " ++ show (map mixedStateCountInfo [(firstMergeIter - 1)..lastProperIter])
   
   renderBeamWith False reader (colorMapper . indexMapper) chunkSize combiner fileIn fileOut
   where
