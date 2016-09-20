@@ -25,7 +25,9 @@ module Vanda.CBSM.StatisticsRenderer
 
 import           Codec.Picture  -- package JuicyPixels
 import qualified Data.Binary as B
+import qualified Data.ByteString.Char8 as CS
 import qualified Data.ByteString.Lazy.Char8 as C
+import           Data.ByteString.Lex.Fractional
 import           Data.List (foldl', intercalate, sortOn, groupBy, elemIndex, sort, minimumBy)
 import           Data.List.Split (splitOn, chunksOf)
 import qualified Data.Map.Lazy as M
@@ -325,7 +327,11 @@ unsafeReadInt x
     err = errorHere "unsafeReadInt" $ "No parse for: " ++ show x
 
 unsafeReadDouble :: C.ByteString -> Double
-unsafeReadDouble = read . C.unpack  -- TODO: read is awfully slow!
+unsafeReadDouble bs
+  = case readSigned readExponential (C.toStrict bs) of
+      Just (x, rest) | CS.null rest -> x
+      _ -> read (C.unpack bs)
+        -- readExponential cannot handle NaN, Infinity, -Infinity
 
 
 
