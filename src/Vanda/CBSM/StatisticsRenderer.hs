@@ -27,7 +27,7 @@ import           Codec.Picture  -- package JuicyPixels
 import qualified Data.Binary as B
 import qualified Data.ByteString.Char8 as CS
 import qualified Data.ByteString.Lazy.Char8 as C
-import           Data.ByteString.Lex.Fractional
+import           Data.ByteString.Lex.Fractional  -- package bytestring-lexing
 import           Data.List (foldl', intercalate, sortOn, groupBy, elemIndex, sort, minimumBy)
 import           Data.List.Split (splitOn, chunksOf)
 import qualified Data.Map.Lazy as M
