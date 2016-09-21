@@ -304,7 +304,7 @@ parseCSVData
   -> [[C.ByteString]]             -- ^ full CSV
   -> [(Int, Int, a)]
 parseCSVData rle reader
-  = map (\(i, b, x) -> (pred i, pred b, x)) -- ^ zero-base index values
+  = map (\(i, b, x) -> (pred i, pred b, x))  -- zero-base index values
   . concatMap (parseCSVRow rle reader)
   where
     parseCSVRow True reader (rawIter:bl:bh:values)
