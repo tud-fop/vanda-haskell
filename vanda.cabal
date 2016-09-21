@@ -45,6 +45,7 @@ library
     , QuickCheck
     , random
     , split
+    , stm
     , text
     , time
     , unix
@@ -175,6 +176,7 @@ executable Vanda
     , QuickCheck
     , random
     , split
+    , stm
     , text
     , time
     , unix
