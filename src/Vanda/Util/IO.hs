@@ -96,7 +96,7 @@ handleOnDemand mn mt signals worker handler = do
 -- >    void $ fork $ never-executed-action
 --
 -- Race condition: @sub-sub-thread-action@ may or may not be run, depending
--- on weather @fork@ or @wait@ is executed first. Note that @wait@ does not
+-- on whether @fork@ or @wait@ is executed first. Note that @wait@ does not
 -- wait for the thread created with 'forkIO'.
 --
 -- > do (fork, wait) <- createForkerWithWaiter
