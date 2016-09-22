@@ -33,6 +33,7 @@ module Vanda.CBSM.CountBasedStateMerging
 , refineRanking
 , mergeRanking
 , enrichRanking
+, ruleEquivalenceClasses
 , forwardStar
 , bidiStar
 , likelihoodDelta
@@ -862,6 +863,22 @@ likelihoodDelta CRTG{..} = \ mrgs ->
     strictTriple x y z = x `seq` y `seq` z `seq` (x, y, z)
 
     getCnt m k = M.findWithDefault 0 k m
+
+
+-- needed from test suite
+ruleEquivalenceClasses
+  :: (Ord l, Ord v) => BidiStar v l -> Merge v -> Map (Rule v l) [Rule v l]
+ruleEquivalenceClasses g mrgs
+  = M.filter notSingle
+  $ M.fromListWith (++)
+  $ map (\ r -> (mergeRule mrgs r, [r]))
+  $ (S.toList . S.fromList)
+  $ concat
+  $ M.elems
+  $ M.intersection g (Merge.forward mrgs)
+  where
+    notSingle [_] = False
+    notSingle  _  = True
 
 
 mergeRule :: Ord v => Merge v -> Rule v l -> Rule v l
