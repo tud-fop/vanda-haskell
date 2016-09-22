@@ -130,10 +130,25 @@ mainArgs opts@CBSM{..} = do
    withFileIf flagLogBeamVerbose (flagDir </> fileNameLogBeamVerbose)
               AppendMode $ \ mhLogBeamVerbose -> do
     hPutStrLn hStat
-      "CPU time,iteration,rules,states,initial states,merge pairs,beam width,\
-      \beam index,saturation steps,rule merges,state merges,\
-      \initial-state merges,log₂ likelihood delta,likelihood delta,\
-      \log₂ evaluation of merge,evaluation of merge,total saturation steps"
+      "CPU time,\
+      \iteration,\
+      \rules,\
+      \states,\
+      \initial states,\
+      \merge pairs,\
+      \beam width,\
+      \beam index,\
+      \saturation steps,\
+      \rule merges,\
+      \state merges,\
+      \initial-state merges,\
+      \log₂ likelihood delta,\
+      \likelihood delta,\
+      \log₂ evaluation of merge,\
+      \evaluation of merge,\
+      \heuristic chosen,\
+      \heuristic lowest,\
+      \total saturation steps"
     hPutStrLn hEvals "iteration,beam index low,beam index high,\
       \log₂ evaluation of merge,evaluation of merge"
     hPutStrLn hBeam "iteration,beam index low,beam index high"
@@ -520,8 +535,12 @@ safeSaveLastGrammar
                             , show beLikelihoodDelta
                             , show (ld beEvaluation)
                             , show beEvaluation
+                            , show beHeuristic
                             ]
-                 Nothing -> ["NaN", "NaN", "NaN", "NaN" , "0.0", "1.0", "0.0", "1.0"]
+                 Nothing -> ["NaN", "NaN", "NaN", "NaN" , "0.0", "1.0", "0.0", "1.0", "0"]
+            ++ case infoBeam of
+                 BeamEntry{..} : _ -> [show beHeuristic]
+                 []                -> ["0"]
             ++ [ show $ sum $ map beSaturationSteps infoBeam ]
           hPutStr hEvals
             $ unlines
