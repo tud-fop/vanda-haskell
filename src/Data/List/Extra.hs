@@ -160,8 +160,10 @@ mergeListsBy cmp = go
     go [xs] = xs
     go xss = go (pairwise xss)
 
-    pairwise (xs1 : xs2 : xss) = mergeBy cmp xs1 xs2 : pairwise xss
+    pairwise (xs1 : xs2 : xss) = mrg xs1 xs2 : pairwise xss
     pairwise xss = xss
+
+    mrg = mergeBy cmp
 
 
 -- | Like 'Data.List.minimumBy', but returns all least elements in their
