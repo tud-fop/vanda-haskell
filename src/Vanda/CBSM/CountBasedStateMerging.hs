@@ -64,7 +64,7 @@ import           Control.Parallel.Strategies
 import qualified Data.Array as A
 import qualified Data.Binary as B
 import           Data.List (foldl', groupBy, sortBy, transpose)
-import           Data.List.Extra (mergeBy, mergeListsBy, minimaBy)
+import           Data.List.Extra (mergeListsBy, minimaBy)
 import           Data.Function (on)
 import qualified Data.Map.Lazy as ML
 import           Data.Map.Strict (Map)
@@ -503,7 +503,7 @@ cbsmGo cache conf@ConfigCBSM{..} prev@(g, info@Info{..})
               then \ xs -> fst $ shuffleGroupsBy ((==) `on` fst) xs genMerge
               else id
             )
-          . foldr1 (mergeBy (comparing fst))
+          . mergeListsBy (comparing fst)
         processMergePair i h pair@(v1, v2)
           = BeamEntry
               { beIndex           = i
