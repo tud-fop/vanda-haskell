@@ -246,19 +246,31 @@ mainArgs ShowInfo{..} = do
       putStr (prettyPrintMerge beMergeSaturated)
   putStrLn ""
   putStrLn ""
-  putStrLn "merge history:"
-  putStrLn ""
   m <- if null flagIntToTreeMap
-       then return $ M.map (fmap $ \ x -> Node (show x) []) infoMergeTreeMap
-       else do tM <- decodeFile flagIntToTreeMap :: IO BinaryIntToTreeMap
-               return $ M.map (fmap (tM !)) infoMergeTreeMap
-  let mergeTree2Tree (State t c ) = Node (colorTTY [96] ("count: " ++ show c))
-                                         [mapLeafs (colorTTY [93]) t]
-      mergeTree2Tree (Merge i ms) = Node (colorTTY [7, 96] $ show i)
-                                  $ map mergeTree2Tree ms
-  forM_ (M.toAscList m) $ \ (i, t) -> do
-    putStrLn $ show i ++ ":"
-    putStrLn $ drawTree' (drawstyleCompact1 "─") $ mergeTree2Tree t
+       then return Nothing
+       else Just <$> (decodeFile flagIntToTreeMap :: IO BinaryIntToTreeMap)
+  let colorState = colorTTY [91]
+      colorIter  = colorTTY [7, 96]
+      colorCount = colorTTY [96]
+      colorLeaf  = colorTTY [93]
+      mergeTree2Tree (State s c)
+        = ( Node (colorState (show s) ++ " # " ++ colorCount (show c))
+            $ maybe [] (\ int2tree -> [mapLeafs colorLeaf $ int2tree ! s]) m
+          , c )
+      mergeTree2Tree (Merge i ms)
+        = ( Node (colorIter (show i) ++ " # " ++ colorCount (show c)) ts
+          , c )
+        where (ts, c) = second sum $ unzip $ map mergeTree2Tree ms
+  putStrLn $ "merge history: (colors:"
+           ++ ", " ++ colorState "state"
+           ++ ", " ++ colorIter  "iteration"
+           ++ ", " ++ colorCount "count"
+           ++ maybe "" (const $ ", " ++ colorLeaf "leaf") m
+           ++ ")"
+  putStrLn ""
+  forM_ (M.toAscList $ infoMergeTreeMap) $ \ (i, t) -> do
+    putStrLn $ colorState (show i) ++ ":"
+    putStrLn $ drawTree' (drawstyleCompact1 "─") $ fst $ mergeTree2Tree t
 
 mainArgs Parse{..} = do
   (hg, inis) <- toHypergraph <$> (decodeFile argGrammar :: IO BinaryCRTG)
