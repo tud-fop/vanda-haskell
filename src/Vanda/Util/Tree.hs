@@ -28,6 +28,7 @@ module Vanda.Util.Tree
   toTikZ
 , -- * Extraction
   flattenRanked
+, height
 , subTrees
 , yield
 , filterTree
@@ -164,6 +165,11 @@ toTikZ = go 1 where
 flattenRanked :: Tree a -> [(a, Int)]
 flattenRanked t = go t []                       -- idea from Data.Tree.flatten
   where go (Node x ts) xs = (x, length ts) : foldr go xs ts
+
+
+-- | The length of the longest path of a tree. @'Node' _ []@ has height @1@.
+height :: Tree a -> Int
+height (Node _ xs) = succ $ maximum $ 0 : map height xs
 
 
 -- | List of all subtrees in pre-order.
