@@ -258,7 +258,7 @@ mainArgs ShowInfo{..} = do
                                   $ map mergeTree2Tree ms
   forM_ (M.toAscList m) $ \ (i, t) -> do
     putStrLn $ show i ++ ":"
-    putStrLn $ drawTree' (drawstyleCompact2 1 "") $ mergeTree2Tree t
+    putStrLn $ drawTree' (drawstyleCompact1 "─") $ mergeTree2Tree t
 
 mainArgs Parse{..} = do
   (hg, inis) <- toHypergraph <$> (decodeFile argGrammar :: IO BinaryCRTG)
