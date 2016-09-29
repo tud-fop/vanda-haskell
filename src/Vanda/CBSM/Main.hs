@@ -44,7 +44,7 @@ import           Vanda.Util.IO
 import           Vanda.Util.Timestamps
 import           Vanda.Util.Tree as T
 
-import           Control.Arrow (second)
+import           Control.Arrow (first, second)
 import qualified Codec.Compression.GZip as GZip
 import           Control.Concurrent (getNumCapabilities)
 import           Control.Monad
@@ -61,6 +61,7 @@ import qualified Data.Set as S
 import           Data.Tree
 import qualified Data.Vector as V
 import           Numeric.Log (Log(..))
+import qualified Text.Parsec.Error as Parsec
 import           System.Console.CmdArgs.Explicit (processArgs)
 import           System.CPUTime
 import           System.Directory ( createDirectoryIfMissing
@@ -102,11 +103,17 @@ mainArgs PrintCorpora{..}
     . zipWith ( drawTreeFormatted flagBinarization flagOutputFormat
               . show
               ) [1 :: Int ..]
-    . map (encodeByFlag flagBinarization)
-    . filterByLength flagFilterByLength
-  =<< (if null flagFilterByLeafs then return
-                                 else filterByLeafs flagFilterByLeafs)
-  =<< readCorpora flagAsForests flagDefoliate flagPennFilter argCorpora
+    . map fst
+  =<< preprocessCorpus
+        flagPennFilter
+        flagBinarization
+        flagDefoliate
+        flagFilterByLeafs
+        flagFilterByLength
+  =<< readCorpora
+        flagWeightedCorpus
+        flagAsForests
+        argCorpora
 
 mainArgs opts@CBSM{..} = do
   exist <- fileExist (flagDir </> fileNameOptions)
@@ -117,11 +124,17 @@ mainArgs opts@CBSM{..} = do
     exitFailure
   createDirectoryIfMissing True flagDir
   writeFile (flagDir </> fileNameOptions) (show opts)
-  (g, tM) <- fmap ( forestToGrammar
-                  . map (encodeByFlag flagBinarization) )
-           $ (if null flagFilterByLeafs then return
-                                        else filterByLeafs flagFilterByLeafs)
-         =<< readCorpora flagAsForests flagDefoliate flagPennFilter argCorpora
+  (g, tM) <- return . forestToGrammar'
+         =<< preprocessCorpus
+               flagPennFilter
+               flagBinarization
+               flagDefoliate
+               flagFilterByLeafs
+               flagFilterByLength
+         =<< readCorpora
+               flagWeightedCorpus
+               flagAsForests
+               argCorpora
   encodeFile (flagDir </> fileNameIntToTreeMap) (tM :: BinaryIntToTreeMap)
   numCapabilities <- getNumCapabilities
   putStrLnTimestamped $ "numCapabilities: " ++ show numCapabilities
@@ -325,7 +338,7 @@ mainArgs RenderBeamInfo{..} = do
 
 mainArgs RecognizeTrees{..} = do
   binGrammar <- decodeFile argGrammar :: IO BinaryCRTG
-  trees <- readCorpora False False False [argTreesFile]
+  trees <- map fst <$> readCorpora False False [argTreesFile]
   
   let (hg, initsMap) = toHypergraph binGrammar :: (H.ForwardStar Int String Double, M.Map Int Double)
       logProbs = map (logBase 2 . totalProbOfTree (hg, initsMap)) trees
@@ -367,30 +380,69 @@ chunkCruncher FCCMedian xs
   = head $ drop (length xs `div` 2) $ sort xs
 
 
-readCorpora :: Bool -> Bool -> Bool -> [FilePath] -> IO (Forest String)
-readCorpora asForests doDefoliate doPennFilter corpora
-    = (if doDefoliate  then map T.defoliate         else id)
-    . (if doPennFilter then mapMaybe stripAll       else id)
-    . (if asForests    then concatMap SExp.toForest else map SExp.toTree)
-  <$> if null corpora
+readCorpora
+  :: Bool        -- ^ 'True' if trees have associated counts
+  -> Bool        -- ^ 'True' if the corpus contains forests instead of trees
+  -> [FilePath]  -- ^ input files; if 'null' then stdin is used
+  -> IO [(Tree String, Int)]  -- ^ Trees with associated counts
+readCorpora flagWeightedCorpus flagAsForests argCorpora
+   = (if flagAsForests      then concatMap (floatFst . first SExp.toForest)
+                            else map (first SExp.toTree))
+   . (if flagWeightedCorpus then map extractWeight else map (\ t -> (t, 1)))
+  <$> if null argCorpora
         then SExp.parse SExp.pSExpressions "stdin"
           <$> getContents
         else concat
           <$> (   SExp.parseFromFiles SExp.pSExpressions
-              =<< getContentsRecursive corpora
+              =<< getContentsRecursive argCorpora
               )
+  where
+    extractWeight SExp.List{sExpList = [Atom{sExpAtom = w}, t]} = (t, read w)
+    extractWeight x = errorHere "readCorpora.extractWeight"
+                    $ show
+                    $ Parsec.newErrorMessage
+                        (Parsec.Expect "list with two elements where the first is an atom")
+                        (SExp.sExpPos x)
 
 
-filterByLeafs :: FilePath -> [Tree String] -> IO [Tree String]
+preprocessCorpus
+  :: Bool
+  -> FlagBinarization
+  -> Bool
+  -> FilePath
+  -> Int
+  -> [(Tree String, Int)]
+  -> IO [(Tree String, Int)]
+preprocessCorpus
+     flagPennFilter
+     flagBinarization
+     flagDefoliate
+     flagFilterByLeafs
+     flagFilterByLength
+    = return . map (first $ encodeByFlag flagBinarization)
+  <=< return . filterByLength flagFilterByLength
+  <=< (if null flagFilterByLeafs then return
+                                 else filterByLeafs flagFilterByLeafs)
+    . (if flagDefoliate  then map (first T.defoliate)              else id)
+    . (if flagPennFilter then mapMaybe (floatFst . first stripAll) else id)
+
+
+floatFst :: Functor f => (f a, b) -> f (a, b)
+floatFst (fx, y) = fmap (\ x -> (x, y)) fx
+
+
+filterByLeafs :: FilePath -> [(Tree String, a)] -> IO [(Tree String, a)]
 filterByLeafs file ts = do
   wordS <- S.fromList . words <$> readFile file
-  return $ filter (all (`S.member` wordS) . yield) ts
+  return $ filter (all (`S.member` wordS) . yield . fst) ts
 
-filterByLength :: Int -> [Tree String] -> [Tree String]
+
+filterByLength :: Int -> [(Tree String, a)] -> [(Tree String, a)]
 filterByLength l
   | l <= 0 = id
   | l == 1 = errorHere "filterByLength" "Lengths smaller than 1 doesn't make any sense."
-  | otherwise = filter ((<l) . length . yield)
+  | otherwise = filter ((<l) . length . yield . fst)
+
 
 data RestrictMergeFeature a
   = RMFBinLeaf Bool

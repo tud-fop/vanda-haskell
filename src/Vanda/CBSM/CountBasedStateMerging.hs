@@ -19,6 +19,7 @@ module Vanda.CBSM.CountBasedStateMerging
 , CRTG(..)
 , MergeTree(..)
 , forestToGrammar
+, forestToGrammar'
 , Info(..)
 , BeamEntry(..)
 , initialInfo
@@ -52,7 +53,6 @@ import           Vanda.CBSM.Merge (Merge)
 import qualified Vanda.CBSM.Merge as Merge
 import qualified Vanda.Features as F
 import qualified Vanda.Hypergraph as H
-import           Vanda.Util.Histogram (histogram)
 import           Vanda.Util.PrettyPrint (columnize)
 import           Vanda.Util.Tree as T
 
@@ -63,6 +63,7 @@ import           Control.Monad.State.Lazy
 import           Control.Parallel.Strategies
 import qualified Data.Array as A
 import qualified Data.Binary as B
+import           Data.Coerce (coerce)
 import           Data.List (foldl', groupBy, sortBy, transpose)
 import           Data.List.Extra (mergeListsBy, minimaBy)
 import           Data.Function (on)
@@ -310,15 +311,26 @@ forestToGrammar
   :: Ord l
   => [Tree l]
   -> (CRTG Int l, Map Int (Tree l))
-forestToGrammar corpus
+forestToGrammar = forestToGrammar' . map (\ t -> (t, 1))
+
+
+forestToGrammar'
+  :: Ord l
+  => [(Tree l, Int)]
+  -> (CRTG Int l, Map Int (Tree l))
+forestToGrammar' corpus
   = ( CRTG
         (M.mapKeys toRule cntTrees)
         (M.mapKeysMonotonic (ints M.!) cntTrees)
-        (M.mapKeysMonotonic (ints M.!) $ histogram $ map OrdTree corpus)
+        (M.mapKeysMonotonic (ints M.!) $ M.fromListWith (+) $ coerce corpus)
     , M.map unOrdTree $ M.fromAscList $ map swap $ M.toAscList $ ints
     )
   where
-    cntTrees = histogram $ map OrdTree $ concatMap T.subTrees corpus
+    cntTrees
+      = M.fromListWith (+)
+      $ concatMap
+          (\ (t, c) -> map (\ t' -> (OrdTree t', c)) $ T.subTrees t)
+          corpus
     ints = snd $ M.mapAccum (\ i _ -> (i + 1, i)) 0 $ cntTrees
     toRule t@(OrdTree (Node x ts))
       = Rule (ints M.! t) (map ((ints M.!) . OrdTree) ts) x
