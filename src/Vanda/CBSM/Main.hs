@@ -39,6 +39,7 @@ import           Vanda.Corpus.SExpression as SExp
 import qualified Vanda.Features as F
 import qualified Vanda.Hypergraph as H
 import           Vanda.Hypergraph.Recognize
+import           Vanda.Util.Histogram
 import           Vanda.Util.IO
 import           Vanda.Util.Timestamps
 import           Vanda.Util.Tree as T
@@ -343,11 +344,13 @@ chunkCruncher FCCMinimum xs
 chunkCruncher FCCMajority xs
   = fst
   $ maximumBy (comparing snd)
-  $ M.toList $ M.fromListWith (+) $ zip xs (repeat 1)
+  $ M.toList
+  $ histogram xs
 chunkCruncher FCCMinority xs
   = fst
   $ minimumBy (comparing snd)
-  $ M.toList $ M.fromListWith (+) $ zip xs (repeat 1)
+  $ M.toList
+  $ histogram xs
 chunkCruncher FCCMedian xs
   = head $ drop (length xs `div` 2) $ sort xs
 

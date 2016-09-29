@@ -144,18 +144,22 @@ renderBeamInfo
   -> IO ()
 renderBeamInfo fileIn renderableCats sortformats infoMergeTreeMap int2tree chunkSize combiner fileOut = do
   let allTreesTilNow = M.elems infoMergeTreeMap
+      lastProperIter = maximum $ map getMTRootIter allTreesTilNow
       megaMergeTree = if length allTreesTilNow == 1
                         then head allTreesTilNow
-                        else (Merge (maxBound :: Int) allTreesTilNow)
-      termsOverTime :: M.Map IntState [(Int, [String])]
-      termsOverTime = M.map (map getTerms)
-                    $ turnMergeTree megaMergeTree
-      
+                        else Merge (lastProperIter + 1) allTreesTilNow
+      turnedMegaMergeTree = turnMergeTree megaMergeTree
+      getStatesOfStateAt :: Int -> IntState -> [IntState]
+      getStatesOfStateAt iter = snd
+                              . last
+                              . takeWhile ((<iter) . fst)
+                              . (turnedMegaMergeTree M.!)
+  
   let getTermsOfStateAt :: Int -> IntState -> [String]
-      getTermsOfStateAt iter = snd
-                             . last
-                             . takeWhile ((<iter) . fst)
-                             . (termsOverTime M.!)
+      getTermsOfStateAt iter s
+        = ordNub
+        $ concatMap (snd . curry getTerms undefined . (:[]))
+        $ getStatesOfStateAt iter s
       getMixedness :: Int -> (IntState, IntState) -> Maybe String
       getMixedness iter (s1, s2)
         = case (getTermsOfStateAt iter s1, getTermsOfStateAt iter s2) of
@@ -163,11 +167,30 @@ renderBeamInfo fileIn renderableCats sortformats infoMergeTreeMap int2tree chunk
                             then Just x
                             else Nothing
             _          -> Nothing
-      allTerms = S.toAscList
-               $ S.fromList
+  
+  let allTerms = ordNub
                $ concatMap (getTermsOfStateAt 0)
-               $ M.keys termsOverTime
-      reader iter rowdata
+               $ M.keys turnedMegaMergeTree
+      firstMergeIter = minimum
+                     $ map (fst . head . dropWhile ((<0) . fst))
+                     $ M.elems turnedMegaMergeTree
+      -- reduce equivalent to one representant -> the smallest IntState
+      stateIsRepresentantAt iter s = s == minimum (getStatesOfStateAt iter s)
+      mixedStatesAt iter = length
+                         $ filter ((>1) . length) -- impure ones
+                         $ map (getTermsOfStateAt iter)
+                         $ filter (stateIsRepresentantAt iter)
+                         $ M.keys turnedMegaMergeTree
+      mergeStatesAt :: Int -> Int
+      mergeStatesAt iter = mergeStatesAt' iter megaMergeTree
+        where
+          mergeStatesAt' iter (State _ _) = 0
+          mergeStatesAt' iter (Merge i cs)
+            | i <= iter = 1
+            | otherwise = sum (map (mergeStatesAt' iter) cs)
+      mixedStateCountInfo iter = (mixedStatesAt iter, mergeStatesAt iter)
+  
+  let reader iter rowdata
         = let s1 = unsafeReadInt $ rowdata !! 9
               s2 = unsafeReadInt $ rowdata !! 10
               sortable = [genSorter s rowdata getMixedness iter | s <- sortformats]
@@ -198,7 +221,9 @@ renderBeamInfo fileIn renderableCats sortformats infoMergeTreeMap int2tree chunk
         | otherwise = colorList !! i
   
   putStrLnTimestamped' $ "All terminal symbols: " ++ show allTerms
-  --print $ getTermsOfStateAt 0 $ C.pack "5"
+  putStrLnTimestamped' $ "Total #states: " ++ show (M.size turnedMegaMergeTree)
+  putStrLnTimestamped' $ "Total #iterations: " ++ show (firstMergeIter - 1) ++ " to " ++ show lastProperIter
+  putStrLnTimestamped' $ "Mixedness over time: " ++ show (map mixedStateCountInfo [(firstMergeIter - 1)..lastProperIter])
   
   renderBeamWith False reader (colorMapper . indexMapper) chunkSize combiner fileIn fileOut
   where
@@ -207,10 +232,12 @@ renderBeamInfo fileIn renderableCats sortformats infoMergeTreeMap int2tree chunk
       -> (Int, [String])
     getTerms (iter, states)
       = (,) iter
-      $ S.elems
-      $ S.fromList
+      $ ordNub
       $ map (T.rootLabel . (int2tree M.!))
       $ states
+    ordNub = S.toAscList . S.fromList
+    getMTRootIter (Merge iter _) = iter
+    getMTRootIter (State _ _) = (-1)
 
 -- | The result maps all states into a list containing the list of all
 -- "equivalent" states from a certain iteration on.
