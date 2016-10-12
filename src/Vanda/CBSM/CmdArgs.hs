@@ -59,6 +59,7 @@ data Args
     , flagBinarization :: FlagBinarization
     , flagDefoliate :: Bool
     , flagFilterByLeafs :: FilePath
+    , flagFilterByLength :: Int
     , flagOutputFormat :: FlagOutputFormat
     , argCorpora :: [FilePath]
     }
@@ -70,7 +71,8 @@ data Args
     , flagFilterByLeafs :: FilePath
     , flagRestrictMerge :: [FlagRestrictMerge]
     , flagBeamWidth :: Int
-    , flagBeamRandomize :: Bool
+    , flagDynamicBeamWidth :: Bool
+    , flagShuffle :: FlagShuffle
     , flagSeed :: Int
     , flagNormalize :: Bool
     , flagIterations :: Int
@@ -112,9 +114,36 @@ data Args
   | RenderBeam
     { argRenderBeamInput :: FilePath
     , argRenderBeamOutput :: FilePath
+    , flagRunLengthEncoding :: Bool
+    , argColumn :: Int
+    , flagSortFormatString :: String
+    , flagColormapMin :: Double
+    , flagColormapMax :: Double
+    , flagChunkSize :: Int
+    , flagChunkCruncher :: FlagChunkCruncher
+    }
+  | RenderBeamInfo
+    { argRenderBeamInput :: FilePath
+    , argRenderableCats :: String
+    , flagSortFormatString :: String
+    , argInfo :: FilePath
+    , argIntToTreeMap :: FilePath
+    , flagChunkSize :: Int
+    , flagChunkCruncher :: FlagChunkCruncher
+    , argRenderBeamOutput :: FilePath
+    }
+  | RecognizeTrees
+    { argGrammar :: FilePath
+    , argTreesFile :: FilePath
+    , flagPrintRecognizable :: Bool
     }
   deriving (Read, Show)
 
+data FlagChunkCruncher
+  = FCCMinimum | FCCMaximum | FCCMinority | FCCMajority | FCCMedian
+  deriving (Eq, Read, Show)
+
+data FlagShuffle = FSNone | FSStates | FSMerges deriving (Eq, Read, Show)
 
 data FlagOutputFormat
   = FOFPretty | FOFPenn | FOFYield deriving (Eq, Read, Show)
@@ -132,7 +161,7 @@ data FlagUnknownWordOutput
 cmdArgs :: Mode Args
 cmdArgs
   = modes "cbsm" (Help $ defaultHelp cmdArgs) "Count-Based State Merging"
-  [ (modeEmpty $ PrintCorpora False False FBNone False "" FOFPretty [])
+  [ (modeEmpty $ PrintCorpora False False FBNone False "" (-1) FOFPretty [])
     { modeNames = ["print-corpora"]
     , modeHelp =
         "Print trees from TREEBANKs. Can be used to check for parsing \
@@ -140,7 +169,7 @@ cmdArgs
         \are traversed recursively. If no TREEBANK is given, the trees are \
         \read from standard input. \
         \The filters (if used) apply in the order penn-filter, defoliate, \
-        \and filter-by-leafs."
+        \filter-by-leafs and finally filter-by-length."
     , modeArgs = ([], Just flagArgCorpora)
     , modeGroupFlags = toGroup
         [ flagNoneAsForests
@@ -148,26 +177,28 @@ cmdArgs
         , flagReqBinarization (\ b x -> x{flagBinarization = b})
         , flagNoneDefoliate
         , flagReqFilterByLeafs
+        , flagReqFilterByLength
         , flagReqOutputFormat
         ]
     }
   , ( modeEmpty CBSM
-        { flagAsForests      = False
-        , flagBinarization   = FBNone
-        , flagDefoliate      = False
-        , flagPennFilter     = False
-        , flagFilterByLeafs  = ""
-        , flagRestrictMerge  = []
-        , flagBeamWidth      = 1000
-        , flagBeamRandomize  = False
-        , flagSeed           = 0
-        , flagNormalize      = False
-        , flagIterations     = (pred maxBound)
-        , flagDir            = ""
-        , flagLogBeamVerbose = False
-        , flagSaveCounter    = Nothing
-        , flagSaveTimer      = Nothing
-        , argCorpora         = []
+        { flagAsForests        = False
+        , flagBinarization     = FBNone
+        , flagDefoliate        = False
+        , flagPennFilter       = False
+        , flagFilterByLeafs    = ""
+        , flagRestrictMerge    = []
+        , flagBeamWidth        = 1000
+        , flagDynamicBeamWidth = False
+        , flagShuffle          = FSNone
+        , flagSeed             = 0
+        , flagNormalize        = False
+        , flagIterations       = (pred maxBound)
+        , flagDir              = ""
+        , flagLogBeamVerbose   = False
+        , flagSaveCounter      = Nothing
+        , flagSaveTimer        = Nothing
+        , argCorpora           = []
         })
     { modeNames = ["cbsm"]
     , modeHelp = "Read-off a grammar from TREEBANKs and generalize it. See \
@@ -181,7 +212,8 @@ cmdArgs
         , flagReqFilterByLeafs
         , flagReqRestrictMerge
         , flagReqBeamWidth
-        , flagNoneBeamRandomize
+        , flagNoneDynamicBeamWidth
+        , flagReqShuffle
         , flagReqSeed
         , flagNoneNormalize
         , flagReqIterations
@@ -255,28 +287,72 @@ cmdArgs
         , flagReqOutputFormat
         ]
     }
-  , (modeEmpty $ RenderBeam "" "")
+  , (modeEmpty $ RenderBeam "" "" False (-1) "" 0 1 1 FCCMedian)
     { modeNames = ["render-beam"]
     , modeHelp = "Render " ++ fileNameEvaluations ++ " into a png image."
     , modeArgs =
         ( [ flagArgRenderBeamInput{argRequire = True}
+          , flagArgColumn{argRequire = True}
           , flagArgRenderBeamOutput{argRequire = True}
           ]
         , Nothing
         )
+    , modeGroupFlags = toGroup
+        [ flagNoneRunLengthEncoding
+        , flagReqSortFormatString
+        , flagReqColormapMin
+        , flagReqColormapMax
+        , flagReqChunkSize
+        , flagReqChunkCruncher
+        ]
+    }
+  , (modeEmpty $ RenderBeamInfo "" "" "" "" "" 1 FCCMedian "")
+    { modeNames = ["render-beam-info"]
+    , modeHelp = "Render " ++ fileNameLogBeamVerbose ++ " into a png image."
+    , modeArgs =
+        ( [ flagArgRenderBeamInput{argRequire = True}
+          , flagArgRenderableCats{argRequire = True}
+          , flagArgMergeTreeMap{argRequire = True}
+          , flagArgIntToTreeMap{argRequire = True}
+          , flagArgRenderBeamOutput{argRequire = True}
+          ]
+        , Nothing
+        )
+    , modeGroupFlags = toGroup
+        [ flagReqSortFormatString
+        , flagReqChunkSize
+        , flagReqChunkCruncher
+        ]
+    }
+  , (modeEmpty $ RecognizeTrees "" "" False)
+    { modeNames = ["recognize-trees"]
+    , modeHelp = "Recognize trees using some grammar. Output: NUMBER-OF-STATES \
+                 \LIKELIHOOD NONZERO-TREE-COUNT GEOM-MEAN-LIKELIHOOD (all \
+                 \likelihoods log_2)"
+    , modeArgs =
+        ( [ flagArgGrammar{argRequire = True}
+          , flagArgTreesFile{argRequire = True}
+          ]
+        , Nothing
+        )
+    , modeGroupFlags = toGroup
+        [ flagNonePrintRecognizable
+        ]
     }
   ]
   where
     flagNoneAsForests
       = flagNone ["as-forests"] (\ x -> x{flagAsForests = True})
           "the TREEBANKs contain forests instead of trees"
-    flagNoneBeamRandomize
-      = flagNone ["randomize-beam"] (\ x -> x{flagBeamRandomize = True})
-          "randomize the order of merge candidates that are equivalent \
-          \w.r.t. the heuristics"
     flagNoneDefoliate
       = flagNone ["defoliate"] (\ x -> x{flagDefoliate = True})
           "remove leaves from trees in TREEBANKs"
+    flagNoneDynamicBeamWidth
+      = flagNone ["dynamic-beam-width"] (\ x -> x{flagDynamicBeamWidth = True})
+          "The actual beam width is at least as defined by --beam-width, but \
+          \if this flag is enabled, then the actual beam width is extended \
+          \to capture all candidates that have a heuristic value that is as \
+          \good as for candidates within --beam-width"
     flagNoneNormalize
       = flagNone ["normalize"] (\ x -> x{flagNormalize = True})
           "normalize log likelihood deltas by number of merged states"
@@ -287,6 +363,10 @@ cmdArgs
       = flagReq ["filter-by-leafs"] (\ a x -> Right x{flagFilterByLeafs = a})
           "FILE"
           "only use trees whose leafs occur in FILE"
+    flagReqFilterByLength
+      = flagReq ["filter-by-length"] (readUpdate $ \ a x -> x{flagFilterByLength = a})
+          "LENGTH"
+          "only output trees with a yield shorter than LENGTH (default -1 = no restriction)"
     flagNoneUnbinarize
       = flagNone ["unbinarize"] (\ x -> x{flagUnbinarize = True})
           "Undo the binarization before the output. Might fail if a tree is \
@@ -296,7 +376,7 @@ cmdArgs
           (  "Write all information about the search beam to "
           ++ fileNameLogBeamVerbose   ++ "." )
     flagReqOutputFormat
-      = flagReq [flag] update "FORMAT" ("one of " ++ optsStr)
+      = flagReq [flag] update "FORMAT" ("one of " ++ optsStr ++ ". Default: pretty.")
       where
         flag = "output-format"
         err  = flag ++ " expects one of " ++ optsStr
@@ -332,7 +412,7 @@ cmdArgs
       = flagReq [flag] update "MODE"
       $ "one of " ++ optsStr ++ ". The MODE strict accepts only known \
         \words for parsing. The MODE arbitrary accepts any known word \
-        \as replacment for an unknown word."
+        \as replacment for an unknown word. Default: strict."
       where
         flag = "unknown-words"
         err  = flag ++ " expects one of " ++ optsStr
@@ -342,7 +422,7 @@ cmdArgs
                    $ lookup y opts
     flagReqUnknownWordOutput
       = flagReq [flag] update "MODE"
-      $ "one of " ++ optsStr
+      $ "one of " ++ optsStr ++  ". Default: original."
       where
         flag = "unknown-word-output"
         err  = flag ++ " expects one of " ++ optsStr
@@ -352,6 +432,27 @@ cmdArgs
                , ("both", FUWOBoth) ]
         update y x = maybe (Left err)
                            (\ z -> Right x{flagUnknownWordOutput = z})
+                   $ lookup y opts
+    flagReqShuffle
+      = flagReq [flag] update "MODE"
+      $ unlines
+          [ "one of " ++ optsStr ++ "."
+          , "This flag allows to shuffle the order of merge candidates on \
+            \the search beam."
+          , "none: disable shuffling."
+          , "states: shuffle states with the same count."
+          , "merges: shuffle merges with the same heuristic value."
+          , "Shuffling merges subsumes shuffling of states."
+          ]
+      where
+        flag = "shuffle"
+        err  = flag ++ " expects one of " ++ optsStr
+        optsStr = intercalate ", " (map fst opts)
+        opts = [ ("none"  , FSNone  )
+               , ("states", FSStates)
+               , ("merges", FSMerges) ]
+        update y x = maybe (Left err)
+                           (\ z -> Right x{flagShuffle = z})
                    $ lookup y opts
     flagReqBeamWidth
       = flagReq ["beam-width"]
@@ -395,11 +496,62 @@ cmdArgs
       = flagArg (\ a x -> Right x{argCorpora = argCorpora x ++ [a]}) "TREEBANK"
     flagArgMergeTreeMap
       = flagArg (\ a x -> Right x{argInfo = a}) "INFO-FILE"
+    flagArgIntToTreeMap
+      = flagArg (\ a x -> Right x{argIntToTreeMap = a}) "INT2TREE-FILE"
     flagArgGrammar
       = flagArg (\ a x -> Right x{argGrammar = a}) "GRAMMAR-FILE"
+    flagArgTreesFile
+      = flagArg (\ a x -> Right x{argTreesFile = a}) "TREES-FILE"
+    flagNonePrintRecognizable
+      = flagNone ["print-recognizable"] (\ x -> x{flagPrintRecognizable = True})
+          "also print all recognizable trees out again"
     flagArgCount
       = flagArg (readUpdate $ \ a x -> x{argCount = a}) "COUNT"
     flagArgRenderBeamInput
       = flagArg (\ a x -> Right x{argRenderBeamInput = a}) "CSV-FILE"
     flagArgRenderBeamOutput
       = flagArg (\ a x -> Right x{argRenderBeamOutput = a}) "PNG-FILE"
+    flagArgRenderableCats
+      = flagArg (\ a x -> Right x{argRenderableCats = a}) "RENDERABLE-CATEGORIES"
+    flagNoneRunLengthEncoding
+      = flagNone ["rle"] (\ x -> x{flagRunLengthEncoding = True})
+          "candidates of an iteration are run-length-encoding-compressed"
+    flagArgColumn
+      = flagArg (readUpdate $ \ a x -> x{argColumn = a}) "COLUMN"
+    flagReqSortFormatString
+      = flagReq ["sorting"] (\ a x -> Right x{flagSortFormatString = a})
+                "SORTING-FORMAT-STRING"
+                "comma-separated descriptors like '0a,m(NP|S|*|-),3d', where '|*|-' (all other pure merges|all mixed merges) are always implied as the last categories"
+    flagReqColormapMin
+      = flagReq ["colormapmin"] (readUpdate $ \ a x -> x{flagColormapMin = a})
+                "COLORMAPMIN" "value mapped to the minimum color (default 0.0)"
+    flagReqColormapMax
+      = flagReq ["colormapmax"] (readUpdate $ \ a x -> x{flagColormapMax = a})
+                "COLORMAPMAX" "value mapped to the maximum color (default 1.0)"
+    flagReqChunkSize
+      = flagReq ["chunksize"] (readUpdate $ \ a x -> x{flagChunkSize = a})
+                "CHUNKSIZE" "chunk size (default 1)"
+    flagReqChunkCruncher
+      = flagReq [flag] update "MODE"
+      $ unlines
+          [ "one of " ++ optsStr ++ "."
+          , "Determines candidate choice within a chunk."
+          , "minimum/maximum: (according to Ord instance)."
+          , "majority: most common element in chunk."
+          , "minority: rarest element in chunk."
+          , "median: middle element of ordering (second of these for even chunksize)"
+          , "DEFAULT: median"
+          ]
+      where
+        flag = "chunkcruncher"
+        err  = flag ++ " expects one of " ++ optsStr
+        optsStr = intercalate ", " (map fst opts)
+        opts = [ ("minimum" , FCCMinimum)
+               , ("maximum" , FCCMaximum)
+               , ("minority", FCCMinority)
+               , ("majority", FCCMajority)
+               , ("median"  , FCCMedian) ]
+        update y x = maybe (Left err)
+                           (\ z -> Right x{flagChunkCruncher = z})
+                   $ lookup y opts
+    

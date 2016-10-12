@@ -22,8 +22,8 @@ module Vanda.CBSM.Main
 ) where
 
 
+import qualified Control.Error
 import           Data.List.Extra (at, groupWithRanges, isSingleton, toRanges)
-import           Data.List.Shuffle (shuffle)
 import           System.Console.CmdArgs.Explicit.Misc
 import           Vanda.Algorithms.EarleyMonadic
 import qualified Vanda.Algorithms.Earley.WSA as WSA
@@ -38,16 +38,20 @@ import           Vanda.Corpus.Penn.Text (treeToPenn)
 import           Vanda.Corpus.SExpression as SExp
 import qualified Vanda.Features as F
 import qualified Vanda.Hypergraph as H
+import           Vanda.Hypergraph.Recognize
 import           Vanda.Util.IO
 import           Vanda.Util.Timestamps
 import           Vanda.Util.Tree as T
 
 import           Control.Arrow (second)
+import qualified Codec.Compression.GZip as GZip
 import           Control.Concurrent (getNumCapabilities)
 import           Control.Monad
 import qualified Data.Binary as B
+import qualified Data.ByteString.Lazy as BS
 import           Data.Foldable (for_)
-import           Data.List (intercalate, nub)
+import           Data.List (intercalate, nub, minimumBy, maximumBy, sort)
+import           Data.List.Split (wordsBy)
 import           Data.Map ((!))
 import qualified Data.Map as M
 import           Data.Maybe (mapMaybe)
@@ -62,7 +66,7 @@ import           System.Directory ( createDirectoryIfMissing
                                   , doesDirectoryExist
                                   , getDirectoryContents )
 import           System.Exit (exitFailure)
-import           System.FilePath ((</>))
+import           System.FilePath ((</>), (<.>), takeExtension)
 import           System.IO ( Handle
                            , IOMode(..)
                            , hFlush
@@ -73,6 +77,9 @@ import           System.IO ( Handle
 import           System.Posix.Files (fileExist)
 import           System.Posix.Signals (sigUSR1)
 import           System.Random (StdGen, mkStdGen)
+
+errorHere :: String -> String -> a
+errorHere = Control.Error.errorHere "Vanda.CBSM.Main"
 
 
 type BinaryCRTG = CRTG Int String
@@ -95,6 +102,7 @@ mainArgs PrintCorpora{..}
               . show
               ) [1 :: Int ..]
     . map (encodeByFlag flagBinarization)
+    . filterByLength flagFilterByLength
   =<< (if null flagFilterByLeafs then return
                                  else filterByLeafs flagFilterByLeafs)
   =<< readCorpora flagAsForests flagDefoliate flagPennFilter argCorpora
@@ -113,7 +121,7 @@ mainArgs opts@CBSM{..} = do
            $ (if null flagFilterByLeafs then return
                                         else filterByLeafs flagFilterByLeafs)
          =<< readCorpora flagAsForests flagDefoliate flagPennFilter argCorpora
-  B.encodeFile (flagDir </> fileNameIntToTreeMap) (tM :: BinaryIntToTreeMap)
+  encodeFile (flagDir </> fileNameIntToTreeMap) (tM :: BinaryIntToTreeMap)
   numCapabilities <- getNumCapabilities
   putStrLnTimestamped $ "numCapabilities: " ++ show numCapabilities
   withFile (flagDir </> fileNameStatistics) AppendMode $ \ hStat ->
@@ -122,10 +130,25 @@ mainArgs opts@CBSM{..} = do
    withFileIf flagLogBeamVerbose (flagDir </> fileNameLogBeamVerbose)
               AppendMode $ \ mhLogBeamVerbose -> do
     hPutStrLn hStat
-      "CPU time,iteration,rules,states,initial states,merge pairs,beam width,\
-      \beam index,saturation steps,rule merges,state merges,\
-      \initial-state merges,log₂ likelihood delta,likelihood delta,\
-      \log₂ evaluation of merge,evaluation of merge,total saturation steps"
+      "CPU time,\
+      \iteration,\
+      \rules,\
+      \states,\
+      \initial states,\
+      \merge pairs,\
+      \beam width,\
+      \beam index,\
+      \saturation steps,\
+      \rule merges,\
+      \state merges,\
+      \initial-state merges,\
+      \log₂ likelihood delta,\
+      \likelihood delta,\
+      \log₂ evaluation of merge,\
+      \evaluation of merge,\
+      \heuristic chosen,\
+      \heuristic lowest,\
+      \total saturation steps"
     hPutStrLn hEvals "iteration,beam index low,beam index high,\
       \log₂ evaluation of merge,evaluation of merge"
     hPutStrLn hBeam "iteration,beam index low,beam index high"
@@ -143,20 +166,26 @@ mainArgs opts@CBSM{..} = do
                         flagDir hStat hEvals hBeam mhLogBeamVerbose
       $ take (succ flagIterations)
       $ cbsm
-          numCapabilities
-          (mergeGroups flagBinarization flagRestrictMerge tM)
-          (if flagNormalize then normalizeLklhdByMrgdStates else flip const)
-          flagBeamWidth
-          (if flagBeamRandomize then shuffle else (,))
+          ConfigCBSM
+            { confNumCapabilities  = numCapabilities
+            , confMergeGroups      = mergeGroups flagBinarization flagRestrictMerge tM
+            , confEvaluate         = if flagNormalize
+                                     then normalizeLklhdByMrgdStates
+                                     else flip const
+            , confBeamWidth        = flagBeamWidth
+            , confDynamicBeamWidth = flagDynamicBeamWidth
+            , confShuffleStates    = flagShuffle == FSStates
+            , confShuffleMerges    = flagShuffle == FSMerges
+            }
           (g, initialInfo (mkStdGen flagSeed) (cntState g))
 
 mainArgs CBSMContinue{..} = do
   opts <- read <$> readFile (flagDir </> fileNameOptions) :: IO Args
   it   <- read <$> readFile (flagDir </> fileNameLastIteration) :: IO Int
-  g    <- B.decodeFile (flagDir </> fileNameGrammar it) :: IO BinaryCRTG
-  info <- B.decodeFile (flagDir </> fileNameInfo    it) :: IO BinaryInfo
+  g    <- decodeFile (flagDir </> fileNameGrammar it) :: IO BinaryCRTG
+  info <- decodeFile (flagDir </> fileNameInfo    it) :: IO BinaryInfo
   groups <- mergeGroups (flagBinarization opts) (flagRestrictMerge opts)
-    <$> (B.decodeFile (flagDir </> fileNameIntToTreeMap)
+    <$> (decodeFile (flagDir </> fileNameIntToTreeMap)
            :: IO BinaryIntToTreeMap)
   numCapabilities <- getNumCapabilities
   putStrLnTimestamped $ "numCapabilities: " ++ show numCapabilities
@@ -169,23 +198,27 @@ mainArgs CBSMContinue{..} = do
                         flagDir hStat hEvals hBeam mhLogBeamVerbose
       $ take (succ flagIterations)
       $ cbsm
-          numCapabilities
-          groups
-          ( if flagNormalize opts
-            then normalizeLklhdByMrgdStates
-            else flip const )
-          flagBeamWidth
-          (if flagBeamRandomize opts then shuffle else (,))
+          ConfigCBSM
+            { confNumCapabilities  = numCapabilities
+            , confMergeGroups      = groups
+            , confEvaluate         = if flagNormalize opts
+                                     then normalizeLklhdByMrgdStates
+                                     else flip const
+            , confBeamWidth        = flagBeamWidth
+            , confDynamicBeamWidth = flagDynamicBeamWidth opts
+            , confShuffleStates    = flagShuffle opts == FSStates
+            , confShuffleMerges    = flagShuffle opts == FSMerges
+            }
           (g, info)
 
 mainArgs ShowGrammar{..}
   = putStrLn
   . prettyPrintCRTG
-  =<< (B.decodeFile argGrammar :: IO BinaryCRTG)
+  =<< (decodeFile argGrammar :: IO BinaryCRTG)
 
 
 mainArgs ShowInfo{..} = do
-  Info{..} <- B.decodeFile argInfo :: IO BinaryInfo
+  Info{..} <- decodeFile argInfo :: IO BinaryInfo
   putStr "iteration           : " >> print infoIteration
   putStr "prng state          : " >> print infoRandomGen
   putStr "merge pairs         : " >> print infoMergePairs
@@ -216,7 +249,7 @@ mainArgs ShowInfo{..} = do
   putStrLn ""
   m <- if null flagIntToTreeMap
        then return $ M.map (fmap $ \ x -> Node (show x) []) infoMergeTreeMap
-       else do tM <- B.decodeFile flagIntToTreeMap :: IO BinaryIntToTreeMap
+       else do tM <- decodeFile flagIntToTreeMap :: IO BinaryIntToTreeMap
                return $ M.map (fmap (tM !)) infoMergeTreeMap
   let mergeTree2Tree (State t c ) = Node (colorTTY [96] ("count: " ++ show c))
                                          [mapLeafs (colorTTY [93]) t]
@@ -227,7 +260,7 @@ mainArgs ShowInfo{..} = do
     putStrLn $ drawTree' (drawstyleCompact2 1 "") $ mergeTree2Tree t
 
 mainArgs Parse{..} = do
-  (hg, inis) <- toHypergraph <$> (B.decodeFile argGrammar :: IO BinaryCRTG)
+  (hg, inis) <- toHypergraph <$> (decodeFile argGrammar :: IO BinaryCRTG)
   let comp e | a == 0    = [Right (H.label e)]
               | otherwise = map Left [0 .. a - 1]
         where a = H.arity e
@@ -246,7 +279,7 @@ mainArgs Parse{..} = do
     hFlush stdout
 
 mainArgs Bests{..} = do
-  (hg, inis) <- toHypergraph <$> (B.decodeFile argGrammar :: IO BinaryCRTG)
+  (hg, inis) <- toHypergraph <$> (decodeFile argGrammar :: IO BinaryCRTG)
   let feature = F.Feature (\ _ i xs -> i * product xs) V.singleton
   printWeightedTrees
       flagBinarization flagUnbinarize flagOutputFormat "language empty"
@@ -255,7 +288,68 @@ mainArgs Bests{..} = do
     $ bestsIni (asBackwardStar hg) feature (V.singleton 1) inis
 
 mainArgs RenderBeam{..} = do
-  renderBeam argRenderBeamInput argRenderBeamOutput
+  renderBeam flagRunLengthEncoding
+             argColumn
+             (wordsBy (==',') flagSortFormatString) -- TODO: unless it occurs in a mixedness mapper format string...
+             flagColormapMin
+             flagColormapMax
+             flagChunkSize
+             (chunkCruncher flagChunkCruncher)
+             argRenderBeamInput
+             argRenderBeamOutput
+
+mainArgs RenderBeamInfo{..} = do
+  Info{..} <- B.decodeFile argInfo :: IO BinaryInfo
+  int2tree <- B.decodeFile argIntToTreeMap :: IO BinaryIntToTreeMap
+  renderBeamInfo argRenderBeamInput
+                 argRenderableCats
+                 (wordsBy (==',') flagSortFormatString) -- TODO: unless it occurs in a mixedness mapper format string...
+                 infoMergeTreeMap
+                 int2tree
+                 flagChunkSize
+                 (chunkCruncher flagChunkCruncher)
+                 argRenderBeamOutput
+
+mainArgs RecognizeTrees{..} = do
+  binGrammar <- decodeFile argGrammar :: IO BinaryCRTG
+  trees <- readCorpora False False False [argTreesFile]
+  
+  let (hg, initsMap) = toHypergraph binGrammar :: (H.ForwardStar Int String Double, M.Map Int Double)
+      logProbs = map (logBase 2 . totalProbOfTree (hg, initsMap)) trees
+      stateCount = S.size $ H.nodes hg
+      nonZeros = filter ((/=logBase 2 0) . snd) $ zip trees logProbs
+      nonZeroLogProbs = map snd nonZeros
+      nonZeroCount = length nonZeros
+      meanLogProb = (sum nonZeroLogProbs) / (fromIntegral nonZeroCount)
+  
+  putStrLn $ intercalate "\t" [ show stateCount
+                              , show (sum logProbs)
+                              , show nonZeroCount
+                              , show meanLogProb
+                              ]
+  when flagPrintRecognizable
+    $ putStr
+    $ unlines
+    $ zipWith ( drawTreeFormatted FBNone FOFPenn
+              . show
+              ) [1 :: Int ..]
+    $ map fst nonZeros
+
+chunkCruncher :: Ord a => FlagChunkCruncher -> [a] -> a
+chunkCruncher FCCMaximum xs
+  = maximum xs
+chunkCruncher FCCMinimum xs
+  = minimum xs
+chunkCruncher FCCMajority xs
+  = fst
+  $ maximumBy (comparing snd)
+  $ M.toList $ M.fromListWith (+) $ zip xs (repeat 1)
+chunkCruncher FCCMinority xs
+  = fst
+  $ minimumBy (comparing snd)
+  $ M.toList $ M.fromListWith (+) $ zip xs (repeat 1)
+chunkCruncher FCCMedian xs
+  = head $ drop (length xs `div` 2) $ sort xs
 
 
 readCorpora :: Bool -> Bool -> Bool -> [FilePath] -> IO (Forest String)
@@ -277,6 +371,11 @@ filterByLeafs file ts = do
   wordS <- S.fromList . words <$> readFile file
   return $ filter (all (`S.member` wordS) . yield) ts
 
+filterByLength :: Int -> [Tree String] -> [Tree String]
+filterByLength l
+  | l <= 0 = id
+  | l == 1 = errorHere "filterByLength" "Lengths smaller than 1 doesn't make any sense."
+  | otherwise = filter ((<l) . length . yield)
 
 data RestrictMergeFeature a
   = RMFBinLeaf Bool
@@ -436,8 +535,12 @@ safeSaveLastGrammar
                             , show beLikelihoodDelta
                             , show (ld beEvaluation)
                             , show beEvaluation
+                            , show beHeuristic
                             ]
-                 Nothing -> ["NaN", "NaN", "NaN", "NaN" , "0.0", "1.0", "0.0", "1.0"]
+                 Nothing -> ["NaN", "NaN", "NaN", "NaN" , "0.0", "1.0", "0.0", "1.0", "0"]
+            ++ case infoBeam of
+                 BeamEntry{..} : _ -> [show beHeuristic]
+                 []                -> ["0"]
             ++ [ show $ sum $ map beSaturationSteps infoBeam ]
           hPutStr hEvals
             $ unlines
@@ -491,8 +594,8 @@ safeSaveLastGrammar
       let i = infoIteration info
       putStrLnTimestamped $ "Writing result of iteration " ++ show i ++ " ..."
       hFlush stdout
-      B.encodeFile (dir </> fileNameGrammar i) (g    :: BinaryCRTG)
-      B.encodeFile (dir </> fileNameInfo    i) (info :: BinaryInfo)
+      encodeFile (dir </> fileNameGrammar i) (g    :: BinaryCRTG)
+      encodeFile (dir </> fileNameInfo    i) (info :: BinaryInfo)
       writeFile (dir </> fileNameLastIteration) (show i)
       putStrLnTimestamped
         $ "... done writing result of iteration " ++ show i ++ "."
@@ -568,3 +671,23 @@ ld (Exp x) = invLog2 * x
 
 invLog2 :: Double
 invLog2 = 1 / log 2
+
+
+-- TODO: Remove file extension hack.
+decodeFile :: B.Binary a => FilePath -> IO a
+decodeFile file
+  = if takeExtension file == ".gz"
+     then decodeGZip file
+     else ifM (fileExist file)
+              (B.decodeFile file)
+              (ifM (fileExist  (file <.> "gz"))
+                   (decodeGZip (file <.> "gz"))
+                   (errorHere "decodeFile" $ "File does not exist: " ++ file)
+              )
+  where
+    decodeGZip f = B.decode . GZip.decompress <$> BS.readFile f
+
+
+-- TODO: Remove file extension hack.
+encodeFile :: B.Binary a => FilePath -> a -> IO ()
+encodeFile file = BS.writeFile (file <.> "gz") . GZip.compress . B.encode

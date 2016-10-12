@@ -28,8 +28,8 @@ import           Vanda.Grammar.XRS.LCFRS
 -- (crisp) RETRANSLATION from rules and derivations
 
 translateNTTString
-  :: (A.Array Int String) -- ^ NTs
-  -> (A.Array Int String) -- ^ Ts
+  :: (A.Array NTIdent String) -- ^ NTs
+  -> (A.Array TIdent String) -- ^ Ts
   -> NTT
   -> String
 translateNTTString a_nt _ (NT i) = a_nt A.! i
@@ -37,8 +37,8 @@ translateNTTString _ a_t (T i) = a_t A.! i
 
 sententialFront
   :: MIRTG
-  -> (A.Array Int String) -- ^ NTs
-  -> (A.Array Int String) -- ^ Ts
+  -> (A.Array NTIdent String) -- ^ NTs
+  -> (A.Array TIdent String) -- ^ Ts
   -> Derivation Int Int
   -> V.Vector String -- a sentence (terminal symbol sequence)
 sententialFront (MIRTG hg _ h') a_nt a_t dt
@@ -56,7 +56,7 @@ sententialFront (MIRTG hg _ h') a_nt a_t dt
     = fmap (translateNTTString a_nt a_t) $ join $ getSpans h' dt
 
 getSpans
-  :: V.Vector (V.Vector (V.Vector NTT)) -- ^ homomorphism, see above def.
+  :: V.Vector (V.Vector (V.Vector CompFuncEntry)) -- ^ homomorphism, see above def.
   -> Derivation Int Int -- ^ hyperedge tree
   -> V.Vector (V.Vector NTT) -- ^ Terminal vectors, should only contain Ts
 getSpans h' dt = fmap (join . fmap evalNT) preResult
@@ -69,8 +69,8 @@ getSpans h' dt = fmap (join . fmap evalNT) preResult
     evalNT (NT x) = childSpans V.! x
 
 retranslateRule
-  :: (A.Array Int String)
-  -> (A.Array Int String)
+  :: (A.Array NTIdent String)
+  -> (A.Array TIdent String)
   -> Rule -- ^ a rule
   -> String
 retranslateRule a_nt a_t ((lhs, rhs), hom_f)

@@ -20,6 +20,7 @@ module Data.List.Extra
 (
 -- * Basic functions
   isSingleton
+, isMultiton
 
 -- * Sublists
 
@@ -64,6 +65,13 @@ import Data.List (foldl')
 isSingleton :: [a] -> Bool
 isSingleton [_] = True
 isSingleton  _  = False
+
+
+-- | Test whether a list contains at least two elements.
+isMultiton :: [a] -> Bool
+isMultiton [ ] = False
+isMultiton [_] = False
+isMultiton  _  = True
 
 
 -- | Like 'span', but the length of the prefix is returned additionally.
@@ -152,8 +160,10 @@ mergeListsBy cmp = go
     go [xs] = xs
     go xss = go (pairwise xss)
 
-    pairwise (xs1 : xs2 : xss) = mergeBy cmp xs1 xs2 : pairwise xss
+    pairwise (xs1 : xs2 : xss) = mrg xs1 xs2 : pairwise xss
     pairwise xss = xss
+
+    mrg = mergeBy cmp
 
 
 -- | Like 'Data.List.minimumBy', but returns all least elements in their

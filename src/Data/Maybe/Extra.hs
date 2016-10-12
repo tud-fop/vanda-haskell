@@ -19,7 +19,7 @@ module Data.Maybe.Extra
 ) where
 
 
--- | Return 'Nothing' if predicate is 'False' for the value, otherwise wrap
+-- | Return 'Nothing' if predicate is 'True' for the value, otherwise wrap
 -- the value in 'Just'.
 nothingIf :: (a -> Bool) -> a -> Maybe a
 nothingIf p x = if p x then Nothing else Just x

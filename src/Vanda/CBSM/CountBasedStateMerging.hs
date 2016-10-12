@@ -22,6 +22,7 @@ module Vanda.CBSM.CountBasedStateMerging
 , Info(..)
 , BeamEntry(..)
 , initialInfo
+, ConfigCBSM(..)
 , cbsm
 , normalizeLklhdByMrgdStates
 , prettyPrintCRTG
@@ -32,6 +33,7 @@ module Vanda.CBSM.CountBasedStateMerging
 , refineRanking
 , mergeRanking
 , enrichRanking
+, ruleEquivalenceClasses
 , forwardStar
 , bidiStar
 , likelihoodDelta
@@ -42,6 +44,8 @@ module Vanda.CBSM.CountBasedStateMerging
 
 
 import qualified Control.Error
+import           Data.List.Extra (isMultiton)
+import           Data.List.Shuffle (shuffle)
 import           Data.Maybe.Extra (nothingIf)
 import           Vanda.CBSM.Dovetailing
 import           Vanda.CBSM.Merge (Merge)
@@ -53,14 +57,14 @@ import           Vanda.Util.PrettyPrint (columnize)
 import           Vanda.Util.Tree as T
 
 import           Control.Applicative ((<*>), (<$>))
-import           Control.Arrow ((***), first)
+import           Control.Arrow ((***), first, second)
 import           Control.DeepSeq (NFData(rnf))
 import           Control.Monad.State.Lazy
 import           Control.Parallel.Strategies
 import qualified Data.Array as A
 import qualified Data.Binary as B
 import           Data.List (foldl', groupBy, sortBy, transpose)
-import           Data.List.Extra (mergeBy, mergeListsBy, minimaBy)
+import           Data.List.Extra (mergeListsBy, minimaBy)
 import           Data.Function (on)
 import qualified Data.Map.Lazy as ML
 import           Data.Map.Strict (Map)
@@ -432,14 +436,34 @@ initialInfo gen m
       }
 
 
+data ConfigCBSM g v = ConfigCBSM
+  { confNumCapabilities  :: Int
+  -- ^ result of 'getNumCapabilities' for parallelization, 1 for none
+  , confMergeGroups      :: [Set v]
+  -- ^ partition on the states; only states from the same equivalence class
+  --   will be merged
+  , confEvaluate         :: (Int, Int, Int) -> Log Double -> Log Double
+  -- ^ evaluation function for a merge given number of merged rules, states,
+  --   and initial states, and the loss of likelihood
+  , confBeamWidth        :: Int
+  -- ^ beam width
+  , confDynamicBeamWidth :: Bool
+  -- ^ actual beam width is at least 'confBeamWidth', but if
+  --   @'confDynamicBeamWidth' == 'True'@, then the actual beam width is
+  --   extended to capture all candidates that have a heuristic value that is
+  --   as good as for candidates within 'confBeamWidth'
+  , confShuffleStates    :: Bool
+  -- ^ optionally randomize the order of states with the same count
+  , confShuffleMerges    :: Bool
+  -- ^ optionally randomize the order of merges with the same heuristic value
+  }
+
+
 cbsm
   :: (Ord v, Ord l, RandomGen g)
-  => Int  -- ^ result of 'getNumCapabilities' for parallelization, 1 for none
-  -> [Set v]
-  -> ((Int, Int, Int) -> Log Double -> Log Double)
-  -> Int
-  -> (forall a. [a] -> g -> ([a], g))
+  => ConfigCBSM g v
   ->  (CRTG v l, Info g v)
+  -- ^ starting point; is returned as the first element of the resulting list
   -> [(CRTG v l, Info g v)]
 cbsm = cbsmGo M.empty
 
@@ -447,41 +471,44 @@ cbsm = cbsmGo M.empty
 cbsmGo
   :: (Ord v, Ord l, RandomGen g)
   => Map (v, v) (Merge v)
-  -> Int  -- ^ result of 'getNumCapabilities' for parallelization, 1 for none
-  -> [Set v]
-  -> ((Int, Int, Int) -> Log Double -> Log Double)
-  -> Int
-  -> (forall a. [a] -> g -> ([a], g))
+  -> ConfigCBSM g v
   ->  (CRTG v l, Info g v)
   -> [(CRTG v l, Info g v)]
-cbsmGo cache numCapabilities mergeGroups evaluate beamWidth shuffle prev@(g, info@Info{..})
+cbsmGo cache conf@ConfigCBSM{..} prev@(g, info@Info{..})
   = (prev :)
   $ seq g
   $ seq info
   $ let n = infoIteration + 1
         likelihoodDelta' = likelihoodDelta g
         saturateMerge' = saturateMerge $ forwardStar $ rules g
-        (gen1, gen2) = split infoRandomGen
+        (genNext, (genState, genMerge)) = second split $ split infoRandomGen
         (mergePairs, cands)
           = sum *** processMergePairs
           $ unzip
-          $ zipWith (\ grpS -> fst . compileMergePairs (cntState g) grpS shuffle)
-              mergeGroups
-              (evalState (sequence $ repeat $ state $ split) gen1)
+          $ zipWith (\ grpS -> fst . compileMergePairs (cntState g) grpS confShuffleStates)
+              confMergeGroups
+              (evalState (sequence $ repeat $ state $ split) genState)
         processMergePairs
-          = ( if numCapabilities > 1
-              then withStrategy (parListChunk (beamWidth `div` (2 * numCapabilities)) rseq)
+          = ( if confNumCapabilities > 1
+              then withStrategy (parListChunk (confBeamWidth `div` (2 * confNumCapabilities)) rseq)
               else id )
-          . take beamWidth  -- TODO: Group?
           . zipWith ( \ i (h, ((v1, _), (v2, _)))
                       -> processMergePair i h (v1, v2)
                     ) [1 ..]
-          . foldr1 (mergeBy (comparing fst))
+          . ( if confDynamicBeamWidth
+              then takeAtLeastOn fst confBeamWidth
+              else take confBeamWidth
+            )
+          . ( if confShuffleMerges
+              then \ xs -> fst $ shuffleGroupsBy ((==) `on` fst) xs genMerge
+              else id
+            )
+          . mergeListsBy (comparing fst)
         processMergePair i h pair@(v1, v2)
           = BeamEntry
               { beIndex           = i
               , beHeuristic       = h
-              , beEvaluation      = evaluate sizes l
+              , beEvaluation      = confEvaluate sizes l
               , beLikelihoodDelta = l
               , beFactorRules     = rw
               , beFactorStates    = vw
@@ -508,10 +535,10 @@ cbsmGo cache numCapabilities mergeGroups evaluate beamWidth shuffle prev@(g, inf
           $ map (\ BeamEntry{..} -> (beMergeSeed, beMergeSaturated))
                 cands
         info' = Info
-                  { infoRandomGen             = gen2
+                  { infoRandomGen             = genNext
                   , infoIteration             = n
                   , infoMergePairs            = mergePairs
-                  , infoBeamWidth             = beamWidth
+                  , infoBeamWidth             = length cands
                   , infoBeamIndex             = beIndex (head minimalCands)
                   , infoBeam                  = cands
                   , infoEquivalentBeamIndizes = map beIndex minimalCands
@@ -522,8 +549,7 @@ cbsmGo cache numCapabilities mergeGroups evaluate beamWidth shuffle prev@(g, inf
                   }
     in if null cands
        then []
-       else cbsmGo cache' numCapabilities mergeGroups evaluate beamWidth shuffle
-                   (mergeCRTG mrg g, info')
+       else cbsmGo cache' conf (mergeCRTG mrg g, info')
 --   = g
 --   : ( g `seq` case refineRanking $ enrichRanking $ mergeRanking g of
 --         ((_, ((v1, _), (v2, _))), _) : _
@@ -534,23 +560,54 @@ cbsmGo cache numCapabilities mergeGroups evaluate beamWidth shuffle prev@(g, inf
 --     )
 
 compileMergePairs
-  :: Ord v
+  :: (Ord v, RandomGen g)
   => Map v Int
   -> Set v
-  -> (forall a. [a] -> g -> ([a], g))
+  -> Bool
+  -- ^ optionally randomize the order of states with the same count
   -> g
   -> ((Int, [(Int, ((v, Int), (v, Int)))]), g)
-compileMergePairs cntM grpS shuffle g
+  -- ^ ((length of list,
+  --     [(heuristic value, ((state 1, count 1), (state 2, count 2)))]),
+  --    updated RandomGen state)
+compileMergePairs cntM grpS doShuffle g
   = n `seq` ((n, sortedCartesianProductWith' ((+) `on` snd) vs (tail vs)), g')
   where n     = let s = M.size cntM' in s * (s - 1) `div` 2
         cntM' = M.intersection cntM (M.fromSet (const ()) grpS)
         (vs, g')
-          = flip runState g
-          $ fmap concat
-          $ mapM (state . shuffle)
-          $ groupBy ((==) `on` snd)
+          = ( if doShuffle
+              then \ xs -> shuffleGroupsBy ((==) `on` snd) xs g
+              else \ xs -> (xs, g)
+            )
           $ sortBy (comparing snd)
           $ M.toList cntM'
+
+
+shuffleGroupsBy :: RandomGen g => (a -> a -> Bool) -> [a] -> g -> ([a], g)
+shuffleGroupsBy eq xs g
+  = flip runState g
+  . fmap concat
+  . mapM (state . shuffle)
+  $ groupBy eq xs
+
+
+takeAtLeastOn :: Eq b => (a -> b) -> Int -> [a] -> [a]
+takeAtLeastOn project = sanitize
+  where
+    sanitize n = if n < 1 then const [] else takeAtLeast n
+
+    takeAtLeast _ [] = []
+    takeAtLeast n (x : xs)
+      = x : if n > 1
+            then takeAtLeast (pred n) xs
+            else takeOn (project x) xs
+
+    takeOn _ [] = []
+    takeOn px (y : ys)
+      = if px == py
+        then y : takeOn py ys
+        else []
+      where py = project y
 
 
 normalizeLklhdByMrgdStates :: (Int, Int, Int) -> Log Double -> Log Double
@@ -648,6 +705,7 @@ saturateMergeStep g (todo, mrgs)
           . map (\ Rule{..} -> ( map (Merge.apply mrgs) from
                                , S.singleton (Merge.apply mrgs to)))
           )
+        $ filter isMultiton
         $ M.elems
         $ M.unionsWith (flip (++))  -- bring together rules with same terminal
         $ M.elems
@@ -805,6 +863,22 @@ likelihoodDelta CRTG{..} = \ mrgs ->
     strictTriple x y z = x `seq` y `seq` z `seq` (x, y, z)
 
     getCnt m k = M.findWithDefault 0 k m
+
+
+-- needed from test suite
+ruleEquivalenceClasses
+  :: (Ord l, Ord v) => BidiStar v l -> Merge v -> Map (Rule v l) [Rule v l]
+ruleEquivalenceClasses g mrgs
+  = M.filter notSingle
+  $ M.fromListWith (++)
+  $ map (\ r -> (mergeRule mrgs r, [r]))
+  $ (S.toList . S.fromList)
+  $ concat
+  $ M.elems
+  $ M.intersection g (Merge.forward mrgs)
+  where
+    notSingle [_] = False
+    notSingle  _  = True
 
 
 mergeRule :: Ord v => Merge v -> Rule v l -> Rule v l

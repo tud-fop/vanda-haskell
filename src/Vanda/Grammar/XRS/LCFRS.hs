@@ -17,6 +17,11 @@ module Vanda.Grammar.XRS.LCFRS
     -- for example the stuff in LCFRS.Evaluation
   , MIRTG(..)
   , MXRS(..)
+    -- * Identifier
+  , NTIdent
+  , TIdent
+  , CompFuncEntry
+  , Fanout
     -- * getter
   , getRk
   , getFo
@@ -43,27 +48,32 @@ import           Data.NTT
 import           Vanda.Hypergraph.IntHypergraph
 
 
-type Rule = ((Int, [Int]), [[NTT]])
+type NTIdent = Int
+type TIdent = Int
+type CompFuncEntry = NTT
+type Fanout = Int
+type Rule = ((NTIdent, [NTIdent]), [[CompFuncEntry]])
 
 -- These are kept vague to allow ProtoRules in Binarize!
-getRk, getFo :: (((l, [a]), [[NTT]]), Double) -> Int
+getRk :: (((l, [a]), [[CompFuncEntry]]), Double) -> Int
 getRk (((_, rhs),  _), _) = length rhs
+getFo :: (((l, [a]), [[CompFuncEntry]]), Double) -> Fanout
 getFo (((_, _  ), h'), _) = length h'
 
-getRhs :: (((l, [a]), [[NTT]]), Double) -> [a]
+getRhs :: (((l, [a]), [[CompFuncEntry]]), Double) -> [a]
 getRhs (((_, rhs), _), _) = rhs
 
--- | Intial NTs, a map from each NT to a list of possible (intified)
+-- | Initial NTs, a map from each NT to a list of possible (intified)
 -- rules with their probabilities and a NT and T dictionary.
-type PLCFRS = ([Int], [(Rule, Double)], (A.Array Int String, A.Array Int String))
+type PLCFRS = ([NTIdent], [(Rule, Double)], (A.Array NTIdent String, A.Array TIdent String))
 
 data MIRTG -- Mono-IRTG! I should not be allowed to name things.
   = MIRTG
     { rtg :: Hypergraph Int Int
       -- Int as identification for the homomorphism (label)
       -- and for the rule weights (ident)
-    , initial :: [Int] -- these are nodes of the hypergraph (NTs)
-    , h :: V.Vector (V.Vector (V.Vector NTT))
+    , initial :: [NTIdent] -- these are nodes of the hypergraph (NTs)
+    , h :: V.Vector (V.Vector (V.Vector CompFuncEntry))
       -- Outer vector lets me map rules (using their Int-label) to the
       -- Middle vector, which represents the components of the lhs-NT,
       -- its length is that NTs fan-out
@@ -95,7 +105,7 @@ instance Show MXRS where
     where cut n = take n . (++ repeat ' ')
 
 fromRules
-  :: [Int] -- ^ initials
+  :: [NTIdent] -- ^ initials
   -> [Rule]
   -> MIRTG
 fromRules initials rules =
@@ -105,7 +115,7 @@ fromRules initials rules =
   in MIRTG (mkHypergraph myHyperedges) initials myH
 
 fromProbabilisticRules
-  :: [Int] -- ^ initial NTs
+  :: [NTIdent] -- ^ initial NTs
   -> [(Rule, Double)] -- ^ rules and their probabilities
   -> MXRS
 fromProbabilisticRules initials rs =
@@ -113,7 +123,7 @@ fromProbabilisticRules initials rs =
 
 toProbabilisticRules
   :: MXRS
-  -> ([Int], [(Rule, Double)])
+  -> ([NTIdent], [(Rule, Double)])
 toProbabilisticRules (MXRS (MIRTG hg inits h') ws)
   = (,) inits
   $ map worker
@@ -126,8 +136,8 @@ toProbabilisticRules (MXRS (MIRTG hg inits h') ws)
 -- pretty printing
 
 retranslateProbRule
-  :: A.Array Int String
-  -> A.Array Int String
+  :: A.Array NTIdent String
+  -> A.Array TIdent String
   -> (Rule, Double)
   -> String
 retranslateProbRule a_nt a_t (((lhs, rhs), hom_f), p)

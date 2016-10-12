@@ -27,6 +27,7 @@ library
     , bimap
     , binary >= 0.6.4
     , bytestring
+    , bytestring-lexing
     , cmdargs
     , containers >= 0.5.0
     , deepseq
@@ -45,6 +46,7 @@ library
     , QuickCheck
     , random
     , split
+    , stm
     , text
     , time
     , unix
@@ -160,6 +162,7 @@ executable Vanda
     , bimap
     , binary >= 0.6.4
     , bytestring
+    , bytestring-lexing
     , cmdargs
     , containers >= 0.5.0
     , deepseq
@@ -177,6 +180,7 @@ executable Vanda
     , QuickCheck
     , random
     , split
+    , stm
     , text
     , time
     , unix

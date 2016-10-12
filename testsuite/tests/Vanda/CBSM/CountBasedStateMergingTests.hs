@@ -87,10 +87,10 @@ tests = TestList
         ]
     ]
   , "fst . likelihoodDelta" ~: TestList
-    [ (ln $ fst $ likelihoodDelta crtg0 Merge.empty) ~?= 0
-    , (ln $ fst $ likelihoodDelta crtg0 $ Merge.fromLists ["Cc"]) ~?= log ((3**3 * 6**6) / 9**9)
+    [ (ln $ p1o3 $ likelihoodDelta crtg0 Merge.empty) ~?= 0
+    , (ln $ p1o3 $ likelihoodDelta crtg0 $ Merge.fromLists ["Cc"]) ~?= log ((3**3 * 6**6) / 9**9)
     , TestCase $ assertRoughly "" 1e-10
-        ( ln $ fst $ likelihoodDelta crtg0 $ Merge.fromLists ["Aa", "Bb", "Cc"] )
+        ( ln $ p1o3 $ likelihoodDelta crtg0 $ Merge.fromLists ["Aa", "Bb", "Cc"] )
         ( log
           ( 3**3 / (1**1 * 2**2)  -- } merged initial states
           * 5**5 / (1**1 * 4**4)  -- ⎫ merged
@@ -102,16 +102,19 @@ tests = TestList
         )
     ]
   , "snd . likelihoodDelta" ~: TestList
-    [ (snd $ likelihoodDelta crtg0 Merge.empty) ~?= (0, 0, 0)
-    , (snd $ likelihoodDelta crtg0 $ Merge.fromLists ["Cc"]) ~?= (0, 1, 0)
-    , (snd $ likelihoodDelta crtg0 $ Merge.fromLists ["Aa", "Bb", "Cc"]) ~?= (2, 3, 1)
+    [ (p3o3 $ likelihoodDelta crtg0 Merge.empty) ~?= (0, 0, 0)
+    , (p3o3 $ likelihoodDelta crtg0 $ Merge.fromLists ["Cc"]) ~?= (0, 1, 0)
+    , (p3o3 $ likelihoodDelta crtg0 $ Merge.fromLists ["Aa", "Bb", "Cc"]) ~?= (2, 3, 1)
     ]
   , "saturateMerge" ~: TestList
-    [ (Merge.forward $ saturateMerge (forwardStar rtg0) $ Merge.empty) ~?= (Merge.forward $ Merge.empty)
-    , (Merge.forward $ saturateMerge (forwardStar rtg1) $ Merge.fromLists ["AB", "GH"]) ~?= (Merge.forward $ Merge.fromLists ["AB", "CD", "EF", "GH"])
-    , (Merge.forward $ saturateMerge (forwardStar rtg1) $ Merge.fromLists ["CD", "EF", "IJ"]) ~?= (Merge.forward $ Merge.fromLists ["CD", "EF", "IJ"])
+    [ (Merge.forward $ fst $ saturateMerge (forwardStar rtg0) $ Merge.empty) ~?= (Merge.forward $ Merge.empty)
+    , (Merge.forward $ fst $ saturateMerge (forwardStar rtg1) $ Merge.fromLists ["AB", "GH"]) ~?= (Merge.forward $ Merge.fromLists ["AB", "CD", "EF", "GH"])
+    , (Merge.forward $ fst $ saturateMerge (forwardStar rtg1) $ Merge.fromLists ["CD", "EF", "IJ"]) ~?= (Merge.forward $ Merge.fromLists ["CD", "EF", "IJ"])
     ]
   ]
+  where
+    p1o3 (x, _, _) = x
+    p3o3 (_, _, x) = x
 
 
 testSortedCartesianProductWith
