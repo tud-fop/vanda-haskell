@@ -103,6 +103,7 @@ library
     , Vanda.Grammar.AutomataStorage
     , Vanda.Grammar.AutomataStorage.TreeStackStorage
     , Vanda.Grammar.AutomataStorage.PushdownStorage
+    , Vanda.Grammar.AutomataStorage.SparseTreeStackStorage
     , Vanda.Grammar.Berkeley.IRTG
     , Vanda.Grammar.Berkeley.Text
     , Vanda.Grammar.LM
