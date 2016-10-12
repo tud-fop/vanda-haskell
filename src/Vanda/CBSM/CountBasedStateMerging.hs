@@ -64,7 +64,7 @@ import           Control.Parallel.Strategies
 import qualified Data.Array as A
 import qualified Data.Binary as B
 import           Data.Coerce (coerce)
-import           Data.List (foldl', groupBy, sortBy, transpose)
+import           Data.List (foldl', groupBy, intercalate, sortBy, transpose)
 import           Data.List.Extra (mergeListsBy, minimaBy)
 import           Data.Function (on)
 import qualified Data.Map.Lazy as ML
@@ -165,19 +165,19 @@ unionRuleSets (bw1 :-> fw1) (bw2 :-> fw2)
   = (S.union bw1 bw2 :-> S.union fw1 fw2)
 -}
 
-prettyPrintCRTG :: (Ord v, Show v, Show l) => CRTG v l -> String
-prettyPrintCRTG CRTG{..}
+prettyPrintCRTG :: Ord v => (v -> String) -> (l -> String) -> CRTG v l -> String
+prettyPrintCRTG showV showL CRTG{..}
   = unlines
       [ columnize ["  "]
         $ transpose
         $ (["state", "count"] :)
-        $ map (\ (v, c) -> [show v, show c])
+        $ map (\ (v, c) -> [showV v, show c])
         $ M.assocs cntState
       , columnize ["  "]
         $ transpose
         $ (["initial", "count", "probability", "log₂ probability"] :)
         $ map (\ (v, c) -> let s = sum (M.elems cntInit) in
-            [ show v
+            [ showV v
             , show c
             , show      (fromIntegral c / fromIntegral s :: Double)
             , show $ ln (fromIntegral c / fromIntegral s :: Log Double)
@@ -194,9 +194,9 @@ prettyPrintCRTG CRTG{..}
             , "log₂ probability"
             ] : )
         $ map (\ (Rule{..}, cR) -> let cTo = cntState M.! to in
-            [ show to
-            , show label
-            , show from
+            [ showV to
+            , showL label
+            , "[" ++ intercalate ", " (map showV from) ++ "]"
             , show cR
             , show      (fromIntegral cR / fromIntegral cTo :: Double)
             , show $ ln (fromIntegral cR / fromIntegral cTo :: Log Double)

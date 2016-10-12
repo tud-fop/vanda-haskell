@@ -227,7 +227,7 @@ mainArgs CBSMContinue{..} = do
 
 mainArgs ShowGrammar{..}
   = putStrLn
-  . prettyPrintCRTG
+  . prettyPrintCRTG show id
   =<< (decodeFile argGrammar :: IO BinaryCRTG)
 
 
