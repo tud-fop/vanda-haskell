@@ -119,19 +119,17 @@ toProbabilisticRules (MXRS (MIRTG hg inits h') ws)
 -- pretty printing
 
 retranslateProbRule
-  :: (A.Array Int String)
-  -> (A.Array Int String)
+  :: A.Array Int String
+  -> A.Array Int String
   -> (Rule, Double)
   -> String
 retranslateProbRule a_nt a_t (((lhs, rhs), hom_f), p)
   =  (A.!) a_nt lhs
   ++ " -> ⟨"
-  ++ ( intercalate (',':thinspace)
-     $ map (intercalate thinspace . map retHomComponent)
-     $ hom_f
-     )
+  ++ intercalate (',' : thinspace)
+                 (map (intercalate thinspace . map retHomComponent) hom_f)
   ++ "⟩( "
-  ++ (intercalate " " $ map ((A.!) a_nt) rhs)
+  ++ unwords (map ((A.!) a_nt) rhs)
   ++ " ) "
   ++ show p
     where
@@ -142,7 +140,7 @@ retranslateProbRule a_nt a_t (((lhs, rhs), hom_f), p)
 showPLCFRS :: PLCFRS -> String
 showPLCFRS (initials, rules, (a_nt, a_t))
   =  "Initial NTs:\n"
-  ++ (intercalate ", " $ map ((A.!) a_nt) initials)
+  ++ intercalate ", " (map ((A.!) a_nt) initials)
   ++ "\n\nRules (LHS -> ⟨comp.fct.⟩( RHS ) probability):\n"
   ++ unlines (map (retranslateProbRule a_nt a_t) rules)
 
@@ -151,15 +149,15 @@ niceStatictics
   -> String
 niceStatictics (initials, rulesAndProbs, (a_nt, _)) =
   "\n"
-  ++ (printf "%7d initial non-terminals\n" $ length initials)
-  ++ (printf "%7d non-terminals\n" $ length (A.indices a_nt))
-  ++ (printf "%7d rules\n" $ length rulesAndProbs)
+  ++ printf "%7d initial non-terminals\n" (length initials)
+  ++ printf "%7d non-terminals\n" (length (A.indices a_nt))
+  ++ printf "%7d rules\n" (length rulesAndProbs)
   ++ "\n"
   ++ "Histograms:\n"
   ++ "  Ranks:\n"
-  ++ (unlines (map (uncurry (printf "    %2d: %7d")) rkCounts))
+  ++ unlines (map (uncurry (printf "    %2d: %7d")) rkCounts)
   ++ "  Fanouts:\n"
-  ++ (unlines (map (uncurry (printf "    %2d: %7d")) foCounts))
+  ++ unlines (map (uncurry (printf "    %2d: %7d")) foCounts)
   where
     counter f = foldl' (\m r -> M.insertWith (+) (f r) 1 m)
                        (M.empty :: M.Map Int Int)

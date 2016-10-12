@@ -79,7 +79,7 @@ multipleDyckTreeStackAutomaton ass bij
           ++ [ ((), a, const True, f, ())
              | a <- as
              , let f = pushTreeStack
-                     $ ( Just (bij a)
+                       ( Just (bij a)
                        , S.delete a
                          . S.fromList
                          $ head [ as' | as' <- ass, a `elem` as']

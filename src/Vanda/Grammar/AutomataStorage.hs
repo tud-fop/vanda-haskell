@@ -52,7 +52,7 @@ runAutomaton (c, τs, f) = filter f
 -- | A 'Transition' contains a source state, a symbol, a (unary) predicate (on
 --   the storage), a (unary) nondeterministic function (on the storage), and a
 --   target state.
-type Transition q σ s = (q, σ, (s -> Bool), (s -> [s]), q)
+type Transition q σ s = (q, σ, s -> Bool, s -> [s], q)
 
 -- | A 'Configuration' contains the automatons current state, and the current
 --   value of the storage.
