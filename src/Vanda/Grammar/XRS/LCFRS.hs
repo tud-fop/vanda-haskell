@@ -23,6 +23,7 @@ module Vanda.Grammar.XRS.LCFRS
 , toProbabilisticRules
 , showPLCFRS
 , niceStatictics
+, exampleLCFRS
 ) where
 
 import qualified Data.Array as A
@@ -164,3 +165,17 @@ niceStatictics (initials, rulesAndProbs, (a_nt, _)) =
                        rulesAndProbs
     rkCounts = M.assocs $ counter getRk
     foCounts = M.assocs $ counter getFo
+
+-- examples
+exampleLCFRS :: MIRTG
+exampleLCFRS
+  = fromRules [1] [ ((1, [2, 3]), [[NT 1, NT 3, NT 2, NT 4]]) -- S → [x₁y₁x₂y₂](A,B) # 1.0
+                  , ((2, [2]), [[T 1, NT 1], [T 3, NT 2]])    -- A → [ax₁, cx₂](A)   # 0.7
+                  , ((2, []), [[], []])                       -- A → [ε, ε]()        # 0.3
+                  , ((3, [3]), [[T 2, NT 1], [T 4, NT 2]])    -- B → [bx₁, dx₂](B)   # 0.4
+                  , ((3, []), [[], []])                       -- B → [ε, ε]()        # 0.6
+                  ]
+
+examplePLCFRS :: MXRS
+examplePLCFRS
+  = MXRS exampleLCFRS (V.fromList [1, 0.7, 0.3, 0.4, 0.6])
