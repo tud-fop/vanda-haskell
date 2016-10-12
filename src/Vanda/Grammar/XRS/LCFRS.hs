@@ -10,21 +10,27 @@
 -- ---------------------------------------------------------------------------
 
 module Vanda.Grammar.XRS.LCFRS
-( Rule
-, getRk
-, getFo
-, getRhs
-, PLCFRS
--- The following instances are just there to integrate with other vanda things,
--- for example the stuff in LCFRS.Evaluation
-, MIRTG(..)
-, MXRS(..)
-, fromProbabilisticRules
-, toProbabilisticRules
-, showPLCFRS
-, niceStatictics
-, exampleLCFRS
-) where
+  ( Rule
+  , PLCFRS
+    -- * IRTG view on LCFRS
+    -- The following instances are just there to integrate with other vanda things,
+    -- for example the stuff in LCFRS.Evaluation
+  , MIRTG(..)
+  , MXRS(..)
+    -- * getter
+  , getRk
+  , getFo
+  , getRhs
+    -- * conversion
+  , fromProbabilisticRules
+  , toProbabilisticRules
+    -- * pretty printing
+  , showPLCFRS
+  , niceStatictics
+    -- * examples
+  , exampleLCFRS
+  , examplePLCFRS
+  ) where
 
 import qualified Data.Array as A
 import           Data.Foldable (foldl')
