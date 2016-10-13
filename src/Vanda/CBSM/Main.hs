@@ -56,7 +56,7 @@ import           Data.List (intercalate, nub, minimumBy, maximumBy, sort)
 import           Data.List.Split (wordsBy)
 import           Data.Map ((!))
 import qualified Data.Map as M
-import           Data.Maybe (mapMaybe)
+import           Data.Maybe (mapMaybe, maybeToList)
 import           Data.Ord
 import qualified Data.Set as S
 import           Data.Tree
@@ -178,7 +178,7 @@ mainArgs opts@CBSM{..} = do
       \rule merges,state merges,initial merges,\
       \seed state 1,seed state 2,\
       \saturation steps"
-    safeSaveLastGrammar flagSaveCounter flagSaveTimer
+    safeSaveLastGrammar flagSaveCounter flagSaveTimer flagVerboseInfo
                         flagDir hStat hEvals hBeam mhLogBeamVerbose
       $ take (succ flagIterations)
       $ cbsm
@@ -210,7 +210,9 @@ mainArgs CBSMContinue{..} = do
    withFile (flagDir </> fileNameEquivBeamIndizes) AppendMode $ \ hBeam ->
    withFileIf (flagLogBeamVerbose opts) (flagDir </> fileNameLogBeamVerbose)
               AppendMode $ \ mhLogBeamVerbose ->
-    safeSaveLastGrammar (flagSaveCounter opts) (flagSaveTimer opts)
+    safeSaveLastGrammar (flagSaveCounter opts)
+                        (flagSaveTimer   opts)
+                        (flagVerboseInfo opts)
                         flagDir hStat hEvals hBeam mhLogBeamVerbose
       $ take flagIterations
       $ tail
@@ -241,25 +243,29 @@ mainArgs ShowInfo{..} = do
   putStr "merge pairs         : " >> print infoMergePairs
   putStr "beam width          : " >> print infoBeamWidth
   putStr "beam index          : " >> print infoBeamIndex
-  case infoBeam `at` pred infoBeamIndex of
-    Nothing -> return ()
-    Just (BeamEntry{..}) -> do
-      let showLogValue x = "2^" ++ show (ld x) ++ " = " ++ show x
-      putStrLn $ "heuristic           : " ++ show beHeuristic
-      putStrLn $ "evaluation          : " ++ showLogValue beEvaluation
-      putStrLn $ "Δ likelihood        : " ++ showLogValue beLikelihoodDelta
-      putStrLn $ "factor rules        : " ++ showLogValue beFactorRules
-      putStrLn $ "factor states       : " ++ showLogValue beFactorStates
-      putStrLn $ "factor initial      : " ++ showLogValue beFactorInitials
-      putStrLn $ "rule merges         : " ++ show beMergedRules
-      putStrLn $ "state merges        : " ++ show beMergedStates
-      putStrLn $ "initial merges      : " ++ show beMergedInitials
-      putStrLn $ "seed state 1        : " ++ show (fst beMergeSeed)
-      putStrLn $ "seed state 2        : " ++ show (snd beMergeSeed)
-      putStrLn $ "saturation steps    : " ++ show beSaturationSteps
-      putStrLn ""
-      putStrLn "saturated merge: "
-      putStr (prettyPrintMerge beMergeSaturated)
+  let putBeamEntry BeamEntry{..} = do
+        let showLogValue x = "2^" ++ show (ld x) ++ " = " ++ show x
+        putStrLn   ""
+        putStrLn   "beam entry:"
+        putStrLn $ "index               : " ++ show beIndex
+        putStrLn $ "heuristic           : " ++ show beHeuristic
+        putStrLn $ "evaluation          : " ++ showLogValue beEvaluation
+        putStrLn $ "Δ likelihood        : " ++ showLogValue beLikelihoodDelta
+        putStrLn $ "factor rules        : " ++ showLogValue beFactorRules
+        putStrLn $ "factor states       : " ++ showLogValue beFactorStates
+        putStrLn $ "factor initial      : " ++ showLogValue beFactorInitials
+        putStrLn $ "rule merges         : " ++ show beMergedRules
+        putStrLn $ "state merges        : " ++ show beMergedStates
+        putStrLn $ "initial merges      : " ++ show beMergedInitials
+        putStrLn $ "seed state 1        : " ++ show (fst beMergeSeed)
+        putStrLn $ "seed state 2        : " ++ show (snd beMergeSeed)
+        putStrLn $ "saturation steps    : " ++ show beSaturationSteps
+        putStrLn ""
+        putStrLn "saturated merge: "
+        putStr (prettyPrintMerge beMergeSaturated)
+  case infoBeam of
+    [be] -> putBeamEntry be
+    _    -> maybe (return ()) putBeamEntry (infoBeam `at` pred infoBeamIndex)
   putStrLn ""
   putStrLn ""
   m <- if null flagIntToTreeMap
@@ -573,6 +579,9 @@ newline = unlines [""]
 safeSaveLastGrammar
   :: Maybe Int     -- ^ save interval in number of results
   -> Maybe Int     -- ^ save interval in microseconds
+  -> Bool          -- ^ 'True': write full 'Info's to files;
+                   --   'False': remove every but the chosen candidate from
+                   --   'infoBeam' before writing to file
   -> FilePath      -- ^ directory where the results are saved
   -> Handle        -- ^ handle to log general statistics
   -> Handle        -- ^ handle to log evaluations of candidates in beam
@@ -581,7 +590,7 @@ safeSaveLastGrammar
   -> [(BinaryCRTG, Info StdGen Int)]
   -> IO ()
 safeSaveLastGrammar
-  saveCounter saveTimer dir hStat hEvals hBeam mhLogBeamVerbose xs
+  saveCounter saveTimer verboseInfo dir hStat hEvals hBeam mhLogBeamVerbose xs
   = handleOnDemand saveCounter saveTimer [sigUSR1] worker handler
   where
     worker :: ((BinaryCRTG, BinaryInfo) -> IO ()) -> IO ()
@@ -672,7 +681,11 @@ safeSaveLastGrammar
       putStrLnTimestamped $ "Writing result of iteration " ++ show i ++ " ..."
       hFlush stdout
       encodeFile (dir </> fileNameGrammar i) (g    :: BinaryCRTG)
-      encodeFile (dir </> fileNameInfo    i) (info :: BinaryInfo)
+      encodeFile (dir </> fileNameInfo    i)
+        $ if verboseInfo
+          then info :: BinaryInfo
+          else info{infoBeam = maybeToList
+                             $ infoBeam info `at` pred (infoBeamIndex info)}
       writeFile (dir </> fileNameLastIteration) (show i)
       putStrLnTimestamped
         $ "... done writing result of iteration " ++ show i ++ "."

@@ -81,6 +81,7 @@ data Args
     , flagIterations :: Int
     , flagDir :: FilePath
     , flagLogBeamVerbose :: Bool
+    , flagVerboseInfo :: Bool
     , flagSaveCounter :: Maybe Int
     , flagSaveTimer :: Maybe Int
     , argCorpora :: [FilePath]
@@ -215,6 +216,7 @@ cmdArgs
         , flagIterations       = (pred maxBound)
         , flagDir              = ""
         , flagLogBeamVerbose   = False
+        , flagVerboseInfo      = False
         , flagSaveCounter      = Nothing
         , flagSaveTimer        = Nothing
         , argCorpora           = []
@@ -239,6 +241,7 @@ cmdArgs
         , flagReqIterations
         , flagReqDir
         , flagNoneLogBeamVerbose
+        , flagNoneVerboseInfo
         , flagReqSaveCounter
         , flagReqSaveTimer
         ]
@@ -413,6 +416,10 @@ cmdArgs
       = flagNone ["log-beam-verbose"] (\ x -> x{flagLogBeamVerbose = True})
           (  "Write all information about the search beam to "
           ++ fileNameLogBeamVerbose   ++ "." )
+    flagNoneVerboseInfo
+      = flagNone ["verbose-info"] (\ x -> x{flagVerboseInfo = True})
+          "Write the full beams to the info files. Otherwise only the chosen \
+          \candidates is saved."
     flagReqOutputFormat
       = flagReq [flag] update "FORMAT" ("one of " ++ optsStr ++ ". Default: pretty.")
       where
