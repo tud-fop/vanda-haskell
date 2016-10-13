@@ -212,7 +212,8 @@ mainArgs CBSMContinue{..} = do
               AppendMode $ \ mhLogBeamVerbose ->
     safeSaveLastGrammar (flagSaveCounter opts) (flagSaveTimer opts)
                         flagDir hStat hEvals hBeam mhLogBeamVerbose
-      $ take (succ flagIterations)
+      $ take flagIterations
+      $ tail
       $ cbsm
           ConfigCBSM
             { confNumCapabilities  = numCapabilities
