@@ -97,6 +97,9 @@ data Args
     { flagIntToTreeMap :: FilePath
     , argInfo :: FilePath
     }
+  | GrammarToDOT
+    { argGrammar :: FilePath
+    }
   | Parse
     { flagUnknownWords :: FlagUnknownWords
     , flagUnknownWordOutput :: FlagUnknownWordOutput
@@ -270,6 +273,19 @@ cmdArgs
     , modeGroupFlags = toGroup
         [ flagReqIntToTreeMap
         ]
+    }
+  , (modeEmpty $ GrammarToDOT "")
+    { modeNames = ["grammar-to-dot"]
+    , modeHelp = "Write a grammar as a hypergraph in DOT format to stdout."
+    , modeHelpSuffix =
+        [ "Recommended usage:"
+        , "  ... grammar-to-dot GRAMMAR-FILE | dot -Tpdf > PDF-FILE"
+        ]
+    , modeArgs =
+        ( [ flagArgGrammar{argRequire = True}
+          ]
+        , Nothing
+        )
     }
   , (modeEmpty $ Parse FUWStrict FUWOOriginal FBNone False FOFPretty "" "" 1)
     { modeNames = ["parse"]

@@ -38,6 +38,7 @@ import           Vanda.Corpus.Penn.Text (treeToPenn)
 import           Vanda.Corpus.SExpression as SExp
 import qualified Vanda.Features as F
 import qualified Vanda.Hypergraph as H
+import           Vanda.Hypergraph.DotExport (fullHypergraph2dot)
 import           Vanda.Hypergraph.Recognize
 import           Vanda.Util.Histogram
 import           Vanda.Util.IO
@@ -79,6 +80,7 @@ import           System.IO ( Handle
 import           System.Posix.Files (fileExist)
 import           System.Posix.Signals (sigUSR1)
 import           System.Random (StdGen, mkStdGen)
+import           Text.PrettyPrint (render)
 
 errorHere :: String -> String -> a
 errorHere = Control.Error.errorHere "Vanda.CBSM.Main"
@@ -303,6 +305,13 @@ mainArgs Parse{..} = do
                     . fmap H.label)
       $ bestsIni hg' feature (V.singleton 1) inis'
     hFlush stdout
+
+mainArgs GrammarToDOT{..}
+  = putStrLn
+  . render
+  . fullHypergraph2dot show H.label argGrammar
+  . (fst . toHypergraph :: BinaryCRTG -> H.EdgeList Int String Double)
+  =<< (decodeFile argGrammar :: IO BinaryCRTG)
 
 mainArgs Bests{..} = do
   (hg, inis) <- toHypergraph <$> (decodeFile argGrammar :: IO BinaryCRTG)
