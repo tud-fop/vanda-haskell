@@ -36,12 +36,15 @@ module Vanda.Grammar.XRS.LCFRS
   , exampleMIRTG
   , exampleMXRS
   , examplePLCFRS
+    -- * plumbing
+  , getNonterminalFanout
   ) where
 
 import qualified Data.Array as A
 import           Data.Foldable (foldl')
 import           Data.List (intercalate)
 import qualified Data.Map.Strict as M
+import           Data.Maybe (listToMaybe)
 import qualified Data.Vector as V
 import           Text.Printf (printf)
 
@@ -210,3 +213,10 @@ examplePLCFRS
       )
     )
 
+-- | Returns the fanout of the given nonterminal symbol in the given 'PLCFRS'
+getNonterminalFanout :: PLCFRS -> NTIdent -> Maybe Int
+getNonterminalFanout (_, rs, _) i
+  = fmap snd
+    . listToMaybe
+    . filter ((== i) . fst)
+    $ map (\(((nt', _), f), _) -> (nt', length f)) rs

@@ -120,6 +120,7 @@ library
     , Vanda.Grammar.PCFG.Functions
     , Vanda.Grammar.PCFG.Main
     , Vanda.Grammar.PMCFG
+    , Vanda.Grammar.PMCFG.Functions                
     , Vanda.Grammar.XRS.Binarize
     , Vanda.Grammar.XRS.Functions
     , Vanda.Grammar.XRS.GHKM
