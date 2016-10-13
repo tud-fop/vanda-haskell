@@ -121,6 +121,7 @@ library
     , Vanda.Grammar.PCFG.Main
     , Vanda.Grammar.PMCFG
     , Vanda.Grammar.PMCFG.Functions                
+    , Vanda.Grammar.PMCFG.Main
     , Vanda.Grammar.XRS.Binarize
     , Vanda.Grammar.XRS.Functions
     , Vanda.Grammar.XRS.GHKM
