@@ -571,13 +571,13 @@ newline = unlines [""]
 
 
 safeSaveLastGrammar
-  :: Maybe Int
-  -> Maybe Int
-  -> FilePath
-  -> Handle
-  -> Handle
-  -> Handle
-  -> Maybe Handle
+  :: Maybe Int     -- ^ save interval in number of results
+  -> Maybe Int     -- ^ save interval in microseconds
+  -> FilePath      -- ^ directory where the results are saved
+  -> Handle        -- ^ handle to log general statistics
+  -> Handle        -- ^ handle to log evaluations of candidates in beam
+  -> Handle        -- ^ handle to log equivalent beam indizes
+  -> Maybe Handle  -- ^ handle to log full beam information
   -> [(BinaryCRTG, Info StdGen Int)]
   -> IO ()
 safeSaveLastGrammar
