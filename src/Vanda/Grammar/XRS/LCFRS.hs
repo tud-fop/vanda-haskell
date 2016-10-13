@@ -33,7 +33,8 @@ module Vanda.Grammar.XRS.LCFRS
   , showPLCFRS
   , niceStatictics
     -- * examples
-  , exampleLCFRS
+  , exampleMIRTG
+  , exampleMXRS
   , examplePLCFRS
   ) where
 
@@ -183,15 +184,29 @@ niceStatictics (initials, rulesAndProbs, (a_nt, _)) =
     foCounts = M.assocs $ counter getFo
 
 -- examples
-exampleLCFRS :: MIRTG
-exampleLCFRS
-  = fromRules [1] [ ((1, [2, 3]), [[NT 1, NT 3, NT 2, NT 4]]) -- S → [x₁y₁x₂y₂](A,B) # 1.0
-                  , ((2, [2]), [[T 1, NT 1], [T 3, NT 2]])    -- A → [ax₁, cx₂](A)   # 0.7
-                  , ((2, []), [[], []])                       -- A → [ε, ε]()        # 0.3
-                  , ((3, [3]), [[T 2, NT 1], [T 4, NT 2]])    -- B → [bx₁, dx₂](B)   # 0.4
-                  , ((3, []), [[], []])                       -- B → [ε, ε]()        # 0.6
-                  ]
+exampleRules :: [Rule]
+exampleRules
+  = [ ((0, [1, 2]), [[NT 0, NT 2, NT 1, NT 3]]) -- S → [x₁y₁x₂y₂](A,B) # 1.0
+    , ((1, [1]), [[T 0, NT 0], [T 2, NT 1]])    -- A → [ax₁, cx₂](A)   # 0.7
+    , ((1, []), [[], []])                       -- A → [ε, ε]()        # 0.3
+    , ((2, [2]), [[T 1, NT 0], [T 3, NT 1]])    -- B → [bx₁, dx₂](B)   # 0.4
+    , ((2, []), [[], []])                       -- B → [ε, ε]()        # 0.6
+    ]
 
-examplePLCFRS :: MXRS
+exampleMIRTG :: MIRTG
+exampleMIRTG
+  = fromRules [1] exampleRules
+
+exampleMXRS :: MXRS
+exampleMXRS
+  = MXRS exampleMIRTG (V.fromList [1, 0.7, 0.3, 0.4, 0.6])
+
+examplePLCFRS :: PLCFRS
 examplePLCFRS
-  = MXRS exampleLCFRS (V.fromList [1, 0.7, 0.3, 0.4, 0.6])
+  = ( [1]
+    , zip exampleRules [1, 0.7, 0.3, 0.4, 0.6]
+    , ( A.listArray (0, 2) ["S", "A", "B"]
+      , A.listArray (0, 3) ["a", "b", "c", "d"]
+      )
+    )
+
