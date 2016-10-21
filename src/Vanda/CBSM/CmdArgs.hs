@@ -169,13 +169,13 @@ data FlagUnknownWordOutput
 cmdArgs :: Mode Args
 cmdArgs
   = modes "cbsm" (Help $ defaultHelp cmdArgs) "Count-Based State Merging"
-  [ ( modeEmpty $ PrintCorpora
+  [ ( modeEmpty PrintCorpora
         { flagWeightedCorpus = False
         , flagAsForests      = False
         , flagPennFilter     = False
         , flagDefoliate      = False
         , flagFilterByLeafs  = ""
-        , flagFilterByLength = (-1)
+        , flagFilterByLength = -1
         , flagBinarization   = FBNone
         , flagOutputFormat   = FOFPretty
         , argCorpora         = []
@@ -206,7 +206,7 @@ cmdArgs
         , flagPennFilter       = False
         , flagDefoliate        = False
         , flagFilterByLeafs    = ""
-        , flagFilterByLength   = (-1)
+        , flagFilterByLength   = -1
         , flagBinarization     = FBNone
         , flagRestrictMerge    = []
         , flagBeamWidth        = 1000
@@ -214,7 +214,7 @@ cmdArgs
         , flagShuffle          = FSNone
         , flagSeed             = 0
         , flagNormalize        = False
-        , flagIterations       = (pred maxBound)
+        , flagIterations       = pred maxBound
         , flagDir              = ""
         , flagLogBeamVerbose   = False
         , flagVerboseInfo      = False
@@ -579,4 +579,3 @@ cmdArgs
         update y x = maybe (Left err)
                            (\ z -> Right x{flagChunkCruncher = z})
                    $ lookup y opts
-    

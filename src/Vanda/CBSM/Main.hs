@@ -129,13 +129,13 @@ mainArgs opts@CBSM{..} = do
   (g, tM) <- do
      allowedLeafs <- readAllowedLeafs flagFilterByLeafs
      forestToGrammar'
-       <$> preprocessCorpus
+         . preprocessCorpus
              flagPennFilter
              flagDefoliate
              allowedLeafs
              flagFilterByLength
              flagBinarization
-       <$> toCorpora
+         . toCorpora
              flagWeightedCorpus
              flagAsForests
        <$> readSExpressions argCorpora
@@ -292,7 +292,7 @@ mainArgs ShowInfo{..} = do
            ++ maybe "" (const $ ", " ++ colorLeaf "leaf") m
            ++ ")"
   putStrLn ""
-  forM_ (M.toAscList $ infoMergeTreeMap) $ \ (i, t) -> do
+  forM_ (M.toAscList infoMergeTreeMap) $ \ (i, t) -> do
     putStrLn $ colorState (show i) ++ ":"
     putStrLn $ drawTree' (drawstyleCompact1 "─") $ fst $ mergeTree2Tree t
 
@@ -331,7 +331,7 @@ mainArgs Bests{..} = do
       $ map (second $ fmap H.label)
     $ bestsIni (asBackwardStar hg) feature (V.singleton 1) inis
 
-mainArgs RenderBeam{..} = do
+mainArgs RenderBeam{..} =
   renderBeam flagRunLengthEncoding
              argColumn
              (wordsBy (==',') flagSortFormatString) -- TODO: unless it occurs in a mixedness mapper format string...
@@ -357,7 +357,7 @@ mainArgs RenderBeamInfo{..} = do
 mainArgs RecognizeTrees{..} = do
   binGrammar <- decodeFile argGrammar :: IO BinaryCRTG
   trees <- map fst
-       <$> toCorpora False False
+         . toCorpora False False
        <$> readSExpressions [argTreesFile]
   let (hg, initsMap) = toHypergraph binGrammar :: (H.ForwardStar Int String Double, M.Map Int Double)
       logProbs = map (logBase 2 . totalProbOfTree (hg, initsMap)) trees
@@ -365,7 +365,7 @@ mainArgs RecognizeTrees{..} = do
       nonZeros = filter ((/=logBase 2 0) . snd) $ zip trees logProbs
       nonZeroLogProbs = map snd nonZeros
       nonZeroCount = length nonZeros
-      meanLogProb = (sum nonZeroLogProbs) / (fromIntegral nonZeroCount)
+      meanLogProb = sum nonZeroLogProbs / fromIntegral nonZeroCount
   
   putStrLn $ intercalate "\t" [ show stateCount
                               , show (sum logProbs)
@@ -551,7 +551,7 @@ safeSaveLastGrammar
               , showIfValid infoBeamIndex
               ]
             ++ case infoBeam `at` pred infoBeamIndex of
-                 Just (BeamEntry{..})
+                 Just BeamEntry{..}
                          -> [ show beSaturationSteps
                             , show beMergedRules
                             , show beMergedStates
@@ -586,7 +586,7 @@ safeSaveLastGrammar
             forM_ infoBeam $ \ BeamEntry{..} ->
               hPutStrLn h
                 $ intercalate ","
-                $ [ show infoIteration
+                  [ show infoIteration
                   , show beIndex
                   , show beHeuristic
                   , show (ld beEvaluation)
