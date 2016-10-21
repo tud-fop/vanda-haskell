@@ -44,17 +44,7 @@ module Vanda.CBSM.CountBasedStateMerging
 ) where
 
 
-import qualified Control.Error
-import           Data.List.Extra (isMultiton)
-import           Data.List.Shuffle (shuffle)
-import           Data.Maybe.Extra (nothingIf)
-import           Vanda.CBSM.Dovetailing
-import           Vanda.CBSM.Merge (Merge)
-import qualified Vanda.CBSM.Merge as Merge
-import qualified Vanda.Features as F
-import qualified Vanda.Hypergraph as H
-import           Vanda.Util.PrettyPrint (columnize)
-import           Vanda.Util.Tree as T
+import Debug.Trace
 
 import           Control.Applicative ((<*>), (<$>))
 import           Control.Arrow ((***), first, second)
@@ -81,7 +71,17 @@ import qualified Data.Vector as V
 import           Numeric.Log (Log(..))
 import           System.Random (RandomGen, split)
 
-import Debug.Trace
+import qualified Control.Error
+import           Data.List.Extra (isMultiton)
+import           Data.List.Shuffle (shuffle)
+import           Data.Maybe.Extra (nothingIf)
+import           Vanda.CBSM.Dovetailing
+import           Vanda.CBSM.Merge (Merge)
+import qualified Vanda.CBSM.Merge as Merge
+import qualified Vanda.Features as F
+import qualified Vanda.Hypergraph as H
+import           Vanda.Util.PrettyPrint (columnize)
+import           Vanda.Util.Tree as T
 
 
 errorHere :: String -> String -> a

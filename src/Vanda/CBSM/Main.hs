@@ -22,29 +22,6 @@ module Vanda.CBSM.Main
 ) where
 
 
-import qualified Control.Error
-import           Control.Monad.Extra (ifM)
-import           Data.List.Extra (at, groupWithRanges, isSingleton, toRanges)
-import           System.Console.CmdArgs.Explicit.Misc
-import           Vanda.Algorithms.EarleyMonadic
-import qualified Vanda.Algorithms.Earley.WSA as WSA
-import           Vanda.CBSM.CmdArgs
-import           Vanda.CBSM.CountBasedStateMerging
-import           Vanda.CBSM.Merge (prettyPrintMerge)
-import           Vanda.CBSM.StatisticsRenderer
-import           Vanda.Corpus.Binarization (Nodetype(..))
-import           Vanda.Corpus.Binarization.CmdArgs
-import           Vanda.Corpus.Penn.Text (treeToPenn)
-import           Vanda.Corpus.SExpression.CmdArgs
-import qualified Vanda.Features as F
-import qualified Vanda.Hypergraph as H
-import           Vanda.Hypergraph.DotExport (fullHypergraph2dot)
-import           Vanda.Hypergraph.Recognize
-import           Vanda.Util.Histogram
-import           Vanda.Util.IO
-import           Vanda.Util.Timestamps
-import           Vanda.Util.Tree as T
-
 import           Control.Arrow (second)
 import qualified Codec.Compression.GZip as GZip
 import           Control.Concurrent (getNumCapabilities)
@@ -78,6 +55,31 @@ import           System.Posix.Files (fileExist)
 import           System.Posix.Signals (sigUSR1)
 import           System.Random (StdGen, mkStdGen)
 import           Text.PrettyPrint (render)
+
+
+import qualified Control.Error
+import           Control.Monad.Extra (ifM)
+import           Data.List.Extra (at, groupWithRanges, isSingleton, toRanges)
+import           System.Console.CmdArgs.Explicit.Misc
+import           Vanda.Algorithms.EarleyMonadic
+import qualified Vanda.Algorithms.Earley.WSA as WSA
+import           Vanda.CBSM.CmdArgs
+import           Vanda.CBSM.CountBasedStateMerging
+import           Vanda.CBSM.Merge (prettyPrintMerge)
+import           Vanda.CBSM.StatisticsRenderer
+import           Vanda.Corpus.Binarization (Nodetype(..))
+import           Vanda.Corpus.Binarization.CmdArgs
+import           Vanda.Corpus.Penn.Text (treeToPenn)
+import           Vanda.Corpus.SExpression.CmdArgs
+import qualified Vanda.Features as F
+import qualified Vanda.Hypergraph as H
+import           Vanda.Hypergraph.DotExport (fullHypergraph2dot)
+import           Vanda.Hypergraph.Recognize
+import           Vanda.Util.Histogram
+import           Vanda.Util.IO
+import           Vanda.Util.Timestamps
+import           Vanda.Util.Tree as T
+
 
 errorHere :: String -> String -> a
 errorHere = Control.Error.errorHere "Vanda.CBSM.Main"
