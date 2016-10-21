@@ -23,6 +23,7 @@ module Vanda.CBSM.Main
 
 
 import qualified Control.Error
+import           Control.Monad.Extra (ifM)
 import           Data.List.Extra (at, groupWithRanges, isSingleton, toRanges)
 import           System.Console.CmdArgs.Explicit.Misc
 import           Vanda.Algorithms.EarleyMonadic
@@ -33,9 +34,8 @@ import           Vanda.CBSM.Merge (prettyPrintMerge)
 import           Vanda.CBSM.StatisticsRenderer
 import           Vanda.Corpus.Binarization (Nodetype(..))
 import           Vanda.Corpus.Binarization.CmdArgs
-import           Vanda.Corpus.Penn.Filter
 import           Vanda.Corpus.Penn.Text (treeToPenn)
-import           Vanda.Corpus.SExpression as SExp
+import           Vanda.Corpus.SExpression.CmdArgs
 import qualified Vanda.Features as F
 import qualified Vanda.Hypergraph as H
 import           Vanda.Hypergraph.DotExport (fullHypergraph2dot)
@@ -45,7 +45,7 @@ import           Vanda.Util.IO
 import           Vanda.Util.Timestamps
 import           Vanda.Util.Tree as T
 
-import           Control.Arrow (first, second)
+import           Control.Arrow (second)
 import qualified Codec.Compression.GZip as GZip
 import           Control.Concurrent (getNumCapabilities)
 import           Control.Monad
@@ -56,18 +56,15 @@ import           Data.List (intercalate, nub, minimumBy, maximumBy, sort)
 import           Data.List.Split (wordsBy)
 import           Data.Map ((!))
 import qualified Data.Map as M
-import           Data.Maybe (mapMaybe, maybeToList)
+import           Data.Maybe (maybeToList)
 import           Data.Ord
 import qualified Data.Set as S
 import           Data.Tree
 import qualified Data.Vector as V
 import           Numeric.Log (Log(..))
-import qualified Text.Parsec.Error as Parsec
 import           System.Console.CmdArgs.Explicit (processArgs)
 import           System.CPUTime
-import           System.Directory ( createDirectoryIfMissing
-                                  , doesDirectoryExist
-                                  , getDirectoryContents )
+import           System.Directory (createDirectoryIfMissing)
 import           System.Exit (exitFailure)
 import           System.FilePath ((</>), (<.>), takeExtension)
 import           System.IO ( Handle
@@ -99,23 +96,24 @@ mainArgs :: Args -> IO ()
 
 mainArgs (Help cs) = putStr cs
 
-mainArgs PrintCorpora{..}
-    = putStr
+mainArgs PrintCorpora{..} = do
+  allowedLeafs <- readAllowedLeafs flagFilterByLeafs
+  putStr
     . unlines
     . zipWith ( drawTreeFormatted flagBinarization flagOutputFormat
               . show
               ) [1 :: Int ..]
     . map fst
-  =<< preprocessCorpus
+    . preprocessCorpus
         flagPennFilter
-        flagBinarization
         flagDefoliate
-        flagFilterByLeafs
+        allowedLeafs
         flagFilterByLength
-  =<< readCorpora
+        flagBinarization
+    . toCorpora
         flagWeightedCorpus
         flagAsForests
-        argCorpora
+   =<< readSExpressions argCorpora
 
 mainArgs opts@CBSM{..} = do
   exist <- fileExist (flagDir </> fileNameOptions)
@@ -126,17 +124,19 @@ mainArgs opts@CBSM{..} = do
     exitFailure
   createDirectoryIfMissing True flagDir
   writeFile (flagDir </> fileNameOptions) (show opts)
-  (g, tM) <- return . forestToGrammar'
-         =<< preprocessCorpus
-               flagPennFilter
-               flagBinarization
-               flagDefoliate
-               flagFilterByLeafs
-               flagFilterByLength
-         =<< readCorpora
-               flagWeightedCorpus
-               flagAsForests
-               argCorpora
+  (g, tM) <- do
+     allowedLeafs <- readAllowedLeafs flagFilterByLeafs
+     forestToGrammar'
+       <$> preprocessCorpus
+             flagPennFilter
+             flagDefoliate
+             allowedLeafs
+             flagFilterByLength
+             flagBinarization
+       <$> toCorpora
+             flagWeightedCorpus
+             flagAsForests
+       <$> readSExpressions argCorpora
   encodeFile (flagDir </> fileNameIntToTreeMap) (tM :: BinaryIntToTreeMap)
   numCapabilities <- getNumCapabilities
   putStrLnTimestamped $ "numCapabilities: " ++ show numCapabilities
@@ -354,8 +354,9 @@ mainArgs RenderBeamInfo{..} = do
 
 mainArgs RecognizeTrees{..} = do
   binGrammar <- decodeFile argGrammar :: IO BinaryCRTG
-  trees <- map fst <$> readCorpora False False [argTreesFile]
-  
+  trees <- map fst
+       <$> toCorpora False False
+       <$> readSExpressions [argTreesFile]
   let (hg, initsMap) = toHypergraph binGrammar :: (H.ForwardStar Int String Double, M.Map Int Double)
       logProbs = map (logBase 2 . totalProbOfTree (hg, initsMap)) trees
       stateCount = S.size $ H.nodes hg
@@ -394,70 +395,6 @@ chunkCruncher FCCMinority xs
   $ histogram xs
 chunkCruncher FCCMedian xs
   = head $ drop (length xs `div` 2) $ sort xs
-
-
-readCorpora
-  :: Bool        -- ^ 'True' if trees have associated counts
-  -> Bool        -- ^ 'True' if the corpus contains forests instead of trees
-  -> [FilePath]  -- ^ input files; if 'null' then stdin is used
-  -> IO [(Tree String, Int)]  -- ^ Trees with associated counts
-readCorpora flagWeightedCorpus flagAsForests argCorpora
-   = (if flagAsForests      then concatMap (floatFst . first SExp.toForest)
-                            else map (first SExp.toTree))
-   . (if flagWeightedCorpus then map extractWeight else map (\ t -> (t, 1)))
-  <$> if null argCorpora
-        then SExp.parse SExp.pSExpressions "stdin"
-          <$> getContents
-        else concat
-          <$> (   SExp.parseFromFiles SExp.pSExpressions
-              =<< getContentsRecursive argCorpora
-              )
-  where
-    extractWeight SExp.List{sExpList = [Atom{sExpAtom = w}, t]} = (t, read w)
-    extractWeight x = errorHere "readCorpora.extractWeight"
-                    $ show
-                    $ Parsec.newErrorMessage
-                        (Parsec.Expect "list with two elements where the first is an atom")
-                        (SExp.sExpPos x)
-
-
-preprocessCorpus
-  :: Bool
-  -> FlagBinarization
-  -> Bool
-  -> FilePath
-  -> Int
-  -> [(Tree String, Int)]
-  -> IO [(Tree String, Int)]
-preprocessCorpus
-     flagPennFilter
-     flagBinarization
-     flagDefoliate
-     flagFilterByLeafs
-     flagFilterByLength
-    = return . map (first $ encodeByFlag flagBinarization)
-  <=< return . filterByLength flagFilterByLength
-  <=< (if null flagFilterByLeafs then return
-                                 else filterByLeafs flagFilterByLeafs)
-    . (if flagDefoliate  then map (first T.defoliate)              else id)
-    . (if flagPennFilter then mapMaybe (floatFst . first stripAll) else id)
-
-
-floatFst :: Functor f => (f a, b) -> f (a, b)
-floatFst (fx, y) = fmap (\ x -> (x, y)) fx
-
-
-filterByLeafs :: FilePath -> [(Tree String, a)] -> IO [(Tree String, a)]
-filterByLeafs file ts = do
-  wordS <- S.fromList . words <$> readFile file
-  return $ filter (all (`S.member` wordS) . yield . fst) ts
-
-
-filterByLength :: Int -> [(Tree String, a)] -> [(Tree String, a)]
-filterByLength l
-  | l <= 0 = id
-  | l == 1 = errorHere "filterByLength" "Lengths smaller than 1 doesn't make any sense."
-  | otherwise = filter ((<l) . length . yield . fst)
 
 
 data RestrictMergeFeature a
@@ -730,25 +667,6 @@ bestsIni hg feat wV inis
           _  ->  x : mergeBy cmp xs' ys
     mergeBy _ [] ys = ys
     mergeBy _ xs [] = xs
-
-
-getContentsRecursive :: [FilePath] -> IO [FilePath]
-getContentsRecursive paths
-  = fmap concat
-  $ forM paths $ \ path ->
-      ifM (doesDirectoryExist path)
-        ( getDirectoryContents path
-          >>= getContentsRecursive
-            . map (path </>)
-            . filter (`notElem` [".", ".."])  -- TODO: this seems like a hack
-        )
-        (return [path])
-
-
-ifM :: Monad m => m Bool -> m b -> m b -> m b
-ifM predicateM thn els = do
-  b <- predicateM
-  if b then thn else els
 
 
 withFileIf :: Bool -> FilePath -> IOMode -> (Maybe Handle -> IO r) -> IO r

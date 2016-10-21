@@ -24,6 +24,7 @@ import           System.Console.CmdArgs.Explicit
 import           System.Console.CmdArgs.Explicit.Misc
 import           System.FilePath ((<.>))
 import           Vanda.Corpus.Binarization.CmdArgs
+import           Vanda.Corpus.SExpression.CmdArgs
 
 
 fileNameGrammar          :: Int -> FilePath
@@ -57,21 +58,21 @@ data Args
     { flagWeightedCorpus :: Bool
     , flagAsForests :: Bool
     , flagPennFilter :: Bool
-    , flagBinarization :: FlagBinarization
     , flagDefoliate :: Bool
     , flagFilterByLeafs :: FilePath
     , flagFilterByLength :: Int
+    , flagBinarization :: FlagBinarization
     , flagOutputFormat :: FlagOutputFormat
     , argCorpora :: [FilePath]
     }
   | CBSM
     { flagWeightedCorpus :: Bool
     , flagAsForests :: Bool
-    , flagBinarization :: FlagBinarization
-    , flagDefoliate :: Bool
     , flagPennFilter :: Bool
+    , flagDefoliate :: Bool
     , flagFilterByLeafs :: FilePath
     , flagFilterByLength :: Int
+    , flagBinarization :: FlagBinarization
     , flagRestrictMerge :: [FlagRestrictMerge]
     , flagBeamWidth :: Int
     , flagDynamicBeamWidth :: Bool
@@ -172,10 +173,10 @@ cmdArgs
         { flagWeightedCorpus = False
         , flagAsForests      = False
         , flagPennFilter     = False
-        , flagBinarization   = FBNone
         , flagDefoliate      = False
         , flagFilterByLeafs  = ""
         , flagFilterByLength = (-1)
+        , flagBinarization   = FBNone
         , flagOutputFormat   = FOFPretty
         , argCorpora         = []
         } )
@@ -189,24 +190,24 @@ cmdArgs
         \filter-by-leafs and finally filter-by-length."
     , modeArgs = ([], Just flagArgCorpora)
     , modeGroupFlags = toGroup
-        [ flagNoneWeightedCorpus
-        , flagNoneAsForests
-        , flagNonePennFilter
-        , flagReqBinarization (\ b x -> x{flagBinarization = b})
-        , flagNoneDefoliate
-        , flagReqFilterByLeafs
-        , flagReqFilterByLength
+        [ flagNoneWeightedCorpus (\   x -> x{flagWeightedCorpus = True})
+        , flagNoneAsForests      (\   x -> x{flagAsForests      = True})
+        , flagNonePennFilter     (\   x -> x{flagPennFilter     = True})
+        , flagNoneDefoliate      (\   x -> x{flagDefoliate      = True})
+        , flagReqFilterByLeafs   (\ a x -> x{flagFilterByLeafs  = a   })
+        , flagReqFilterByLength  (\ a x -> x{flagFilterByLength = a   })
+        , flagReqBinarization    (\ b x -> x{flagBinarization   = b   })
         , flagReqOutputFormat
         ]
     }
   , ( modeEmpty CBSM
         { flagWeightedCorpus   = False
         , flagAsForests        = False
-        , flagBinarization     = FBNone
-        , flagDefoliate        = False
         , flagPennFilter       = False
+        , flagDefoliate        = False
         , flagFilterByLeafs    = ""
-        , flagFilterByLength = (-1)
+        , flagFilterByLength   = (-1)
+        , flagBinarization     = FBNone
         , flagRestrictMerge    = []
         , flagBeamWidth        = 1000
         , flagDynamicBeamWidth = False
@@ -226,12 +227,13 @@ cmdArgs
         \print-corpora for further information about the TREEBANK arguments."
     , modeArgs = ([], Just flagArgCorpora)
     , modeGroupFlags = toGroup
-        [ flagNoneWeightedCorpus
-        , flagNoneAsForests
-        , flagReqBinarization (\ b x -> x{flagBinarization = b})
-        , flagNoneDefoliate
-        , flagNonePennFilter
-        , flagReqFilterByLeafs
+        [ flagNoneWeightedCorpus (\   x -> x{flagWeightedCorpus = True})
+        , flagNoneAsForests      (\   x -> x{flagAsForests      = True})
+        , flagNonePennFilter     (\   x -> x{flagPennFilter     = True})
+        , flagNoneDefoliate      (\   x -> x{flagDefoliate      = True})
+        , flagReqFilterByLeafs   (\ a x -> x{flagFilterByLeafs  = a   })
+        , flagReqFilterByLength  (\ a x -> x{flagFilterByLength = a   })
+        , flagReqBinarization    (\ b x -> x{flagBinarization   = b   })
         , flagReqRestrictMerge
         , flagReqBeamWidth
         , flagNoneDynamicBeamWidth
@@ -377,17 +379,6 @@ cmdArgs
     }
   ]
   where
-    flagNoneWeightedCorpus
-      = flagNone ["weighted-corpus"] (\ x -> x{flagWeightedCorpus = True})
-          "the TREEBANKs also contain weights for every tree. A corpus entry \
-          \then has the form (weight tree) where weight is an integer and \
-          \tree is an s-expression denoting a tree."
-    flagNoneAsForests
-      = flagNone ["as-forests"] (\ x -> x{flagAsForests = True})
-          "the TREEBANKs contain forests instead of trees"
-    flagNoneDefoliate
-      = flagNone ["defoliate"] (\ x -> x{flagDefoliate = True})
-          "remove leaves from trees in TREEBANKs"
     flagNoneDynamicBeamWidth
       = flagNone ["dynamic-beam-width"] (\ x -> x{flagDynamicBeamWidth = True})
           "The actual beam width is at least as defined by --beam-width, but \
@@ -397,17 +388,6 @@ cmdArgs
     flagNoneNormalize
       = flagNone ["normalize"] (\ x -> x{flagNormalize = True})
           "normalize log likelihood deltas by number of merged states"
-    flagNonePennFilter
-      = flagNone ["penn-filter"] (\ x -> x{flagPennFilter = True})
-          "remove predicate argument structure annotations from TREEBANKs"
-    flagReqFilterByLeafs
-      = flagReq ["filter-by-leafs"] (\ a x -> Right x{flagFilterByLeafs = a})
-          "FILE"
-          "only use trees whose leafs occur in FILE"
-    flagReqFilterByLength
-      = flagReq ["filter-by-length"] (readUpdate $ \ a x -> x{flagFilterByLength = a})
-          "LENGTH"
-          "only use trees with a yield shorter than LENGTH (default -1 = no restriction)"
     flagNoneUnbinarize
       = flagNone ["unbinarize"] (\ x -> x{flagUnbinarize = True})
           "Undo the binarization before the output. Might fail if a tree is \
