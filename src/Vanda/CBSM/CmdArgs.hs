@@ -168,7 +168,7 @@ data FlagUnknownWordOutput
 
 cmdArgs :: Mode Args
 cmdArgs
-  = modes "cbsm" (Help $ defaultHelp cmdArgs) "Count-Based State Merging"
+  = ( modes "cbsm" (Help $ defaultHelp cmdArgs) "Count-Based State Merging"
   [ ( modeEmpty PrintCorpora
         { flagWeightedCorpus = False
         , flagAsForests      = False
@@ -377,7 +377,17 @@ cmdArgs
         [ flagNonePrintRecognizable
         ]
     }
-  ]
+  ] )
+  { modeHelpSuffix =
+      [ "This is an implementation of the approach presented in \
+        \“Count-based State Merging for Probabilistic Regular Tree Grammars” \
+        \by Toni Dietze and Mark-Jan Nederhof."
+      , "Download the paper at:"
+      , "  https://aclweb.org/anthology/sigfsm.html#2015_0"
+      , "  http://aclanthology.info/papers/\
+        \count-based-state-merging-for-probabilistic-regular-tree-grammars"
+      ]
+  }
   where
     flagNoneDynamicBeamWidth
       = flagNone ["dynamic-beam-width"] (\ x -> x{flagDynamicBeamWidth = True})
