@@ -10,28 +10,32 @@ Stability:   experimental
 This module contains functions to work with /automata with storage/ [close to the notation of Luisa Herrmann and Heiko Vogler: A Chomsky-Schützenberger Theorem for Weighted Automata with Storage, 2015].
 -}
 module Vanda.Grammar.AutomataStorage
-  ( Automaton
+  ( Automaton (..)
   , runAutomaton
 -- * plumbing
-  , Transition
-  , Configuration
+  , Transition (..)
+  , Configuration (..)
 -- * examples
   , exampleTrivAutomaton
   ) where
 
+import Data.List (isPrefixOf)
 import qualified Data.Map as M
 import qualified Data.Set as S
 
 -- | An 'Automaton' contains an initial 'Configuration', a set of
 --   'Transition's, and a predicate to distinguish accepting configurations.
-type Automaton q σ s = (Configuration q s, [Transition q σ s], Configuration q s -> Bool)
+data Automaton q s σ = Automaton { initial :: (q, s)
+                                 , transitions :: [Transition q s σ]
+                                 , accepting :: (q, s) -> Bool
+                                 }
 
 -- | A simple automaton without storage (i.e., with the trivial storage '()')
 --   and three states [cf. <http://infolab.stanford.edu/~ullman/ialc/slides/slides2.pdf>]
-exampleTrivAutomaton :: Automaton Int Char ()
-exampleTrivAutomaton = ((0, ()), τs, flip S.member final . fst)
+exampleTrivAutomaton :: Automaton Int () Char
+exampleTrivAutomaton = Automaton (0, ()) τs (flip S.member final . fst)
   where final = S.singleton 2
-        τs = [ (q, σ, const True, const [()], q')
+        τs = [ Transition q [σ] (const True) (const [()]) q'
              | (q, σ, q') <- [(0,'0',0), (0,'1',1), (1,'0',0), (1,'1',2), (2,'0',2), (2,'1',2)]
              ]
 
@@ -39,42 +43,44 @@ exampleTrivAutomaton = ((0, ()), τs, flip S.member final . fst)
 --   accepting 'Configuration's.
 runAutomaton
   :: (Ord q, Ord σ)
-  => Automaton q σ s
+  => Automaton q s σ
   -> [σ]
-  -> [Configuration q s]
-runAutomaton (c, τs, f) = filter f
-                        . runTransitions
-                            (flip (M.findWithDefault [])
-                               . M.fromListWith (++)
-                               $ map (\ τ@(p, σ, _, _, _) -> ((p,σ), [τ])) τs
-                            ) c
+  -> [Configuration q s σ]
+runAutomaton a w
+  = filter (\(Configuration q s v) -> null v && accepting a (q, s)) $ go [Configuration q' s' w]
+  where (q', s') = initial a
+        go [] = []
+        go xs = xs ++ go (concatMap (runTransitions τs) xs)
+        τs q = M.findWithDefault [] q
+               ( M.fromListWith (++)
+                 . map (\τ -> (sState τ, [τ]))
+                 $ transitions a )
 
 -- | A 'Transition' contains a source state, a symbol, a (unary) predicate (on
 --   the storage), a (unary) nondeterministic function (on the storage), and a
 --   target state.
-type Transition q σ s = (q, σ, s -> Bool, s -> [s], q)
+data Transition q s σ = Transition { sState :: q
+                                   , _word :: [σ]
+                                   , _predicate :: s -> Bool
+                                   , _instruction :: s -> [s]
+                                   , _tState :: q
+                                   }
 
--- | A 'Configuration' contains the automatons current state, and the current
---   value of the storage.
-type Configuration q s = (q, s)
+-- | A 'Configuration' contains the automatons current state, the current value
+--   of the storage, and the remaining word to be read.
+data Configuration q s σ = Configuration { state :: q
+                                         , storage :: s
+                                         , _remainingWord :: [σ]
+                                         } deriving (Show)
 
--- | Applies the given 'Transition' to the given 'Configuration'.
-apply
-  :: Configuration q s            -- ^ 'Configuration' before the 'Transition'
-  -> Transition q σ s                  -- ^ 'Transition' that is being applied
-  -> [Configuration q s]           -- ^ 'Configuration' after the 'Transition'
-apply (_, s) (_, _, p, f, q)
-  = [ (q, s') | p s, s' <- f s ]
-
--- | Reads the given word applying a 'L.List' of 'Transition's starting from
---   the given 'Configuration'.
+-- | Computes all the successor 'Configuration's reachable from the given
+--   'Configuration' using the given 'Transition's (categorized by state).
 runTransitions
-  :: ((q, σ) -> [Transition q σ s])
+  :: Eq σ
+  => (q -> [Transition q s σ])
                        -- ^ 'L.List' of 'Transition's for some terminal symbol
-  -> Configuration q s                            -- ^ initial 'Configuration'
-  -> [σ]                                                  -- ^ word to be read
-  -> [Configuration q s]               -- ^ 'L.List' of final 'Configuration's
-runTransitions τs = foldl step . return
-  where step cs σ = do c@(q, _) <- cs
-                       τ <- τs (q, σ)
-                       apply c τ
+  -> Configuration q s σ                          -- ^ initial 'Configuration'
+  -> [Configuration q s σ]             -- ^ 'L.List' of final 'Configuration's
+runTransitions τs c = concatMap (apply c) . τs $ state c
+  where apply (Configuration _ s w) (Transition _ v p i q')
+          = [Configuration q' s' $ drop (length v) w | p s, v `isPrefixOf` w, s' <- i s]

@@ -40,7 +40,7 @@ _isDyck l r x =
         else Just $ (m BM.! a):y:ys
     step a []
       = if   elem a $ BM.keys m
-        then Just $ [m BM.! a]
+        then Just [m BM.! a]
         else Nothing
 
 
@@ -60,10 +60,10 @@ dyckPushdownAutomaton
   :: Eq a
   => [a]                                                 -- ^ left parentheses
   -> (a -> a)                                   -- ^ right parentheses mapping
-  -> Automaton () a (Pushdown a)
-dyckPushdownAutomaton lps b = (((), emptyPushdown), τs, isEmptyPushdown . snd)
-  where τs = [ ((), l  , const True            , pushPushdown (b l), ()) | l <- lps ]
-          ++ [ ((), b l, checkPushdown (b l ==), popPushdown       , ()) | l <- lps ]
+  -> Automaton () (Pushdown a) a
+dyckPushdownAutomaton lps b = Automaton ((), emptyPushdown) τs (isEmptyPushdown . snd)
+  where τs = [ Transition () [l]   (const True)             (pushPushdown (b l)) () | l <- lps ]
+          ++ [ Transition () [b l] (checkPushdown (b l ==)) popPushdown          () | l <- lps ]
 
 
 -- | Compares the lengths of two 'L.List's.
@@ -117,10 +117,10 @@ nth n (_ : xs) = nth (n-1) xs
 nth _ [] = Nothing
 
 -- | Constructs a Dyck grammar for a given bijection.
-constructDyckGrammar :: ([Char], [Char]) -> [String]
+constructDyckGrammar :: (String, String) -> [String]
 constructDyckGrammar (u, v)
   = foldl (|||) [""]
-  $ [ [[x]] +++ constructDyckGrammar (u, v)
+    [ [[x]] +++ constructDyckGrammar (u, v)
             +++ [[y]]
             +++ constructDyckGrammar (u, v)
     | (x, y) <- zip u v
@@ -130,8 +130,8 @@ constructDyckGrammar (u, v)
 --   and outputs a sub-'L.List' of the resulting language.
 intersectDyckLangs
   :: ([String] -> [String])          -- ^ function that selects a sub-'L.List'
-  -> ([Char], [Char])     -- ^ bijection that determines the 1st Dyck language
-  -> ([Char], [Char])     -- ^ bijection that determines the 2nd Dyck language
+  -> (String, String)     -- ^ bijection that determines the 1st Dyck language
+  -> (String, String)     -- ^ bijection that determines the 2nd Dyck language
   -> [String]                            -- ^ sub-'L.List' of the intersection
 intersectDyckLangs tk t1 (u, v)
   = filter (isDyck u v) . tk $ constructDyckGrammar t1
