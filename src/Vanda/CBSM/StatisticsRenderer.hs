@@ -24,15 +24,14 @@ module Vanda.CBSM.StatisticsRenderer
 
 
 import           Codec.Picture  -- package JuicyPixels
-import qualified Data.Binary as B
 import qualified Data.ByteString.Char8 as CS
 import qualified Data.ByteString.Lazy.Char8 as C
 import           Data.ByteString.Lex.Fractional  -- package bytestring-lexing
-import           Data.List (foldl', intercalate, sortOn, groupBy, elemIndex, sort, minimumBy)
+import           Data.List (elemIndex, groupBy, sortOn)
 import           Data.List.Split (splitOn, chunksOf)
 import qualified Data.Map.Lazy as M
 import           Data.Maybe (fromMaybe)
-import           Data.Ord (Down(..), comparing)
+import           Data.Ord (Down(..))
 import qualified Data.Set as S
 import qualified Data.Tree as T
 
@@ -58,8 +57,8 @@ safeMapping
   -> Int     -- ^ value for all Nothing values
   -> Maybe s -- ^ thing we want to map to its index
   -> Int     -- ^ the index
-safeMapping cats wildcard nothing maybe
-  = case maybe of
+safeMapping cats wildcard nothing m
+  = case m of
       Nothing  -> nothing
       (Just s) -> case s `elemIndex` cats of
                     Nothing -> wildcard
@@ -105,6 +104,7 @@ genSorter s rowdata _ _
     in case last s of
          'a' -> SortableDouble colval
          'd' -> SortableDownDouble $ Down colval
+         _   -> errorHere "genSorter" "This should not be reached."
 
 -- | Visualize the beam using a heat map.
 --
@@ -124,7 +124,6 @@ renderBeam rle col sortformats minval maxval
   = renderBeamWith rle reader renderer
   where
     getMixedness = errorHere "renderBeam" "tried to access a getMixedness function!"
-    iter         = errorHere "renderBeam" "tried to access the iteration!"
     reader iter rowdata
       = let sortable = [genSorter s rowdata getMixedness iter | s <- sortformats]
             renderable = unsafeReadDouble $ rowdata !! col
@@ -142,8 +141,8 @@ renderBeamInfo
   -> ([Maybe String] -> Maybe String)    -- ^ combining chunk candidates
   -> FilePath                            -- ^ output png file
   -> IO ()
-renderBeamInfo fileIn renderableCats sortformats infoMergeTreeMap int2tree chunkSize combiner fileOut = do
-  let allTreesTilNow = M.elems infoMergeTreeMap
+renderBeamInfo fileIn renderableCats sortformats mergeHistory int2tree chunkSize combiner fileOut = do
+  let allTreesTilNow = M.elems mergeHistory
       lastProperIter = maximum $ map getMTRootIter allTreesTilNow
       megaMergeTree = if length allTreesTilNow == 1
                         then head allTreesTilNow
@@ -182,9 +181,9 @@ renderBeamInfo fileIn renderableCats sortformats infoMergeTreeMap int2tree chunk
                          $ filter (stateIsRepresentantAt iter)
                          $ M.keys turnedMegaMergeTree
       mergeStatesAt :: Int -> Int
-      mergeStatesAt iter = mergeStatesAt' iter megaMergeTree
+      mergeStatesAt = flip mergeStatesAt' megaMergeTree
         where
-          mergeStatesAt' iter (State _ _) = 0
+          mergeStatesAt' _    (State _ _) = 0
           mergeStatesAt' iter (Merge i cs)
             | i <= iter = 1
             | otherwise = sum (map (mergeStatesAt' iter) cs)
@@ -246,7 +245,7 @@ turnMergeTree = M.map (map readoff) . turn
   where
     turn :: Ord v => MergeTree v -> M.Map v [MergeTree v]  --  v == Int / Tree a
     turn mt@(State v _)     = M.singleton v [mt]
-    turn mt@(Merge iter cs) = M.unionWith (++) childrenMap thisNodeMap
+    turn mt@(Merge _ cs) = M.unionWith (++) childrenMap thisNodeMap
       where
         childrenMap = M.unionsWith undefined $ map turn cs
         thisNodeMap = M.unionsWith undefined $ map (flip M.singleton [mt]) allLeafs
@@ -254,16 +253,13 @@ turnMergeTree = M.map (map readoff) . turn
     readoff :: MergeTree v -> (Int, [v])
     readoff (State v _)     = ((-1), [v])
     readoff (Merge iter cs) = (iter, concatMap flattenMergeTree cs)
-    pp (State v _) = show v
-    pp (Merge _ cs) = "(" ++ (intercalate "," $ map pp cs) ++ ")"
 
 flattenMergeTree :: MergeTree v -> [v]
 flattenMergeTree (State x _) = [x]
-flattenMergeTree (Merge iter cs) = concatMap flattenMergeTree cs
+flattenMergeTree (Merge _ cs) = concatMap flattenMergeTree cs
 
 renderBeamWith
-  :: Ord a
-  => Bool                                       -- ^ run length encoding used?
+  :: Bool                                       -- ^ run length encoding used?
   -> (Int -> [C.ByteString] -> ([Sortable], a)) -- ^ read function for row after indices
   -> (a -> PixelRGB8)                           -- ^ render function for the column
   -> Int                                        -- ^ chunk size for scaling the beam
@@ -307,6 +303,8 @@ renderBeamWith rle reader renderer chunkSize combiner fileIn fileOut = do
       $ chunksOf chunkSize
       $ map snd . sortOn fst
       $ cands
+    processIntraIter _ = errorHere "renderBeamWith.processIntraIter"
+                                   "This should not be reached."
 
 toImage :: Int -> Int -> (a -> PixelRGB8) -> [(Int, Int, a)] -> Image PixelRGB8
 toImage w h renderer
@@ -332,9 +330,9 @@ parseCSVData
   -> [(Int, Int, a)]
 parseCSVData rle reader
   = map (\(i, b, x) -> (pred i, pred b, x))  -- zero-base index values
-  . concatMap (parseCSVRow rle reader)
+  . concatMap (parseCSVRow rle)
   where
-    parseCSVRow True reader (rawIter:bl:bh:values)
+    parseCSVRow True (rawIter:bl:bh:values)
       = let iter = unsafeReadInt rawIter
         in [ ( iter
              , b
@@ -342,8 +340,8 @@ parseCSVData rle reader
              )
              | b <- [unsafeReadInt bl .. unsafeReadInt bh]
            ]
-    parseCSVRow False reader (rawIter:rawb:values)
-      = parseCSVRow True reader (rawIter:rawb:rawb:values)
+    parseCSVRow False (rawIter:rawb:values)
+      = parseCSVRow True (rawIter:rawb:rawb:values)
 
 unsafeReadInt :: C.ByteString -> Int
 unsafeReadInt x
@@ -397,9 +395,9 @@ colormap minval maxval x
       (round $ 0xFF * (0 `max` sin (2 * pi * p)))
   where
     p = (clamp x - minval) / range
-    clamp x = if minval < maxval
-                then minval `max` x `min` maxval
-                else minval `min` x `max` maxval
+    clamp y = if minval < maxval
+                then minval `max` y `min` maxval
+                else minval `min` y `max` maxval
     range = maxval - minval
 
 
