@@ -325,18 +325,20 @@ parseCSVData
   -> [(Int, Int, a)]
 parseCSVData rle reader
   = map (\(i, b, x) -> (pred i, pred b, x))  -- zero-base index values
-  . concatMap (parseCSVRow rle)
+  . concatMap (if rle then parseCSVRowRLE else parseCSVRow)
   where
-    parseCSVRow True (rawIter:bl:bh:values)
-      = let iter = unsafeReadInt rawIter
-        in [ ( iter
-             , b
-             , reader iter values
-             )
-             | b <- [unsafeReadInt bl .. unsafeReadInt bh]
-           ]
-    parseCSVRow False (rawIter:rawb:values)
-      = parseCSVRow True (rawIter:rawb:rawb:values)
+    parseCSVRowRLE (rawIter : bl : bh : rawValues)
+      = [(iter, b, values) | b <- [unsafeReadInt bl .. unsafeReadInt bh]]
+      where iter   = unsafeReadInt rawIter
+            values = reader iter rawValues
+    parseCSVRowRLE _ = errorHere "parseCSVData.parseCSVRowRLE"
+                                 "Expecting at least 3 entries per row."
+
+    parseCSVRow (rawIter : rawb : rawValues)
+      = [(iter, unsafeReadInt rawb, reader iter rawValues)]
+      where iter = unsafeReadInt rawIter
+    parseCSVRow _ = errorHere "parseCSVData.parseCSVRow"
+                              "Expecting at least 2 entries per row."
 
 unsafeReadInt :: C.ByteString -> Int
 unsafeReadInt x
