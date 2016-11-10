@@ -18,7 +18,7 @@ module Vanda.Grammar.PMCFG.Main
   , Args ()
   ) where
 
-import Codec.Compression.GZip (compress, decompress)
+import Codec.Compression.GZip (compress)
 import qualified Data.Text.Lazy.IO as TIO
 import qualified Data.Binary as B
 import qualified Data.ByteString.Lazy as BS

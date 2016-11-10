@@ -33,9 +33,10 @@ module Vanda.Grammar.AutomataStorage.SparseTreeStackStorage
   , exampleSparseTree
   ) where
 
-import Prelude hiding (null, filter)
+import Prelude hiding (null, filter, lookup)
 import Data.List (intercalate)
-import Data.Map (Map (), assocs, elems, empty, filter, insert, unions, keys, null, (!))
+import Data.Map (Map (), (!), assocs, elems, empty, filter, insert, keys, lookup, notMember, null, unions)
+import Data.Maybe (maybeToList)
 import Data.Tree (Tree (Node))
 
 
@@ -104,7 +105,9 @@ pushTreeStack :: Ord i => i -> a -> TreeStack i a -> [TreeStack i a]
 pushTreeStack _ _ (TreeStack [])
   = error "pushTreeStack: the stack backlog must not be empty"
 pushTreeStack i x (TreeStack cs@((_, SparseTree a tm) : _))
-  = [ TreeStack $ (\ t' -> SparseTree a (insert i t' tm), SparseTree x empty) : cs ]
+  = [ TreeStack $ (\ t' -> SparseTree a (insert i t' tm), SparseTree x empty) : cs
+    | i `notMember` tm
+    ]
 
 
 -- | If the current node is a leaf and not the root, then this function
@@ -123,7 +126,9 @@ upTreeStack :: Ord i => i -> TreeStack i a -> [TreeStack i a]
 upTreeStack _ (TreeStack [])
   = error "upTreeStack: the stack backlog must not be empty"
 upTreeStack i (TreeStack ((f, SparseTree a tm) : cs))
-  = [ TreeStack $ (\ t' -> SparseTree a (insert i t' tm), tm ! i) : (f, SparseTree a tm) : cs ]
+  = [ TreeStack $ (\ t' -> SparseTree a (insert i t' tm), t) : (f, SparseTree a tm) : cs
+    | t <- maybeToList $ i `lookup` tm
+    ]
 
 
 -- | Moves the stack pointer to the parent of its current position, if possible.

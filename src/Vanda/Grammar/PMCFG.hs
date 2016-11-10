@@ -12,12 +12,16 @@
 module Vanda.Grammar.PMCFG
   ( VarT (Var, T)
   , Rule (Rule)
+  , isT
+  , fromT
+  , isVar
+  , fromVar
   -- * Parallel multiple context-free grammars
-  , PMCFG
+  , PMCFG (PMCFG)
   , fromRules
   , yield
   -- * Weighted parallel multiple context-free grammars
-  , WPMCFG
+  , WPMCFG (WPMCFG)
   , fromWeightedRules
   -- * pretty printing
   , prettyPrintRule
@@ -34,6 +38,7 @@ module Vanda.Grammar.PMCFG
 import Control.Arrow (first)
 import qualified Control.Error
 import qualified Data.Binary as B
+import Data.Hashable
 import Data.List (intercalate)
 import Data.Maybe (listToMaybe)
 import Data.Tree
@@ -42,6 +47,26 @@ errorHere :: String -> String -> a
 errorHere = Control.Error.errorHere "Vanda.Grammar.PMCFG"
 
 data VarT t = T t | Var !Int !Int deriving (Eq, Ord, Show)
+
+instance (Hashable t) => Hashable (VarT t) where
+  salt `hashWithSalt` (T t) = salt `hashWithSalt` t
+  salt `hashWithSalt` (Var i j) = salt `hashWithSalt` i `hashWithSalt` j
+
+isT :: VarT t -> Bool
+isT (T _) = True
+isT _     = False
+
+fromT :: VarT t -> Maybe t
+fromT (T x) = Just x
+fromT _     = Nothing
+
+isVar :: VarT t -> Bool
+isVar (Var _ _) = True
+isVar _         = False
+
+fromVar :: VarT t -> Maybe (Int, Int)
+fromVar (Var i j) = Just (i,j)
+fromVar _         = Nothing
 
 instance Functor VarT where
   fmap f (T t)     = T (f t)
@@ -62,6 +87,9 @@ instance B.Binary t => B.Binary (VarT t) where
 
 -- | 'Rule' ((A, [A₁, …, Aₖ]), f) ~ A → f(A₁, …, Aₖ).
 newtype Rule nt t = Rule ((nt, [nt]), [[VarT t]]) deriving (Eq, Ord, Show)
+
+instance (Hashable nt, Hashable t) => Hashable (Rule nt t) where
+  salt `hashWithSalt` (Rule tup) = salt `hashWithSalt` tup
 
 instance Functor (Rule nt) where
   fmap f (Rule (nts, varts)) = Rule (nts, map (map (fmap f)) varts)
