@@ -385,16 +385,19 @@ unsafeReadDouble bs
 --           * thus the ranges in `set pm3d rgbformulae' are -36..36
 
 colormap :: Double -> Double -> Double -> PixelRGB8
-colormap minval maxval x
-  = PixelRGB8
-      (round $ 0xFF * sqrt p)
-      (round $ 0xFF * p ^ (3 :: Int))
-      (round $ 0xFF * (0 `max` sin (2 * pi * p)))
+colormap minval maxval
+  = \ x -> let p = (clamp x - minval) / range
+            in PixelRGB8
+                 (round $ 0xFF * sqrt p)
+                 (round $ 0xFF * p * p * p)
+                 (round $ 0xFF * (0 `max` sin (2 * pi * p)))
   where
-    p = (clamp x - minval) / range
-    clamp y = if minval < maxval
-                then minval `max` y `min` maxval
-                else minval `min` y `max` maxval
+    clamp :: Double -> Double
+    clamp = if minval < maxval
+            then \ x -> minval `max` x `min` maxval
+            else \ x -> minval `min` x `max` maxval
+
+    range :: Double
     range = maxval - minval
 
 
