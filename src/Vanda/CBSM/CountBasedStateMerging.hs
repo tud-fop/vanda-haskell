@@ -247,30 +247,6 @@ unshowTree (L x        ) = x `Node` []
 unshowTree (x :<     ts) = x `Node` map unshowTree ts
 -}
 
-newtype OrdTree a = OrdTree (Tree a) deriving Eq
-
-
-unOrdTree :: OrdTree t -> Tree t
-unOrdTree (OrdTree t) = t
-
-
-instance Ord a => Ord (OrdTree a) where
-  compare (OrdTree (Node x1 ts1)) (OrdTree (Node x2 ts2))
-    = case compare x1 x2 of
-        EQ -> compare (map OrdTree ts1) (map OrdTree ts2)
-        o -> o
-
-
-instance Show a => Show (OrdTree a) where
-  showsPrec d (OrdTree (Node x [])) = showsPrec d x
-  showsPrec _ (OrdTree (Node x ts)) = showsPrec 11 x . showsPrec 11 (map OrdTree ts)
---   show (OrdTree (Node x [])) = stripQuotes (show x)
---   show (OrdTree (Node x ts)) = stripQuotes (show x) ++ show (map OrdTree ts)
-
-instance (B.Binary a) => B.Binary (OrdTree a) where
-  put (OrdTree x) = B.put x
-  get = OrdTree <$> B.get
-
 
 {-
 stripQuotes :: String -> String

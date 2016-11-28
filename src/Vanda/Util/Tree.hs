@@ -15,7 +15,9 @@
 --
 -----------------------------------------------------------------------------
 
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
 
 module Vanda.Util.Tree
 ( -- * Two-dimensional drawing
@@ -41,10 +43,13 @@ module Vanda.Util.Tree
 , mapWithSubtrees
 , mapAccumLLeafs
 , zipLeafsWith
+, -- * newtype with Ord instance
+  OrdTree(..)
 ) where
 
 
 import Control.Arrow (second)
+import Data.Coerce (coerce)
 import Data.List (mapAccumL)
 import Data.Tree
 
@@ -247,3 +252,17 @@ zipLeafsWith f = (snd .) . go
     go [] t = ([], t)
     go (x : xs) (Node y []) = (xs, Node (f x y) [])
     go      xs  (Node y ts) = second (Node y) (mapAccumL go xs ts)
+
+
+-- newtype with Ord instance -------------------------------------------------
+
+-- | A wrapper for 'Tree' to add an 'Ord' instance.
+newtype OrdTree a = OrdTree { unOrdTree :: Tree a }
+  deriving (Applicative, Eq, Foldable, Functor, Monad, Read, Show)
+
+
+instance forall a. Ord a => Ord (OrdTree a) where
+  compare (OrdTree (Node x1 ts1)) (OrdTree (Node x2 ts2))
+    = case compare x1 x2 of
+        EQ -> compare (coerce ts1 :: [OrdTree a]) (coerce ts2 :: [OrdTree a])
+        o  -> o
