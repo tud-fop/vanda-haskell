@@ -25,6 +25,11 @@ import           System.Console.CmdArgs.Explicit.Misc
 import           System.FilePath ((<.>))
 import           Vanda.Corpus.Binarization.CmdArgs
 import           Vanda.Corpus.SExpression.CmdArgs
+                   ( CmdArgsCorpora
+                   , defaultCmdArgsCorpora
+                   , flagArgCorpora
+                   , modeFlagsCorpora
+                   )
 
 
 fileNameGrammar          :: Int -> FilePath
@@ -55,25 +60,11 @@ show0 l i = replicate (l - length cs) '0' ++ cs
 data Args
   = Help String
   | PrintCorpora
-    { flagWeightedCorpus :: Bool
-    , flagAsForests :: Bool
-    , flagPennFilter :: Bool
-    , flagDefoliate :: Bool
-    , flagFilterByLeafs :: FilePath
-    , flagFilterByLength :: Int
-    , flagBinarization :: FlagBinarization
-    , flagOutputFormat :: FlagOutputFormat
-    , argCorpora :: [FilePath]
+    { flagOutputFormat :: FlagOutputFormat
+    , flagsCorpora     :: CmdArgsCorpora
     }
   | CBSM
-    { flagWeightedCorpus :: Bool
-    , flagAsForests :: Bool
-    , flagPennFilter :: Bool
-    , flagDefoliate :: Bool
-    , flagFilterByLeafs :: FilePath
-    , flagFilterByLength :: Int
-    , flagBinarization :: FlagBinarization
-    , flagRestrictMerge :: [FlagRestrictMerge]
+    { flagRestrictMerge :: [FlagRestrictMerge]
     , flagBeamWidth :: Int
     , flagDynamicBeamWidth :: Bool
     , flagShuffle :: FlagShuffle
@@ -85,7 +76,7 @@ data Args
     , flagVerboseInfo :: Bool
     , flagSaveCounter :: Maybe Int
     , flagSaveTimer :: Maybe Int
-    , argCorpora :: [FilePath]
+    , flagsCorpora :: CmdArgsCorpora
     }
   | CBSMContinue
     { flagBeamWidth :: Int
@@ -141,9 +132,9 @@ data Args
     , argRenderBeamOutput :: FilePath
     }
   | RecognizeTrees
-    { argGrammar :: FilePath
-    , argTreesFile :: FilePath
-    , flagPrintRecognizable :: Bool
+    { flagPrintRecognizable :: Bool
+    , flagsCorpora          :: CmdArgsCorpora
+    , argGrammar            :: FilePath
     }
   deriving (Read, Show)
 
@@ -170,15 +161,8 @@ cmdArgs :: Mode Args
 cmdArgs
   = ( modes "cbsm" (Help $ defaultHelp cmdArgs) "Count-Based State Merging"
   [ ( modeEmpty PrintCorpora
-        { flagWeightedCorpus = False
-        , flagAsForests      = False
-        , flagPennFilter     = False
-        , flagDefoliate      = False
-        , flagFilterByLeafs  = ""
-        , flagFilterByLength = -1
-        , flagBinarization   = FBNone
-        , flagOutputFormat   = FOFPretty
-        , argCorpora         = []
+        { flagOutputFormat = FOFPretty
+        , flagsCorpora     = defaultCmdArgsCorpora
         } )
     { modeNames = ["print-corpora"]
     , modeHelp =
@@ -188,27 +172,13 @@ cmdArgs
         \read from standard input. \
         \The filters (if used) apply in the order penn-filter, defoliate, \
         \filter-by-leafs and finally filter-by-length."
-    , modeArgs = ([], Just flagArgCorpora)
+    , modeArgs = ([], Just (flagArgCorpora liftCmdArgsCorpora))
     , modeGroupFlags = toGroup
-        [ flagNoneWeightedCorpus (\   x -> x{flagWeightedCorpus = True})
-        , flagNoneAsForests      (\   x -> x{flagAsForests      = True})
-        , flagNonePennFilter     (\   x -> x{flagPennFilter     = True})
-        , flagNoneDefoliate      (\   x -> x{flagDefoliate      = True})
-        , flagReqFilterByLeafs   (\ a x -> x{flagFilterByLeafs  = a   })
-        , flagReqFilterByLength  (\ a x -> x{flagFilterByLength = a   })
-        , flagReqBinarization    (\ b x -> x{flagBinarization   = b   })
-        , flagReqOutputFormat
-        ]
+      $ [ flagReqOutputFormat
+        ] ++ modeFlagsCorpora liftCmdArgsCorpora
     }
   , ( modeEmpty CBSM
-        { flagWeightedCorpus   = False
-        , flagAsForests        = False
-        , flagPennFilter       = False
-        , flagDefoliate        = False
-        , flagFilterByLeafs    = ""
-        , flagFilterByLength   = -1
-        , flagBinarization     = FBNone
-        , flagRestrictMerge    = []
+        { flagRestrictMerge    = []
         , flagBeamWidth        = 1000
         , flagDynamicBeamWidth = False
         , flagShuffle          = FSNone
@@ -220,21 +190,14 @@ cmdArgs
         , flagVerboseInfo      = False
         , flagSaveCounter      = Nothing
         , flagSaveTimer        = Nothing
-        , argCorpora           = []
+        , flagsCorpora         = defaultCmdArgsCorpora
         })
     { modeNames = ["cbsm"]
     , modeHelp = "Read-off a grammar from TREEBANKs and generalize it. See \
         \print-corpora for further information about the TREEBANK arguments."
-    , modeArgs = ([], Just flagArgCorpora)
+    , modeArgs = ([], Just (flagArgCorpora liftCmdArgsCorpora))
     , modeGroupFlags = toGroup
-        [ flagNoneWeightedCorpus (\   x -> x{flagWeightedCorpus = True})
-        , flagNoneAsForests      (\   x -> x{flagAsForests      = True})
-        , flagNonePennFilter     (\   x -> x{flagPennFilter     = True})
-        , flagNoneDefoliate      (\   x -> x{flagDefoliate      = True})
-        , flagReqFilterByLeafs   (\ a x -> x{flagFilterByLeafs  = a   })
-        , flagReqFilterByLength  (\ a x -> x{flagFilterByLength = a   })
-        , flagReqBinarization    (\ b x -> x{flagBinarization   = b   })
-        , flagReqRestrictMerge
+      $ [ flagReqRestrictMerge
         , flagReqBeamWidth
         , flagNoneDynamicBeamWidth
         , flagReqShuffle
@@ -246,7 +209,7 @@ cmdArgs
         , flagNoneVerboseInfo
         , flagReqSaveCounter
         , flagReqSaveTimer
-        ]
+        ] ++ modeFlagsCorpora liftCmdArgsCorpora
     }
   , (modeEmpty $ CBSMContinue 1000 (pred maxBound) "")
     { modeNames = ["cbsm-continue"]
@@ -362,20 +325,22 @@ cmdArgs
         , flagReqChunkCruncher
         ]
     }
-  , (modeEmpty $ RecognizeTrees "" "" False)
+  , (modeEmpty RecognizeTrees
+       { flagPrintRecognizable = False
+       , flagsCorpora          = defaultCmdArgsCorpora
+       , argGrammar            = ""
+       })
     { modeNames = ["recognize-trees"]
     , modeHelp = "Recognize trees using some grammar. Output: NUMBER-OF-STATES \
                  \LIKELIHOOD NONZERO-TREE-COUNT GEOM-MEAN-LIKELIHOOD (all \
                  \likelihoods log_2)"
     , modeArgs =
-        ( [ flagArgGrammar{argRequire = True}
-          , flagArgTreesFile{argRequire = True}
-          ]
-        , Nothing
+        ( [flagArgGrammar{argRequire = True}]
+        , Just (flagArgCorpora liftCmdArgsCorpora)
         )
     , modeGroupFlags = toGroup
-        [ flagNonePrintRecognizable
-        ]
+      $ [ flagNonePrintRecognizable
+        ] ++ modeFlagsCorpora liftCmdArgsCorpora
     }
   ] )
   { modeHelpSuffix =
@@ -389,6 +354,8 @@ cmdArgs
       ]
   }
   where
+    liftCmdArgsCorpora f
+      = \ x -> x{flagsCorpora = f (flagsCorpora x)}
     flagNoneDynamicBeamWidth
       = flagNone ["dynamic-beam-width"] (\ x -> x{flagDynamicBeamWidth = True})
           "The actual beam width is at least as defined by --beam-width, but \
@@ -527,16 +494,12 @@ cmdArgs
     flagReqIntToTreeMap
       = flagReq ["int2tree"] (\ a x -> Right x{flagIntToTreeMap = a}) "FILE"
           "resolve Int to trees from the original corpus"
-    flagArgCorpora
-      = flagArg (\ a x -> Right x{argCorpora = argCorpora x ++ [a]}) "TREEBANK"
     flagArgMergeTreeMap
       = flagArg (\ a x -> Right x{argInfo = a}) "INFO-FILE"
     flagArgIntToTreeMap
       = flagArg (\ a x -> Right x{argIntToTreeMap = a}) "INT2TREE-FILE"
     flagArgGrammar
       = flagArg (\ a x -> Right x{argGrammar = a}) "GRAMMAR-FILE"
-    flagArgTreesFile
-      = flagArg (\ a x -> Right x{argTreesFile = a}) "TREES-FILE"
     flagNonePrintRecognizable
       = flagNone ["print-recognizable"] (\ x -> x{flagPrintRecognizable = True})
           "also print all recognizable trees out again"

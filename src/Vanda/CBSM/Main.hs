@@ -70,7 +70,7 @@ import           Vanda.CBSM.StatisticsRenderer
 import           Vanda.Corpus.Binarization (Nodetype(..))
 import           Vanda.Corpus.Binarization.CmdArgs
 import           Vanda.Corpus.Penn.Text (treeToPenn)
-import           Vanda.Corpus.SExpression.CmdArgs
+import qualified Vanda.Corpus.SExpression.CmdArgs as SExp
 import qualified Vanda.Features as F
 import qualified Vanda.Hypergraph as H
 import           Vanda.Hypergraph.DotExport (fullHypergraph2dot)
@@ -99,23 +99,14 @@ mainArgs :: Args -> IO ()
 mainArgs (Help cs) = putStr cs
 
 mainArgs PrintCorpora{..} = do
-  allowedLeafs <- readAllowedLeafs flagFilterByLeafs
   putStr
     . unlines
-    . zipWith ( drawTreeFormatted flagBinarization flagOutputFormat
+    . zipWith ( drawTreeFormatted (SExp.flagBinarization flagsCorpora)
+                                  flagOutputFormat
               . show
               ) [1 :: Int ..]
     . map fst
-    . preprocessCorpus
-        flagPennFilter
-        flagDefoliate
-        allowedLeafs
-        flagFilterByLength
-        flagBinarization
-    . toCorpora
-        flagWeightedCorpus
-        flagAsForests
-   =<< readSExpressions argCorpora
+   =<< SExp.readCorpora flagsCorpora
 
 mainArgs opts@CBSM{..} = do
   exist <- fileExist (flagDir </> fileNameOptions)
@@ -126,19 +117,7 @@ mainArgs opts@CBSM{..} = do
     exitFailure
   createDirectoryIfMissing True flagDir
   writeFile (flagDir </> fileNameOptions) (show opts)
-  (g, tM) <- do
-     allowedLeafs <- readAllowedLeafs flagFilterByLeafs
-     forestToGrammar'
-         . preprocessCorpus
-             flagPennFilter
-             flagDefoliate
-             allowedLeafs
-             flagFilterByLength
-             flagBinarization
-         . toCorpora
-             flagWeightedCorpus
-             flagAsForests
-       <$> readSExpressions argCorpora
+  (g, tM) <- forestToGrammar' <$> SExp.readCorpora flagsCorpora
   encodeFile (flagDir </> fileNameIntToTreeMap) (tM :: BinaryIntToTreeMap)
   numCapabilities <- getNumCapabilities
   putStrLnTimestamped $ "numCapabilities: " ++ show numCapabilities
@@ -186,7 +165,10 @@ mainArgs opts@CBSM{..} = do
       $ cbsm
           ConfigCBSM
             { confNumCapabilities  = numCapabilities
-            , confMergeGroups      = mergeGroups flagBinarization flagRestrictMerge tM
+            , confMergeGroups      = mergeGroups
+                                       (SExp.flagBinarization flagsCorpora)
+                                       flagRestrictMerge
+                                       tM
             , confEvaluate         = if flagNormalize
                                      then normalizeLklhdByMrgdStates
                                      else flip const
@@ -356,9 +338,7 @@ mainArgs RenderBeamInfo{..} = do
 
 mainArgs RecognizeTrees{..} = do
   binGrammar <- decodeFile argGrammar :: IO BinaryCRTG
-  trees <- map fst
-         . toCorpora False False
-       <$> readSExpressions [argTreesFile]
+  trees <- map fst <$> SExp.readCorpora flagsCorpora
   let (hg, initsMap) = toHypergraph binGrammar :: (H.ForwardStar Int String Double, M.Map Int Double)
       logProbs = map (logBase 2 . totalProbOfTree (hg, initsMap)) trees
       stateCount = S.size $ H.nodes hg

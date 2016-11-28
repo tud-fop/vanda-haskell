@@ -12,17 +12,56 @@
 -- Portability :  portable
 -----------------------------------------------------------------------------
 
+{-# LANGUAGE RecordWildCards #-}
+
 module Vanda.Corpus.SExpression.CmdArgs
-( -- * Various CmdArgs 'Flag's
+( -- * Porcelain
+  --
+  -- | Example usage:
+  --
+  -- > import System.Console.CmdArgs.Explicit
+  -- >
+  -- > import Vanda.Corpus.SExpression.CmdArgs
+  -- >
+  -- > data Args
+  -- >   = SomeCtor
+  -- >     { flagSomething :: ()
+  -- >     , flagCorpora   :: CmdArgsCorpora
+  -- >     }
+  -- >   deriving (Read, Show)
+  -- >
+  -- > cmdArgs :: Mode Args
+  -- > cmdArgs
+  -- >   = modes "…" undefined "…"
+  -- >   [ (modeEmpty SomeCtor
+  -- >        { flagSomething = ()
+  -- >        , flagCorpora = defaultCmdArgsCorpora
+  -- >        })
+  -- >     { modeNames      = ["…"]
+  -- >     , modeHelp       = "…"
+  -- >     , modeArgs       = ([{- … -}], Just (flagArgCorpora liftCmdArgsCorpora))
+  -- >     , modeGroupFlags = toGroup
+  -- >                      $ [{- … -}] ++ modeFlagsCorpora liftCmdArgsCorpora
+  -- >     }
+  -- >   ]
+  -- >   where
+  -- >     liftCmdArgsCorpora f = \ x -> x{flagCorpora = f (flagCorpora x)}
+  CmdArgsCorpora(..)
+, defaultCmdArgsCorpora
+, flagArgCorpora
+, modeFlagsCorpora
+, readCorpora
+, -- * Plumbing
+  -- ** Various CmdArgs 'Flag's
   flagNoneWeightedCorpus
 , flagNoneAsForests
 , flagNonePennFilter
 , flagNoneDefoliate
 , flagReqFilterByLeafs
 , flagReqFilterByLength
-, -- * Functions to deal with the CmdArgs
+, -- ** Functions to deal with the CmdArgs
   readSExpressions
-, toCorpora
+, toCorpus
 , preprocessCorpus
 , readAllowedLeafs
 , filterByLeafsBy
@@ -48,6 +87,73 @@ import           Vanda.Util.Tree as T
 
 errorHere :: String -> String -> a
 errorHere = Control.Error.errorHere "Vanda.Corpus.SExpression.CmdArgs"
+
+
+data CmdArgsCorpora
+  = CmdArgsCorpora
+    { flagWeightedCorpus :: Bool
+    , flagAsForests :: Bool
+    , flagPennFilter :: Bool
+    , flagDefoliate :: Bool
+    , flagFilterByLeafs :: FilePath
+    , flagFilterByLength :: Int
+    , flagBinarization :: FlagBinarization
+    , argCorpora :: [FilePath]
+    }
+  deriving (Read, Show)
+
+
+defaultCmdArgsCorpora :: CmdArgsCorpora
+defaultCmdArgsCorpora
+  = CmdArgsCorpora
+      { flagWeightedCorpus = False
+      , flagAsForests      = False
+      , flagPennFilter     = False
+      , flagDefoliate      = False
+      , flagFilterByLeafs  = ""
+      , flagFilterByLength = -1
+      , flagBinarization   = FBNone
+      , argCorpora         = []
+      }
+
+
+flagArgCorpora
+  :: ((CmdArgsCorpora -> CmdArgsCorpora) -> a -> a)
+     -- ^ lift update function to 'Arg'’s type
+  -> Arg a
+flagArgCorpora f
+  = flagArg (\ a -> Right . f (\ x -> x{argCorpora = argCorpora x ++ [a]}))
+            "TREEBANK"
+
+
+modeFlagsCorpora
+  :: ((CmdArgsCorpora -> CmdArgsCorpora) -> a -> a)
+     -- ^ lift update function to 'Flag'’s type
+  -> [Flag a]
+modeFlagsCorpora f
+  = [ flagNoneWeightedCorpus (       f $ \ x -> x{flagWeightedCorpus = True})
+    , flagNoneAsForests      (       f $ \ x -> x{flagAsForests      = True})
+    , flagNonePennFilter     (       f $ \ x -> x{flagPennFilter     = True})
+    , flagNoneDefoliate      (       f $ \ x -> x{flagDefoliate      = True})
+    , flagReqFilterByLeafs   (\ a -> f $ \ x -> x{flagFilterByLeafs  = a   })
+    , flagReqFilterByLength  (\ a -> f $ \ x -> x{flagFilterByLength = a   })
+    , flagReqBinarization    (\ b -> f $ \ x -> x{flagBinarization   = b   })
+    ]
+
+
+readCorpora :: CmdArgsCorpora -> IO [(Tree String, Int)]
+readCorpora CmdArgsCorpora{..} = do
+  allowedLeafs <- readAllowedLeafs flagFilterByLeafs
+  preprocessCorpus
+          flagPennFilter
+          flagDefoliate
+          allowedLeafs
+          flagFilterByLength
+          flagBinarization
+      . toCorpus
+          flagWeightedCorpus
+          flagAsForests
+    <$> readSExpressions argCorpora
 
 
 -- | Assume that the trees in the corpus have associated counts.
@@ -109,19 +215,19 @@ readSExpressions argCorpora
               )
 
 
-toCorpora
+toCorpus
   :: Bool                  -- ^ cf. 'flagNoneWeightedCorpus'
   -> Bool                  -- ^ cf. 'flagNoneAsForests'
   -> [SExpression]         -- ^ the 'SExpression's to be converted
   -> [(Tree String, Int)]  -- ^ Trees with associated counts
-toCorpora flagWeightedCorpus flagAsForests
+toCorpus flagWeightedCorpus flagAsForests
    = (if flagAsForests      then concatMap (floatFst . first SExp.toForest)
                             else map (first SExp.toTree))
    . (if flagWeightedCorpus then map extractWeight else map (\ t -> (t, 1)))
   where
     extractWeight SExp.List{sExpList = [Atom{sExpAtom = w}, t]} = (t, read w)
     extractWeight x
-      = errorHere "toCorpora.extractWeight"
+      = errorHere "toCorpus.extractWeight"
       $ show
       $ Parsec.newErrorMessage
           (Parsec.Expect "list with two elements where the first is an atom")
