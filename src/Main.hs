@@ -2,7 +2,7 @@
 -- |
 -- Module      :  Vanda.Main
 -- Description :  unified Vanda command line tool
--- Copyright   :  (c) Technische Universität Dresden 2015
+-- Copyright   :  (c) Technische Universität Dresden 2015-2016
 -- License     :  Redistribution and use in source and binary forms, with
 --                or without modification, is ONLY permitted for teaching
 --                purposes at Technische Universität Dresden AND IN
@@ -35,6 +35,7 @@ import qualified Vanda.CBSM.Main
 import qualified Vanda.Dyck.Main
 import qualified Vanda.Grammar.XRS.LCFRS.Main
 import qualified Vanda.Grammar.NGrams.Main
+import qualified Vanda.GrammaticalInference.PDTA.Main
 import qualified Vanda.Algorithms.IntersectWithNGrams.Main
 import qualified Vanda.Grammar.PCFG.Main
 
@@ -51,6 +52,7 @@ data Args
   | Dyck Vanda.Dyck.Main.Args
   | LCFRS Vanda.Grammar.XRS.LCFRS.Main.Args
   | NGrams Vanda.Grammar.NGrams.Main.Args
+  | PDTA Vanda.GrammaticalInference.PDTA.Main.Args
   | XRSNGrams Vanda.Algorithms.IntersectWithNGrams.Main.Args
   | PCFGs Vanda.Grammar.PCFG.Main.Args
 #ifdef VERSION_gtk
@@ -66,6 +68,7 @@ cmdArgs
   , remap2 CBSM (\ (CBSM x) -> x) Vanda.CBSM.Main.cmdArgs
   , remap2 LCFRS (\ (LCFRS x) -> x) Vanda.Grammar.XRS.LCFRS.Main.cmdArgs
   , remap2 NGrams (\ (NGrams x) -> x) Vanda.Grammar.NGrams.Main.cmdArgs
+  , remap2 PDTA (\ (PDTA x) -> x) Vanda.GrammaticalInference.PDTA.Main.cmdArgs
   , remap2 XRSNGrams (\ (XRSNGrams x) -> x) Vanda.Algorithms.IntersectWithNGrams.Main.cmdArgs
   , remap2 PCFGs (\ (PCFGs x) -> x) Vanda.Grammar.PCFG.Main.cmdArgs
 #ifdef VERSION_gtk
@@ -84,6 +87,7 @@ mainArgs (CBSM      x ) = Vanda.CBSM.Main.mainArgs x
 mainArgs (Dyck      x ) = Vanda.Dyck.Main.mainArgs x
 mainArgs (LCFRS     x ) = Vanda.Grammar.XRS.LCFRS.Main.mainArgs x
 mainArgs (NGrams    x ) = Vanda.Grammar.NGrams.Main.mainArgs x
+mainArgs (PDTA      x ) = Vanda.GrammaticalInference.PDTA.Main.mainArgs x
 mainArgs (XRSNGrams x ) = Vanda.Algorithms.IntersectWithNGrams.Main.mainArgs x
 mainArgs (PCFGs     x ) = Vanda.Grammar.PCFG.Main.mainArgs x
 #ifdef VERSION_gtk

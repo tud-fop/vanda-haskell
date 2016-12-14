@@ -31,6 +31,7 @@ module Vanda.Util.Tree
 , -- * Extraction
   flattenRanked
 , height
+, annotateWithHeights
 , subTrees
 , yield
 , filterTree
@@ -175,6 +176,24 @@ flattenRanked t = go t []                       -- idea from Data.Tree.flatten
 -- | The length of the longest path of a tree. @'Node' _ []@ has height @1@.
 height :: Tree a -> Int
 height (Node _ xs) = succ $ maximum $ 0 : map height xs
+
+
+{-
+-- | Replace the 'Node's’ 'rootLabel's of a 'Tree' by pairs of the 'height' of
+-- the subtree at that 'Node' and the subtree itself.
+annotateWithHeights :: Tree a -> Tree (Int, Tree a)
+annotateWithHeights t@(Node _ ts)
+  = Node (succ $ maximum $ 0 : map (fst . rootLabel) ts', t) ts'
+  where ts' = map annotateWithHeights ts
+-}
+
+
+-- | Replace the 'Node's’ 'rootLabel's of a 'Tree' by pairs of the 'height' of
+-- the subtree at that 'Node' and the original 'rootLabel'.
+annotateWithHeights :: Tree a -> Tree (Int, a)
+annotateWithHeights (Node x ts)
+  = Node (succ $ maximum $ 0 : map (fst . rootLabel) ts', x) ts'
+  where ts' = map annotateWithHeights ts
 
 
 -- | List of all subtrees in pre-order.
