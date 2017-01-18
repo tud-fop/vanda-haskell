@@ -121,7 +121,10 @@ library
     , Vanda.Grammar.PCFG.Main
     , Vanda.Grammar.PMCFG
     , Vanda.Grammar.PMCFG.Functions                
-    , Vanda.Grammar.PMCFG.Main
+    , Vanda.Grammar.PMCFG.Main                
+    , Vanda.Grammar.PMCFG.Parse               
+    , Vanda.Grammar.PMCFG.CYKParser               
+    , Vanda.Grammar.PMCFG.DeductiveSolver
     , Vanda.Grammar.XRS.Binarize
     , Vanda.Grammar.XRS.Functions
     , Vanda.Grammar.XRS.GHKM

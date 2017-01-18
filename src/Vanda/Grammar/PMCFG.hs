@@ -33,6 +33,7 @@ module Vanda.Grammar.PMCFG
   , exampleDerivation
   , exampleRules
   , exampleCompositions
+  , exampleWeights
   ) where
 
 import Control.Arrow (first)

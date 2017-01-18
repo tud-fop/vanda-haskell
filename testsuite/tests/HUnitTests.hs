@@ -14,6 +14,8 @@ import qualified Vanda.CBSM.CountBasedStateMergingTests
 import qualified Vanda.CBSM.DovetailingTests
 import qualified Vanda.CBSM.ProductOrderTests
 import qualified Vanda.Corpus.BinarizationTests
+import qualified Vanda.Grammar.PMCFG.DeductiveSolverTest
+import qualified Vanda.Grammar.PMCFG.CYKParserTest
 
 
 main :: IO ()
@@ -44,4 +46,8 @@ tests = TestList
     ~: Vanda.CBSM.ProductOrderTests.tests
   ,   "Vanda.Corpus.Binarization"
     ~: Vanda.Corpus.BinarizationTests.tests
+  ,   "Vanda.Grammar.PMCFG.DeductiveSolver"
+    ~: Vanda.Grammar.PMCFG.DeductiveSolverTest.tests
+  ,   "Vanda.Grammar.PMCFG.CYKParser"
+    ~: Vanda.Grammar.PMCFG.CYKParserTest.tests
   ]
