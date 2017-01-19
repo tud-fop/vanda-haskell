@@ -30,7 +30,7 @@ instance (Show it) => Show (DeductiveSolver it) where
 solve :: (Eq it, Ord it, Hashable it)
       => DeductiveSolver it           -- ^ the solver instance
       -> [it]                         -- ^ all (filtered) items, that were deducted
-solve s@(DeductiveSolver rs f) = evalState (deductiveIteration s) initSet
+solve s@(DeductiveSolver rs f) = evalState (deductiveIteration s) (initSet, initSet)
   where
     initSet = fromList $ f $ deductiveStep [] rs
 
@@ -38,21 +38,21 @@ solve s@(DeductiveSolver rs f) = evalState (deductiveIteration s) initSet
 -- Applies all valid combination of rules to all items as antecedents until there are no new items.
 deductiveIteration  :: (Eq it, Ord it, Hashable it)
                     => DeductiveSolver it           -- ^ solver instance for rules and filter
-                    -> State (Set it) [it]          -- ^ state to store previously deducted items, returns list of all items
-deductiveIteration s@(DeductiveSolver rs f) = do  c <- get
-                                                  let new_items = filter (not . flip member c) $ deductiveStep (toList c) rs
-                                                  case new_items of
-                                                    [] -> return $ f $ toList c
-                                                    is -> do  put $ fromList $ f $ toList (c `union` fromList is) 
-                                                              deductiveIteration s
+                    -> State (Set it, Set it) [it]          -- ^ state to store previously deducted items, returns list of all items
+deductiveIteration s@(DeductiveSolver rs f) = do  (c, newItems') <- get
+                                                  let newItems = fromList $ filter (not . flip member c) $ deductiveStep (toList newItems') (toList c) rs
+                                                  if null newItems
+                                                  then return $ f $ toList c
+                                                  else do put (fromList $ f $ toList (c `union` newItems), newItems)
+                                                          deductiveIteration s
 
 -- | A step to apply all rules for all possible antecedents.
-deductiveStep :: [it] -> [DeductiveRule it] -> [it]
-deductiveStep is rs = rs >>= ruleApplication is
+deductiveStep :: [it] -> [it] -> [DeductiveRule it] -> [it]
+deductiveStep forcedItems is rs = rs >>= ruleApplication forcedItems is
 
 -- | Application of one rule to all possible antecedents.
-ruleApplication :: [it] -> DeductiveRule it -> [it]
-ruleApplication is (DeductiveRule fs app) = mapMaybe app candidates
+ruleApplication :: [it] -> [it] -> DeductiveRule it -> [it]
+ruleApplication forcedItems is (DeductiveRule fs app) = mapMaybe app candidates
   where
-    candidates = mapM (`filter` is) fs
+    candidates = filter (any . map (`elem` forcedItems)) $ mapM (`filter` is) fs
 

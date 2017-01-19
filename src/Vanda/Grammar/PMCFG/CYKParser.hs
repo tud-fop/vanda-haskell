@@ -6,14 +6,18 @@
 module Vanda.Grammar.PMCFG.CYKParser
     ( parse
     , weightedParse
+    , instantiate
+    -- * Ranges
     , Range
     , Rangevector
+    , prettyPrintRangevector
+    , isNonOverlapping
+    -- * Ranges with variables
     , Function
     , InstantiatedFunction
+    , prettyPrintInstantiatedFunction
     , concVarRange
     , toRange
-    , isNonOverlapping
-    , instantiate
     ) where
 
 import Vanda.Grammar.PMCFG.DeductiveSolver (solve, DeductiveSolver(DeductiveSolver), DeductiveRule(DeductiveRule))
@@ -23,18 +27,20 @@ import Data.Hashable (Hashable, hashWithSalt)
 import Data.List (elemIndices, sort)
 import Data.Maybe (mapMaybe)
 
--- | A range in a word. Nothing of length is 0.
+-- | A range in a word. Nothing is an empty range.
 type Range = Maybe (Int, Int)
 type Rangevector = [Range]
 
 -- | Item of naive parsing deduction. 
 -- Tuple of nonterminal, spanning range vector, derivation tree.
 type DeductiveItem nt t = (nt, Rangevector, Tree (Rule nt t))
+
 -- | Adds weight to item.
 type WeightedDeductiveItem nt t wt = (DeductiveItem nt t, wt)
 
 -- | A composition function.
 type Function t = [[VarT t]]
+
 -- | An instantiated composition function. 
 -- Terminals are substituted by thir corresponding ranges in the word.
 type InstantiatedFunction = Function Range
@@ -125,19 +131,19 @@ makeRules w rs = rs >>= makeRule w
         (rvs, ts) = case  unzip3 is of
                           (_, rvs, ts) -> (rvs, ts)
 
--- | Instantiates a composition function for a word.
+-- | Returns a list of all possible instantiations of a composition function for a word.
 instantiate :: (Eq t)
             => [t]                    -- ^ the word
             -> Function t             -- ^ the function to instantiate
             -> [InstantiatedFunction] -- ^ all possible combinations of instances with valid concatenated ranges
 instantiate w = mapM (mapMaybe concVarRange . sequence . instantiateComponent w)
   where
-    instantiateComponent :: (Eq t) => [t] -> [VarT t] -> [[VarT Range]]   -- ^ instantiates a function component, returns list of possible ranges for each character
-    instantiateComponent _ []             = [[ T Nothing ]]
-    instantiateComponent w [T t]          = [ map (T . Just . (\ i -> (i, i+1))) $ elemIndices t w ]
-    instantiateComponent _ [Var i j]      = [[ Var i j ]]
-    instantiateComponent w (T t : fs)     = map (T . Just . (\ i -> (i, i+1))) (elemIndices t w) : instantiateComponent w fs
-    instantiateComponent w (Var i j : fs) = [ Var i j ] : instantiateComponent w fs
+    instantiateComponent :: (Eq t) => [t] -> [VarT t] -> [[VarT Range]]
+    instantiateComponent _ []         = [[ T Nothing ]]
+    instantiateComponent w fs         = map (instantiateCharacter w) fs
+    instantiateCharacter :: [t] -> VarT t -> [VarT Range]
+    instantiateCharacter _ (Var i j)  = [Var i j]
+    instantiateCharacter w (T c)      = map (T . Just . (\ i -> (i, i+1))) $ elemIndices t w
 
 -- | Checks for overlapping components in a range vector.
 isNonOverlapping :: Rangevector -> Bool
@@ -152,14 +158,14 @@ isNonOverlapping = isNonOverlapping' []
 
 -- | Replaces variables with corresponding ranges. Fails if ranges do not fit in their context.
 insert :: [Rangevector] -> InstantiatedFunction -> Maybe Rangevector
---insert rvs = mapM (concRange . map (insert rvs))
 insert rvs = mapM ((>>= toRange) . concVarRange . map (insert' rvs))
   where
     insert' :: [Rangevector] -> VarT Range -> VarT Range
     insert' rvs (Var x y)  = T $ rvs !! x !! y
     insert' _ r = r
 
-
+-- | Tries to concatenate ranges in an instantiated function component.
+-- Variables are left as they are, so they result does not need to be one range.
 concVarRange :: [VarT Range] -> Maybe [VarT Range]
 concVarRange (T (Just (i, j)) : T (Just (k, l)) : is)
   | j == k = concVarRange $ (T $ Just (i, l)) : is
@@ -171,13 +177,10 @@ concVarRange (i:is) = case concVarRange is of
                             Just is' -> Just $ i:is'
 concVarRange [] = Just []
 
-
+-- | Tries to unpack a concatenated range vector.
 toRange :: [VarT Range] -> Maybe Range
 toRange [T r] = Just r
 toRange _ = Nothing
-
-{-
-for testing:
 
 prettyPrintInstantiatedFunction :: InstantiatedFunction -> String
 prettyPrintInstantiatedFunction fs = show $ map go fs
@@ -196,4 +199,3 @@ prettyPrintRangevector rs = "<" ++ unwords (map go rs) ++  ">"
 
 prettyPrintDeductiveItem :: (Show nt, Show t) => DeductiveItem nt t -> String
 prettyPrintDeductiveItem (n, rv, t) = show n ++ ", " ++ prettyPrintRangevector rv ++ ", " ++ show t
--}

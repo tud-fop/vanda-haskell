@@ -2,11 +2,14 @@ module Vanda.Grammar.PMCFG.NaiveParser
     (parse) where
 
 import Vanda.Grammar.PMCFG.DeductiveSolver (solve, DeductiveRule(DeductiveRule), DeductiveSolver(DeductiveSolver))
-import Vanda.Grammar.PMCFG.CYKParser (InstantiatedFunction, Range, Rangevector, Function, concVarRange, toRange, isNonOverlapping, instantiate)
+import Vanda.Grammar.PMCFG.CYKParser (InstantiatedFunction, Range, Rangevector, Function, concVarRange, toRange, isNonOverlapping, instantiate, prettyPrintInstantiatedFunction, prettyPrintRangevector)
 import Vanda.Grammar.PMCFG (Rule(Rule), PMCFG(PMCFG), WPMCFG(WPMCFG), VarT(Var, T), prettyPrintRule)
 import Data.Hashable (Hashable, hashWithSalt)
 import Data.Tree (Tree(Node))
 
+-- | Two types of deductive items:
+-- * active items need to be completet by substituting variables with ranges
+-- * passive items are completely instantiated
 data Item nt t = ActiveItem (Rule nt t, [nt], Int, [Tree (Rule nt t)], InstantiatedFunction)
                     | PassiveItem (nt, Rangevector, Tree (Rule nt t)) deriving (Eq, Ord)
 
@@ -14,25 +17,11 @@ instance (Hashable nt, Hashable t) => Hashable (Item nt t) where
     salt `hashWithSalt` (ActiveItem tup) = salt `hashWithSalt` tup
     salt `hashWithSalt` (PassiveItem tup) = salt `hashWithSalt` tup
 
-prettyPrintInstantiatedFunction :: InstantiatedFunction -> String
-prettyPrintInstantiatedFunction fs = show $ map go fs
-  where
-    go :: [VarT Range] -> String
-    go [] = ""
-    go (T (Just (i,j)) : f) = "(" ++ show i ++ "," ++ show j ++ ")" ++ go f
-    go (T Nothing : f) = "()" ++ go f
-    go (Var i j : f) = "x[" ++ show i ++ ":" ++ show j ++ "]" ++ go f
-
-prettyPrintRangevector :: Rangevector -> String
-prettyPrintRangevector rs = "<" ++ unwords (map go rs) ++  ">"
-  where
-    go (Just r) = show r
-    go Nothing = "()"
-
 instance (Show nt, Show t) => Show (Item nt t) where
     show (ActiveItem (r, as, i, _, fs)) = "[active] " ++ prettyPrintRule r ++ " " ++ show as ++ "+" ++ show i ++ " " ++ prettyPrintInstantiatedFunction fs
     show (PassiveItem (a, rv, _)) = "[passive] " ++ show a ++ " " ++ prettyPrintRangevector rv 
 
+-- | Top-level function to parse a word using a PMCFG.
 parse :: (Eq t, Eq nt, Ord t, Ord nt, Hashable t, Hashable nt) => PMCFG nt t -> [t] -> [Tree (Rule nt t)]
 parse (PMCFG s rs) w = map (\ (PassiveItem (_, _, t)) -> t) 
                         $ filter resultfilter
@@ -44,6 +33,11 @@ parse (PMCFG s rs) w = map (\ (PassiveItem (_, _, t)) -> t)
         resultfilter (PassiveItem (a, rho, _)) = a `elem` s && rho == targetrange
         resultfilter _ = False 
 
+-- | Constructs deductive rules using one rule of a grammar.
+-- Per grammar rule, there are 3 types of deductive rules:
+-- * prediction: initializes an active item without using antecendents
+-- * completion: step-by-step substituting of variables in instantiated function using ranges of passive items
+-- * conversion: converts an active item into a passive one, if there are no variables left
 makeRule :: (Eq nt, Eq t) => [t] -> Rule nt t -> [DeductiveRule (Item nt t)]
 makeRule w r@(Rule ((a, as), f)) = DeductiveRule [filterConversion r] convert
                                     : [ DeductiveRule [] (\ [] -> Just $ ActiveItem (r, as, 0, [], inst)) | inst <- instantiate w f ]
@@ -77,6 +71,7 @@ makeRule w r@(Rule ((a, as), f)) = DeductiveRule [filterConversion r] convert
                                                                     else Nothing
                                                         Nothing -> Nothing
 
+-- | substitutes variables with index 'off' with a ranges of a vector
 insert :: Int -> Rangevector -> InstantiatedFunction -> InstantiatedFunction
 insert off rv = map (map (substitute off rv))
     where
