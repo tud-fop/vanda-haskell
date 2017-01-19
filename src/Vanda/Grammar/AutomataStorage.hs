@@ -19,8 +19,9 @@ module Vanda.Grammar.AutomataStorage
   , exampleTrivAutomaton
   ) where
 
-import Data.List (isPrefixOf)
+import Data.List (stripPrefix)
 import qualified Data.Map as M
+import Data.Maybe (maybeToList)
 import qualified Data.Set as S
 
 -- | An 'Automaton' contains an initial 'Configuration', a set of
@@ -47,14 +48,16 @@ runAutomaton
   -> [σ]
   -> [Configuration q s σ]
 runAutomaton a w
-  = filter (\(Configuration q s v) -> null v && accepting a (q, s)) $ go [Configuration q' s' w]
+  = filter (\(Configuration q s v) -> null v && accepting a (q, s))
+    . concat
+    . takeWhile (not . null)
+    . iterate (concatMap (runTransitions τs))
+    $ [Configuration q' s' w]
   where (q', s') = initial a
-        go [] = []
-        go xs = xs ++ go (concatMap (runTransitions τs) xs)
-        τs q = M.findWithDefault [] q
-               ( M.fromListWith (++)
-                 . map (\τ -> (sState τ, [τ]))
-                 $ transitions a )
+        τm = M.fromListWith (++)
+           . map (\τ -> (sState τ, [τ]))
+           $ transitions a
+        τs q = M.findWithDefault [] q τm
 
 -- | A 'Transition' contains a source state, a symbol, a (unary) predicate (on
 --   the storage), a (unary) nondeterministic function (on the storage), and a
@@ -83,4 +86,4 @@ runTransitions
   -> [Configuration q s σ]             -- ^ 'L.List' of final 'Configuration's
 runTransitions τs c = concatMap (apply c) . τs $ state c
   where apply (Configuration _ s w) (Transition _ v p i q')
-          = [Configuration q' s' $ drop (length v) w | p s, v `isPrefixOf` w, s' <- i s]
+          = [Configuration q' s' w' | w' <- maybeToList (v `stripPrefix` w), p s, s' <- i s]

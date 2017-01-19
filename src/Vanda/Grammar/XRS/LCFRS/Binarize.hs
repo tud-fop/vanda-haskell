@@ -10,7 +10,8 @@
 -- ---------------------------------------------------------------------------
 
 module Vanda.Grammar.XRS.LCFRS.Binarize
-( binarizeNaively
+( Binarizer
+, binarizeNaively
 , binarizeByAdjacency
 , binarizeHybrid
 , binarizeUsing
@@ -225,11 +226,13 @@ getFoNTArrayFromRules = toArray . foldl worker M.empty
                                      Just _  -> m
 
 
+type Binarizer =  A.Array NTIdent Fanout -> (Rule, Double) -> [(ProtoRule, Double)]
+
 {-------------------------------------------------
 - Naive Binarization (always fuses last two NTs) -
 -------------------------------------------------}
 
-binarizeNaively :: A.Array NTIdent Fanout -> (Rule, Double) -> [(ProtoRule, Double)]
+binarizeNaively :: Binarizer
 binarizeNaively fanouts r = binWorker (ruleToProto fanouts r)
   where
     binWorker :: (ProtoRule, Double) -> [(ProtoRule, Double)]
@@ -346,17 +349,13 @@ getCurPosFromIndex rhs i = fromJust $ elemIndex i $ map fst rhs
 
 binarizeHybrid
   :: Int -- ^ bound for the rank up to which we binarize optimally
-  -> A.Array NTIdent Fanout
-  -> (Rule, Double)
-  -> [(ProtoRule, Double)]
+  -> Binarizer
 binarizeHybrid b a r@(((_, nts), _), _)
   = (if length nts <= b then binarizeByAdjacency else binarizeNaively) a r
 
 
 binarizeByAdjacency
-  :: A.Array NTIdent Fanout
-  -> (Rule, Double)
-  -> [(ProtoRule, Double)]
+  :: Binarizer
 binarizeByAdjacency fanouts r@(((_, rhs), h'), _)
   | getRk r <= 2 = [ruleToProto fanouts r]
   | otherwise = crunchRule $ tryAdjacenciesFrom $ getFo r

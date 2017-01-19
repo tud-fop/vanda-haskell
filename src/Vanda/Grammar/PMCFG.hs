@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveGeneric, DeriveAnyClass #-}
+
 -- (c) 2016 Tobias Denkinger <Tobias.Denkinger@tu-dresden.de>
 --
 -- Technische Universität Dresden / Faculty of Computer Science / Institute
@@ -37,17 +39,20 @@ module Vanda.Grammar.PMCFG
   ) where
 
 import Control.Arrow (first)
+import Control.DeepSeq (NFData)
 import qualified Control.Error
 import qualified Data.Binary as B
 import Data.Hashable
 import Data.List (intercalate)
 import Data.Maybe (listToMaybe)
 import Data.Tree
+import GHC.Generics (Generic)
+
 
 errorHere :: String -> String -> a
 errorHere = Control.Error.errorHere "Vanda.Grammar.PMCFG"
 
-data VarT t = T t | Var !Int !Int deriving (Eq, Ord, Show)
+data VarT t = T t | Var !Int !Int deriving (Eq, Ord, Show, Generic, NFData)
 
 instance (Hashable t) => Hashable (VarT t) where
   salt `hashWithSalt` (T t) = salt `hashWithSalt` t
@@ -87,7 +92,7 @@ instance B.Binary t => B.Binary (VarT t) where
 
 
 -- | 'Rule' ((A, [A₁, …, Aₖ]), f) ~ A → f(A₁, …, Aₖ).
-newtype Rule nt t = Rule ((nt, [nt]), [[VarT t]]) deriving (Eq, Ord, Show)
+newtype Rule nt t = Rule ((nt, [nt]), [[VarT t]]) deriving (Eq, Ord, Show, Generic, NFData)
 
 instance (Hashable nt, Hashable t) => Hashable (Rule nt t) where
   salt `hashWithSalt` (Rule tup) = salt `hashWithSalt` tup
@@ -96,11 +101,11 @@ instance Functor (Rule nt) where
   fmap f (Rule (nts, varts)) = Rule (nts, map (map (fmap f)) varts)
 
 instance (B.Binary nt, B.Binary t) => B.Binary (Rule nt t) where
-  get = B.get
+  get = Rule <$> B.get
   put (Rule x) = B.put x
 
 
-data PMCFG nt t = PMCFG [nt] [Rule nt t] deriving Show
+data PMCFG nt t = PMCFG [nt] [Rule nt t] deriving (Show, Generic, NFData)
 
 instance Functor (PMCFG nt) where
   fmap f (PMCFG ints rs) = PMCFG ints $ map (fmap f) rs
@@ -118,7 +123,7 @@ fromRules
 fromRules = PMCFG
 
 
-data WPMCFG nt w t = WPMCFG [nt] [(Rule nt t, w)] deriving Show
+data WPMCFG nt w t = WPMCFG [nt] [(Rule nt t, w)] deriving (Show, Generic, NFData)
 
 instance Functor (WPMCFG nt w) where
   fmap f (WPMCFG ints rs) = WPMCFG ints $ map (first (fmap f)) rs
