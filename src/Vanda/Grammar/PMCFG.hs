@@ -95,7 +95,7 @@ instance Functor (Rule nt) where
   fmap f (Rule (nts, varts)) = Rule (nts, map (map (fmap f)) varts)
 
 instance (B.Binary nt, B.Binary t) => B.Binary (Rule nt t) where
-  get = B.get
+  get = Rule <$> B.get
   put (Rule x) = B.put x
 
 
