@@ -6,6 +6,14 @@
 module Vanda.Grammar.PMCFG.CYKParser
     ( parse
     , weightedParse
+    , Range
+    , Rangevector
+    , Function
+    , InstantiatedFunction
+    , concVarRange
+    , toRange
+    , isNonOverlapping
+    , instantiate
     ) where
 
 import Vanda.Grammar.PMCFG.DeductiveSolver (solve, DeductiveSolver(DeductiveSolver), DeductiveRule(DeductiveRule))
@@ -29,7 +37,7 @@ type WeightedDeductiveItem nt t wt = (DeductiveItem nt t, wt)
 type Function t = [[VarT t]]
 -- | An instantiated composition function. 
 -- Terminals are substituted by thir corresponding ranges in the word.
-type InstantiatedFunction = [[VarT Range]]
+type InstantiatedFunction = Function Range
 
 instance (Ord t) => Ord (Tree t) where
   compare (Node x xs) (Node y ys)
@@ -45,18 +53,24 @@ parse :: (Ord t, Ord nt, Hashable t, Hashable nt)
       => PMCFG nt t                               -- ^ the grammar
       -> [t]                                      -- ^ the word
       -> [Tree (Rule nt t)]                       -- ^ list of derivation trees 
-parse (PMCFG s rules) w = map (\ (_, _, t) -> t) $ filter (\ (a, rho, _) -> (a `elem` s) && (rho == [Just (0, length w)])) $ solve ds
+parse (PMCFG s rules) w = map (\ (_, _, t) -> t) 
+                          $ filter (\ (a, rho, _) -> (a `elem` s) && (rho == [expectedRange])) 
+                          $ solve ds
   where
     ds = DeductiveSolver (makeRules w rules) id
+    expectedRange = if not $ null w then Just (0, length w) else Nothing
 
 -- | Top-level function to parse a word using a weighted grammar.
 weightedParse :: (Ord t, Ord nt, Hashable t, Hashable nt, Num wt, Ord wt, Hashable wt)
               => WPMCFG nt wt t             -- ^ weighted grammar
               -> [t]                        -- ^ word
-              -> [(Tree (Rule nt t), wt)]   -- ^ parse trees and resulting weights
-weightedParse (WPMCFG s rs) w = map (\ ((_, _, t), w) -> (t, w)) $ filter (\ ((a, rho, _), _) -> (a `elem` s) && (rho == [Just (0, length w)])) $ solve ds
+              -> [Tree (Rule nt t)]   -- ^ parse trees and resulting weights
+weightedParse (WPMCFG s rs) w = map (\ ((_, _, t), _) -> t) 
+                                $ filter (\ ((a, rho, _), _) -> (a `elem` s) && (rho == [expectedRange])) 
+                                $ solve ds
   where
     ds = DeductiveSolver (makeWeightedRules w rs) sort
+    expectedRange = if not $ null w then Just (0, length w) else Nothing
 
 -- | Constructs deduction rules using a weighted grammar.
 -- Weights are stored in antecedent items and apllication functions of rules.
@@ -67,9 +81,13 @@ makeWeightedRules :: (Eq nt, Num wt, Eq t, Ord wt)
 makeWeightedRules w rs = rs >>= makeRule w
   where
     makeRule :: (Eq nt, Num wt, Eq t, Ord wt) => [t] -> (Rule nt t, wt) -> [DeductiveRule (DeductiveItem nt t, wt)]
-    makeRule w r@(Rule ((a, as), f), weight) = [ DeductiveRule (map itemFilter as) (application r inst) | inst <- instantiate w f ]
+    makeRule w r@(Rule ((a, as), f), weight) =  [ DeductiveRule (map itemFilter as) (application r inst) 
+                                                | inst <- instantiate w f 
+                                                ]
+    
     itemFilter :: (Eq nt, Num wt, Ord wt) => nt -> (DeductiveItem nt t, wt) -> Bool
     itemFilter a ((a', _, _), weight) = a == a' && weight > 0
+    
     application :: (Num wt, Ord wt) => (Rule nt t, wt) -> InstantiatedFunction -> [(DeductiveItem nt t, wt)] -> Maybe (DeductiveItem nt t, wt)
     application (r@(Rule ((a, as), f)), weight) fs is = case  insert rvs fs of
                                                               Just rv ->  if isNonOverlapping rv && newWeight > 0
@@ -90,9 +108,13 @@ makeRules :: (Eq t, Eq nt)
 makeRules w rs = rs >>= makeRule w
   where
     makeRule :: (Eq t, Eq nt) => [t] -> Rule nt t -> [DeductiveRule (DeductiveItem nt t)]
-    makeRule w r@(Rule ((_, as), f)) = [ DeductiveRule (map itemFilter as) (application r inst) | inst <- instantiate w f ]
+    makeRule w r@(Rule ((_, as), f)) =  [ DeductiveRule (map itemFilter as) (application r inst) 
+                                        | inst <- instantiate w f 
+                                        ]
+    
     itemFilter :: (Eq nt) =>  nt -> DeductiveItem nt t -> Bool
     itemFilter a (a', _, _) = a == a'
+    
     application :: Rule nt t -> InstantiatedFunction -> [DeductiveItem nt t] -> Maybe (DeductiveItem nt t)
     application r@(Rule ((a, _), _)) fs is = case insert rvs fs of
                                                   Just rv ->  if isNonOverlapping rv 
@@ -108,7 +130,7 @@ instantiate :: (Eq t)
             => [t]                    -- ^ the word
             -> Function t             -- ^ the function to instantiate
             -> [InstantiatedFunction] -- ^ all possible combinations of instances with valid concatenated ranges
-instantiate w = mapM (mapMaybe concRange . sequence . instantiateComponent w)
+instantiate w = mapM (mapMaybe concVarRange . sequence . instantiateComponent w)
   where
     instantiateComponent :: (Eq t) => [t] -> [VarT t] -> [[VarT Range]]   -- ^ instantiates a function component, returns list of possible ranges for each character
     instantiateComponent _ []             = [[ T Nothing ]]
@@ -116,16 +138,6 @@ instantiate w = mapM (mapMaybe concRange . sequence . instantiateComponent w)
     instantiateComponent _ [Var i j]      = [[ Var i j ]]
     instantiateComponent w (T t : fs)     = map (T . Just . (\ i -> (i, i+1))) (elemIndices t w) : instantiateComponent w fs
     instantiateComponent w (Var i j : fs) = [ Var i j ] : instantiateComponent w fs
-    concRange :: [VarT Range] -> Maybe [VarT Range]     -- ^ tries to concatenate ranges of one component, variables are left as they are
-    concRange (T (Just (i, j)) : T (Just (k, l)) : is)
-      | j == k = concRange $ (T $ Just (i, l)) : is
-      | otherwise = Nothing
-    concRange (T Nothing : (i : is)) = concRange $ i:is
-    concRange (i : (T Nothing : is)) = concRange $ i:is
-    concRange (i:is) = case concRange is of
-                            Nothing -> Nothing
-                            Just is' -> Just $ i:is'
-    concRange [] = Just []
 
 -- | Checks for overlapping components in a range vector.
 isNonOverlapping :: Rangevector -> Bool
@@ -140,20 +152,29 @@ isNonOverlapping = isNonOverlapping' []
 
 -- | Replaces variables with corresponding ranges. Fails if ranges do not fit in their context.
 insert :: [Rangevector] -> InstantiatedFunction -> Maybe Rangevector
-insert rvs = mapM (concRange . map (insert rvs))
+--insert rvs = mapM (concRange . map (insert rvs))
+insert rvs = mapM ((>>= toRange) . concVarRange . map (insert' rvs))
   where
-    insert :: [Rangevector] -> VarT Range -> Range
-    insert _ (T m)        = m
-    insert rvs (Var x y)  = rvs !! x !! y
-    concRange :: [Range] -> Maybe Range
-    concRange (Just (i, j): (Just (k, l) : rs))
-      | j == k                      = concRange $ Just (i, l) : rs
-      | otherwise                   = Nothing
-    concRange (Nothing : (i : is))  = concRange $ i:is
-    concRange (i : (Nothing : is))  = concRange $ i:is
-    concRange [Nothing]             = Just Nothing
-    concRange [Just r]              = Just $ Just r
+    insert' :: [Rangevector] -> VarT Range -> VarT Range
+    insert' rvs (Var x y)  = T $ rvs !! x !! y
+    insert' _ r = r
 
+
+concVarRange :: [VarT Range] -> Maybe [VarT Range]
+concVarRange (T (Just (i, j)) : T (Just (k, l)) : is)
+  | j == k = concVarRange $ (T $ Just (i, l)) : is
+  | otherwise = Nothing
+concVarRange (T Nothing : (i : is)) = concVarRange $ i:is
+concVarRange (i : (T Nothing : is)) = concVarRange $ i:is
+concVarRange (i:is) = case concVarRange is of
+                            Nothing -> Nothing
+                            Just is' -> Just $ i:is'
+concVarRange [] = Just []
+
+
+toRange :: [VarT Range] -> Maybe Range
+toRange [T r] = Just r
+toRange _ = Nothing
 
 {-
 for testing:

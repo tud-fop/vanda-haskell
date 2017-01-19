@@ -123,7 +123,8 @@ library
     , Vanda.Grammar.PMCFG.Functions                
     , Vanda.Grammar.PMCFG.Main                
     , Vanda.Grammar.PMCFG.Parse               
-    , Vanda.Grammar.PMCFG.CYKParser               
+    , Vanda.Grammar.PMCFG.CYKParser           
+    , Vanda.Grammar.PMCFG.NaiveParser               
     , Vanda.Grammar.PMCFG.DeductiveSolver
     , Vanda.Grammar.XRS.Binarize
     , Vanda.Grammar.XRS.Functions

@@ -1,9 +1,9 @@
-module Vanda.Grammar.PMCFG.CYKParserTest
+module Vanda.Grammar.PMCFG.NaiveParserTest
     (tests) where
 
 import Test.HUnit
 import Vanda.Grammar.PMCFG
-import Vanda.Grammar.PMCFG.CYKParser
+import Vanda.Grammar.PMCFG.NaiveParser
 import Data.Maybe (mapMaybe)
 
 tests :: Test
