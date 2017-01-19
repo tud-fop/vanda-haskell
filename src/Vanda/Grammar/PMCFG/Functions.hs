@@ -12,6 +12,7 @@
 module Vanda.Grammar.PMCFG.Functions
   ( fromPLCFRS
   , extractFromNegra
+  , extractFromNegraAndBinarize
   ) where
 
 import           Control.Arrow                           (first)
@@ -22,6 +23,7 @@ import           Vanda.Corpus.Negra                      (Negra)
 import           Vanda.Grammar.PMCFG                     (WPMCFG, fromWeightedRules, Rule (..))
 import qualified Vanda.Grammar.PMCFG                as M (VarT (..))
 import           Vanda.Grammar.XRS.LCFRS                 (PLCFRS, getNonterminalFanout, NTIdent)
+import           Vanda.Grammar.XRS.LCFRS.Binarize        (Binarizer, binarizeUsing)
 import           Vanda.Grammar.XRS.LCFRS.Extraction      (extractPLCFRSFromNegra)
 
 fromPLCFRS :: PLCFRS -> WPMCFG String Double String
@@ -45,3 +47,9 @@ fromPLCFRS g@(is, rs, (mnt, mt))
 
 extractFromNegra :: Negra -> WPMCFG String Double String
 extractFromNegra = fromPLCFRS . extractPLCFRSFromNegra
+
+extractFromNegraAndBinarize
+  :: Binarizer
+  -> Negra
+  -> WPMCFG String Double String
+extractFromNegraAndBinarize strategy = fromPLCFRS . binarizeUsing strategy . extractPLCFRSFromNegra
