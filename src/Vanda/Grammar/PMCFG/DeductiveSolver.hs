@@ -32,7 +32,7 @@ solve :: (Eq it, Ord it, Hashable it)
       -> [it]                         -- ^ all (filtered) items, that were deducted
 solve s@(DeductiveSolver rs f) = evalState (deductiveIteration s) (initSet, initSet)
   where
-    initSet = fromList $ f $ deductiveStep [] rs
+    initSet = fromList $ f $ deductiveStep [] [] rs
 
 -- | Recursion that solves the deduction system.
 -- Applies all valid combination of rules to all items as antecedents until there are no new items.
@@ -42,17 +42,19 @@ deductiveIteration  :: (Eq it, Ord it, Hashable it)
 deductiveIteration s@(DeductiveSolver rs f) = do  (c, newItems') <- get
                                                   let newItems = fromList $ filter (not . flip member c) $ deductiveStep (toList newItems') (toList c) rs
                                                   if null newItems
-                                                  then return $ f $ toList c
-                                                  else do put (fromList $ f $ toList (c `union` newItems), newItems)
-                                                          deductiveIteration s
+                                                    then return $ f $ toList c
+                                                    else do put (fromList $ f $ toList (c `union` newItems), newItems)
+                                                            deductiveIteration s
 
 -- | A step to apply all rules for all possible antecedents.
-deductiveStep :: [it] -> [it] -> [DeductiveRule it] -> [it]
+deductiveStep :: (Eq it) => [it] -> [it] -> [DeductiveRule it] -> [it]
 deductiveStep forcedItems is rs = rs >>= ruleApplication forcedItems is
 
 -- | Application of one rule to all possible antecedents.
-ruleApplication :: [it] -> [it] -> DeductiveRule it -> [it]
+ruleApplication :: (Eq it) => [it] -> [it] -> DeductiveRule it -> [it]
 ruleApplication forcedItems is (DeductiveRule fs app) = mapMaybe app candidates
   where
-    candidates = filter (any . map (`elem` forcedItems)) $ mapM (`filter` is) fs
+    candidates =  if null fs
+                  then [[]]
+                  else filter (any (`elem` forcedItems)) $ mapM (`filter` is) fs
 

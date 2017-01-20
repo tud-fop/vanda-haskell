@@ -141,9 +141,9 @@ instantiate w = mapM (mapMaybe concVarRange . sequence . instantiateComponent w)
     instantiateComponent :: (Eq t) => [t] -> [VarT t] -> [[VarT Range]]
     instantiateComponent _ []         = [[ T Nothing ]]
     instantiateComponent w fs         = map (instantiateCharacter w) fs
-    instantiateCharacter :: [t] -> VarT t -> [VarT Range]
+    instantiateCharacter :: (Eq t) => [t] -> VarT t -> [VarT Range]
     instantiateCharacter _ (Var i j)  = [Var i j]
-    instantiateCharacter w (T c)      = map (T . Just . (\ i -> (i, i+1))) $ elemIndices t w
+    instantiateCharacter w (T c)      = map (T . Just . (\ i -> (i, i+1))) $ elemIndices c w
 
 -- | Checks for overlapping components in a range vector.
 isNonOverlapping :: Rangevector -> Bool

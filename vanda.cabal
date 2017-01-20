@@ -42,6 +42,7 @@ library
     , mtl
     , parallel >= 3.2
     , parsec >= 3.1.2
+    , pqueue
     , pretty
     , QuickCheck
     , random
@@ -182,6 +183,7 @@ executable Vanda
     , mtl
     , parallel >= 3.2
     , parsec >= 3.1.2
+    , pqueue
     , pretty
     , QuickCheck
     , random
