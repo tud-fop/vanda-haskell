@@ -2,11 +2,13 @@
 -- | NaiveParser
 --
 -----------------------------------------------------
-
 module Vanda.Grammar.PMCFG.CYKParser
     ( parse
     , weightedParse
     , instantiate
+    -- * derivation trees
+    , Derivation(Derivation)
+    , node
     -- * Ranges
     , Range
     , Rangevector
@@ -20,7 +22,8 @@ module Vanda.Grammar.PMCFG.CYKParser
     , toRange
     ) where
 
-import Vanda.Grammar.PMCFG.DeductiveSolver (solve, DeductiveSolver(DeductiveSolver), DeductiveRule(DeductiveRule))
+import Vanda.Grammar.PMCFG.DeductiveSolver (DeductiveRule(DeductiveRule))
+import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (solve, WeightedDeductiveSolver(WeightedDeductiveSolver))
 import Vanda.Grammar.PMCFG
 import Data.Tree (Tree(Node))
 import Data.Hashable (Hashable, hashWithSalt)
@@ -32,38 +35,44 @@ type Range = Maybe (Int, Int)
 type Rangevector = [Range]
 
 -- | Item of naive parsing deduction. 
--- Tuple of nonterminal, spanning range vector, derivation tree.
-type DeductiveItem nt t = (nt, Rangevector, Tree (Rule nt t))
-
--- | Adds weight to item.
-type WeightedDeductiveItem nt t wt = (DeductiveItem nt t, wt)
+-- Tuple of non-terminal, spanning range vector, derivation tree.
+type DeductiveItem nt t = (nt, Rangevector, Derivation nt t)
 
 -- | A composition function.
 type Function t = [[VarT t]]
 
 -- | An instantiated composition function. 
--- Terminals are substituted by thir corresponding ranges in the word.
+-- Terminals are substituted by their corresponding ranges in the word.
 type InstantiatedFunction = Function Range
 
-instance (Ord t) => Ord (Tree t) where
-  compare (Node x xs) (Node y ys)
+-- | A derivation tree.
+newtype Derivation nt t = Derivation (Tree (Rule nt t)) deriving (Eq, Show)
+
+-- | Wraps Node constructor of Tree to easy use of Derivation.
+node :: Rule nt t -> [Derivation nt t] -> Derivation nt t
+node r ds = Derivation $ Node r ts
+  where
+    ts = map (\ (Derivation t) -> t) ds
+
+instance (Ord nt, Ord t) => Ord (Derivation nt t) where
+  compare (Derivation (Node x xs)) (Derivation (Node y ys))
     | x < y = LT
     | x > y = GT
-    | otherwise = compare xs ys
+    | otherwise = map Derivation xs `compare` map Derivation ys
 
-instance (Hashable t) => Hashable (Tree t) where
-  salt `hashWithSalt` (Node x xs) = salt `hashWithSalt` x `hashWithSalt` xs
+instance (Hashable t, Hashable nt) => Hashable (Derivation nt t) where
+  salt `hashWithSalt` (Derivation (Node x xs)) = salt `hashWithSalt` x `hashWithSalt` map Derivation xs
 
 -- | Top-level function to parse a word using a grammar.
 parse :: (Ord t, Ord nt, Hashable t, Hashable nt)
       => PMCFG nt t                               -- ^ the grammar
       -> [t]                                      -- ^ the word
       -> [Tree (Rule nt t)]                       -- ^ list of derivation trees 
-parse (PMCFG s rules) w = map (\ (_, _, t) -> t) 
+parse (PMCFG s rules) w = map (\ (_, _, Derivation t) -> t) 
                           $ filter (\ (a, rho, _) -> (a `elem` s) && (rho == [expectedRange])) 
                           $ solve ds
   where
-    ds = DeductiveSolver (makeRules w rules) id
+    ds = WeightedDeductiveSolver (makeWeightedRules w (zip rules (repeat 1 :: [Int]))) id
     expectedRange = if not $ null w then Just (0, length w) else Nothing
 
 -- | Top-level function to parse a word using a weighted grammar.
@@ -71,72 +80,46 @@ weightedParse :: (Ord t, Ord nt, Hashable t, Hashable nt, Num wt, Ord wt, Hashab
               => WPMCFG nt wt t             -- ^ weighted grammar
               -> [t]                        -- ^ word
               -> [Tree (Rule nt t)]   -- ^ parse trees and resulting weights
-weightedParse (WPMCFG s rs) w = map (\ ((_, _, t), _) -> t) 
-                                $ filter (\ ((a, rho, _), _) -> (a `elem` s) && (rho == [expectedRange])) 
+weightedParse (WPMCFG s rs) w = map (\ (_, _, Derivation t) -> t) 
+                                $ filter (\ (a, rho, _) -> (a `elem` s) && (rho == [expectedRange])) 
                                 $ solve ds
   where
-    ds = DeductiveSolver (makeWeightedRules w rs) sort
+    ds = WeightedDeductiveSolver (makeWeightedRules w rs) sort
     expectedRange = if not $ null w then Just (0, length w) else Nothing
 
 -- | Constructs deduction rules using a weighted grammar.
--- Weights are stored in antecedent items and apllication functions of rules.
+-- Weights are stored in antecedent items and application functions of rules.
 makeWeightedRules :: (Eq nt, Num wt, Eq t, Ord wt) 
                   => [t]                                      -- ^ word 
                   -> [(Rule nt t, wt)]                        -- ^ weighted grammar rules
-                  -> [DeductiveRule (DeductiveItem nt t, wt)] -- ^ weighted deduction rules 
+                  -> [(DeductiveRule (DeductiveItem nt t), wt)] -- ^ weighted deduction rules 
 makeWeightedRules w rs = rs >>= makeRule w
   where
-    makeRule :: (Eq nt, Num wt, Eq t, Ord wt) => [t] -> (Rule nt t, wt) -> [DeductiveRule (DeductiveItem nt t, wt)]
-    makeRule w r@(Rule ((a, as), f), weight) =  [ DeductiveRule (map itemFilter as) (application r inst) 
-                                                | inst <- instantiate w f 
-                                                ]
-    
-    itemFilter :: (Eq nt, Num wt, Ord wt) => nt -> (DeductiveItem nt t, wt) -> Bool
-    itemFilter a ((a', _, _), weight) = a == a' && weight > 0
-    
-    application :: (Num wt, Ord wt) => (Rule nt t, wt) -> InstantiatedFunction -> [(DeductiveItem nt t, wt)] -> Maybe (DeductiveItem nt t, wt)
-    application (r@(Rule ((a, as), f)), weight) fs is = case  insert rvs fs of
-                                                              Just rv ->  if isNonOverlapping rv && newWeight > 0
-                                                                          then Just ((a, rv, Node r ts), newWeight)
-                                                                          else Nothing
-                                                              Nothing -> Nothing
-      where
-        (antecedents, weights) = unzip is
-        (rvs, ts) = case  unzip3 antecedents of
-                          (_, rvs, ts) -> (rvs, ts)
-        newWeight = weight * product weights
+    makeRule :: (Eq nt, Num wt, Eq t, Ord wt) => [t] -> (Rule nt t, wt) -> [(DeductiveRule (DeductiveItem nt t), wt)]
+    makeRule w' (r@(Rule ((_, as), f)), weight) =  [ (DeductiveRule (map itemFilter as) (application r inst), weight) 
+                                                    | inst <- instantiate w' f 
+                                                    ]
 
--- | Constructs deduction rules for a grammar to parse a word.
-makeRules :: (Eq t, Eq nt) 
-          => [t]                                  -- ^ the word, functions are instantiated to it
-          -> [Rule nt t]                          -- ^ grammar rules
-          -> [DeductiveRule (DeductiveItem nt t)] -- ^ resulting deduction rules with corresponding item type
-makeRules w rs = rs >>= makeRule w
-  where
-    makeRule :: (Eq t, Eq nt) => [t] -> Rule nt t -> [DeductiveRule (DeductiveItem nt t)]
-    makeRule w r@(Rule ((_, as), f)) =  [ DeductiveRule (map itemFilter as) (application r inst) 
-                                        | inst <- instantiate w f 
-                                        ]
+    itemFilter :: (Eq nt) => nt -> DeductiveItem nt t -> Bool
+    itemFilter a (a', _, _)= a == a'
     
-    itemFilter :: (Eq nt) =>  nt -> DeductiveItem nt t -> Bool
-    itemFilter a (a', _, _) = a == a'
-    
-    application :: Rule nt t -> InstantiatedFunction -> [DeductiveItem nt t] -> Maybe (DeductiveItem nt t)
-    application r@(Rule ((a, _), _)) fs is = case insert rvs fs of
-                                                  Just rv ->  if isNonOverlapping rv 
-                                                              then Just (a, rv, Node r ts)
-                                                              else Nothing
-                                                  Nothing -> Nothing
+    application :: (Rule nt t) -> InstantiatedFunction -> [DeductiveItem nt t] -> Maybe (DeductiveItem nt t)
+    application r@(Rule ((a', _), _)) fs is = case  insert rvs fs of
+                                                    Just rv ->  if isNonOverlapping rv
+                                                                then Just (a', rv, node r ts)
+                                                                else Nothing
+                                                    Nothing -> Nothing
       where
         (rvs, ts) = case  unzip3 is of
-                          (_, rvs, ts) -> (rvs, ts)
+                          (_, rvs', ts') -> (rvs', ts')
 
--- | Returns a list of all possible instantiations of a composition function for a word.
+
+-- | Returns a list of all possible instances of a composition function for a word.
 instantiate :: (Eq t)
             => [t]                    -- ^ the word
             -> Function t             -- ^ the function to instantiate
             -> [InstantiatedFunction] -- ^ all possible combinations of instances with valid concatenated ranges
-instantiate w = mapM (mapMaybe concVarRange . sequence . instantiateComponent w)
+instantiate w' = mapM (mapMaybe concVarRange . sequence . instantiateComponent w')
   where
     instantiateComponent :: (Eq t) => [t] -> [VarT t] -> [[VarT Range]]
     instantiateComponent _ []         = [[ T Nothing ]]
@@ -161,7 +144,7 @@ insert :: [Rangevector] -> InstantiatedFunction -> Maybe Rangevector
 insert rvs = mapM ((>>= toRange) . concVarRange . map (insert' rvs))
   where
     insert' :: [Rangevector] -> VarT Range -> VarT Range
-    insert' rvs (Var x y)  = T $ rvs !! x !! y
+    insert' rvs' (Var x y)  = T $ rvs' !! x !! y
     insert' _ r = r
 
 -- | Tries to concatenate ranges in an instantiated function component.
@@ -196,6 +179,3 @@ prettyPrintRangevector rs = "<" ++ unwords (map go rs) ++  ">"
   where
     go (Just r) = show r
     go Nothing = "()"
-
-prettyPrintDeductiveItem :: (Show nt, Show t) => DeductiveItem nt t -> String
-prettyPrintDeductiveItem (n, rv, t) = show n ++ ", " ++ prettyPrintRangevector rv ++ ", " ++ show t

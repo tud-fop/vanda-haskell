@@ -10,7 +10,6 @@ module Vanda.Grammar.PMCFG.WeightedDeductiveSolver
 import Data.PQueue.Prio.Max (MaxPQueue, fromList, toDescList, elems, union)
 import Data.Hashable (Hashable)
 import Data.Maybe (mapMaybe)
-import Data.Tuple (swap)
 import Control.Monad.State (State, evalState, get, put)
 import Vanda.Grammar.PMCFG.DeductiveSolver (DeductiveRule(DeductiveRule))
 
@@ -38,9 +37,9 @@ deductiveIteration  :: (Eq it, Ord it, Hashable it, Ord wt, Num wt)
 deductiveIteration s@(WeightedDeductiveSolver rs f) = do  (c, newItems') <- get
                                                           let newItems = filter (not . (`elem` elems c) . snd) $ deductiveStep newItems' (toDescList c) rs
                                                           if null newItems
-                                                          then return $ map snd $ f $ toDescList c
-                                                          else do put (fromList $ f $ toDescList (c `union` fromList newItems), snd $ unzip newItems)
-                                                                  deductiveIteration s
+                                                            then return $ map snd $ f $ toDescList c
+                                                            else do put (fromList $ f $ toDescList (c `union` fromList newItems), snd $ unzip newItems)
+                                                                    deductiveIteration s
 
 -- | A step to apply all rules for all possible antecedents.
 deductiveStep :: (Num wt, Eq it) => [it] -> [(wt, it)] -> [(DeductiveRule it, wt)] -> [(wt, it)]
@@ -48,14 +47,14 @@ deductiveStep forcedItems is rs = rs >>= ruleApplication forcedItems is
 
 -- | Application of one rule to all possible antecedents.
 ruleApplication :: (Num wt, Eq it) => [it] -> [(wt, it)] -> (DeductiveRule it, wt) -> [(wt, it)]
-ruleApplication forcedItems is d@(DeductiveRule fs app, w) = mapMaybe (`ruleApplication'` d) candidates 
+ruleApplication forcedItems is (DeductiveRule fs app, w) = mapMaybe ruleApplication' candidates 
   where
     candidates =  if null fs
                   then [[]]
                   else filter (any ((`elem` forcedItems) . snd)) $ mapM ((`filter` is) . (. snd)) fs
-    ruleApplication' :: (Num wt, Eq it) =>[(wt, it)] -> (DeductiveRule it, wt) -> Maybe (wt, it)
-    ruleApplication' is (DeductiveRule fs app, w) = case app antecedents of
-                                                      Just c -> Just (w * product weights, c)
-                                                      Nothing -> Nothing
+    --ruleApplication' :: (Num wt, Eq it) =>[(wt, it)] -> Maybe (wt, it)
+    ruleApplication' is' = case  app antecedents of
+                                  Just c -> Just (w * product weights, c)
+                                  Nothing -> Nothing
       where
-        (weights, antecedents) = unzip is
+        (weights, antecedents) = unzip is'

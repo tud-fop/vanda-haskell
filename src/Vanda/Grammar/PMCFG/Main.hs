@@ -51,7 +51,7 @@ data Args
   deriving Show
 
 data BinarizationStrategy = Naive | Optimal | Hybrid Int deriving (Eq, Show)
-data ParsingAlgorithm = UnweightedAutomaton | UnweightedCYK | CYK | UnweightedNaive deriving (Eq, Show)
+data ParsingAlgorithm = UnweightedAutomaton | UnweightedCYK | CYK | UnweightedNaive | NaiveP deriving (Eq, Show)
 
 cmdArgs :: Mode Args
 cmdArgs
@@ -66,7 +66,7 @@ cmdArgs
     { modeNames = ["parse"]
     , modeHelp = "Parses, given a (w)PMCFG, each in a sequence of sentences."
     , modeArgs = ( [ flagArgGrammar{argRequire = True} ], Nothing )
-    , modeGroupFlags = toGroup  [flagUnweightedAutomaton]
+    , modeGroupFlags = toGroup  [flagUnweightedAutomaton, flagCYK, flagUnweightedCYK, flagNaive, flagUnweightedNaive]
     }
   ]
   where
@@ -79,9 +79,11 @@ cmdArgs
     flagCYK
       = flagNone ["c", "wcyk"] (\ x -> x{flagAlgorithm = CYK}) "use a basic cyk-like deduction system constructed from the grammar"
     flagUnweightedCYK
-      = flagNone ["u", "cyk"] (\ x -> x{flagAlgorithm = UnweightedCYK}) "use an unweighted cyk-like deduction system constructed from the grammar"
+      = flagNone ["cyk"] (\ x -> x{flagAlgorithm = UnweightedCYK}) "use an unweighted cyk-like deduction system constructed from the grammar"
     flagUnweightedNaive
-      = flagNone ["n", "naive"] (\ x -> x{flagAlgorithm = UnweightedNaive}) "use an unweighted binarized deduction system constructed from the grammar"
+      = flagNone ["naive"] (\ x -> x{flagAlgorithm = UnweightedNaive}) "use an unweighted binarized deduction system constructed from the grammar"
+    flagNaive
+      = flagNone ["n", "wnaive"] (\ x -> x{flagAlgorithm = NaiveP}) "use a binarized deduction system constructed from the grammar"
     flagNoneBinarize
       = flagNone ["b", "binarize", "binarise"] (\ x -> x{flagBinarize = True}) "binarize the extracted grammar"
     flagNoneNaive
@@ -120,6 +122,7 @@ mainArgs (Parse algorithm grFile)
       WPMCFG inits wrs <- B.decode . decompress
                           <$> BS.readFile grFile :: IO (WPMCFG String Double String)
       let parse = case algorithm of CYK -> CYK.weightedParse (WPMCFG inits wrs)
+                                    NaiveP -> Naive.weightedParse (WPMCFG inits wrs)
                                     UnweightedCYK -> CYK.parse (PMCFG inits (map fst wrs))
                                     UnweightedNaive -> Naive.parse (PMCFG inits (map fst wrs))
                                     --UnweightedAutomaton -> UnweightedAutomaton.parse (PMCFG inits (map fst wrs))
