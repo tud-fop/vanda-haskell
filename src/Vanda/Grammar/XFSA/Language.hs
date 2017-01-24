@@ -1,9 +1,9 @@
-module XFSA.Language (
+module Vanda.Grammar.XFSA.Language (
   assocLanguage, language, contains,
   wordElem, sortedDerivs
 ) where
 
-import XFSA.Internal
+import Vanda.Grammar.XFSA.Internal
 
 import Data.Foldable
 import qualified Data.Vector as V

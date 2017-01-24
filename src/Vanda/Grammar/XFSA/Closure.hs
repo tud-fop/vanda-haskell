@@ -1,9 +1,9 @@
-module XFSA.Closure (
+module Vanda.Grammar.XFSA.Closure (
   union, concatenate, kleene, intersect,
   construct
 ) where
 
-import XFSA.Internal
+import Vanda.Grammar.XFSA.Internal
 
 import Data.Vector ((!))
 import qualified Control.Applicative as A

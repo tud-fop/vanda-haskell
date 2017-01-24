@@ -1,5 +1,5 @@
 {-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
-module XFSA.Internal (
+module Vanda.Grammar.XFSA.Internal (
   XFSA(..),
   empty, epsilon, singleton,
   fromList, expand, construct,

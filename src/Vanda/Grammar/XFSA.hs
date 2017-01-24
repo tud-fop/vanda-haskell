@@ -1,7 +1,7 @@
-module XFSA (
+module Vanda.Grammar.XFSA (
   module X
 ) where
 
-import XFSA.XFSA as X
-import XFSA.Closure as X
-import XFSA.Language as X
+import Vanda.Grammar.XFSA.XFSA as X
+import Vanda.Grammar.XFSA.Closure as X
+import Vanda.Grammar.XFSA.Language as X

@@ -1,5 +1,5 @@
-module XFSA.XFSA (
-  module XFSA.Internal
+module Vanda.Grammar.XFSA.XFSA (
+  module Vanda.Grammar.XFSA.Internal
 ) where
 
-import XFSA.Internal (XFSA, empty, epsilon, singleton, fromList, expand)
+import Vanda.Grammar.XFSA.Internal (XFSA, empty, epsilon, singleton, fromList, expand)

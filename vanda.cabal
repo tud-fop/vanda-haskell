@@ -49,6 +49,7 @@ library
     , stm
     , text
     , time
+    , transformers
     , unix
     , unordered-containers
     , vector
@@ -132,6 +133,11 @@ library
     , Vanda.Grammar.XRS.LCFRS.Extraction
     , Vanda.Grammar.XRS.LCFRS.Main
     , Vanda.Grammar.XRS.Text
+    , Vanda.Grammar.XFSA
+    , Vanda.Grammar.XFSA.Closure
+    , Vanda.Grammar.XFSA.Internal
+    , Vanda.Grammar.XFSA.Language
+    , Vanda.Grammar.XFSA.XFSA
     , Vanda.Hypergraph
     , Vanda.Hypergraph.BackwardStar
     , Vanda.Hypergraph.Basic
