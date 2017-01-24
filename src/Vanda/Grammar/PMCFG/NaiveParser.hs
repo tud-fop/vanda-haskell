@@ -3,7 +3,7 @@ module Vanda.Grammar.PMCFG.NaiveParser
     , parse
     ) where
 
-import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (solve, WeightedDeductiveSolver(WeightedDeductiveSolver), DeductiveRule(DeductiveRule))
+import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (solve, WeightedDeductiveSolver(..), DeductiveRule(..), Cost(..), Dividable(divide))
 import Vanda.Grammar.PMCFG.CYKParser (InstantiatedFunction, Range, Rangevector, concVarRange, toRange, isNonOverlapping, instantiate, prettyPrintInstantiatedFunction, prettyPrintRangevector, Derivation(Derivation), node)
 import Vanda.Grammar.PMCFG (Rule(Rule), PMCFG(PMCFG), WPMCFG(WPMCFG), VarT(Var, T), prettyPrintRule)
 import Data.Hashable (Hashable, hashWithSalt)
@@ -25,10 +25,17 @@ instance (Show nt, Show t) => Show (Item nt t) where
     show (PassiveItem (a, rv, _)) = "[passive] " ++ show a ++ " " ++ prettyPrintRangevector rv 
 
 -- | Top-level function to parse a word using a PMCFG.
-parse :: (Eq t, Eq nt, Ord t, Ord nt, Hashable t, Hashable nt) => PMCFG nt t -> [t] -> [Tree (Rule nt t)]
-parse (PMCFG s rs) = weightedParse $ WPMCFG s $ zip rs $ repeat 1 
+parse :: (Ord t, Ord nt) 
+      => PMCFG nt t         -- ^ unweighted grammar
+      -> [t]                -- ^ terminal word
+      -> [Tree (Rule nt t)] -- ^ derivation tree of applied rules
+parse (PMCFG s rs) = weightedParse $ WPMCFG s $ zip rs $ repeat (Cost 1 :: Cost Double)
 
-weightedParse :: (Eq t, Eq nt, Ord t, Ord nt, Hashable t, Hashable nt, Num wt, Floating wt, Ord wt) => WPMCFG nt wt t -> [t] -> [Tree (Rule nt t)]
+-- | Top-level function to parse a word using a weighted PMCFG.
+weightedParse :: (Ord t, Ord nt, Ord wt, Monoid wt, Dividable wt) 
+              => WPMCFG nt wt t     -- ^ weighted grammar
+              -> [t]                -- ^ terminal word
+              -> [Tree (Rule nt t)] -- ^ derivation tree of applied rules
 weightedParse (WPMCFG s rs) w = map (\ (PassiveItem (_, _, Derivation t)) -> t) 
                         $ filter (resultfilter s targetrange)
                         $ solve ds
@@ -45,12 +52,12 @@ weightedParse (WPMCFG s rs) w = map (\ (PassiveItem (_, _, Derivation t)) -> t)
 -- * prediction: initializes an active item without using antecendents
 -- * completion: step-by-step substituting of variables in instantiated function using ranges of passive items
 -- * conversion: converts an active item into a passive one, if there are no variables left
-makeRule :: (Eq nt, Eq t, Floating wt) => [t] -> (Rule nt t, wt) -> [(DeductiveRule (Item nt t), wt)]
-makeRule w (r@(Rule ((_, as), f)), weight) = (DeductiveRule [filterConversion r] convert, 1)
-                                              : (DeductiveRule [] (\ [] -> [ ActiveItem (r, as, 0, [], inst) | inst <- instantiate w f ]), 1)
-                                              : [ (DeductiveRule [filterCompletePassive a', filterCompleteActive r] complete, singleNTWeight) | a' <- as ] 
+makeRule :: (Eq nt, Eq t, Monoid wt, Dividable wt) => [t] -> (Rule nt t, wt) -> [(DeductiveRule (Item nt t), wt)]
+makeRule w (r@(Rule ((_, as), f)), weight) = (DeductiveRule [filterConversion r] convert, mempty)
+                                              : (DeductiveRule [] (\ [] -> [ ActiveItem (r, as, 0, [], inst) | inst <- instantiate w f ]), mempty)
+                                              : zip [ DeductiveRule [filterCompletePassive a', filterCompleteActive r] complete | a' <- as ] singleNTWeight
     where
-        singleNTWeight = weight**(1 / (fromIntegral $ length as))
+        singleNTWeight = divide weight $ length as
         filterCompletePassive :: (Eq nt) => nt -> Item nt t -> Bool
         filterCompletePassive a (PassiveItem (a', _, _)) = a == a'
         filterCompletePassive _ _ = False

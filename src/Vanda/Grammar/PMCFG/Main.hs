@@ -34,6 +34,7 @@ import Vanda.Grammar.PMCFG.Functions (extractFromNegra, extractFromNegraAndBinar
 import qualified Vanda.Grammar.PMCFG.Parse as UnweightedAutomaton
 import qualified Vanda.Grammar.PMCFG.CYKParser as CYK
 import qualified Vanda.Grammar.PMCFG.NaiveParser as Naive
+import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (Probabilistic(..))
 import Vanda.Grammar.XRS.LCFRS.Binarize (binarizeNaively, binarizeByAdjacency, binarizeHybrid)
 
 
@@ -121,8 +122,8 @@ mainArgs (Parse algorithm grFile)
   = do
       WPMCFG inits wrs <- B.decode . decompress
                           <$> BS.readFile grFile :: IO (WPMCFG String Double String)
-      let parse = case algorithm of CYK -> CYK.weightedParse (WPMCFG inits wrs)
-                                    NaiveP -> Naive.weightedParse (WPMCFG inits wrs)
+      let parse = case algorithm of CYK -> CYK.weightedParse (WPMCFG inits $ map (\ (r, w) -> (r, Probabilistic w)) wrs)
+                                    NaiveP -> Naive.weightedParse (WPMCFG inits $ map (\ (r, w) -> (r, Probabilistic w)) wrs)
                                     UnweightedCYK -> CYK.parse (PMCFG inits (map fst wrs))
                                     UnweightedNaive -> Naive.parse (PMCFG inits (map fst wrs))
                                     --UnweightedAutomaton -> UnweightedAutomaton.parse (PMCFG inits (map fst wrs))

@@ -22,7 +22,7 @@ module Vanda.Grammar.PMCFG.CYKParser
     , toRange
     ) where
 
-import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (solve, WeightedDeductiveSolver(WeightedDeductiveSolver), DeductiveRule(DeductiveRule))
+import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (solve, WeightedDeductiveSolver(..), DeductiveRule(..), Cost(..))
 import Vanda.Grammar.PMCFG
 import Data.Tree (Tree(Node))
 import Data.Hashable (Hashable, hashWithSalt)
@@ -63,14 +63,14 @@ instance (Hashable t, Hashable nt) => Hashable (Derivation nt t) where
   salt `hashWithSalt` (Derivation (Node x xs)) = salt `hashWithSalt` x `hashWithSalt` map Derivation xs
 
 -- | Top-level function to parse a word using a grammar.
-parse :: (Ord t, Ord nt, Hashable t, Hashable nt)
+parse :: (Ord t, Ord nt)
       => PMCFG nt t                               -- ^ the grammar
       -> [t]                                      -- ^ the word
       -> [Tree (Rule nt t)]                       -- ^ list of derivation trees 
-parse (PMCFG s rules) = weightedParse $ WPMCFG s $ zip rules $ repeat (1::Float)
+parse (PMCFG s rules) = weightedParse $ WPMCFG s $ zip rules $ repeat (Cost 1 :: Cost Int)
 
 -- | Top-level function to parse a word using a weighted grammar.
-weightedParse :: (Ord t, Ord nt, Hashable t, Hashable nt, Num wt, Ord wt, Hashable wt)
+weightedParse :: (Ord t, Ord nt, Monoid wt, Ord wt)
               => WPMCFG nt wt t             -- ^ weighted grammar
               -> [t]                        -- ^ word
               -> [Tree (Rule nt t)]   -- ^ parse trees and resulting weights
@@ -83,7 +83,7 @@ weightedParse (WPMCFG s rs) w = map (\ (_, _, Derivation t) -> t)
 
 -- | Constructs deduction rules using a weighted grammar.
 -- Weights are stored in antecedent items and application functions of rules.
-makeWeightedRules :: (Eq nt, Num wt, Eq t, Ord wt) 
+makeWeightedRules :: (Eq nt, Monoid wt, Eq t, Ord wt) 
                   => [t]                                      -- ^ word 
                   -> [(Rule nt t, wt)]                        -- ^ weighted grammar rules
                   -> [(DeductiveRule (DeductiveItem nt t), wt)] -- ^ weighted deduction rules 
