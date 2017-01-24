@@ -22,8 +22,7 @@ module Vanda.Grammar.PMCFG.CYKParser
     , toRange
     ) where
 
-import Vanda.Grammar.PMCFG.DeductiveSolver (DeductiveRule(DeductiveRule))
-import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (solve, WeightedDeductiveSolver(WeightedDeductiveSolver))
+import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (solve, WeightedDeductiveSolver(WeightedDeductiveSolver), DeductiveRule(DeductiveRule))
 import Vanda.Grammar.PMCFG
 import Data.Tree (Tree(Node))
 import Data.Hashable (Hashable, hashWithSalt)
@@ -68,12 +67,7 @@ parse :: (Ord t, Ord nt, Hashable t, Hashable nt)
       => PMCFG nt t                               -- ^ the grammar
       -> [t]                                      -- ^ the word
       -> [Tree (Rule nt t)]                       -- ^ list of derivation trees 
-parse (PMCFG s rules) w = map (\ (_, _, Derivation t) -> t) 
-                          $ filter (\ (a, rho, _) -> (a `elem` s) && (rho == [expectedRange])) 
-                          $ solve ds
-  where
-    ds = WeightedDeductiveSolver (makeWeightedRules w (zip rules (repeat 1 :: [Int]))) id
-    expectedRange = if not $ null w then Just (0, length w) else Nothing
+parse (PMCFG s rules) = weightedParse $ WPMCFG s $ zip rules $ repeat (1::Float)
 
 -- | Top-level function to parse a word using a weighted grammar.
 weightedParse :: (Ord t, Ord nt, Hashable t, Hashable nt, Num wt, Ord wt, Hashable wt)
@@ -93,22 +87,18 @@ makeWeightedRules :: (Eq nt, Num wt, Eq t, Ord wt)
                   => [t]                                      -- ^ word 
                   -> [(Rule nt t, wt)]                        -- ^ weighted grammar rules
                   -> [(DeductiveRule (DeductiveItem nt t), wt)] -- ^ weighted deduction rules 
-makeWeightedRules w rs = rs >>= makeRule w
+makeWeightedRules w rs =  [ (DeductiveRule (map itemFilter as) (application r $ instantiate w f), weight)
+                          | (r@(Rule ((_, as), f)), weight) <- rs
+                          ]
   where
-    makeRule :: (Eq nt, Num wt, Eq t, Ord wt) => [t] -> (Rule nt t, wt) -> [(DeductiveRule (DeductiveItem nt t), wt)]
-    makeRule w' (r@(Rule ((_, as), f)), weight) =  [ (DeductiveRule (map itemFilter as) (application r inst), weight) 
-                                                    | inst <- instantiate w' f 
-                                                    ]
-
     itemFilter :: (Eq nt) => nt -> DeductiveItem nt t -> Bool
     itemFilter a (a', _, _)= a == a'
     
-    application :: (Rule nt t) -> InstantiatedFunction -> [DeductiveItem nt t] -> Maybe (DeductiveItem nt t)
-    application r@(Rule ((a', _), _)) fs is = case  insert rvs fs of
-                                                    Just rv ->  if isNonOverlapping rv
-                                                                then Just (a', rv, node r ts)
-                                                                else Nothing
-                                                    Nothing -> Nothing
+    application :: (Rule nt t) -> [InstantiatedFunction] -> [DeductiveItem nt t] -> [DeductiveItem nt t]
+    application r@(Rule ((a', _), _)) fs is = [ (a', rv, node r ts) 
+                                              | rv <- mapMaybe (insert rvs) fs
+                                              , isNonOverlapping rv 
+                                              ]
       where
         (rvs, ts) = case  unzip3 is of
                           (_, rvs', ts') -> (rvs', ts')

@@ -3,12 +3,12 @@ module Vanda.Grammar.PMCFG.NaiveParser
     , parse
     ) where
 
-import Vanda.Grammar.PMCFG.DeductiveSolver (DeductiveRule(DeductiveRule))
-import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (solve, WeightedDeductiveSolver(WeightedDeductiveSolver))
+import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (solve, WeightedDeductiveSolver(WeightedDeductiveSolver), DeductiveRule(DeductiveRule))
 import Vanda.Grammar.PMCFG.CYKParser (InstantiatedFunction, Range, Rangevector, concVarRange, toRange, isNonOverlapping, instantiate, prettyPrintInstantiatedFunction, prettyPrintRangevector, Derivation(Derivation), node)
 import Vanda.Grammar.PMCFG (Rule(Rule), PMCFG(PMCFG), WPMCFG(WPMCFG), VarT(Var, T), prettyPrintRule)
 import Data.Hashable (Hashable, hashWithSalt)
 import Data.Tree (Tree)
+import Data.Maybe (maybeToList)
 
 -- | Two types of deductive items:
 -- * active items need to be completet by substituting variables with ranges
@@ -26,16 +26,7 @@ instance (Show nt, Show t) => Show (Item nt t) where
 
 -- | Top-level function to parse a word using a PMCFG.
 parse :: (Eq t, Eq nt, Ord t, Ord nt, Hashable t, Hashable nt) => PMCFG nt t -> [t] -> [Tree (Rule nt t)]
-parse (PMCFG s rs) w = map (\ (PassiveItem (_, _, Derivation t)) -> t) 
-                        $ filter (resultfilter s targetrange)
-                        $ solve ds
-    where
-        ds = WeightedDeductiveSolver ((zip rs (repeat 1 :: [Float])) >>= makeRule w) id
-        targetrange = [ if null w then Nothing else Just (0, length w) ]
-        
-        resultfilter :: (Eq nt) => [nt] -> Rangevector -> Item nt t -> Bool
-        resultfilter start target (PassiveItem (a, rho, _)) = a `elem` start && rho == target
-        resultfilter _ _ _ = False 
+parse (PMCFG s rs) = weightedParse $ WPMCFG s $ zip rs $ repeat 1 
 
 weightedParse :: (Eq t, Eq nt, Ord t, Ord nt, Hashable t, Hashable nt, Num wt, Floating wt, Ord wt) => WPMCFG nt wt t -> [t] -> [Tree (Rule nt t)]
 weightedParse (WPMCFG s rs) w = map (\ (PassiveItem (_, _, Derivation t)) -> t) 
@@ -56,8 +47,8 @@ weightedParse (WPMCFG s rs) w = map (\ (PassiveItem (_, _, Derivation t)) -> t)
 -- * conversion: converts an active item into a passive one, if there are no variables left
 makeRule :: (Eq nt, Eq t, Floating wt) => [t] -> (Rule nt t, wt) -> [(DeductiveRule (Item nt t), wt)]
 makeRule w (r@(Rule ((_, as), f)), weight) = (DeductiveRule [filterConversion r] convert, 1)
-                                              : [ (DeductiveRule [] (\ [] -> Just $ ActiveItem (r, as, 0, [], inst)), 1) | inst <- instantiate w f ]
-                                              ++ [ (DeductiveRule [filterCompletePassive a', filterCompleteActive r] complete, singleNTWeight) | a' <- as ]
+                                              : (DeductiveRule [] (\ [] -> [ ActiveItem (r, as, 0, [], inst) | inst <- instantiate w f ]), 1)
+                                              : [ (DeductiveRule [filterCompletePassive a', filterCompleteActive r] complete, singleNTWeight) | a' <- as ] 
     where
         singleNTWeight = weight**(1 / (fromIntegral $ length as))
         filterCompletePassive :: (Eq nt) => nt -> Item nt t -> Bool
@@ -68,26 +59,25 @@ makeRule w (r@(Rule ((_, as), f)), weight) = (DeductiveRule [filterConversion r]
         filterCompleteActive r' (ActiveItem (r'', _, _, _, _)) = r'' == r'
         filterCompleteActive _ _ = False
 
-        complete :: [Item nt t] -> Maybe (Item nt t)
+        complete :: [Item nt t] -> [Item nt t]
         complete [ PassiveItem (_, rv, t)
                     , ActiveItem ( r'@(Rule ((_, _), _))
-                                , _:as', offset, ts, fs) ] = case mapM concVarRange $ insert offset rv fs of
-                                                                Just fs' -> Just (ActiveItem (r', as', offset+1, t:ts, fs'))
-                                                                Nothing -> Nothing
-        complete _ = Nothing
+                                , _:as', offset, ts, fs) ] =  [ ActiveItem (r', as', offset+1, t:ts, fs')
+                                                              | fs' <- maybeToList $ mapM concVarRange $ insert offset rv fs
+                                                              ]
+        complete _ = []
 
         filterConversion :: (Eq t, Eq nt) => Rule nt t -> Item nt t -> Bool
         filterConversion r'' (ActiveItem (r', [], _, _, _)) = r'' == r'
         filterConversion _ _ = False
 
-        convert :: [Item nt t] -> Maybe (Item nt t)
+        convert :: [Item nt t] -> [(Item nt t)]
         convert [ActiveItem (r'@(Rule ((a, _),_))
-                , [], _, ts, fs)]               = case mapM ((>>= toRange) . concVarRange) fs of
-                                                        Just rv' ->  if isNonOverlapping rv'
-                                                                      then Just (PassiveItem (a, rv', node r' $ reverse ts))
-                                                                      else Nothing
-                                                        Nothing -> Nothing
-        convert _ = Nothing
+                , [], _, ts, fs)]               = [ PassiveItem (a, rv', node r' $ reverse ts)
+                                                  | rv' <- maybeToList $ mapM ((>>= toRange) . concVarRange) fs
+                                                  , isNonOverlapping rv'
+                                                  ]
+        convert _ = []
 
 -- | substitutes variables with index 'off' with a ranges of a vector
 insert :: Int -> Rangevector -> InstantiatedFunction -> InstantiatedFunction
