@@ -94,7 +94,7 @@ makeWeightedRules w rs =  [ (DeductiveRule (map itemFilter as) (application r $ 
     itemFilter :: (Eq nt) => nt -> DeductiveItem nt t -> Bool
     itemFilter a (a', _, _)= a == a'
     
-    application :: (Rule nt t) -> [InstantiatedFunction] -> [DeductiveItem nt t] -> [DeductiveItem nt t]
+    application :: Rule nt t -> [InstantiatedFunction] -> [DeductiveItem nt t] -> [DeductiveItem nt t]
     application r@(Rule ((a', _), _)) fs is = [ (a', rv, node r ts) 
                                               | rv <- mapMaybe (insert rvs) fs
                                               , isNonOverlapping rv 

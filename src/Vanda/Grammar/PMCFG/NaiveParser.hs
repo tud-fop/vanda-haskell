@@ -11,7 +11,7 @@ import Data.Tree (Tree)
 import Data.Maybe (maybeToList)
 
 -- | Two types of deductive items:
--- * active items need to be completet by substituting variables with ranges
+-- * active items need to be completed by substituting variables with ranges
 -- * passive items are completely instantiated
 data Item nt t = ActiveItem (Rule nt t, [nt], Int, [Derivation nt t], InstantiatedFunction)
                     | PassiveItem (nt, Rangevector, Derivation nt t) deriving (Eq, Ord)
@@ -49,7 +49,7 @@ weightedParse (WPMCFG s rs) w = map (\ (PassiveItem (_, _, Derivation t)) -> t)
         
 -- | Constructs deductive rules using one rule of a grammar.
 -- Per grammar rule, there are 3 types of deductive rules:
--- * prediction: initializes an active item without using antecendents
+-- * prediction: initializes an active item without using antecendent items
 -- * completion: step-by-step substituting of variables in instantiated function using ranges of passive items
 -- * conversion: converts an active item into a passive one, if there are no variables left
 makeRule :: (Eq nt, Eq t, Monoid wt, Dividable wt) => [t] -> (Rule nt t, wt) -> [(DeductiveRule (Item nt t), wt)]
@@ -78,7 +78,7 @@ makeRule w (r@(Rule ((_, as), f)), weight) = (DeductiveRule [filterConversion r]
         filterConversion r'' (ActiveItem (r', [], _, _, _)) = r'' == r'
         filterConversion _ _ = False
 
-        convert :: [Item nt t] -> [(Item nt t)]
+        convert :: [Item nt t] -> [Item nt t]
         convert [ActiveItem (r'@(Rule ((a, _),_))
                 , [], _, ts, fs)]               = [ PassiveItem (a, rv', node r' $ reverse ts)
                                                   | rv' <- maybeToList $ mapM ((>>= toRange) . concVarRange) fs
