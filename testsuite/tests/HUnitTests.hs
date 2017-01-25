@@ -17,7 +17,7 @@ import qualified Vanda.Corpus.BinarizationTests
 import qualified Vanda.Grammar.PMCFG.WeightedDeductiveSolverTest
 import qualified Vanda.Grammar.PMCFG.CYKParserTest
 import qualified Vanda.Grammar.PMCFG.NaiveParserTest
-
+import qualified Vanda.Grammar.PMCFG.ActiveParserTest
 
 main :: IO ()
 main = do
@@ -53,4 +53,6 @@ tests = TestList
     ~: Vanda.Grammar.PMCFG.CYKParserTest.tests
   ,   "Vanda.Grammar.PMCFG.NaiveParser"
     ~: Vanda.Grammar.PMCFG.NaiveParserTest.tests
+  ,   "Vanda.Grammar.PMCFG.ActiveParser"
+    ~: Vanda.Grammar.PMCFG.ActiveParserTest.tests
   ]
