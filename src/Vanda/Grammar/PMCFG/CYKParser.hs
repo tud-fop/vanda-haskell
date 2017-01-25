@@ -1,25 +1,55 @@
-----------------------------------------------------
--- | NaiveParser
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  CYKParser
+-- Copyright   :  (c) Thomas Ruprecht 2017
+-- License     :  Redistribution and use in source and binary forms, with
+--                or without modification, is ONLY permitted for teaching
+--                purposes at Technische Universität Dresden AND IN
+--                COORDINATION with the Chair of Foundations of Programming.
 --
------------------------------------------------------
+-- Maintainer  :  thomas.ruprecht@tu-dresden.de
+-- Stability   :  unknown
+-- Portability :  portable
+--
+-- This module provides two functions for parsing words using the 
+-- CYK-parsing algorithm by Seki et al.
+-- @weightedParse@ uses a weighted PMCFG to find a list of all possible
+-- derivation trees ordered by minimal cost / maximum probability. The
+-- rules' weigthts need to be instances of @Monoid@ and @Dividable@.
+-- @parse@ uses an unweighted grammar to find a list of derivation trees
+-- ordered by least rule applications.
+--
+-- The algorithm uses a deduction system to parse the word. Items of this 
+-- deduction system are a tuple of a non-terminal, a vector of ranges in
+-- the word we want to parse and a tree of applied derivation rules. Thus
+-- every item represents a (partial) derivation step that generated parts
+-- of the word by their ranges in it. There is exactly one deduction
+-- rule for every rule of the grammar that uses already generated items
+-- of all non-terminals in the rule and produces an item of the rule's lhs
+-- non-terminal. To validate the generated subword of this step, the ranges
+-- if all non-terminal and terminal symbols in the composition function of
+-- the rule are replaced by the possible ranges in the word and concatented,
+-- s.t. they have to fit.
+--
+-----------------------------------------------------------------------------
 module Vanda.Grammar.PMCFG.CYKParser
     ( parse
     , weightedParse
-    , instantiate
     -- * derivation trees
     , Derivation(Derivation)
     , node
-    -- * Ranges
+    -- * ranges
     , Range
     , Rangevector
     , prettyPrintRangevector
     , isNonOverlapping
-    -- * Ranges with variables
+    -- * ranges with variables
     , Function
     , InstantiatedFunction
-    , prettyPrintInstantiatedFunction
+    , instantiate
     , concVarRange
     , toRange
+    , prettyPrintInstantiatedFunction
     ) where
 
 import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (solve, WeightedDeductiveSolver(..), DeductiveRule(..), Cost(..))

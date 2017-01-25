@@ -1,7 +1,20 @@
-----------------------------------------------------
--- | DeductiveSolver
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  WeightedDeductiveSolver
+-- Copyright   :  (c) Thomas Ruprecht 2017
+-- License     :  Redistribution and use in source and binary forms, with
+--                or without modification, is ONLY permitted for teaching
+--                purposes at Technische Universität Dresden AND IN
+--                COORDINATION with the Chair of Foundations of Programming.
 --
------------------------------------------------------
+-- Maintainer  :  thomas.ruprecht@tu-dresden.de
+-- Stability   :  unknown
+-- Portability :  portable
+--
+-- This module supplies the definition of a weighted deduction system and a 
+-- function to find all generated items ordered by minimal costs.
+--
+-----------------------------------------------------------------------------
 module Vanda.Grammar.PMCFG.WeightedDeductiveSolver
   ( WeightedDeductiveSolver(WeightedDeductiveSolver)
   , DeductiveRule(DeductiveRule)
