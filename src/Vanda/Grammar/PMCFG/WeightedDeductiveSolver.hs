@@ -14,6 +14,13 @@
 -- This module supplies the definition of a weighted deduction system and a 
 -- function to find all generated items ordered by minimal costs.
 --
+-- Weights are considered a monoid, two example wrappers are the @Cost@ and
+-- @Probabilistic@ newtypes. Whereas the Cost monoid uses addition to add up
+-- all weights during deduction, the Probabilistic monoid assumes floating
+-- point values in range [0,1] to calculate the probability of an item as
+-- product of all antecedent items and the rule with it as consequence.
+-- 
+--
 -----------------------------------------------------------------------------
 module Vanda.Grammar.PMCFG.WeightedDeductiveSolver
   ( WeightedDeductiveSolver(WeightedDeductiveSolver)
@@ -21,8 +28,10 @@ module Vanda.Grammar.PMCFG.WeightedDeductiveSolver
   , solve
   -- * Weights
   , Dividable(divide)
-  , Probabilistic(Probabilistic)
-  , Cost(Cost)
+  , Probabilistic( )
+  , probabilistic
+  , Cost( )
+  , cost
   ) where
 
 import qualified Data.PQueue.Prio.Max as Q
@@ -33,11 +42,24 @@ import Data.Monoid ((<>))
 
 -- | Multiplicative monoid for probabilistic weights.
 newtype Probabilistic a = Probabilistic a deriving (Show, Eq, Ord)
+
+-- | Wraps constructor to check for correct ranged values.
+probabilistic :: (Num a, Ord a) => a -> Probabilistic a
+probabilistic x
+  | x >= 0 && x <= 1 = Probabilistic x
+  | otherwise = error "probabilistic value out of range"
+
 -- | Additive monoid for costs.
 newtype Cost a = Cost a deriving (Show, Eq)
 
+-- | Wraps constructor to check for correct ranged values.
+cost :: (Num a, Ord a) => a -> Cost a
+cost x
+  | x >= 0 = Cost x
+  | otherwise = error "cost value out of range"
+
 class (Monoid d) => Dividable d where
-  -- | Devides an object into a given amount of subobjects.
+  -- | Divides an object into a given amount of subobjects.
   -- It should be divided s.t. mconcat (divide x n) = x.
   divide :: d -> Int -> [d]
 
@@ -48,7 +70,7 @@ instance (Num a) => Monoid (Probabilistic a) where
 
 -- | Uses root to divide a probability into n subprobabilities.
 instance (Floating a) => Dividable (Probabilistic a) where
-  divide (Probabilistic x) rt = replicate rt $ Probabilistic $ x ** (1 / (fromIntegral rt))
+  divide (Probabilistic x) rt = replicate rt $ Probabilistic $ x ** (1 / fromIntegral rt)
 
 -- | Instance of additive monoid.
 instance (Num a) => Monoid (Cost a) where
@@ -82,7 +104,7 @@ solve :: (Ord wt, Monoid wt, Ord it, Eq it)
       -> [it]                                     -- ^ all (filtered) items, that were deducted
 solve (WeightedDeductiveSolver rs f) = f $ evalState (deductiveIteration s') (Q.fromList $ map swap inits, Map.fromList inits)
   where
-    s' = WeightedDeductiveSolver (filter (\ ((DeductiveRule fs _), _) -> length fs > 0) rs) f
+    s' = WeightedDeductiveSolver (filter (\ (DeductiveRule fs _, _) -> not $ null fs) rs) f
     inits = rs >>= applyWithoutAntecedents
     
     applyWithoutAntecedents (DeductiveRule [] app, w) = zip (app []) (repeat w)
@@ -99,7 +121,7 @@ deductiveIteration s@(WeightedDeductiveSolver rs _) = do (c, a) <- get
                                                             else do let ((_, item), c') = Q.deleteFindMax c
                                                                     let newitems = filter (not . (`Map.member` a) . fst) $ deductiveStep item (Map.toList a) rs
                                                                     let a'' = a `Map.union` Map.fromList newitems
-                                                                    let c'' = c' `Q.union` (Q.fromList $ map swap newitems)
+                                                                    let c'' = c' `Q.union` Q.fromList (map swap newitems)
                                                                     put (c'', a'')
                                                                     is <- deductiveIteration s
                                                                     return (item:is)

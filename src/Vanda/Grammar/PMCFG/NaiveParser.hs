@@ -15,9 +15,11 @@
 -- naive (active) parsing algorithm by Burden and Ljunglöf.
 -- @weightedParse@ uses a weighted PMCFG to find a list of all possible
 -- derivation trees ordered by minimal cost / maximum probability. The
--- rules' weigthts need to be instances of @Monoid@ and @Dividable@.
+-- rules' weights need to be instances of @Monoid@ and @Dividable@.
 -- @parse@ uses an unweighted grammar to find a list of derivation trees
 -- ordered by least rule applications.
+--
+-- 
 --
 -----------------------------------------------------------------------------
 module Vanda.Grammar.PMCFG.NaiveParser
@@ -25,8 +27,8 @@ module Vanda.Grammar.PMCFG.NaiveParser
     , parse
     ) where
 
-import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (solve, WeightedDeductiveSolver(..), DeductiveRule(..), Cost(..), Dividable(divide))
-import Vanda.Grammar.PMCFG.CYKParser (InstantiatedFunction, Range, Rangevector, concVarRange, toRange, isNonOverlapping, instantiate, prettyPrintInstantiatedFunction, prettyPrintRangevector, Derivation(Derivation), node)
+import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (solve, WeightedDeductiveSolver(..), DeductiveRule(..), Cost, cost, Dividable(divide))
+import Vanda.Grammar.PMCFG.CYKParser (InstantiatedFunction, Range, entire, Rangevector, concVarRange, toRange, isNonOverlapping, instantiate, prettyPrintInstantiatedFunction, prettyPrintRangevector, Derivation(Derivation), node)
 import Vanda.Grammar.PMCFG (Rule(Rule), PMCFG(PMCFG), WPMCFG(WPMCFG), VarT(Var, T), prettyPrintRule)
 import Data.Hashable (Hashable, hashWithSalt)
 import Data.Tree (Tree)
@@ -38,10 +40,6 @@ import Data.Maybe (maybeToList)
 data Item nt t = ActiveItem (Rule nt t, [nt], Int, [Derivation nt t], InstantiatedFunction)
                     | PassiveItem (nt, Rangevector, Derivation nt t) deriving (Eq, Ord)
 
-instance (Hashable nt, Hashable t) => Hashable (Item nt t) where
-    salt `hashWithSalt` (ActiveItem tup) = salt `hashWithSalt` tup
-    salt `hashWithSalt` (PassiveItem tup) = salt `hashWithSalt` tup
-
 instance (Show nt, Show t) => Show (Item nt t) where
     show (ActiveItem (r, as, i, _, fs)) = "[active] " ++ prettyPrintRule r ++ " " ++ show as ++ "+" ++ show i ++ " " ++ prettyPrintInstantiatedFunction fs
     show (PassiveItem (a, rv, _)) = "[passive] " ++ show a ++ " " ++ prettyPrintRangevector rv 
@@ -51,7 +49,7 @@ parse :: (Ord t, Ord nt)
       => PMCFG nt t         -- ^ unweighted grammar
       -> [t]                -- ^ terminal word
       -> [Tree (Rule nt t)] -- ^ derivation tree of applied rules
-parse (PMCFG s rs) = weightedParse $ WPMCFG s $ zip rs $ repeat (Cost 1 :: Cost Double)
+parse (PMCFG s rs) = weightedParse $ WPMCFG s $ zip rs $ repeat (cost 1 :: Cost Double)
 
 -- | Top-level function to parse a word using a weighted PMCFG.
 weightedParse :: (Ord t, Ord nt, Ord wt, Monoid wt, Dividable wt) 
@@ -59,11 +57,10 @@ weightedParse :: (Ord t, Ord nt, Ord wt, Monoid wt, Dividable wt)
               -> [t]                -- ^ terminal word
               -> [Tree (Rule nt t)] -- ^ derivation tree of applied rules
 weightedParse (WPMCFG s rs) w = map (\ (PassiveItem (_, _, Derivation t)) -> t) 
-                        $ filter (resultfilter s targetrange)
+                        $ filter (resultfilter s [entire w])
                         $ solve ds
     where
         ds = WeightedDeductiveSolver (conversionRule : (rs >>= \ r -> predictionRule w r : completionRules r)) id
-        targetrange = [ if null w then Nothing else Just (0, length w) ]
         
         resultfilter :: (Eq nt) => [nt] -> Rangevector -> Item nt t -> Bool
         resultfilter start target (PassiveItem (a, rho, _)) = a `elem` start && rho == target

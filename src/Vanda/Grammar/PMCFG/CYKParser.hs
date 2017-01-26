@@ -13,10 +13,12 @@
 --
 -- This module provides two functions for parsing words using the 
 -- CYK-parsing algorithm by Seki et al.
--- @weightedParse@ uses a weighted PMCFG to find a list of all possible
+--
+-- 'weightedParse' uses a weighted PMCFG to find a list of all possible
 -- derivation trees ordered by minimal cost / maximum probability. The
--- rules' weigthts need to be instances of @Monoid@ and @Dividable@.
--- @parse@ uses an unweighted grammar to find a list of derivation trees
+-- rules' weights need to be instances of 'Monoid' and 
+-- 'Vanda.Grammar.PMCFG.WeightedDeductiveSolver.Dividable'.
+-- 'parse' uses an unweighted grammar to find a list of derivation trees
 -- ordered by least rule applications.
 --
 -- The algorithm uses a deduction system to parse the word. Items of this 
@@ -26,10 +28,12 @@
 -- of the word by their ranges in it. There is exactly one deduction
 -- rule for every rule of the grammar that uses already generated items
 -- of all non-terminals in the rule and produces an item of the rule's lhs
--- non-terminal. To validate the generated subword of this step, the ranges
+-- non-terminal. To validate the generated sub-word of this step, the ranges
 -- if all non-terminal and terminal symbols in the composition function of
--- the rule are replaced by the possible ranges in the word and concatented,
+-- the rule are replaced by the possible ranges in the word and concatenated,
 -- s.t. they have to fit.
+--
+--
 --
 -----------------------------------------------------------------------------
 module Vanda.Grammar.PMCFG.CYKParser
@@ -39,7 +43,10 @@ module Vanda.Grammar.PMCFG.CYKParser
     , Derivation(Derivation)
     , node
     -- * ranges
-    , Range
+    , Range(Epsilon)
+    , singletons
+    , entire
+    , safeConc
     , Rangevector
     , prettyPrintRangevector
     , isNonOverlapping
@@ -52,15 +59,39 @@ module Vanda.Grammar.PMCFG.CYKParser
     , prettyPrintInstantiatedFunction
     ) where
 
-import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (solve, WeightedDeductiveSolver(..), DeductiveRule(..), Cost(..))
+import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (solve, WeightedDeductiveSolver(..), DeductiveRule(..), Cost, cost)
 import Vanda.Grammar.PMCFG
 import Data.Tree (Tree(Node))
 import Data.Hashable (Hashable, hashWithSalt)
 import Data.List (elemIndices, sort)
 import Data.Maybe (mapMaybe)
 
--- | A range in a word. Nothing is an empty range.
-type Range = Maybe (Int, Int)
+-- | A range (i, j) in a word w.
+-- Consider i \< j for i \>= 0 and j \<= |w|
+-- and 'Epsilon' substitutes all (i, i) for 0 <= i <= |w|.
+data Range = Range (Int, Int)
+              | Epsilon -- ^ empty range of ε in w
+              deriving (Show, Eq, Ord)
+
+-- | A singleton range is a range of a single character in a word.
+singletons :: (Eq t) => t -> [t] -> [Range]
+singletons c w = map singleton $ c `elemIndices` w
+  where singleton i = Range (i, i+1)
+
+-- | Full range of a word.
+entire :: [t] -> Range
+entire [] = Epsilon
+entire xs = Range (0, length xs)
+
+-- | Concatenates two ranges. Fails if neighboring ranges do not fit.
+safeConc :: Range -> Range -> Maybe Range
+safeConc Epsilon r = Just r
+safeConc r Epsilon = Just r
+safeConc (Range (i,j)) (Range (k,l))
+  | j == k = Just $ Range (i, l)
+  | otherwise = Nothing
+
+-- | A range vector is a non-overlapping sequence of ranges.
 type Rangevector = [Range]
 
 -- | Item of naive parsing deduction. 
@@ -77,7 +108,7 @@ type InstantiatedFunction = Function Range
 -- | A derivation tree.
 newtype Derivation nt t = Derivation (Tree (Rule nt t)) deriving (Eq, Show)
 
--- | Wraps Node constructor of Tree to easy use of Derivation.
+-- | Wraps Node constructor of Tree for easy use of Derivation.
 node :: Rule nt t -> [Derivation nt t] -> Derivation nt t
 node r ds = Derivation $ Node r ts
   where
@@ -97,19 +128,17 @@ parse :: (Ord t, Ord nt)
       => PMCFG nt t                               -- ^ the grammar
       -> [t]                                      -- ^ the word
       -> [Tree (Rule nt t)]                       -- ^ list of derivation trees 
-parse (PMCFG s rules) = weightedParse $ WPMCFG s $ zip rules $ repeat (Cost 1 :: Cost Int)
+parse (PMCFG s rules) = weightedParse $ WPMCFG s $ zip rules $ repeat (cost 1 :: Cost Int)
 
 -- | Top-level function to parse a word using a weighted grammar.
 weightedParse :: (Ord t, Ord nt, Monoid wt, Ord wt)
               => WPMCFG nt wt t             -- ^ weighted grammar
               -> [t]                        -- ^ word
               -> [Tree (Rule nt t)]   -- ^ parse trees and resulting weights
-weightedParse (WPMCFG s rs) w = map (\ (_, _, Derivation t) -> t) 
-                                $ filter (\ (a, rho, _) -> (a `elem` s) && (rho == [expectedRange])) 
-                                $ solve ds
-  where
-    ds = WeightedDeductiveSolver (makeWeightedRules w rs) sort
-    expectedRange = if not $ null w then Just (0, length w) else Nothing
+weightedParse (WPMCFG s rs) word = map (\ (_, _, Derivation t) -> t) 
+                                    $ filter (\ (a, rho, _) -> (a `elem` s) && (rho == [entire word])) 
+                                    $ solve 
+                                    $ WeightedDeductiveSolver (makeWeightedRules word rs) id
 
 -- | Constructs deduction rules using a weighted grammar.
 -- Weights are stored in antecedent items and application functions of rules.
@@ -142,11 +171,11 @@ instantiate :: (Eq t)
 instantiate w' = mapM (mapMaybe concVarRange . sequence . instantiateComponent w')
   where
     instantiateComponent :: (Eq t) => [t] -> [VarT t] -> [[VarT Range]]
-    instantiateComponent _ []         = [[ T Nothing ]]
+    instantiateComponent _ []         = [[ T Epsilon ]]
     instantiateComponent w fs         = map (instantiateCharacter w) fs
     instantiateCharacter :: (Eq t) => [t] -> VarT t -> [VarT Range]
     instantiateCharacter _ (Var i j)  = [Var i j]
-    instantiateCharacter w (T c)      = map (T . Just . (\ i -> (i, i+1))) $ elemIndices c w
+    instantiateCharacter w (T c)      = map T $ singletons c w
 
 -- | Checks for overlapping components in a range vector.
 isNonOverlapping :: Rangevector -> Bool
@@ -154,10 +183,10 @@ isNonOverlapping = isNonOverlapping' []
   where
     isNonOverlapping' :: [(Int, Int)] -> Rangevector -> Bool
     isNonOverlapping' _ [] = True
-    isNonOverlapping' cache (Just (i,j) : rs)
+    isNonOverlapping' cache (Range (i,j) : rs)
       | any (\ (k,l) -> (j > k && j < l) || (i > k && i < l)) cache = False
       | otherwise = isNonOverlapping' ((i, j):cache) rs
-    isNonOverlapping' cache (Nothing : rs) = isNonOverlapping' cache rs
+    isNonOverlapping' cache (Epsilon : rs) = isNonOverlapping' cache rs
 
 -- | Replaces variables with corresponding ranges. Fails if ranges do not fit in their context.
 insert :: [Rangevector] -> InstantiatedFunction -> Maybe Rangevector
@@ -170,14 +199,12 @@ insert rvs = mapM ((>>= toRange) . concVarRange . map (insert' rvs))
 -- | Tries to concatenate ranges in an instantiated function component.
 -- Variables are left as they are, so they result does not need to be one range.
 concVarRange :: [VarT Range] -> Maybe [VarT Range]
-concVarRange (T (Just (i, j)) : T (Just (k, l)) : is)
-  | j == k = concVarRange $ (T $ Just (i, l)) : is
-  | otherwise = Nothing
-concVarRange (T Nothing : (i : is)) = concVarRange $ i:is
-concVarRange (i : (T Nothing : is)) = concVarRange $ i:is
-concVarRange (i:is) = case concVarRange is of
-                            Nothing -> Nothing
-                            Just is' -> Just $ i:is'
+concVarRange (T r1 : T r2 : is) = case safeConc r1 r2 of
+                                       Just r -> concVarRange $ T r : is
+                                       Nothing -> Nothing
+concVarRange (T Epsilon : (i : is)) = concVarRange $ i:is
+concVarRange (i : (T Epsilon : is)) = concVarRange $ i:is
+concVarRange (i:is) = (i:) <$> concVarRange is
 concVarRange [] = Just []
 
 -- | Tries to unpack a concatenated range vector.
@@ -190,12 +217,12 @@ prettyPrintInstantiatedFunction fs = show $ map go fs
   where
     go :: [VarT Range] -> String
     go [] = ""
-    go (T (Just (i,j)) : f) = "(" ++ show i ++ "," ++ show j ++ ")" ++ go f
-    go (T Nothing : f) = "()" ++ go f
+    go (T (Range (i,j)) : f) = "(" ++ show i ++ "," ++ show j ++ ")" ++ go f
+    go (T Epsilon : f) = "()" ++ go f
     go (Var i j : f) = "x[" ++ show i ++ ":" ++ show j ++ "]" ++ go f
 
 prettyPrintRangevector :: Rangevector -> String
 prettyPrintRangevector rs = "<" ++ unwords (map go rs) ++  ">"
   where
-    go (Just r) = show r
-    go Nothing = "()"
+    go (Range r) = show r
+    go Epsilon = "()"
