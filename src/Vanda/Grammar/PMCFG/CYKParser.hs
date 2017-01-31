@@ -63,7 +63,7 @@ import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (solve, WeightedDeductiveSolv
 import Vanda.Grammar.PMCFG
 import Data.Tree (Tree(Node))
 import Data.Hashable (Hashable, hashWithSalt)
-import Data.List (elemIndices, sort)
+import Data.List (elemIndices)
 import Data.Maybe (mapMaybe)
 
 -- | A range (i, j) in a word w.
@@ -142,7 +142,7 @@ weightedParse (WPMCFG s rs) word = map (\ (_, _, Derivation t) -> t)
 
 -- | Constructs deduction rules using a weighted grammar.
 -- Weights are stored in antecedent items and application functions of rules.
-makeWeightedRules :: (Eq nt, Monoid wt, Eq t, Ord wt) 
+makeWeightedRules :: (Eq nt, Eq t) 
                   => [t]                                      -- ^ word 
                   -> [(Rule nt t, wt)]                        -- ^ weighted grammar rules
                   -> [(DeductiveRule (DeductiveItem nt t), wt)] -- ^ weighted deduction rules 

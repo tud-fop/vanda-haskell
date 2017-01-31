@@ -66,7 +66,7 @@ parse :: (Ord nt, Ord t) => PMCFG nt t -> [t] -> [Tree (Rule nt t)]
 parse (PMCFG s rs) = weightedParse $ WPMCFG s $ zip rs $ repeat (cost 1 :: Cost Double)
 
 -- | Top-level function to parse a word using a weighted PMCFG.
-weightedParse :: (Ord nt, Ord t, Ord wt, Monoid wt, Dividable wt) => WPMCFG nt wt t -> [t] -> [Tree (Rule nt t)]
+weightedParse :: (Ord nt, Ord t, Ord wt, Dividable wt) => WPMCFG nt wt t -> [t] -> [Tree (Rule nt t)]
 weightedParse (WPMCFG s rs) w = map (\ (Passive (_, _, Derivation t)) -> t) 
                                 $ filter (resultfilter s [entire w])
                                 $ solve ds
@@ -115,7 +115,7 @@ terminalCompletionRule w = (DeductiveRule [completeTFilter] (completeT w), mempt
                                                             ]
     completeT _ _ = []
 
-completionRules :: (Eq t, Eq nt, Ord t, Ord nt, Monoid wt, Dividable wt) => (Rule nt t, wt) -> [(DeductiveRule (Item nt t), wt)]
+completionRules :: (Ord t, Ord nt, Dividable wt) => (Rule nt t, wt) -> [(DeductiveRule (Item nt t), wt)]
 completionRules (r@(Rule ((_, as), f)), w) = (DeductiveRule [] (\ [] -> [ Active (r, [Epsilon], f, Map.empty, []) ]), mempty)
                                               : zip [ DeductiveRule [completeNTFilterPassive a', completeNTFilterActive r a'] completeNT
                                                     | a' <- as 
@@ -131,7 +131,7 @@ completionRules (r@(Rule ((_, as), f)), w) = (DeductiveRule [] (\ [] -> [ Active
           = i `elem` elemIndices a as' && r'' == r'
     completeNTFilterActive _ _ _ = False
     
-    completeNT :: (Ord nt, Ord t) => [Item nt t] -> [Item nt t]
+    completeNT :: (Ord t) => [Item nt t] -> [Item nt t]
     completeNT [Passive (_, rv, d), Active (r', ra:ras, (Var i j:fs):fss, m, ds)]
       | Map.fromList (zip [Var i j' | j' <- [0..]] rv) `Map.isSubmapOf` m
         = [ Active (r', ra':ras, fs:fss, m, ds)

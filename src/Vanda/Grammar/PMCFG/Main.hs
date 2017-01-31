@@ -26,10 +26,11 @@ import qualified Data.ByteString.Lazy as BS
 import qualified Data.Text.Lazy.IO as TIO
 import qualified Data.Text.Lazy as T
 import Data.Tree (drawTree)
+import Data.Interner
 import System.Console.CmdArgs.Explicit
 import System.Console.CmdArgs.Explicit.Misc
 import Vanda.Corpus.Negra.Text (parseNegra)
-import Vanda.Grammar.PMCFG (WPMCFG (..), PMCFG (..), prettyPrintWPMCFG)
+import Vanda.Grammar.PMCFG (WPMCFG (..), PMCFG (..), prettyPrintWPMCFG, integerize, deintegerize)
 import Vanda.Grammar.PMCFG.Functions (extractFromNegra, extractFromNegraAndBinarize)
 import qualified Vanda.Grammar.PMCFG.Parse as UnweightedAutomaton
 import qualified Vanda.Grammar.PMCFG.CYKParser as CYK
@@ -120,13 +121,13 @@ mainArgs (Extract outfile True strategy)
       writeFile (outfile ++ ".readable") $ prettyPrintWPMCFG pmcfg
 mainArgs (Parse algorithm grFile)
   = do
-      WPMCFG inits wrs <- B.decode . decompress
-                          <$> BS.readFile grFile :: IO (WPMCFG String Double String)
+      wpmcfg <- B.decode . decompress <$> BS.readFile grFile :: IO (WPMCFG String Double String)
+      let (WPMCFG inits wrs, nti, ti) = integerize wpmcfg         
       let parse = case algorithm of CYK -> CYK.weightedParse (WPMCFG inits $ map (\ (r, w) -> (r, probabilistic w)) wrs)
                                     NaiveP -> Naive.weightedParse (WPMCFG inits $ map (\ (r, w) -> (r, probabilistic w)) wrs)
                                     UnweightedCYK -> CYK.parse (PMCFG inits (map fst wrs))
                                     UnweightedNaive -> Naive.parse (PMCFG inits (map fst wrs))
                                     --UnweightedAutomaton -> UnweightedAutomaton.parse (PMCFG inits (map fst wrs))
-      --_ <- evaluate pmcfg
       corpus <- TIO.getContents
-      mapM_ (putStrLn . drawTree . fmap show . head . parse . map T.unpack . T.words) $ T.lines corpus
+      mapM_ (putStrLn . drawTree . fmap show . head . map (deintegerize (nti, ti)) . parse . snd . internListPreserveOrder ti . map T.unpack . T.words) $ T.lines corpus
+ 

@@ -4,12 +4,12 @@ module Vanda.Grammar.PMCFG.ActiveParserTest
 import Test.HUnit
 import Vanda.Grammar.PMCFG
 import Vanda.Grammar.PMCFG.ActiveParser
-import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (Probabilistic(..))
+import Vanda.Grammar.PMCFG.WeightedDeductiveSolver
 import Data.Maybe (mapMaybe)
 
 exampleWPMCFG' :: WPMCFG Int (Probabilistic Double) Char
 exampleWPMCFG' = case exampleWPMCFG of
-                      (WPMCFG s rs) -> WPMCFG s $ map (\ (r, w) -> (r, Probabilistic w)) rs
+                      (WPMCFG s rs) -> WPMCFG s $ map (\ (r, w) -> (r, probabilistic w)) rs
                       
 tests :: Test
 tests = TestList    [ TestCase $ assertEqual "Cannot reproduce exmaple derivation" [exampleDerivation] $ parse examplePMCFG "aabccd"

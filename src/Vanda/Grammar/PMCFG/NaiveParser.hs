@@ -30,7 +30,6 @@ module Vanda.Grammar.PMCFG.NaiveParser
 import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (solve, WeightedDeductiveSolver(..), DeductiveRule(..), Cost, cost, Dividable(divide))
 import Vanda.Grammar.PMCFG.CYKParser (InstantiatedFunction, Range, entire, Rangevector, concVarRange, toRange, isNonOverlapping, instantiate, prettyPrintInstantiatedFunction, prettyPrintRangevector, Derivation(Derivation), node)
 import Vanda.Grammar.PMCFG (Rule(Rule), PMCFG(PMCFG), WPMCFG(WPMCFG), VarT(Var, T), prettyPrintRule)
-import Data.Hashable (Hashable, hashWithSalt)
 import Data.Tree (Tree)
 import Data.Maybe (maybeToList)
 
@@ -52,7 +51,7 @@ parse :: (Ord t, Ord nt)
 parse (PMCFG s rs) = weightedParse $ WPMCFG s $ zip rs $ repeat (cost 1 :: Cost Double)
 
 -- | Top-level function to parse a word using a weighted PMCFG.
-weightedParse :: (Ord t, Ord nt, Ord wt, Monoid wt, Dividable wt) 
+weightedParse :: (Ord t, Ord nt, Ord wt, Dividable wt) 
               => WPMCFG nt wt t     -- ^ weighted grammar
               -> [t]                -- ^ terminal word
               -> [Tree (Rule nt t)] -- ^ derivation tree of applied rules
@@ -94,7 +93,7 @@ conversionRule = (DeductiveRule [filterConversion] convert, mempty)
 
 -- | Constructs deductive rules using one rule of a grammar.
 -- * completion: step-by-step substituting of variables in instantiated function using ranges of passive items
-completionRules :: (Eq nt, Eq t, Monoid wt, Dividable wt) => (Rule nt t, wt) -> [(DeductiveRule (Item nt t), wt)]
+completionRules :: (Eq nt, Eq t, Dividable wt) => (Rule nt t, wt) -> [(DeductiveRule (Item nt t), wt)]
 completionRules (r@(Rule ((_, as), _)), weight) = zip [ DeductiveRule [filterCompletePassive a', filterCompleteActive r a'] complete 
                                                       | a' <- as 
                                                       ] singleNTWeight

@@ -157,7 +157,7 @@ integerize (WPMCFG s rs) = (WPMCFG s' rs', ntInterner', tInterner)
                                              let (nti'', as') = internListPreserveOrder nti' as
                                              let (f', ti') = runState (mapM (mapM internVar) f) ti
                                              put (nti'', ti')
-                                             return $ (Rule ((a', as'), f'), wt)
+                                             return (Rule ((a', as'), f'), wt)
       where
         internVar :: (Eq t, Hashable t) => VarT t -> State (Interner t) (VarT Int)
         internVar (T t) = do i <- get
@@ -167,19 +167,18 @@ integerize (WPMCFG s rs) = (WPMCFG s' rs', ntInterner', tInterner)
         internVar (Var i j) = return (Var i j)
 
 -- | Re-substitutes old terminals and nonterminals into integetrized rules.
-deintegerize :: (Eq t, Eq nt, Hashable t, Hashable nt) => (WPMCFG Int wt Int, Interner nt, Interner t) -> WPMCFG nt wt t
-deintegerize (WPMCFG s rs, nti, ti) = WPMCFG (map (nta !) s) rs'
+deintegerize :: (Interner nt, Interner t) -> Tree (Rule Int Int) -> Tree (Rule nt t)
+deintegerize (nti, ti) = fmap (deintegerize' ta nta) 
   where
     nta = internerToArray nti
     ta = internerToArray ti
-    rs' = map (deintegerize' ta nta) rs
     
-    deintegerize' :: Array Int t -> Array Int nt -> (Rule Int Int, wt) -> (Rule nt t, wt)
-    deintegerize' ta nta (Rule ((a, as), f), wt) = (Rule ((a', as'), f'), wt)
+    deintegerize' :: Array Int t -> Array Int nt -> Rule Int Int -> Rule nt t
+    deintegerize' ta' nta' (Rule ((a, as), f)) = Rule ((a', as'), f')
       where
-        a' = nta ! a
-        as' = map (nta !) as
-        f' = map (map (fmap (ta !))) f
+        a' = nta' ! a
+        as' = map (nta' !) as
+        f' = map (map (fmap (ta' !))) f
 
 yield :: Tree (Rule nt t) -> Maybe [t]
 yield = fmap head . evaluate . fmap (\(Rule (_, f)) -> f)

@@ -92,14 +92,14 @@ data WeightedDeductiveSolver it wt = WeightedDeductiveSolver [(DeductiveRule it,
 -- Consists of a list of filters that are True for possible antecedents and an application function with multiple possible consequences. 
 data DeductiveRule it = DeductiveRule [it -> Bool] ([it] -> [it])
 
-instance (Show it, Show wt) => Show (WeightedDeductiveSolver it wt) where
+instance (Show wt) => Show (WeightedDeductiveSolver it wt) where
   show (WeightedDeductiveSolver rs _) = "Instance of DeductiveSolver with:\n" ++ unlines (map show rs)
-instance (Show it) => Show (DeductiveRule it) where
+instance Show (DeductiveRule it) where
   showsPrec _ (DeductiveRule filters _) = (++) ("Instance of DeductiveRule with " ++ show (length filters) ++ " anticidents" )
   
 
 -- | Top-level function that solves a deduction system.
-solve :: (Ord wt, Monoid wt, Ord it, Eq it)
+solve :: (Ord wt, Monoid wt, Ord it)
       => WeightedDeductiveSolver it wt            -- ^ the solver instance
       -> [it]                                     -- ^ all (filtered) items, that were deducted
 solve (WeightedDeductiveSolver rs f) = f $ evalState (deductiveIteration s') (Q.fromList $ map swap inits, Map.fromList inits)
@@ -112,7 +112,7 @@ solve (WeightedDeductiveSolver rs f) = f $ evalState (deductiveIteration s') (Q.
 
 -- | Recursion that solves the deduction system.
 -- Applies all valid combination of rules to all items as antecedents until there are no new items.
-deductiveIteration  :: (Ord wt, Ord it, Monoid wt, Eq it)
+deductiveIteration  :: (Ord wt, Ord it, Monoid wt)
                     => WeightedDeductiveSolver it wt                  -- ^ solver instance for rules and filter
                     -> State (Q.MaxPQueue wt it, Map.Map it wt) [it]          -- ^ state to store previously deducted items, returns
 deductiveIteration s@(WeightedDeductiveSolver rs _) = do (c, a) <- get
