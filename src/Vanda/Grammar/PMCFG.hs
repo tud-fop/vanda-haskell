@@ -25,6 +25,8 @@ module Vanda.Grammar.PMCFG
   -- * Weighted parallel multiple context-free grammars
   , WPMCFG (WPMCFG)
   , fromWeightedRules
+  , integerize
+  , deintegerize
   -- * pretty printing
   , prettyPrintRule
   , prettyPrintComposition
@@ -47,7 +49,9 @@ import Data.List (intercalate)
 import Data.Maybe (listToMaybe)
 import Data.Tree
 import GHC.Generics (Generic)
-
+import Data.Interner (Interner, internList, intern, emptyInterner, internListPreserveOrder, internerToArray)
+import Control.Monad.State.Lazy
+import Data.Array (Array, (!))
 
 errorHere :: String -> String -> a
 errorHere = Control.Error.errorHere "Vanda.Grammar.PMCFG"
@@ -140,6 +144,42 @@ fromWeightedRules
   -> WPMCFG nt w t
 fromWeightedRules = WPMCFG
 
+-- | Substitutes all terminals and nonterminals with integers and saves substitutions.
+integerize :: (Eq t, Eq nt, Hashable t, Hashable nt) => WPMCFG nt wt t -> (WPMCFG Int wt Int, Interner nt, Interner t)
+integerize (WPMCFG s rs) = (WPMCFG s' rs', ntInterner', tInterner)
+  where
+    (rs', (ntInterner, tInterner)) = runState (mapM integerize' rs) (emptyInterner, emptyInterner)
+    (ntInterner', s') = internList ntInterner s
+    
+    integerize' :: (Eq nt, Hashable nt, Eq t, Hashable t) => (Rule nt t, wt) -> State (Interner nt, Interner t) (Rule Int Int, wt)
+    integerize' (Rule ((a, as), f), wt) = do (nti, ti) <- get
+                                             let (nti', a') = intern nti a
+                                             let (nti'', as') = internListPreserveOrder nti' as
+                                             let (f', ti') = runState (mapM (mapM internVar) f) ti
+                                             put (nti'', ti')
+                                             return $ (Rule ((a', as'), f'), wt)
+      where
+        internVar :: (Eq t, Hashable t) => VarT t -> State (Interner t) (VarT Int)
+        internVar (T t) = do i <- get
+                             let (i', t') = intern i t
+                             put i'
+                             return (T t')
+        internVar (Var i j) = return (Var i j)
+
+-- | Re-substitutes old terminals and nonterminals into integetrized rules.
+deintegerize :: (Eq t, Eq nt, Hashable t, Hashable nt) => (WPMCFG Int wt Int, Interner nt, Interner t) -> WPMCFG nt wt t
+deintegerize (WPMCFG s rs, nti, ti) = WPMCFG (map (nta !) s) rs'
+  where
+    nta = internerToArray nti
+    ta = internerToArray ti
+    rs' = map (deintegerize' ta nta) rs
+    
+    deintegerize' :: Array Int t -> Array Int nt -> (Rule Int Int, wt) -> (Rule nt t, wt)
+    deintegerize' ta nta (Rule ((a, as), f), wt) = (Rule ((a', as'), f'), wt)
+      where
+        a' = nta ! a
+        as' = map (nta !) as
+        f' = map (map (fmap (ta !))) f
 
 yield :: Tree (Rule nt t) -> Maybe [t]
 yield = fmap head . evaluate . fmap (\(Rule (_, f)) -> f)
