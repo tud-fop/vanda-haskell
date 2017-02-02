@@ -138,7 +138,7 @@ weightedParse :: (Ord t, Ord nt, Monoid wt, Ord wt)
 weightedParse (WPMCFG s rs) word = map (\ (_, _, Derivation t) -> t) 
                                     $ filter (\ (a, rho, _) -> (a `elem` s) && (rho == [entire word])) 
                                     $ solve 
-                                    $ WeightedDeductiveSolver (makeWeightedRules word rs) id
+                                    $ WeightedDeductiveSolver (makeWeightedRules word rs) 100
 
 -- | Constructs deduction rules using a weighted grammar.
 -- Weights are stored in antecedent items and application functions of rules.

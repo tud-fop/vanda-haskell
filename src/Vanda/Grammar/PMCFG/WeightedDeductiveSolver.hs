@@ -86,8 +86,8 @@ instance (Ord a) => Ord (Cost a) where
   (Cost x) `compare` (Cost y) = y `compare` x
 
 -- | An instance for a deduction system.
--- Consists of a list of rules and a filter function that is applied in each step and on the result.
-data WeightedDeductiveSolver it wt = WeightedDeductiveSolver [(DeductiveRule it, wt)] ([it] -> [it])
+-- Consists of a list of rules and a limit for queue elements.
+data WeightedDeductiveSolver it wt = WeightedDeductiveSolver [(DeductiveRule it, wt)] Int
 -- | A rule of a deduction system.
 -- Consists of a list of filters that are True for possible antecedents and an application function with multiple possible consequences. 
 data DeductiveRule it = DeductiveRule [it -> Bool] ([it] -> [it])
@@ -102,9 +102,9 @@ instance Show (DeductiveRule it) where
 solve :: (Ord wt, Monoid wt, Ord it)
       => WeightedDeductiveSolver it wt            -- ^ the solver instance
       -> [it]                                     -- ^ all (filtered) items, that were deducted
-solve (WeightedDeductiveSolver rs f) = f $ evalState (deductiveIteration s') (Q.fromList $ map swap inits, Map.fromList inits)
+solve (WeightedDeductiveSolver rs b) = evalState (deductiveIteration s') (Q.fromList $ map swap inits, Map.fromList inits)
   where
-    s' = WeightedDeductiveSolver (filter (\ (DeductiveRule fs _, _) -> not $ null fs) rs) f
+    s' = WeightedDeductiveSolver (filter (\ (DeductiveRule fs _, _) -> not $ null fs) rs) b
     inits = rs >>= applyWithoutAntecedents
     
     applyWithoutAntecedents (DeductiveRule [] app, w) = zip (app []) (repeat w)
@@ -115,16 +115,16 @@ solve (WeightedDeductiveSolver rs f) = f $ evalState (deductiveIteration s') (Q.
 deductiveIteration  :: (Ord wt, Ord it, Monoid wt)
                     => WeightedDeductiveSolver it wt                  -- ^ solver instance for rules and filter
                     -> State (Q.MaxPQueue wt it, Map.Map it wt) [it]          -- ^ state to store previously deducted items, returns
-deductiveIteration s@(WeightedDeductiveSolver rs _) = do (c, a) <- get
-                                                         if Q.null c
-                                                            then return []
-                                                            else do let ((_, item), c') = Q.deleteFindMax c
-                                                                    let newitems = filter (not . (`Map.member` a) . fst) $ deductiveStep item (Map.toList a) rs
-                                                                    let a'' = a `Map.union` Map.fromList newitems
-                                                                    let c'' = c' `Q.union` Q.fromList (map swap newitems)
-                                                                    put (c'', a'')
-                                                                    is <- deductiveIteration s
-                                                                    return (item:is)
+deductiveIteration s@(WeightedDeductiveSolver rs beam) = do (c, a) <- get
+                                                            if Q.null c
+                                                                then return []
+                                                                else do let ((_, item), c') = Q.deleteFindMax c
+                                                                        let newitems = filter (not . (`Map.member` a) . fst) $ deductiveStep item (Map.toList a) rs
+                                                                        let a'' = a `Map.union` Map.fromList newitems
+                                                                        let c'' = Q.fromList $ Q.take beam $ c' `Q.union` Q.fromList (map swap newitems)
+                                                                        put (c'', a'')
+                                                                        is <- deductiveIteration s
+                                                                        return (item:is)
                                                                     
 -- | A step to apply all rules for all possible antecedents.
 deductiveStep :: (Monoid wt, Eq it) => it -> [(it, wt)] -> [(DeductiveRule it, wt)] -> [(it, wt)]

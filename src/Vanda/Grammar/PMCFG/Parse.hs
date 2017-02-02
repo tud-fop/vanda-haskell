@@ -13,7 +13,6 @@ module Vanda.Grammar.PMCFG.Parse
   ( parse ) where
 
 import Data.Hashable (Hashable)
-import Data.List (foldr)
 import qualified Data.HashMap.Strict as HM
 import Data.Interner (emptyInterner, inMap, internList, internListPreserveOrder)
 import Data.Maybe (maybeToList, fromMaybe)

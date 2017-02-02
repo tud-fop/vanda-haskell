@@ -59,7 +59,7 @@ weightedParse (WPMCFG s rs) w = map (\ (PassiveItem (_, _, Derivation t)) -> t)
                         $ filter (resultfilter s [entire w])
                         $ solve ds
     where
-        ds = WeightedDeductiveSolver (conversionRule : (rs >>= \ r -> predictionRule w r : completionRules r)) id
+        ds = WeightedDeductiveSolver (conversionRule : (rs >>= \ r -> predictionRule w r : completionRules r)) 100
         
         resultfilter :: (Eq nt) => [nt] -> Rangevector -> Item nt t -> Bool
         resultfilter start target (PassiveItem (a, rho, _)) = a `elem` start && rho == target
