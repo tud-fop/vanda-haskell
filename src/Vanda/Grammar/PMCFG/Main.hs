@@ -29,14 +29,17 @@ import Data.Tree (drawTree)
 import Data.Interner
 import System.Console.CmdArgs.Explicit
 import System.Console.CmdArgs.Explicit.Misc
+
 import Vanda.Corpus.Negra.Text (parseNegra)
-import Vanda.Grammar.PMCFG (WPMCFG (..), PMCFG (..), prettyPrintWPMCFG, integerize, deintegerize)
 import Vanda.Grammar.PMCFG.Functions (extractFromNegra, extractFromNegraAndBinarize)
+import Vanda.Grammar.XRS.LCFRS.Binarize (binarizeNaively, binarizeByAdjacency, binarizeHybrid)
+
+import Vanda.Grammar.PMCFG (WPMCFG (..), PMCFG (..), prettyPrintWPMCFG, integerize, deintegerize)
 import qualified Vanda.Grammar.PMCFG.Parse as UnweightedAutomaton
 import qualified Vanda.Grammar.PMCFG.CYKParser as CYK
 import qualified Vanda.Grammar.PMCFG.NaiveParser as Naive
+import qualified Vanda.Grammar.PMCFG.ActiveParser as Active
 import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (Probabilistic, probabilistic)
-import Vanda.Grammar.XRS.LCFRS.Binarize (binarizeNaively, binarizeByAdjacency, binarizeHybrid)
 
 
 data Args
@@ -49,11 +52,12 @@ data Args
   | Parse
     { flagAlgorithm :: ParsingAlgorithm
     , argGrammar :: FilePath
+    , flagWeights :: Bool
     }
   deriving Show
 
 data BinarizationStrategy = Naive | Optimal | Hybrid Int deriving (Eq, Show)
-data ParsingAlgorithm = UnweightedAutomaton | UnweightedCYK | CYK | UnweightedNaive | NaiveP deriving (Eq, Show)
+data ParsingAlgorithm = UnweightedAutomaton | CYK | NaiveActive | Active deriving (Eq, Show)
 
 cmdArgs :: Mode Args
 cmdArgs
@@ -64,11 +68,15 @@ cmdArgs
     , modeArgs = ( [ flagArgCorpus{argRequire = True}], Nothing )
     , modeGroupFlags = toGroup [flagNoneBinarize,  flagNoneNaive, flagNoneOptimal, flagReqHybrid]
     }
-  , (modeEmpty $ Parse undefined undefined)
+  , (modeEmpty $ Parse undefined undefined False)
     { modeNames = ["parse"]
     , modeHelp = "Parses, given a (w)PMCFG, each in a sequence of sentences."
     , modeArgs = ( [ flagArgGrammar{argRequire = True} ], Nothing )
-    , modeGroupFlags = toGroup  [flagUnweightedAutomaton, flagCYK, flagUnweightedCYK, flagNaive, flagUnweightedNaive]
+    , modeGroupFlags = toGroup  [ flagUnweightedAutomaton
+                                , flagCYK
+                                , flagNaive
+                                , flagActive
+                                ]
     }
   ]
   where
@@ -76,16 +84,16 @@ cmdArgs
       = flagArg (\ a x -> Right x{argOutput = a}) "OUTPUT"
     flagArgGrammar
       = flagArg (\ a x -> Right x{argGrammar = a}) "GRAMMAR"
+    flagUseWeights
+      = flagNone ["w", "weighted"] (\ x -> x{flagWeights = True}) "use a weighted parsing algorithm"
     flagUnweightedAutomaton
       = flagNone ["a", "automaton"] (\ x -> x{flagAlgorithm = UnweightedAutomaton}) "use an unweighted automaton constructed from the grammar"
     flagCYK
-      = flagNone ["c", "wcyk"] (\ x -> x{flagAlgorithm = CYK}) "use a basic cyk-like deduction system constructed from the grammar"
-    flagUnweightedCYK
-      = flagNone ["cyk"] (\ x -> x{flagAlgorithm = UnweightedCYK}) "use an unweighted cyk-like deduction system constructed from the grammar"
-    flagUnweightedNaive
-      = flagNone ["naive"] (\ x -> x{flagAlgorithm = UnweightedNaive}) "use an unweighted binarized deduction system constructed from the grammar"
+      = flagNone ["c", "cyk"] (\ x -> x{flagAlgorithm = CYK}) "use a basic cyk-like deduction system constructed from the grammar"
     flagNaive
-      = flagNone ["n", "wnaive"] (\ x -> x{flagAlgorithm = NaiveP}) "use a binarized deduction system constructed from the grammar"
+      = flagNone ["naive-active"] (\ x -> x{flagAlgorithm = NaiveActive}) "use a binarized deduction system constructed from the grammar"
+    flagActive
+      = flagNone ["active"] (\ x -> x{flagAlgorithm = Active}) "use a binarized active deduction system constructed from the grammar"
     flagNoneBinarize
       = flagNone ["b", "binarize", "binarise"] (\ x -> x{flagBinarize = True}) "binarize the extracted grammar"
     flagNoneNaive
@@ -119,15 +127,19 @@ mainArgs (Extract outfile True strategy)
       let pmcfg = extractFromNegraAndBinarize s $ parseNegra corpus :: WPMCFG String Double String
       BS.writeFile outfile . compress $ B.encode pmcfg
       writeFile (outfile ++ ".readable") $ prettyPrintWPMCFG pmcfg
-mainArgs (Parse algorithm grFile)
+mainArgs (Parse algorithm grFile useWeights)
   = do
       wpmcfg <- B.decode . decompress <$> BS.readFile grFile :: IO (WPMCFG String Double String)
       let (WPMCFG inits wrs, nti, ti) = integerize wpmcfg         
-      let parse = case algorithm of CYK -> CYK.weightedParse (WPMCFG inits $ map (\ (r, w) -> (r, probabilistic w)) wrs)
-                                    NaiveP -> Naive.weightedParse (WPMCFG inits $ map (\ (r, w) -> (r, probabilistic w)) wrs)
-                                    UnweightedCYK -> CYK.parse (PMCFG inits (map fst wrs))
-                                    UnweightedNaive -> Naive.parse (PMCFG inits (map fst wrs))
-                                    --UnweightedAutomaton -> UnweightedAutomaton.parse (PMCFG inits (map fst wrs))
+      let parse = if useWeights
+                  then case algorithm of CYK -> CYK.weightedParse (WPMCFG inits $ map (\ (r, w) -> (r, probabilistic w)) wrs)
+                                         NaiveActive -> Naive.weightedParse (WPMCFG inits $ map (\ (r, w) -> (r, probabilistic w)) wrs)
+                                         Active -> Active.weightedParse (WPMCFG inits $ map (\ (r, w) -> (r, probabilistic w)) wrs)
+                                         UnweightedAutomaton -> error "not implemented"
+                  else case algorithm of CYK -> CYK.parse (PMCFG inits (map fst wrs))
+                                         NaiveActive -> Naive.parse (PMCFG inits (map fst wrs))
+                                         Active -> Active.parse (PMCFG inits (map fst wrs))
+                                         --UnweightedAutomaton -> UnweightedAutomaton.parse (PMCFG inits (map fst wrs))
       corpus <- TIO.getContents
       mapM_ (putStrLn . drawTree . fmap show . head . map (deintegerize (nti, ti)) . parse . snd . internListPreserveOrder ti . map T.unpack . T.words) $ T.lines corpus
  
