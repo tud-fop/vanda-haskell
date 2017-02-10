@@ -40,17 +40,26 @@ import Control.Monad.State (State, evalState, get, put)
 import Data.Tuple (swap)
 import Data.Monoid ((<>))
 
+
 -- | Multiplicative monoid for probabilistic weights.
-newtype Probabilistic a = Probabilistic a deriving (Show, Eq, Ord)
+-- Values are stored in log domain.
+newtype Probabilistic a = Probabilistic a deriving (Eq, Ord)
+
 
 -- | Wraps constructor to check for correct ranged values.
-probabilistic :: (Num a, Ord a) => a -> Probabilistic a
+probabilistic :: (Floating a, Ord a) => a -> Probabilistic a
 probabilistic x
-  | x >= 0 && x <= 1 = Probabilistic x
+  | x > 0 && x <= 1 = Probabilistic $ log x
   | otherwise = error "probabilistic value out of range"
+
+
+instance (Show a, Floating a) => Show (Probabilistic a) where
+  show (Probabilistic x) = show (exp x)
+
 
 -- | Additive monoid for costs.
 newtype Cost a = Cost a deriving (Show, Eq)
+
 
 -- | Wraps constructor to check for correct ranged values.
 cost :: (Num a, Ord a) => a -> Cost a
@@ -58,45 +67,56 @@ cost x
   | x >= 0 = Cost x
   | otherwise = error "cost value out of range"
 
+
 class (Monoid d) => Dividable d where
   -- | Divides an object into a given amount of subobjects.
   -- It should be divided s.t. mconcat (divide x n) = x.
   divide :: d -> Int -> [d]
 
+
 -- | Instance of multiplicative monoid.
 instance (Num a) => Monoid (Probabilistic a) where
-  mempty = Probabilistic 1
-  (Probabilistic x) `mappend` (Probabilistic y) = Probabilistic $ x * y
+  mempty = Probabilistic 0
+  (Probabilistic x) `mappend` (Probabilistic y) = Probabilistic $ x + y
+
 
 -- | Uses root to divide a probability into n subprobabilities.
 instance (Floating a) => Dividable (Probabilistic a) where
-  divide (Probabilistic x) rt = replicate rt $ Probabilistic $ x ** (1 / fromIntegral rt)
+  divide (Probabilistic x) rt = replicate rt $ Probabilistic $ x / fromIntegral rt
+
 
 -- | Instance of additive monoid.
 instance (Num a) => Monoid (Cost a) where
   mempty = Cost 0
   (Cost x) `mappend` (Cost y) = Cost $ x + y
 
+
 -- | Divides by division.
 instance (Fractional a) => Dividable (Cost a) where
   divide (Cost x) d = replicate d $ Cost $ x / fromIntegral d
+
 
 -- | Uses inverted comparison to find best results with least cost.
 instance (Ord a) => Ord (Cost a) where
   (Cost x) `compare` (Cost y) = y `compare` x
 
+
 -- | An instance for a deduction system.
 -- Consists of a list of rules and a limit for queue elements.
 data WeightedDeductiveSolver it wt = WeightedDeductiveSolver [(DeductiveRule it, wt)] Int
+
+
 -- | A rule of a deduction system.
 -- Consists of a list of filters that are True for possible antecedents and an application function with multiple possible consequences. 
 data DeductiveRule it = DeductiveRule [it -> Bool] ([it] -> [it])
 
+
 instance (Show wt) => Show (WeightedDeductiveSolver it wt) where
   show (WeightedDeductiveSolver rs _) = "Instance of DeductiveSolver with:\n" ++ unlines (map show rs)
+
 instance Show (DeductiveRule it) where
   showsPrec _ (DeductiveRule filters _) = (++) ("Instance of DeductiveRule with " ++ show (length filters) ++ " anticidents" )
-  
+
 
 -- | Top-level function that solves a deduction system.
 solve :: (Ord wt, Monoid wt, Ord it)
@@ -110,6 +130,7 @@ solve (WeightedDeductiveSolver rs b) = evalState (deductiveIteration s') (Q.from
     applyWithoutAntecedents (DeductiveRule [] app, w) = zip (app []) (repeat w)
     applyWithoutAntecedents _ = []
 
+
 -- | Recursion that solves the deduction system.
 -- Applies all valid combination of rules to all items as antecedents until there are no new items.
 deductiveIteration  :: (Ord wt, Ord it, Monoid wt)
@@ -119,16 +140,18 @@ deductiveIteration s@(WeightedDeductiveSolver rs beam) = do (c, a) <- get
                                                             if Q.null c
                                                                 then return []
                                                                 else do let ((_, item), c') = Q.deleteFindMax c
-                                                                        let newitems = filter (not . (`Map.member` a) . fst) $ deductiveStep item (Map.toList a) rs
-                                                                        let a'' = a `Map.union` Map.fromList newitems
-                                                                        let c'' = Q.fromList $ Q.take beam $ c' `Q.union` Q.fromList (map swap newitems)
+                                                                            newitems = filter (not . (`Map.member` a) . fst) $ deductiveStep item (Map.toList a) rs
+                                                                            a'' = a `Map.union` Map.fromList newitems
+                                                                            c'' = Q.fromList $ Q.take beam $ c' `Q.union` Q.fromList (map swap newitems)
                                                                         put (c'', a'')
                                                                         is <- deductiveIteration s
                                                                         return (item:is)
-                                                                    
+
+
 -- | A step to apply all rules for all possible antecedents.
 deductiveStep :: (Monoid wt, Eq it) => it -> [(it, wt)] -> [(DeductiveRule it, wt)] -> [(it, wt)]
 deductiveStep item is rs = rs >>= ruleApplication item is
+
 
 -- | Application of one rule to all possible antecedents.
 ruleApplication :: (Monoid wt, Eq it) => it -> [(it, wt)] -> (DeductiveRule it, wt) -> [(it, wt)]

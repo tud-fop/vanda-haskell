@@ -8,6 +8,7 @@ import Vanda.Grammar.PMCFG.CYKParser
 import Vanda.Grammar.PMCFG.WeightedDeductiveSolver
 import Data.Maybe (mapMaybe)
 import Data.Hashable (hash)
+import Numeric.Log (Log)
 
 testcomposition :: Function Char
 testcomposition = [ [T 'a', Var 1 1, T 'a']

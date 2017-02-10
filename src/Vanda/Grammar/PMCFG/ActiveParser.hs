@@ -51,94 +51,101 @@ module Vanda.Grammar.PMCFG.ActiveParser
     , weightedParse
     ) where
 
-import Vanda.Grammar.PMCFG (PMCFG(..), WPMCFG(..), Rule(..), VarT(..), prettyPrintRule, prettyPrintComposition)
-import Vanda.Grammar.PMCFG.CYKParser (Derivation(..), Range(Epsilon), singletons, entire, safeConc, Rangevector, Function, prettyPrintRangevector, node, isNonOverlapping)
-import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (WeightedDeductiveSolver(..), DeductiveRule(..), solve, Cost, cost, Dividable(divide))
-
+import Vanda.Grammar.PMCFG
+import Vanda.Grammar.PMCFG.WeightedDeductiveSolver
 import qualified Data.Map.Strict as Map
 import Data.Tree (Tree)
 import Data.List (sort, elemIndices)
 import Data.Maybe (mapMaybe, maybeToList)
+import Data.Monoid ((<>))
+
 
 -- | Top-level function to parse a word using a PMCFG.
 -- Uses weightedParse with additive costs for each rule, s.t. the number of rule applications is minimized.
 parse :: (Ord nt, Ord t) => PMCFG nt t -> [t] -> [Tree (Rule nt t)]
 parse (PMCFG s rs) = weightedParse $ WPMCFG s $ zip rs $ repeat (cost 1 :: Cost Double)
 
+
 -- | Top-level function to parse a word using a weighted PMCFG.
 weightedParse :: (Ord nt, Ord t, Ord wt, Dividable wt) => WPMCFG nt wt t -> [t] -> [Tree (Rule nt t)]
-weightedParse (WPMCFG s rs) w = map (\ (Passive (_, _, Derivation t)) -> t) 
+weightedParse (WPMCFG s rs) w = map (\ (Passive _ _ (Derivation t)) -> t) 
                                 $ filter (resultfilter s [entire w])
                                 $ solve ds
     where
-        ds = WeightedDeductiveSolver (conversionRule : terminalCompletionRule w : (rs >>= completionRules)) 100
+        ds = WeightedDeductiveSolver (conversionRule : terminalCompletionRule w : (rs >>= completionRules)) 1000
         
         resultfilter :: (Eq nt) => [nt] -> Rangevector -> Item nt t -> Bool
-        resultfilter start target (Passive (a, rho, _)) = a `elem` start && rho == target
-        resultfilter _ _ _ = False 
+        resultfilter start target (Passive a rho _) = a `elem` start && rho == target
+        resultfilter _ _ _                          = False 
 
-data Item nt t = Passive (nt, Rangevector, Derivation nt t)
-                 | Active (Rule nt t, [Range], Function t, Map.Map (VarT t) Range, [(Int, Derivation nt t)]) deriving (Eq)
+
+data Item nt t = Passive nt Rangevector (Derivation nt t)
+               | Active (Rule nt t) [Range] (Function t) (Map.Map (VarT t) Range) [(Int, Derivation nt t)] deriving (Eq)
+
 
 instance (Ord nt, Ord t) => Ord (Item nt t) where
-    (Passive tup) `compare` (Passive tup') = tup `compare` tup'
-    (Active (r, rv, f, _, _)) `compare` (Active (r', rv', f', _, _)) = (r, rv, f) `compare` (r', rv', f')
-    (Active _) `compare` (Passive _) = GT
-    (Passive _) `compare` (Active _) = LT
+    (Passive a rv d) `compare` (Passive a' rv' d') = compare a a' <> compare rv rv' <> compare d d'
+    (Active r rv f _ _) `compare` (Active r' rv' f' _ _) = compare r r' <> compare rv rv' <> compare f f'
+    (Active _ _ _ _ _) `compare` (Passive _ _ _) = GT
+    (Passive _ _ _) `compare` (Active _ _ _ _ _) = LT
+
 
 instance (Show nt, Show t) => Show (Item nt t) where
-    show (Passive (a, rv, _)) = "[Passive] " ++ show a ++ " " ++ prettyPrintRangevector rv
-    show (Active (r, rv, f, _, _)) = "[Active] " ++ prettyPrintRule r ++ " " ++ prettyPrintRangevector rv ++ " " ++ prettyPrintComposition f
+    show (Passive a rv _) = "[Passive] " ++ show a ++ " " ++ prettyPrintRangevector rv
+    show (Active r rv f _ _) = "[Active] " ++ prettyPrintRule r ++ " " ++ prettyPrintRangevector rv ++ " " ++ prettyPrintComposition f
+
 
 conversionRule :: (Ord nt, Ord t, Monoid wt) => (DeductiveRule (Item nt t), wt)
 conversionRule = (DeductiveRule [conversionFilter] convert, mempty)
   where
     conversionFilter :: Item nt t -> Bool
-    conversionFilter (Active (_, _, []:_, _, _)) = True
-    conversionFilter _ = False
+    conversionFilter (Active _ _ ([]:_) _ _) = True
+    conversionFilter _                       = False
     
     convert :: (Ord nt, Ord t) => [Item nt t] -> [Item nt t]
-    convert [Active (r@(Rule ((a, _), _)), rs, [[]], _, ts)] = [Passive (a, reverse rs, node r $ snd $ unzip $ sort ts) | isNonOverlapping rs]
-    convert [Active (r, rs, []:fs, m, ts)] = [Active (r, Epsilon:rs, fs, m, ts)]
-    convert _ = []
-    
+    convert [Active r@(Rule ((a, _), _)) rs [[]] _ ts] = [Passive a (reverse rs) d | isNonOverlapping rs]
+      where d = node r $ snd $ unzip $ sort ts
+    convert [Active r rs ([]:fs) m ts]                 = [Active r (Epsilon:rs) fs m ts]
+    convert _                                          = []
+
+
 terminalCompletionRule :: (Monoid wt, Eq t) => [t] -> (DeductiveRule (Item nt t), wt)
 terminalCompletionRule w = (DeductiveRule [completeTFilter] (completeT w), mempty)
   where
     completeTFilter :: Item nt t -> Bool
-    completeTFilter (Active (_, _, (T _:_):_, _, _)) = True
-    completeTFilter _ = False
+    completeTFilter (Active _ _ ((T _:_):_) _ _) = True
+    completeTFilter _                            = False
     
     completeT :: (Eq t) => [t] -> [Item nt t] -> [Item nt t]
-    completeT w' [Active (r, ra:rs, (T t:fs):fss, m, ds)] = [Active (r, ra':rs, fs:fss, m, ds) 
-                                                            | ra' <- mapMaybe (safeConc ra) $ singletons t w'
-                                                            ]
-    completeT _ _ = []
+    completeT w' [Active r (ra:rs) ((T t:fs):fss) m ds] = [ Active r (ra':rs) (fs:fss) m ds 
+                                                          | ra' <- mapMaybe (safeConc ra) $ singletons t w'
+                                                          ]
+    completeT _ _                                       = []
+
 
 completionRules :: (Ord t, Ord nt, Dividable wt) => (Rule nt t, wt) -> [(DeductiveRule (Item nt t), wt)]
-completionRules (r@(Rule ((_, as), f)), w) = (DeductiveRule [] (\ [] -> [ Active (r, [Epsilon], f, Map.empty, []) ]), mempty)
+completionRules (r@(Rule ((_, as), f)), w) = (DeductiveRule [] (\ [] -> [ Active r [Epsilon] f Map.empty [] ]), mempty)
                                               : zip [ DeductiveRule [completeNTFilterPassive a', completeNTFilterActive r a'] completeNT
                                                     | a' <- as 
                                                     ] weights
   where
     weights = divide w $ length as
     completeNTFilterPassive :: (Eq nt) => nt -> Item nt t -> Bool
-    completeNTFilterPassive a (Passive (a', _, _)) = a == a'
-    completeNTFilterPassive _ _ = False
+    completeNTFilterPassive a (Passive a' _ _) = a == a'
+    completeNTFilterPassive _ _                = False
     
     completeNTFilterActive :: (Eq nt, Eq t) => Rule nt t -> nt -> Item nt t -> Bool
-    completeNTFilterActive r''@(Rule ((_, as'), _)) a (Active (r', _, (Var i _:_):_, _, _)) 
-          = i `elem` elemIndices a as' && r'' == r'
-    completeNTFilterActive _ _ _ = False
+    completeNTFilterActive r''@(Rule ((_, as'), _)) a (Active r' _ ((Var i _:_):_) _ _) = i `elem` elemIndices a as' && r'' == r'
+    completeNTFilterActive _ _ _                                                        = False
     
     completeNT :: (Ord t) => [Item nt t] -> [Item nt t]
-    completeNT [Passive (_, rv, d), Active (r', ra:ras, (Var i j:fs):fss, m, ds)]
+    completeNT [Passive _ rv d, Active r' (ra:ras) ((Var i j:fs):fss) m ds]
       | Map.fromList (zip [Var i j' | j' <- [0..]] rv) `Map.isSubmapOf` m
-        = [ Active (r', ra':ras, fs:fss, m, ds)
+        = [ Active r' (ra':ras) (fs:fss) m ds
           | ra' <- maybeToList $ safeConc ra (rv !! j) 
           ]
       | not $ any (`Map.member` m) [Var i j' | j' <- [0..(length rv)]]
-        = [ Active (r', ra':ras, fs:fss, m `Map.union` Map.fromList (zip [Var i j' | j' <- [0..]] rv), (i,d):ds)
+        = [ Active r' (ra':ras) (fs:fss) (m `Map.union` Map.fromList (zip [Var i j' | j' <- [0..]] rv)) ((i,d):ds)
           | ra' <- maybeToList $ safeConc ra (rv !! j)
           ]
       | otherwise = []

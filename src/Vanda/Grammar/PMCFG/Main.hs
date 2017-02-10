@@ -19,8 +19,6 @@ module Vanda.Grammar.PMCFG.Main
   ) where
 
 import Codec.Compression.GZip (compress, decompress)
-import Control.Applicative ((<$>))
-import Control.Exception.Base (evaluate)
 import qualified Data.Binary as B
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.Text.Lazy.IO as TIO
@@ -35,11 +33,11 @@ import Vanda.Grammar.PMCFG.Functions (extractFromNegra, extractFromNegraAndBinar
 import Vanda.Grammar.XRS.LCFRS.Binarize (binarizeNaively, binarizeByAdjacency, binarizeHybrid)
 
 import Vanda.Grammar.PMCFG (WPMCFG (..), PMCFG (..), prettyPrintWPMCFG, integerize, deintegerize)
-import qualified Vanda.Grammar.PMCFG.Parse as UnweightedAutomaton
+--import qualified Vanda.Grammar.PMCFG.Parse as UnweightedAutomaton
 import qualified Vanda.Grammar.PMCFG.CYKParser as CYK
 import qualified Vanda.Grammar.PMCFG.NaiveParser as Naive
 import qualified Vanda.Grammar.PMCFG.ActiveParser as Active
-import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (Probabilistic, probabilistic)
+import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (probabilistic)
 
 
 data Args
@@ -76,6 +74,7 @@ cmdArgs
                                 , flagCYK
                                 , flagNaive
                                 , flagActive
+                                , flagUseWeights
                                 ]
     }
   ]
@@ -139,6 +138,7 @@ mainArgs (Parse algorithm grFile useWeights)
                   else case algorithm of CYK -> CYK.parse (PMCFG inits (map fst wrs))
                                          NaiveActive -> Naive.parse (PMCFG inits (map fst wrs))
                                          Active -> Active.parse (PMCFG inits (map fst wrs))
+                                         UnweightedAutomaton -> error "not implemented"
                                          --UnweightedAutomaton -> UnweightedAutomaton.parse (PMCFG inits (map fst wrs))
       corpus <- TIO.getContents
       mapM_ (putStrLn . drawTree . fmap show . head . map (deintegerize (nti, ti)) . parse . snd . internListPreserveOrder ti . map T.unpack . T.words) $ T.lines corpus

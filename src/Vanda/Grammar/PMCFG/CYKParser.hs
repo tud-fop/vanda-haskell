@@ -39,89 +39,17 @@
 module Vanda.Grammar.PMCFG.CYKParser
     ( parse
     , weightedParse
-    -- * derivation trees
-    , Derivation(Derivation)
-    , node
-    -- * ranges
-    , Range(Epsilon)
-    , singletons
-    , entire
-    , safeConc
-    , Rangevector
-    , prettyPrintRangevector
-    , isNonOverlapping
-    -- * ranges with variables
-    , Function
-    , InstantiatedFunction
-    , instantiate
-    , concVarRange
-    , toRange
-    , prettyPrintInstantiatedFunction
     ) where
 
 import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (solve, WeightedDeductiveSolver(..), DeductiveRule(..), Cost, cost)
 import Vanda.Grammar.PMCFG
-import Data.Tree (Tree(Node))
-import Data.Hashable (Hashable, hashWithSalt)
-import Data.List (elemIndices)
+import Data.Tree (Tree)
 import Data.Maybe (mapMaybe)
 
--- | A range (i, j) in a word w.
--- Consider i \< j for i \>= 0 and j \<= |w|
--- and 'Epsilon' substitutes all (i, i) for 0 <= i <= |w|.
-data Range = Range (Int, Int)
-              | Epsilon -- ^ empty range of ε in w
-              deriving (Show, Eq, Ord)
-
--- | A singleton range is a range of a single character in a word.
-singletons :: (Eq t) => t -> [t] -> [Range]
-singletons c w = map singleton $ c `elemIndices` w
-  where singleton i = Range (i, i+1)
-
--- | Full range of a word.
-entire :: [t] -> Range
-entire [] = Epsilon
-entire xs = Range (0, length xs)
-
--- | Concatenates two ranges. Fails if neighboring ranges do not fit.
-safeConc :: Range -> Range -> Maybe Range
-safeConc Epsilon r = Just r
-safeConc r Epsilon = Just r
-safeConc (Range (i,j)) (Range (k,l))
-  | j == k = Just $ Range (i, l)
-  | otherwise = Nothing
-
--- | A range vector is a non-overlapping sequence of ranges.
-type Rangevector = [Range]
 
 -- | Item of naive parsing deduction. 
 -- Tuple of non-terminal, spanning range vector, derivation tree.
-type DeductiveItem nt t = (nt, Rangevector, Derivation nt t)
-
--- | A composition function.
-type Function t = [[VarT t]]
-
--- | An instantiated composition function. 
--- Terminals are substituted by their corresponding ranges in the word.
-type InstantiatedFunction = Function Range
-
--- | A derivation tree.
-newtype Derivation nt t = Derivation (Tree (Rule nt t)) deriving (Eq, Show)
-
--- | Wraps Node constructor of Tree for easy use of Derivation.
-node :: Rule nt t -> [Derivation nt t] -> Derivation nt t
-node r ds = Derivation $ Node r ts
-  where
-    ts = map (\ (Derivation t) -> t) ds
-
-instance (Ord nt, Ord t) => Ord (Derivation nt t) where
-  compare (Derivation (Node x xs)) (Derivation (Node y ys))
-    | x < y = LT
-    | x > y = GT
-    | otherwise = map Derivation xs `compare` map Derivation ys
-
-instance (Hashable t, Hashable nt) => Hashable (Derivation nt t) where
-  salt `hashWithSalt` (Derivation (Node x xs)) = salt `hashWithSalt` x `hashWithSalt` map Derivation xs
+data DeductiveItem nt t = Item nt Rangevector (Derivation nt t) deriving (Eq, Ord, Show)
 
 -- | Top-level function to parse a word using a grammar.
 parse :: (Ord t, Ord nt)
@@ -130,15 +58,17 @@ parse :: (Ord t, Ord nt)
       -> [Tree (Rule nt t)]                       -- ^ list of derivation trees 
 parse (PMCFG s rules) = weightedParse $ WPMCFG s $ zip rules $ repeat (cost 1 :: Cost Int)
 
+
 -- | Top-level function to parse a word using a weighted grammar.
 weightedParse :: (Ord t, Ord nt, Monoid wt, Ord wt)
               => WPMCFG nt wt t             -- ^ weighted grammar
               -> [t]                        -- ^ word
               -> [Tree (Rule nt t)]   -- ^ parse trees and resulting weights
-weightedParse (WPMCFG s rs) word = map (\ (_, _, Derivation t) -> t) 
-                                    $ filter (\ (a, rho, _) -> (a `elem` s) && (rho == [entire word])) 
+weightedParse (WPMCFG s rs) word = map (\ (Item _ _ (Derivation t)) -> t) 
+                                    $ filter (\ (Item a rho _) -> (a `elem` s) && (rho == [entire word])) 
                                     $ solve 
                                     $ WeightedDeductiveSolver (makeWeightedRules word rs) 100
+
 
 -- | Constructs deduction rules using a weighted grammar.
 -- Weights are stored in antecedent items and application functions of rules.
@@ -151,78 +81,19 @@ makeWeightedRules w rs =  [ (DeductiveRule (map itemFilter as) (application r $ 
                           ]
   where
     itemFilter :: (Eq nt) => nt -> DeductiveItem nt t -> Bool
-    itemFilter a (a', _, _)= a == a'
+    itemFilter a (Item a' _ _)= a == a'
     
     application :: Rule nt t -> [InstantiatedFunction] -> [DeductiveItem nt t] -> [DeductiveItem nt t]
-    application r@(Rule ((a', _), _)) fs is = [ (a', rv, node r ts) 
+    application r@(Rule ((a', _), _)) fs is = [ Item a' rv $ node r ts 
                                               | rv <- mapMaybe (insert rvs) fs
                                               , isNonOverlapping rv 
                                               ]
       where
-        (rvs, ts) = case  unzip3 is of
-                          (_, rvs', ts') -> (rvs', ts')
+        (rvs, ts) = foldr (\ (Item _ rv t) (rvs, ts) -> (rv:rvs, t:ts)) ([], []) is
 
-
--- | Returns a list of all possible instances of a composition function for a word.
-instantiate :: (Eq t)
-            => [t]                    -- ^ the word
-            -> Function t             -- ^ the function to instantiate
-            -> [InstantiatedFunction] -- ^ all possible combinations of instances with valid concatenated ranges
-instantiate w' = mapM (mapMaybe concVarRange . sequence . instantiateComponent w')
-  where
-    instantiateComponent :: (Eq t) => [t] -> [VarT t] -> [[VarT Range]]
-    instantiateComponent _ []         = [[ T Epsilon ]]
-    instantiateComponent w fs         = map (instantiateCharacter w) fs
-    instantiateCharacter :: (Eq t) => [t] -> VarT t -> [VarT Range]
-    instantiateCharacter _ (Var i j)  = [Var i j]
-    instantiateCharacter w (T c)      = map T $ singletons c w
-
--- | Checks for overlapping components in a range vector.
-isNonOverlapping :: Rangevector -> Bool
-isNonOverlapping = isNonOverlapping' []
-  where
-    isNonOverlapping' :: [(Int, Int)] -> Rangevector -> Bool
-    isNonOverlapping' _ [] = True
-    isNonOverlapping' cache (Range (i,j) : rs)
-      | any (\ (k,l) -> (j > k && j < l) || (i > k && i < l)) cache = False
-      | otherwise = isNonOverlapping' ((i, j):cache) rs
-    isNonOverlapping' cache (Epsilon : rs) = isNonOverlapping' cache rs
-
--- | Replaces variables with corresponding ranges. Fails if ranges do not fit in their context.
-insert :: [Rangevector] -> InstantiatedFunction -> Maybe Rangevector
-insert rvs = mapM ((>>= toRange) . concVarRange . map (insert' rvs))
-  where
-    insert' :: [Rangevector] -> VarT Range -> VarT Range
-    insert' rvs' (Var x y)  = T $ rvs' !! x !! y
-    insert' _ r = r
-
--- | Tries to concatenate ranges in an instantiated function component.
--- Variables are left as they are, so they result does not need to be one range.
-concVarRange :: [VarT Range] -> Maybe [VarT Range]
-concVarRange (T r1 : T r2 : is) = case safeConc r1 r2 of
-                                       Just r -> concVarRange $ T r : is
-                                       Nothing -> Nothing
-concVarRange (T Epsilon : (i : is)) = concVarRange $ i:is
-concVarRange (i : (T Epsilon : is)) = concVarRange $ i:is
-concVarRange (i:is) = (i:) <$> concVarRange is
-concVarRange [] = Just []
-
--- | Tries to unpack a concatenated range vector.
-toRange :: [VarT Range] -> Maybe Range
-toRange [T r] = Just r
-toRange _ = Nothing
-
-prettyPrintInstantiatedFunction :: InstantiatedFunction -> String
-prettyPrintInstantiatedFunction fs = show $ map go fs
-  where
-    go :: [VarT Range] -> String
-    go [] = ""
-    go (T (Range (i,j)) : f) = "(" ++ show i ++ "," ++ show j ++ ")" ++ go f
-    go (T Epsilon : f) = "()" ++ go f
-    go (Var i j : f) = "x[" ++ show i ++ ":" ++ show j ++ "]" ++ go f
-
-prettyPrintRangevector :: Rangevector -> String
-prettyPrintRangevector rs = "<" ++ unwords (map go rs) ++  ">"
-  where
-    go (Range r) = show r
-    go Epsilon = "()"
+        insert :: [Rangevector] -> InstantiatedFunction -> Maybe Rangevector
+        insert rvs = mapM ((>>= toRange) . concVarRange . map (insert' rvs))
+          where
+            insert' :: [Rangevector] -> VarT Range -> VarT Range
+            insert' rvs' (Var x y)  = T $ rvs' !! x !! y
+            insert' _ r = r

@@ -6,6 +6,7 @@ import Vanda.Grammar.PMCFG
 import Vanda.Grammar.PMCFG.NaiveParser
 import Vanda.Grammar.PMCFG.WeightedDeductiveSolver
 import Data.Maybe (mapMaybe)
+import Numeric.Log (Log)
 
 exampleWPMCFG' :: WPMCFG Int (Probabilistic Double) Char
 exampleWPMCFG' = case exampleWPMCFG of

@@ -27,10 +27,28 @@ module Vanda.Grammar.PMCFG
   , fromWeightedRules
   , integerize
   , deintegerize
+  -- * ranges
+  , Range(Epsilon)
+  , singletons
+  , entire
+  , safeConc
+  , Rangevector
+  , prettyPrintRangevector
+  , isNonOverlapping
+  -- * derivation trees
+  , Derivation(Derivation)
+  , node
+  -- * ranges with variables
+  , Function
+  , InstantiatedFunction
+  , instantiate
+  , concVarRange
+  , toRange
   -- * pretty printing
   , prettyPrintRule
   , prettyPrintComposition
   , prettyPrintWPMCFG
+  , prettyPrintInstantiatedFunction
   -- * examples
   , examplePMCFG
   , exampleWPMCFG
@@ -45,8 +63,8 @@ import Control.DeepSeq (NFData)
 import qualified Control.Error
 import qualified Data.Binary as B
 import Data.Hashable
-import Data.List (intercalate)
-import Data.Maybe (listToMaybe)
+import Data.List (intercalate, elemIndices)
+import Data.Maybe (listToMaybe, mapMaybe)
 import Data.Tree
 import GHC.Generics (Generic)
 import Data.Interner (Interner, internList, intern, emptyInterner, internListPreserveOrder, internerToArray)
@@ -143,6 +161,135 @@ fromWeightedRules
   -> [(Rule nt t, w)] -- ^ weighted rules
   -> WPMCFG nt w t
 fromWeightedRules = WPMCFG
+
+
+-- | A range (i, j) in a word w.
+-- Consider i \< j for i \>= 0 and j \<= |w|
+-- and 'Epsilon' substitutes all (i, i) for 0 <= i <= |w|.
+data Range = Range (Int, Int)
+           | Epsilon -- ^ empty range of ε in w
+            deriving (Show, Eq, Ord)
+
+
+-- | A singleton range is a range of a single character in a word.
+singletons :: (Eq t) => t -> [t] -> [Range]
+singletons c w = map singleton $ c `elemIndices` w
+  where singleton i = Range (i, i+1)
+
+
+-- | Full range of a word.
+entire :: [t] -> Range
+entire [] = Epsilon
+entire xs = Range (0, length xs)
+
+
+-- | Concatenates two ranges. Fails if neighboring ranges do not fit.
+safeConc :: Range -> Range -> Maybe Range
+safeConc Epsilon r = Just r
+safeConc r Epsilon = Just r
+safeConc (Range (i,j)) (Range (k,l))
+  | j == k = Just $ Range (i, l)
+  | otherwise = Nothing
+
+
+-- | A range vector is a non-overlapping sequence of ranges.
+type Rangevector = [Range]
+
+
+-- | Checks for overlapping components in a range vector.
+isNonOverlapping :: Rangevector -> Bool
+isNonOverlapping = isNonOverlapping' []
+  where
+    isNonOverlapping' :: [(Int, Int)] -> Rangevector -> Bool
+    isNonOverlapping' _ [] = True
+    isNonOverlapping' cache (Range (i,j) : rs)
+      | any (\ (k,l) -> (j > k && j < l) || (i > k && i < l)) cache = False
+      | otherwise = isNonOverlapping' ((i, j):cache) rs
+    isNonOverlapping' cache (Epsilon : rs) = isNonOverlapping' cache rs
+
+
+-- | A composition function.
+type Function t = [[VarT t]]
+
+
+-- | An instantiated composition function. 
+-- Terminals are substituted by their corresponding ranges in the word.
+type InstantiatedFunction = Function Range
+
+
+-- | A derivation tree.
+newtype Derivation nt t = Derivation (Tree (Rule nt t)) deriving (Eq, Show)
+
+
+-- | Wraps Node constructor of Tree for easy use of Derivation.
+node :: Rule nt t -> [Derivation nt t] -> Derivation nt t
+node r ds = Derivation $ Node r ts
+  where
+    ts = map (\ (Derivation t) -> t) ds
+
+
+instance (Ord nt, Ord t) => Ord (Derivation nt t) where
+  compare (Derivation (Node x xs)) (Derivation (Node y ys))
+    | x < y = LT
+    | x > y = GT
+    | otherwise = map Derivation xs `compare` map Derivation ys
+
+
+instance (Hashable t, Hashable nt) => Hashable (Derivation nt t) where
+  salt `hashWithSalt` (Derivation (Node x xs)) = salt `hashWithSalt` x `hashWithSalt` map Derivation xs
+
+
+
+-- | Tries to concatenate ranges in an instantiated function component.
+-- Variables are left as they are, so they result does not need to be one range.
+concVarRange :: [VarT Range] -> Maybe [VarT Range]
+concVarRange (T r1 : T r2 : is) = case safeConc r1 r2 of
+                                       Just r -> concVarRange $ T r : is
+                                       Nothing -> Nothing
+concVarRange (T Epsilon : (i : is)) = concVarRange $ i:is
+concVarRange (i : (T Epsilon : is)) = concVarRange $ i:is
+concVarRange (i:is) = (i:) <$> concVarRange is
+concVarRange [] = Just []
+
+
+-- | Tries to unpack a concatenated range vector.
+toRange :: [VarT Range] -> Maybe Range
+toRange [T r] = Just r
+toRange _ = Nothing
+
+
+-- | Returns a list of all possible instances of a composition function for a word.
+instantiate :: (Eq t)
+            => [t]                    -- ^ the word
+            -> Function t             -- ^ the function to instantiate
+            -> [InstantiatedFunction] -- ^ all possible combinations of instances with valid concatenated ranges
+instantiate w' = mapM (mapMaybe concVarRange . sequence . instantiateComponent w')
+  where
+    instantiateComponent :: (Eq t) => [t] -> [VarT t] -> [[VarT Range]]
+    instantiateComponent _ []         = [[ T Epsilon ]]
+    instantiateComponent w fs         = map (instantiateCharacter w) fs
+    
+    instantiateCharacter :: (Eq t) => [t] -> VarT t -> [VarT Range]
+    instantiateCharacter _ (Var i j)  = [Var i j]
+    instantiateCharacter w (T c)      = map T $ singletons c w
+
+
+prettyPrintInstantiatedFunction :: InstantiatedFunction -> String
+prettyPrintInstantiatedFunction fs = show $ map go fs
+  where
+    go :: [VarT Range] -> String
+    go [] = ""
+    go (T (Range (i,j)) : f) = "(" ++ show i ++ "," ++ show j ++ ")" ++ go f
+    go (T Epsilon : f) = "()" ++ go f
+    go (Var i j : f) = "x[" ++ show i ++ ":" ++ show j ++ "]" ++ go f
+
+
+prettyPrintRangevector :: Rangevector -> String
+prettyPrintRangevector rs = "<" ++ unwords (map go rs) ++  ">"
+  where
+    go (Range r) = show r
+    go Epsilon = "()"
+
 
 -- | Substitutes all terminals and nonterminals with integers and saves substitutions.
 integerize :: (Eq t, Eq nt, Hashable t, Hashable nt) => WPMCFG nt wt t -> (WPMCFG Int wt Int, Interner nt, Interner t)
