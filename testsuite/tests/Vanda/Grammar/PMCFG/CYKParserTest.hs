@@ -31,11 +31,11 @@ testderivation = node testrule [node testrule []]
 testderivation2 :: Derivation String Char
 testderivation2 = node testrule []
 
-exampleWPMCFG' :: WPMCFG Int (Probabilistic Double) Char
+exampleWPMCFG' :: WPMCFG Int (Probabilistic (Log Double)) Char
 exampleWPMCFG' = case exampleWPMCFG of
                       (WPMCFG s rs) -> WPMCFG s $ map (\ (r, w) -> (r, probabilistic w)) rs
 
-exampleWPMCFG'' :: (WPMCFG Int (Probabilistic Double) Int, Interner Int, Interner Char)
+exampleWPMCFG'' :: (WPMCFG Int (Probabilistic (Log Double)) Int, Interner Int, Interner Char)
 exampleWPMCFG'' = integerize exampleWPMCFG'
 
 tests :: Test

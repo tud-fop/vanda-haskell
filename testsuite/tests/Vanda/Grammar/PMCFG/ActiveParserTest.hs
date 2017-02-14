@@ -8,7 +8,7 @@ import Vanda.Grammar.PMCFG.WeightedDeductiveSolver
 import Data.Maybe (mapMaybe)
 import Numeric.Log (Log)
 
-exampleWPMCFG' :: WPMCFG Int (Probabilistic Double) Char
+exampleWPMCFG' :: WPMCFG Int (Probabilistic (Log Double)) Char
 exampleWPMCFG' = case exampleWPMCFG of
                       (WPMCFG s rs) -> WPMCFG s $ map (\ (r, w) -> (r, probabilistic w)) rs
 

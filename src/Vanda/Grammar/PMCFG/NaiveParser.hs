@@ -28,6 +28,7 @@ module Vanda.Grammar.PMCFG.NaiveParser
     ) where
 
 import Vanda.Grammar.PMCFG.WeightedDeductiveSolver
+import Vanda.Grammar.PMCFG.Range
 import Vanda.Grammar.PMCFG
 import Data.Tree (Tree)
 import Data.Maybe (maybeToList)
@@ -42,7 +43,7 @@ data Item nt t = ActiveItem (Rule nt t) [nt] Int [Derivation nt t] InstantiatedF
 
 instance (Show nt, Show t) => Show (Item nt t) where
     show (ActiveItem r as i _ fs) = "[active] " ++ prettyPrintRule r ++ " " ++ show as ++ "+" ++ show i ++ " " ++ prettyPrintInstantiatedFunction fs
-    show (PassiveItem a rv _) = "[passive] " ++ show a ++ " " ++ prettyPrintRangevector rv 
+    show (PassiveItem a rv _) = "[passive] " ++ show a ++ " " ++ show rv 
 
 
 -- | Top-level function to parse a word using a PMCFG.
@@ -59,7 +60,7 @@ weightedParse :: (Ord t, Ord nt, Ord wt, Dividable wt)
               -> [t]                -- ^ terminal word
               -> [Tree (Rule nt t)] -- ^ derivation tree of applied rules
 weightedParse (WPMCFG s rs) w = map (\ (PassiveItem _ _ (Derivation t)) -> t) 
-                        $ filter (resultfilter s [entire w])
+                        $ filter (resultfilter s $ singleton $ entire w)
                         $ solve ds
     where
         ds = WeightedDeductiveSolver (conversionRule : (rs >>= \ r -> predictionRule w r : completionRules r)) 100
@@ -90,8 +91,7 @@ conversionRule = (DeductiveRule [filterConversion] convert, mempty)
 
     convert :: [Item nt t] -> [Item nt t]
     convert [ActiveItem r'@(Rule ((a, _),_)) [] _ ts fs] = [ PassiveItem a rv' (node r' $ reverse ts)
-                                                           | rv' <- maybeToList $ mapM ((>>= toRange) . concVarRange) fs
-                                                           , isNonOverlapping rv'
+                                                           | rv' <- maybeToList $ mapM ((>>= toRange) . concVarRange) fs >>= fromList
                                                            ]
     convert _                                            = []
 
@@ -126,6 +126,6 @@ insert off rv = map (map (substitute off rv))
     where
         substitute :: Int -> Rangevector -> VarT Range -> VarT Range
         substitute i rv' (Var i' j)
-            | i' == i =  T $ rv' !! j
+            | i' == i =  T $ rv' ! j
             | otherwise = Var i' j
         substitute _ _ r = r

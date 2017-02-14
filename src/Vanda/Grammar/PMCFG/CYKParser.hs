@@ -41,7 +41,8 @@ module Vanda.Grammar.PMCFG.CYKParser
     , weightedParse
     ) where
 
-import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (solve, WeightedDeductiveSolver(..), DeductiveRule(..), Cost, cost)
+import Vanda.Grammar.PMCFG.WeightedDeductiveSolver
+import Vanda.Grammar.PMCFG.Range
 import Vanda.Grammar.PMCFG
 import Data.Tree (Tree)
 import Data.Maybe (mapMaybe)
@@ -50,6 +51,7 @@ import Data.Maybe (mapMaybe)
 -- | Item of naive parsing deduction. 
 -- Tuple of non-terminal, spanning range vector, derivation tree.
 data DeductiveItem nt t = Item nt Rangevector (Derivation nt t) deriving (Eq, Ord, Show)
+
 
 -- | Top-level function to parse a word using a grammar.
 parse :: (Ord t, Ord nt)
@@ -65,7 +67,7 @@ weightedParse :: (Ord t, Ord nt, Monoid wt, Ord wt)
               -> [t]                        -- ^ word
               -> [Tree (Rule nt t)]   -- ^ parse trees and resulting weights
 weightedParse (WPMCFG s rs) word = map (\ (Item _ _ (Derivation t)) -> t) 
-                                    $ filter (\ (Item a rho _) -> (a `elem` s) && (rho == [entire word])) 
+                                    $ filter (\ (Item a rho _) -> (a `elem` s) && (rho == singleton (entire word))) 
                                     $ solve 
                                     $ WeightedDeductiveSolver (makeWeightedRules word rs) 100
 
@@ -86,14 +88,13 @@ makeWeightedRules w rs =  [ (DeductiveRule (map itemFilter as) (application r $ 
     application :: Rule nt t -> [InstantiatedFunction] -> [DeductiveItem nt t] -> [DeductiveItem nt t]
     application r@(Rule ((a', _), _)) fs is = [ Item a' rv $ node r ts 
                                               | rv <- mapMaybe (insert rvs) fs
-                                              , isNonOverlapping rv 
                                               ]
       where
         (rvs, ts) = foldr (\ (Item _ rv t) (rvs, ts) -> (rv:rvs, t:ts)) ([], []) is
 
         insert :: [Rangevector] -> InstantiatedFunction -> Maybe Rangevector
-        insert rvs = mapM ((>>= toRange) . concVarRange . map (insert' rvs))
+        insert rvs = (>>= fromList) . mapM ((>>= toRange) . concVarRange . map (insert' rvs))
           where
             insert' :: [Rangevector] -> VarT Range -> VarT Range
-            insert' rvs' (Var x y)  = T $ rvs' !! x !! y
+            insert' rvs' (Var x y)  = T $ rvs' !! x ! y
             insert' _ r = r

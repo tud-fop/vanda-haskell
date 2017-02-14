@@ -39,22 +39,22 @@ import qualified Data.Map.Strict      as Map
 import Control.Monad.State (State, evalState, get, put)
 import Data.Tuple (swap)
 import Data.Monoid ((<>))
+import Numeric.Log (Log(Exp), Precise)
 
 
 -- | Multiplicative monoid for probabilistic weights.
--- Values are stored in log domain.
 newtype Probabilistic a = Probabilistic a deriving (Eq, Ord)
 
 
--- | Wraps constructor to check for correct ranged values.
-probabilistic :: (Floating a, Ord a) => a -> Probabilistic a
+-- | Wraps constructor to check for correct ranged values, stores value in log domain.
+probabilistic :: (Precise a, Ord a) => a -> Probabilistic (Log a)
 probabilistic x
-  | x > 0 && x <= 1 = Probabilistic $ log x
+  | x > 0 && x <= 1 = Probabilistic $ Exp $ log x
   | otherwise = error "probabilistic value out of range"
 
 
 instance (Show a, Floating a) => Show (Probabilistic a) where
-  show (Probabilistic x) = show (exp x)
+  show (Probabilistic x) = show x
 
 
 -- | Additive monoid for costs.
@@ -76,13 +76,13 @@ class (Monoid d) => Dividable d where
 
 -- | Instance of multiplicative monoid.
 instance (Num a) => Monoid (Probabilistic a) where
-  mempty = Probabilistic 0
-  (Probabilistic x) `mappend` (Probabilistic y) = Probabilistic $ x + y
+  mempty = Probabilistic 1
+  (Probabilistic x) `mappend` (Probabilistic y) = Probabilistic $ x * y
 
 
 -- | Uses root to divide a probability into n subprobabilities.
 instance (Floating a) => Dividable (Probabilistic a) where
-  divide (Probabilistic x) rt = replicate rt $ Probabilistic $ x / fromIntegral rt
+  divide (Probabilistic x) rt = replicate rt $ Probabilistic $ x ** (1 / fromIntegral rt)
 
 
 -- | Instance of additive monoid.

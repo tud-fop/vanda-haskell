@@ -52,6 +52,7 @@ module Vanda.Grammar.PMCFG.ActiveParser
     ) where
 
 import Vanda.Grammar.PMCFG
+import Vanda.Grammar.PMCFG.Range
 import Vanda.Grammar.PMCFG.WeightedDeductiveSolver
 import qualified Data.Map.Strict as Map
 import Data.Tree (Tree)
@@ -69,7 +70,7 @@ parse (PMCFG s rs) = weightedParse $ WPMCFG s $ zip rs $ repeat (cost 1 :: Cost 
 -- | Top-level function to parse a word using a weighted PMCFG.
 weightedParse :: (Ord nt, Ord t, Ord wt, Dividable wt) => WPMCFG nt wt t -> [t] -> [Tree (Rule nt t)]
 weightedParse (WPMCFG s rs) w = map (\ (Passive _ _ (Derivation t)) -> t) 
-                                $ filter (resultfilter s [entire w])
+                                $ filter (resultfilter s $ singleton $ entire w)
                                 $ solve ds
     where
         ds = WeightedDeductiveSolver (conversionRule : terminalCompletionRule w : (rs >>= completionRules)) 1000
@@ -91,8 +92,8 @@ instance (Ord nt, Ord t) => Ord (Item nt t) where
 
 
 instance (Show nt, Show t) => Show (Item nt t) where
-    show (Passive a rv _) = "[Passive] " ++ show a ++ " " ++ prettyPrintRangevector rv
-    show (Active r rv f _ _) = "[Active] " ++ prettyPrintRule r ++ " " ++ prettyPrintRangevector rv ++ " " ++ prettyPrintComposition f
+    show (Passive a rv _) = "[Passive] " ++ show a ++ " " ++ show rv
+    show (Active r rv f _ _) = "[Active] " ++ prettyPrintRule r ++ " " ++ show rv ++ " " ++ prettyPrintComposition f
 
 
 conversionRule :: (Ord nt, Ord t, Monoid wt) => (DeductiveRule (Item nt t), wt)
@@ -103,7 +104,7 @@ conversionRule = (DeductiveRule [conversionFilter] convert, mempty)
     conversionFilter _                       = False
     
     convert :: (Ord nt, Ord t) => [Item nt t] -> [Item nt t]
-    convert [Active r@(Rule ((a, _), _)) rs [[]] _ ts] = [Passive a (reverse rs) d | isNonOverlapping rs]
+    convert [Active r@(Rule ((a, _), _)) rs [[]] _ ts] = [Passive a rv d | rv <- maybeToList $ fromList $ reverse rs]
       where d = node r $ snd $ unzip $ sort ts
     convert [Active r rs ([]:fs) m ts]                 = [Active r (Epsilon:rs) fs m ts]
     convert _                                          = []
@@ -140,13 +141,13 @@ completionRules (r@(Rule ((_, as), f)), w) = (DeductiveRule [] (\ [] -> [ Active
     
     completeNT :: (Ord t) => [Item nt t] -> [Item nt t]
     completeNT [Passive _ rv d, Active r' (ra:ras) ((Var i j:fs):fss) m ds]
-      | Map.fromList (zip [Var i j' | j' <- [0..]] rv) `Map.isSubmapOf` m
+      | Map.fromList [(Var i j', rv ! j') | j' <- [0..(vectorLength rv - 1)]] `Map.isSubmapOf` m
         = [ Active r' (ra':ras) (fs:fss) m ds
-          | ra' <- maybeToList $ safeConc ra (rv !! j) 
+          | ra' <- maybeToList $ safeConc ra (rv ! j) 
           ]
-      | not $ any (`Map.member` m) [Var i j' | j' <- [0..(length rv)]]
-        = [ Active r' (ra':ras) (fs:fss) (m `Map.union` Map.fromList (zip [Var i j' | j' <- [0..]] rv)) ((i,d):ds)
-          | ra' <- maybeToList $ safeConc ra (rv !! j)
+      | not $ any (`Map.member` m) [Var i j' | j' <- [0..(vectorLength rv - 1)]]
+        = [ Active r' (ra':ras) (fs:fss) (m `Map.union` Map.fromList [(Var i j', rv ! j') | j' <- [0..(vectorLength rv - 1)]]) ((i,d):ds)
+          | ra' <- maybeToList $ safeConc ra (rv ! j)
           ]
       | otherwise = []
     completeNT _ = []

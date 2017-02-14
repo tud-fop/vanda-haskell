@@ -27,14 +27,6 @@ module Vanda.Grammar.PMCFG
   , fromWeightedRules
   , integerize
   , deintegerize
-  -- * ranges
-  , Range(Epsilon)
-  , singletons
-  , entire
-  , safeConc
-  , Rangevector
-  , prettyPrintRangevector
-  , isNonOverlapping
   -- * derivation trees
   , Derivation(Derivation)
   , node
@@ -70,6 +62,7 @@ import GHC.Generics (Generic)
 import Data.Interner (Interner, internList, intern, emptyInterner, internListPreserveOrder, internerToArray)
 import Control.Monad.State.Lazy
 import Data.Array (Array, (!))
+import Vanda.Grammar.PMCFG.Range (Range(Epsilon), Rangevector, safeConc, singletons)
 
 errorHere :: String -> String -> a
 errorHere = Control.Error.errorHere "Vanda.Grammar.PMCFG"
@@ -163,51 +156,6 @@ fromWeightedRules
 fromWeightedRules = WPMCFG
 
 
--- | A range (i, j) in a word w.
--- Consider i \< j for i \>= 0 and j \<= |w|
--- and 'Epsilon' substitutes all (i, i) for 0 <= i <= |w|.
-data Range = Range (Int, Int)
-           | Epsilon -- ^ empty range of ε in w
-            deriving (Show, Eq, Ord)
-
-
--- | A singleton range is a range of a single character in a word.
-singletons :: (Eq t) => t -> [t] -> [Range]
-singletons c w = map singleton $ c `elemIndices` w
-  where singleton i = Range (i, i+1)
-
-
--- | Full range of a word.
-entire :: [t] -> Range
-entire [] = Epsilon
-entire xs = Range (0, length xs)
-
-
--- | Concatenates two ranges. Fails if neighboring ranges do not fit.
-safeConc :: Range -> Range -> Maybe Range
-safeConc Epsilon r = Just r
-safeConc r Epsilon = Just r
-safeConc (Range (i,j)) (Range (k,l))
-  | j == k = Just $ Range (i, l)
-  | otherwise = Nothing
-
-
--- | A range vector is a non-overlapping sequence of ranges.
-type Rangevector = [Range]
-
-
--- | Checks for overlapping components in a range vector.
-isNonOverlapping :: Rangevector -> Bool
-isNonOverlapping = isNonOverlapping' []
-  where
-    isNonOverlapping' :: [(Int, Int)] -> Rangevector -> Bool
-    isNonOverlapping' _ [] = True
-    isNonOverlapping' cache (Range (i,j) : rs)
-      | any (\ (k,l) -> (j > k && j < l) || (i > k && i < l)) cache = False
-      | otherwise = isNonOverlapping' ((i, j):cache) rs
-    isNonOverlapping' cache (Epsilon : rs) = isNonOverlapping' cache rs
-
-
 -- | A composition function.
 type Function t = [[VarT t]]
 
@@ -279,16 +227,12 @@ prettyPrintInstantiatedFunction fs = show $ map go fs
   where
     go :: [VarT Range] -> String
     go [] = ""
-    go (T (Range (i,j)) : f) = "(" ++ show i ++ "," ++ show j ++ ")" ++ go f
-    go (T Epsilon : f) = "()" ++ go f
+    go (T r : f) = "(" ++ show r ++ ")" ++ go f
     go (Var i j : f) = "x[" ++ show i ++ ":" ++ show j ++ "]" ++ go f
 
 
 prettyPrintRangevector :: Rangevector -> String
-prettyPrintRangevector rs = "<" ++ unwords (map go rs) ++  ">"
-  where
-    go (Range r) = show r
-    go Epsilon = "()"
+prettyPrintRangevector rv = "<" ++ show rv ++  ">"
 
 
 -- | Substitutes all terminals and nonterminals with integers and saves substitutions.

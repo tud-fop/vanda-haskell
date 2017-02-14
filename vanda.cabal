@@ -124,6 +124,7 @@ library
     , Vanda.Grammar.PMCFG.Functions                
     , Vanda.Grammar.PMCFG.Main                
     , Vanda.Grammar.PMCFG.Parse               
+    , Vanda.Grammar.PMCFG.Range               
     , Vanda.Grammar.PMCFG.CYKParser           
     , Vanda.Grammar.PMCFG.NaiveParser         
     , Vanda.Grammar.PMCFG.ActiveParser   
