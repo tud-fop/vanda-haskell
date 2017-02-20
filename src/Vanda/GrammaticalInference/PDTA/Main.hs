@@ -64,14 +64,6 @@ mainArgs :: Args -> IO ()
 mainArgs (Help cs) = putStr cs
 
 mainArgs Infer{..} = do
---   exist <- fileExist (flagDir </> fileNameOptions)
---   when exist $ do
---     putStrLn $ "File exists: " ++ (flagDir </> fileNameOptions)
---     putStrLn   "Probably you have run cbsm in this directory before."
---     putStrLn   "Did you mean cbsm-continue?"
---     exitFailure
---   createDirectoryIfMissing True flagDir
---   writeFile (flagDir </> fileNameOptions) (show opts)
   corpus <- map (second fromIntegral) <$> SExp.readCorpora flagsCorpora
   debugDissectCorpus corpus
   let (ssub, δ, f) = infer argAlpha corpus
@@ -96,64 +88,6 @@ mainArgs Infer{..} = do
     $ concat
     $ map (traverse M.toList)
     $ IM.toList transW
-
---   encodeFile (flagDir </> fileNameIntToTreeMap) (tM :: BinaryIntToTreeMap)
---   numCapabilities <- getNumCapabilities
---   putStrLnTimestamped $ "numCapabilities: " ++ show numCapabilities
---   withFile (flagDir </> fileNameStatistics) AppendMode $ \ hStat ->
---    withFile (flagDir </> fileNameEvaluations) AppendMode $ \ hEvals ->
---    withFile (flagDir </> fileNameEquivBeamIndizes) AppendMode $ \ hBeam ->
---    withFileIf flagLogBeamVerbose (flagDir </> fileNameLogBeamVerbose)
---               AppendMode $ \ mhLogBeamVerbose -> do
---     hPutStrLn hStat
---       "CPU time,\
---       \iteration,\
---       \rules,\
---       \states,\
---       \initial states,\
---       \merge pairs,\
---       \beam width,\
---       \beam index,\
---       \saturation steps,\
---       \rule merges,\
---       \state merges,\
---       \initial-state merges,\
---       \log₂ likelihood delta,\
---       \likelihood delta,\
---       \log₂ evaluation of merge,\
---       \evaluation of merge,\
---       \heuristic chosen,\
---       \heuristic lowest,\
---       \total saturation steps"
---     hPutStrLn hEvals "iteration,beam index low,beam index high,\
---       \log₂ evaluation of merge,evaluation of merge"
---     hPutStrLn hBeam "iteration,beam index low,beam index high"
---     for_ mhLogBeamVerbose $ \ h -> hPutStrLn h
---       "iteration,\
---       \beam index,\
---       \heuristic,\
---       \log₂ evaluation,\
---       \log₂ Δ likelihood,\
---       \log₂ factor rules,log₂ factor states,log₂ factor initial,\
---       \rule merges,state merges,initial merges,\
---       \seed state 1,seed state 2,\
---       \saturation steps"
---     safeSaveLastGrammar flagSaveCounter flagSaveTimer flagVerboseInfo
---                         flagDir hStat hEvals hBeam mhLogBeamVerbose
---       $ take (succ flagIterations)
---       $ cbsm
---           ConfigCBSM
---             { confNumCapabilities  = numCapabilities
---             , confMergeGroups      = mergeGroups flagBinarization flagRestrictMerge tM
---             , confEvaluate         = if flagNormalize
---                                      then normalizeLklhdByMrgdStates
---                                      else flip const
---             , confBeamWidth        = flagBeamWidth
---             , confDynamicBeamWidth = flagDynamicBeamWidth
---             , confShuffleStates    = flagShuffle == FSStates
---             , confShuffleMerges    = flagShuffle == FSMerges
---             }
---           (g, initialInfo (mkStdGen flagSeed) (cntState g))
 
 
 dissectCorpus
