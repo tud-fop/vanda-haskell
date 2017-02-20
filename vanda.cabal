@@ -55,9 +55,13 @@ library
     , vector
     , weighted-search
     , zlib
+  if flag(gtk)
+   build-depends:
+      gtk
   exposed-modules:
       CodingConventions
     , Control.Error
+    , Control.Monad.Extra
     , Data.Interner
     , Data.List.Extra
     , Data.List.Shuffle
@@ -67,7 +71,9 @@ library
     , Data.Queue
     , Data.RevMap
     , Data.WTA
+    , Main
     , System.Console.CmdArgs.Explicit.Misc
+    , System.Directory.Extra
     , Vanda.Algorithms.Earley
     , Vanda.Algorithms.Earley.FastNub
     , Vanda.Algorithms.Earley.WSA
@@ -78,11 +84,11 @@ library
     , Vanda.Algorithms.InsideOutsideWeightsAcyclic
     , Vanda.Algorithms.IntEarley
     , Vanda.Algorithms.IntersectWithNGram
-    , Vanda.Algorithms.IntersectWithNGrams.Main
     , Vanda.Algorithms.IntersectWithNGramUtil
+    , Vanda.Algorithms.MATLearner.TreeAutomaton
+    , Vanda.Algorithms.MATLearner.TreesContexts
     , Vanda.CBSM.CountBasedStateMerging
     , Vanda.CBSM.Dovetailing
-    , Vanda.CBSM.Main
     , Vanda.CBSM.Merge
     , Vanda.CBSM.ProductOrder
     , Vanda.CBSM.StatisticsRenderer
@@ -98,31 +104,34 @@ library
     , Vanda.Corpus.Penn.Simple
     , Vanda.Corpus.Penn.Text
     , Vanda.Corpus.SExpression
+    , Vanda.Corpus.SExpression.CmdArgs
     , Vanda.Corpus.TreeTerm
     , Vanda.Dyck.DyckLanguages
-    , Vanda.Dyck.Main
     , Vanda.Dyck.MultipleDyckLanguages
     , Vanda.Features
     , Vanda.Grammar.AutomataStorage
-    , Vanda.Grammar.AutomataStorage.TreeStackStorage
     , Vanda.Grammar.AutomataStorage.PushdownStorage
     , Vanda.Grammar.AutomataStorage.SparseTreeStackStorage
+    , Vanda.Grammar.AutomataStorage.TreeStackStorage
     , Vanda.Grammar.Berkeley.IRTG
     , Vanda.Grammar.Berkeley.Text
     , Vanda.Grammar.LM
     , Vanda.Grammar.NGrams.Functions
-    , Vanda.Grammar.NGrams.Main
     , Vanda.Grammar.NGrams.Text
     , Vanda.Grammar.NGrams.VandaNGrams
     , Vanda.Grammar.NGrams.WTA
     , Vanda.Grammar.NGrams.WTA_BHPS
-    , Vanda.Grammar.PCFG.PCFG
-    , Vanda.Grammar.PCFG.IO
     , Vanda.Grammar.PCFG.Functions
-    , Vanda.Grammar.PCFG.Main
+    , Vanda.Grammar.PCFG.IO
+    , Vanda.Grammar.PCFG.PCFG
     , Vanda.Grammar.PMCFG
-    , Vanda.Grammar.PMCFG.Functions                
-    , Vanda.Grammar.PMCFG.Main
+    , Vanda.Grammar.PMCFG.Functions
+    , Vanda.Grammar.PMCFG.Parse
+    , Vanda.Grammar.XFSA
+    , Vanda.Grammar.XFSA.Closure
+    , Vanda.Grammar.XFSA.Internal
+    , Vanda.Grammar.XFSA.Language
+    , Vanda.Grammar.XFSA.XFSA
     , Vanda.Grammar.XRS.Binarize
     , Vanda.Grammar.XRS.Functions
     , Vanda.Grammar.XRS.GHKM
@@ -131,13 +140,7 @@ library
     , Vanda.Grammar.XRS.LCFRS.Binarize
     , Vanda.Grammar.XRS.LCFRS.Evaluation
     , Vanda.Grammar.XRS.LCFRS.Extraction
-    , Vanda.Grammar.XRS.LCFRS.Main
     , Vanda.Grammar.XRS.Text
-    , Vanda.Grammar.XFSA
-    , Vanda.Grammar.XFSA.Closure
-    , Vanda.Grammar.XFSA.Internal
-    , Vanda.Grammar.XFSA.Language
-    , Vanda.Grammar.XFSA.XFSA
     , Vanda.GrammaticalInference.PDTA.Inference
     , Vanda.Hypergraph
     , Vanda.Hypergraph.BackwardStar
@@ -147,6 +150,7 @@ library
     , Vanda.Hypergraph.EdgeList
     , Vanda.Hypergraph.ForwardStar
     , Vanda.Hypergraph.IntHypergraph
+    , Vanda.Hypergraph.Recognize
     , Vanda.Hypergraph.Text
     , Vanda.Hypergraph.Tree
     , Vanda.PBSM.PatternBasedStateMerging
@@ -160,6 +164,35 @@ library
     , Vanda.Util.PrettyPrint
     , Vanda.Util.Timestamps
     , Vanda.Util.Tree
+  if flag(gtk)
+   exposed-modules:
+      Vanda.Algorithms.MATLearner.MATLearner
+    , Vanda.Algorithms.MATLearner.Parser
+    , Vanda.Algorithms.MATLearner.Strings
+    , Vanda.Algorithms.MATLearner.Teacher
+  other-modules:
+  --, Vanda.Algorithms.Earley.Earley
+  --, Vanda.Algorithms.Earley.Earley_String_String
+  --, Vanda.Algorithms.Earley.Earley_WSA
+  --, Vanda.Algorithms.EarleyCFG
+  --, Vanda.Algorithms.EarleyMonadic0
+      Vanda.Algorithms.IntersectWithNGrams.Main
+    , Vanda.CBSM.CmdArgs
+    , Vanda.CBSM.Main
+    , Vanda.CFTG.Foobar
+    , Vanda.Dyck.Main
+  --, Vanda.Functions
+  --, Vanda.Grammar.NGrams.KenLM
+    , Vanda.Grammar.NGrams.Main
+    , Vanda.Grammar.PCFG.Main
+    , Vanda.Grammar.PMCFG.Main
+    , Vanda.Grammar.XRS.LCFRS.Main
+    , Vanda.GrammaticalInference.PDTA.CmdArgs
+    , Vanda.GrammaticalInference.PDTA.Main
+    , Vanda.PBSM.Main
+  if flag(gtk)
+   other-modules:
+      Vanda.Algorithms.MATLearner.Main
   hs-source-dirs:  src
   GHC-Options:      -Wall -fwarn-incomplete-record-updates
   ghc-prof-options: -Wall -fwarn-incomplete-record-updates
@@ -197,7 +230,8 @@ executable Vanda
     , vector
     , zlib
   if flag(gtk)
-    build-depends: gtk
+   build-depends:
+      gtk
   hs-source-dirs:  src
   main-is: Main.hs
   GHC-Options:      -rtsopts -Wall -fwarn-incomplete-record-updates
