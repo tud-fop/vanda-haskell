@@ -304,22 +304,24 @@ differ α     = let x = log (2 / α) / 2
                      ++ "\n         ⇝ " ++ show b ++ " = " ++ show l ++ " > " ++ show r) $ b
 
 
+{-
 closure :: (Int -> [Int]) -> [Int] -> [Int]
 closure f = go IS.empty
       where go done = (>>= \ x -> if x `IS.member` done
                                   then []
                                   else x : go (IS.insert x done) (f x)
                       )
+-}
 
 ------------------------------------------------------------------------------
 
 debugDissectCorpus
   :: (Foldable f, Floating a, Show a) => f (Tree String, a) -> IO ()
 debugDissectCorpus corpus = do
-  let (packedV, packedM, cntV, parentsV, treeV) = dissectCorpus corpus
-      getParents = IS.toList . (parentsV V.!)
-      getChildren = snd . (packedV V.!)
-      getAncestors = closure getParents . (: [])
+  let (packedV, _{-packedM-}, cntV, parentsV, treeV) = dissectCorpus corpus
+--       getParents = IS.toList . (parentsV V.!)
+--       getChildren = snd . (packedV V.!)
+--       getAncestors = closure getParents . (: [])
 --   for_ [0 .. V.length parentsV - 1] $ \ i -> do
 --     putStr $ show i ++ " -> "
 --     print $ getAncestors i
