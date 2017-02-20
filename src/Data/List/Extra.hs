@@ -131,7 +131,7 @@ at xs n  -- based on Data.List.!!
   | otherwise = foldr (\x r k -> case k of
                                    0 -> Just x
                                    _ -> r (k-1)
-                      ) (\ _ -> Nothing) xs n
+                      ) (const Nothing) xs n
 
 
 -- | Merge two sorted lists to a single sorted list.

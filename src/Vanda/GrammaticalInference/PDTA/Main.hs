@@ -69,8 +69,7 @@ mainArgs Infer{..} = do
     $ columnize [" <- ", " ", " # "]
     $ transpose
     $ map (\ (q, ((σ, qs), w)) -> [show q, σ, show qs, show w])
-    $ concat
-    $ map (traverse M.toList)
+    $ concatMap (traverse M.toList)
     $ IM.toList transW
 
 
@@ -119,7 +118,7 @@ closure f = go IS.empty
 -- this is rather inefficient
 tree2term :: Tree String -> String
 tree2term (Node x []) = x
-tree2term (Node x ts) = x ++ "(" ++ (intercalate ", " $ map tree2term ts) ++ ")"
+tree2term (Node x ts) = x ++ "(" ++ intercalate ", " (map tree2term ts) ++ ")"
 
 
 -- | unneeded function
@@ -134,7 +133,7 @@ diffSortedLists xs [] = (xs, [], [])
 
 ------------------------------------------------------------------------------
 
-testCorpus :: [(Tree [Char], Double)]
+testCorpus :: [(Tree String, Double)]
 testCorpus
   = [ (Node "a" [], 4)
     , (Node "a" [Node "a" [Node "a" []]], 2)

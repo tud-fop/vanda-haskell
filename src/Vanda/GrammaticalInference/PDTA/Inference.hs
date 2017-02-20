@@ -75,7 +75,7 @@ dissectCorpus corpus
     packedForest
       = V.map (\ (Node (_, x) ts)
               -> (x, map (\ t -> fst $ tree2ixAndCnt M.! OrdTree t) ts) )
-      $ treeIx2tree
+        treeIx2tree
 
     packedForestInv :: Map (a, [Int]) Int
     packedForestInv
@@ -257,7 +257,7 @@ differ α     = let x = log (2 / α) / 2
   in \ f f' -> let l = abs (f / m - f' / m')
                    b = l > r
                 in trace ("   differ: " ++ show f ++ " / " ++ show m ++ " − " ++ show f' ++ " / " ++ show m'
-                     ++ "\n         ⇝ " ++ show b ++ " = " ++ show l ++ " > " ++ show r) $ b
+                     ++ "\n         ⇝ " ++ show b ++ " = " ++ show l ++ " > " ++ show r) b
 
 
 ------------------------------------------------------------------------------
