@@ -16,7 +16,7 @@ import Control.Arrow ((***))
 import Control.Monad.State ((>=>), (<=<))
 import Data.List.Split (splitOneOf)
 import Data.Map ((!), fromList)
-import qualified Data.Set as S (Set, delete, fromList, member, null)
+import qualified Data.Set as S (Set, delete, fromList, member, null, empty)
 
 import Vanda.Grammar.AutomataStorage
 import Vanda.Grammar.AutomataStorage.TreeStackStorage
@@ -42,24 +42,24 @@ isMultipleDyck sep l r
 -- | An automaton with 'TreeStack'-storage for the recognition of multiple
 --   Dyck languages.
 multipleDyckTreeStackAutomaton
-  :: (Eq a, Ord a)
+  :: Ord a
   => [[a]]                                  -- ^ partition of left parentheses
   -> (a -> a)                    -- ^ bijection from left to right parentheses
-  -> Automaton () a (TreeStack (Maybe a, S.Set a))
+  -> Automaton () (TreeStack (Maybe a, S.Set a)) a
 multipleDyckTreeStackAutomaton ass bij
-  = ( ((), emptyTreeStack (error "multipleDyckTreeStackAutomaton: You must not read the root symbol!"))
-    , τs
-    , bottomTreeStack . snd
-    )
+  = Automaton
+      ((), emptyTreeStack (Nothing, S.empty))
+      τs
+      (bottomTreeStack . snd)
   where as = concat ass
         bs = map bij as
-        τs = [ ((), b, p, popTreeStack, ())
+        τs = [ Transition () [b] p popTreeStack ()
              | b <- bs
              , let p = checkTreeStack
                      $ uncurry (&&)
                        . ((== Just b) *** S.null)
              ]
-          ++ [ ((), b, p, f, ())
+          ++ [ Transition () [b] p f ()
              | b <- bs
              , let p = checkTreeStack
                      $ uncurry (&&)
@@ -68,7 +68,7 @@ multipleDyckTreeStackAutomaton ass bij
                          (\ (_, s) -> [(Nothing, s)] )
                          >=> downTreeStack
              ]
-          ++ [ ((), a, const True, f, ())
+          ++ [ Transition () [a] (const True) f ()
              | a <- as
              , let p (Nothing, s) = a `S.member` s
                    p _            = False
@@ -76,10 +76,10 @@ multipleDyckTreeStackAutomaton ass bij
                          <=< filter (checkTreeStack p)
                          . upTreeStack
              ]
-          ++ [ ((), a, const True, f, ())
+          ++ [ Transition () [a] (const True) f ()
              | a <- as
              , let f = pushTreeStack
-                     $ ( Just (bij a)
+                       ( Just (bij a)
                        , S.delete a
                          . S.fromList
                          $ head [ as' | as' <- ass, a `elem` as']

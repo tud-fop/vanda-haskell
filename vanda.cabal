@@ -33,6 +33,7 @@ library
     , deepseq
     , directory
     , filepath
+    , groups
     , hashable
     , heap
     , JuicyPixels
@@ -48,9 +49,11 @@ library
     , stm
     , text
     , time
+    , transformers
     , unix
     , unordered-containers
     , vector
+    , weighted-search
     , zlib
   exposed-modules:
       CodingConventions
@@ -103,6 +106,7 @@ library
     , Vanda.Grammar.AutomataStorage
     , Vanda.Grammar.AutomataStorage.TreeStackStorage
     , Vanda.Grammar.AutomataStorage.PushdownStorage
+    , Vanda.Grammar.AutomataStorage.SparseTreeStackStorage
     , Vanda.Grammar.Berkeley.IRTG
     , Vanda.Grammar.Berkeley.Text
     , Vanda.Grammar.LM
@@ -116,6 +120,9 @@ library
     , Vanda.Grammar.PCFG.IO
     , Vanda.Grammar.PCFG.Functions
     , Vanda.Grammar.PCFG.Main
+    , Vanda.Grammar.PMCFG
+    , Vanda.Grammar.PMCFG.Functions                
+    , Vanda.Grammar.PMCFG.Main
     , Vanda.Grammar.XRS.Binarize
     , Vanda.Grammar.XRS.Functions
     , Vanda.Grammar.XRS.GHKM
@@ -126,6 +133,11 @@ library
     , Vanda.Grammar.XRS.LCFRS.Extraction
     , Vanda.Grammar.XRS.LCFRS.Main
     , Vanda.Grammar.XRS.Text
+    , Vanda.Grammar.XFSA
+    , Vanda.Grammar.XFSA.Closure
+    , Vanda.Grammar.XFSA.Internal
+    , Vanda.Grammar.XFSA.Language
+    , Vanda.Grammar.XFSA.XFSA
     , Vanda.GrammaticalInference.PDTA.Inference
     , Vanda.Hypergraph
     , Vanda.Hypergraph.BackwardStar

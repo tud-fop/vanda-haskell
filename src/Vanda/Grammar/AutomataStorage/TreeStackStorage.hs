@@ -28,7 +28,7 @@ import Data.Tree (Tree (Node), subForest)
 
 -- | 'Tree' plus stack pointer; the bottom of the stack is the root of the tree.
 --   The data structure has the form [(cₙ, tₙ), …, (c₁, t₁)] where cᵢ are, intuitively,
---   contexts and tᵢ are trees. The tree stack can be obtaines from that data structure
+--   contexts and tᵢ are trees. The tree stack can be obtained from that data structure
 --   as follows: the tree is cₙ . … . c₂ $ c₁ t₁ and the pointer points to the root of
 --   t₁. The data structure optimizes the expensive operation of "going to a specific
 --   position in the tree".
@@ -45,7 +45,7 @@ checkTreeStack :: (a -> Bool) -> TreeStack a -> Bool
 checkTreeStack _ (TreeStack [])
   = error "checkTreeStack: the stack backlog must not be empty"
 checkTreeStack p ts@(TreeStack ((_, Node x _) : _))
-  = (not $ bottomTreeStack ts) && p x
+  = not (bottomTreeStack ts) && p x
 
 
 -- | Checks whether the tree only has a root node.
@@ -91,6 +91,7 @@ upTreeStack (TreeStack [])
   = error "upTreeStack: the stack backlog must not be empty"
 upTreeStack (TreeStack ((f, Node a ts) : cs))
   = [ TreeStack $ (Node a . g, t) : (f, Node a ts') : cs | (g, t, ts') <- contexts ts ]
+
 
 contexts :: [a] -> [(a -> [a], a, [a])]
 contexts []

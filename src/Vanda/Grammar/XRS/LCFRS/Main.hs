@@ -4,8 +4,7 @@
 -- |
 -- Module      :  Vanda.Grammar.XRS.LCFRS.Main
 -- Copyright   :  (c) Technische Universität Dresden 2014
---                Mainly developed by Sebastian Mielke during his Bachelors
---                thesis.
+--                Developed by Sebastian Mielke during his Bachelors thesis.
 -- License     :  Redistribution and use in source and binary forms, with
 --                or without modification, is ONLY permitted for teaching
 --                purposes at Technische Universität Dresden AND IN

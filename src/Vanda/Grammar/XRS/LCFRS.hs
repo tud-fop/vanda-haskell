@@ -10,29 +10,41 @@
 -- ---------------------------------------------------------------------------
 
 module Vanda.Grammar.XRS.LCFRS
-( NTIdent
-, TIdent
-, CompFuncEntry
-, Fanout
-, Rule
-, getRk
-, getFo
-, getRhs
-, PLCFRS
--- The following instances are just there to integrate with other vanda things,
--- for example the stuff in LCFRS.Evaluation
-, MIRTG(..)
-, MXRS(..)
-, fromProbabilisticRules
-, toProbabilisticRules
-, showPLCFRS
-, niceStatictics
-) where
+  ( Rule
+  , PLCFRS
+    -- * IRTG view on LCFRS
+    -- The following instances are just there to integrate with other vanda things,
+    -- for example the stuff in LCFRS.Evaluation
+  , MIRTG(..)
+  , MXRS(..)
+    -- * Identifier
+  , NTIdent
+  , TIdent
+  , CompFuncEntry
+  , Fanout
+    -- * getter
+  , getRk
+  , getFo
+  , getRhs
+    -- * conversion
+  , fromProbabilisticRules
+  , toProbabilisticRules
+    -- * pretty printing
+  , showPLCFRS
+  , niceStatictics
+    -- * examples
+  , exampleMIRTG
+  , exampleMXRS
+  , examplePLCFRS
+    -- * plumbing
+  , getNonterminalFanout
+  ) where
 
 import qualified Data.Array as A
 import           Data.Foldable (foldl')
 import           Data.List (intercalate)
 import qualified Data.Map.Strict as M
+import           Data.Maybe (listToMaybe)
 import qualified Data.Vector as V
 import           Text.Printf (printf)
 
@@ -128,19 +140,17 @@ toProbabilisticRules (MXRS (MIRTG hg inits h') ws)
 -- pretty printing
 
 retranslateProbRule
-  :: (A.Array NTIdent String)
-  -> (A.Array TIdent String)
+  :: A.Array NTIdent String
+  -> A.Array TIdent String
   -> (Rule, Double)
   -> String
 retranslateProbRule a_nt a_t (((lhs, rhs), hom_f), p)
   =  (A.!) a_nt lhs
   ++ " -> ⟨"
-  ++ ( intercalate (',':thinspace)
-     $ map (intercalate thinspace . map retHomComponent)
-     $ hom_f
-     )
+  ++ intercalate (',' : thinspace)
+                 (map (intercalate thinspace . map retHomComponent) hom_f)
   ++ "⟩( "
-  ++ (intercalate " " $ map ((A.!) a_nt) rhs)
+  ++ unwords (map ((A.!) a_nt) rhs)
   ++ " ) "
   ++ show p
     where
@@ -151,7 +161,7 @@ retranslateProbRule a_nt a_t (((lhs, rhs), hom_f), p)
 showPLCFRS :: PLCFRS -> String
 showPLCFRS (initials, rules, (a_nt, a_t))
   =  "Initial NTs:\n"
-  ++ (intercalate ", " $ map ((A.!) a_nt) initials)
+  ++ intercalate ", " (map ((A.!) a_nt) initials)
   ++ "\n\nRules (LHS -> ⟨comp.fct.⟩( RHS ) probability):\n"
   ++ unlines (map (retranslateProbRule a_nt a_t) rules)
 
@@ -160,18 +170,53 @@ niceStatictics
   -> String
 niceStatictics (initials, rulesAndProbs, (a_nt, _)) =
   "\n"
-  ++ (printf "%7d initial non-terminals\n" $ length initials)
-  ++ (printf "%7d non-terminals\n" $ length (A.indices a_nt))
-  ++ (printf "%7d rules\n" $ length rulesAndProbs)
+  ++ printf "%7d initial non-terminals\n" (length initials)
+  ++ printf "%7d non-terminals\n" (length (A.indices a_nt))
+  ++ printf "%7d rules\n" (length rulesAndProbs)
   ++ "\n"
   ++ "Histograms:\n"
   ++ "  Ranks:\n"
-  ++ (unlines (map (uncurry (printf "    %2d: %7d")) rkCounts))
+  ++ unlines (map (uncurry (printf "    %2d: %7d")) rkCounts)
   ++ "  Fanouts:\n"
-  ++ (unlines (map (uncurry (printf "    %2d: %7d")) foCounts))
+  ++ unlines (map (uncurry (printf "    %2d: %7d")) foCounts)
   where
     counter f = foldl' (\m r -> M.insertWith (+) (f r) 1 m)
                        (M.empty :: M.Map Int Int)
                        rulesAndProbs
     rkCounts = M.assocs $ counter getRk
     foCounts = M.assocs $ counter getFo
+
+-- examples
+exampleRules :: [Rule]
+exampleRules
+  = [ ((0, [1, 2]), [[NT 0, NT 2, NT 1, NT 3]]) -- S → [x₁y₁x₂y₂](A,B) # 1.0
+    , ((1, [1]), [[T 0, NT 0], [T 2, NT 1]])    -- A → [ax₁, cx₂](A)   # 0.7
+    , ((1, []), [[], []])                       -- A → [ε, ε]()        # 0.3
+    , ((2, [2]), [[T 1, NT 0], [T 3, NT 1]])    -- B → [bx₁, dx₂](B)   # 0.4
+    , ((2, []), [[], []])                       -- B → [ε, ε]()        # 0.6
+    ]
+
+exampleMIRTG :: MIRTG
+exampleMIRTG
+  = fromRules [1] exampleRules
+
+exampleMXRS :: MXRS
+exampleMXRS
+  = MXRS exampleMIRTG (V.fromList [1, 0.7, 0.3, 0.4, 0.6])
+
+examplePLCFRS :: PLCFRS
+examplePLCFRS
+  = ( [1]
+    , zip exampleRules [1, 0.7, 0.3, 0.4, 0.6]
+    , ( A.listArray (0, 2) ["S", "A", "B"]
+      , A.listArray (0, 3) ["a", "b", "c", "d"]
+      )
+    )
+
+-- | Returns the fanout of the given nonterminal symbol in the given 'PLCFRS'
+getNonterminalFanout :: PLCFRS -> NTIdent -> Maybe Int
+getNonterminalFanout (_, rs, _) i
+  = fmap snd
+    . listToMaybe
+    . filter ((== i) . fst)
+    $ map (\(((nt', _), f), _) -> (nt', length f)) rs

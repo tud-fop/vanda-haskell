@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE BangPatterns, RecordWildCards #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -63,7 +63,7 @@ intern orig@Interner{ .. } v
 -- | Uses interner on a 'List' ignoring (aka reversing) its order.
 internList :: (Hashable t, Eq t) => Interner t -> [t] -> (Interner t, [Int])
 internList im ks
-  = let f (m, xs) k = (m', x:xs) where (m', x) = intern m k
+  = let f (!m, xs) k = (m', x:xs) where (m', x) = intern m k
     in  foldl f (im, []) ks
 
 -- | Uses interner on a 'List' but preserves the 'List's order.
