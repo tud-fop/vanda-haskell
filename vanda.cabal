@@ -193,6 +193,7 @@ library
   if flag(gtk)
    other-modules:
       Vanda.Algorithms.MATLearner.Main
+  default-language: Haskell2010
   hs-source-dirs:  src
   GHC-Options:      -Wall -fwarn-incomplete-record-updates
   ghc-prof-options: -Wall -fwarn-incomplete-record-updates
@@ -232,6 +233,7 @@ executable Vanda
   if flag(gtk)
    build-depends:
       gtk
+  default-language: Haskell2010
   hs-source-dirs:  src
   main-is: Main.hs
   GHC-Options:      -rtsopts -Wall -fwarn-incomplete-record-updates
@@ -247,6 +249,7 @@ Test-Suite HUnitTests
     , random
     , Vanda
     , vector
+  default-language: Haskell2010
   GHC-Options: -main-is HUnitTests
   hs-source-dirs: testsuite/tests
   main-is: HUnitTests.hs
