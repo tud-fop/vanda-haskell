@@ -111,10 +111,10 @@ toRanges (x : xs) = go x x xs
 
 
 -- | @replaceOnce s t xs@ returns all lists where exactly one occurrence of
--- @s@ in @xs@ is replaced by @t@. Hence, if @s 'notElem' xs@, then @[]@ is
+-- @s@ in @xs@ is replaced by @t@. Hence, if @'notElem' s xs@, then @[]@ is
 -- returned.
 --
--- For example: @replaceOnce 1 2 [2, 1, 9, 1] = [[2, 2, 9, 1],[2, 1, 9, 2]]@
+-- For example: @replaceOnce 1 2 [2, 1, 9, 1] = [[2, 2, 9, 1], [2, 1, 9, 2]]@
 replaceOnce :: Eq a => a -> a -> [a] -> [[a]]
 replaceOnce s t = go
   where go [] = []
