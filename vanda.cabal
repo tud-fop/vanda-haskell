@@ -126,6 +126,7 @@ library
     , Vanda.Grammar.XRS.LCFRS.Extraction
     , Vanda.Grammar.XRS.LCFRS.Main
     , Vanda.Grammar.XRS.Text
+    , Vanda.GrammaticalInference.PDTA.Inference
     , Vanda.Hypergraph
     , Vanda.Hypergraph.BackwardStar
     , Vanda.Hypergraph.Basic
