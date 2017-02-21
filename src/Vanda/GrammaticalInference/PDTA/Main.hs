@@ -8,7 +8,7 @@
 --                COORDINATION with the Chair of Foundations of Programming.
 --
 -- Maintainer  :  Toni.Dietze@tu-dresden.de
--- Stability   :  unknown
+-- Stability   :  experimental
 -- Portability :  portable
 -----------------------------------------------------------------------------
 

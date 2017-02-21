@@ -8,7 +8,7 @@
 --                COORDINATION with the Chair of Foundations of Programming.
 --
 -- Maintainer  :  Toni.Dietze@tu-dresden.de
--- Stability   :  unknown
+-- Stability   :  experimental
 -- Portability :  portable
 -----------------------------------------------------------------------------
 
@@ -37,7 +37,8 @@ cmdArgs :: Mode Args
 cmdArgs
   = ( modes "pdta"
           (Help $ defaultHelp cmdArgs)
-          "grammatical inference of probabilistic deterministic tree automata"
+          "grammatical inference of probabilistic deterministic tree automata\
+          \ (experimental!)"
   [ ( modeEmpty $ Infer
         { flagsCorpora = defaultCmdArgsCorpora
         , argAlpha     = undefined

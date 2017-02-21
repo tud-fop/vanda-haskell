@@ -10,8 +10,16 @@
 --                COORDINATION with the Chair of Foundations of Programming.
 --
 -- Maintainer  :  Toni.Dietze@tu-dresden.de
--- Stability   :  unknown
+-- Stability   :  experimental
 -- Portability :  portable
+--
+-- This is a reimplementation of the algorithm presented in
+-- “Stochastic Inference of Regular Tree Languages”
+-- by Rafael C. Carrasco, Jose Oncina, and Jorge Calera.
+-- There are two versions of this paper. Download them at:
+--
+-- * 2001: https://doi.org/10.1023/A:1010836331703
+-- * 1998: https://doi.org/10.1007/BFb0054075
 -----------------------------------------------------------------------------
 
 {-# LANGUAGE BangPatterns, LambdaCase, ScopedTypeVariables #-}
