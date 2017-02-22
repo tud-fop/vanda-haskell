@@ -14,7 +14,7 @@ import qualified Vanda.CBSM.CountBasedStateMergingTests
 import qualified Vanda.CBSM.DovetailingTests
 import qualified Vanda.CBSM.ProductOrderTests
 import qualified Vanda.Corpus.BinarizationTests
-import qualified Vanda.Grammar.PMCFG.WeightedDeductiveSolverTest
+-- import qualified Vanda.Grammar.PMCFG.WeightedDeductiveSolverTest
 import qualified Vanda.Grammar.PMCFG.CYKParserTest
 import qualified Vanda.Grammar.PMCFG.NaiveParserTest
 import qualified Vanda.Grammar.PMCFG.ActiveParserTest
@@ -47,8 +47,8 @@ tests = TestList
     ~: Vanda.CBSM.ProductOrderTests.tests
   ,   "Vanda.Corpus.Binarization"
     ~: Vanda.Corpus.BinarizationTests.tests
-  ,   "Vanda.Grammar.PMCFG.WeightedDeductiveSolver"
-    ~: Vanda.Grammar.PMCFG.WeightedDeductiveSolverTest.tests
+  -- ,   "Vanda.Grammar.PMCFG.WeightedDeductiveSolver"
+  --   ~: Vanda.Grammar.PMCFG.WeightedDeductiveSolverTest.tests
   ,   "Vanda.Grammar.PMCFG.CYKParser"
     ~: Vanda.Grammar.PMCFG.CYKParserTest.tests
   ,   "Vanda.Grammar.PMCFG.NaiveParser"

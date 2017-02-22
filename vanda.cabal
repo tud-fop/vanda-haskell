@@ -128,7 +128,7 @@ library
     , Vanda.Grammar.PMCFG.CYKParser           
     , Vanda.Grammar.PMCFG.NaiveParser         
     , Vanda.Grammar.PMCFG.ActiveParser   
-    , Vanda.Grammar.PMCFG.WeightedDeductiveSolver
+    , Vanda.Grammar.PMCFG.DeductiveSolver
     , Vanda.Grammar.XRS.Binarize
     , Vanda.Grammar.XRS.Functions
     , Vanda.Grammar.XRS.GHKM
@@ -161,8 +161,8 @@ library
     , Vanda.Util.Timestamps
     , Vanda.Util.Tree
   hs-source-dirs:  src
-  GHC-Options:      -Wall -fwarn-incomplete-record-updates
-  ghc-prof-options: -Wall -fwarn-incomplete-record-updates
+  GHC-Options:      -Wall -fwarn-incomplete-record-updates -O1
+  ghc-prof-options: -Wall -fwarn-incomplete-record-updates -fprof-auto -O1
 
 executable Vanda
   build-depends:
@@ -201,8 +201,8 @@ executable Vanda
     build-depends: gtk
   hs-source-dirs:  src
   main-is: Main.hs
-  GHC-Options:      -rtsopts -Wall -fwarn-incomplete-record-updates
-  ghc-prof-options: -rtsopts -Wall -fwarn-incomplete-record-updates
+  GHC-Options:      -rtsopts -Wall -fwarn-incomplete-record-updates -O1
+  ghc-prof-options: -rtsopts -Wall -fwarn-incomplete-record-updates -fprof-auto -O1
 
 Test-Suite HUnitTests
   build-depends:

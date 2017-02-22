@@ -48,6 +48,8 @@ module Vanda.Grammar.PMCFG
   , exampleRules
   , exampleCompositions
   , exampleWeights
+  -- * misc
+  , updateGroupsWith
   ) where
 
 import Control.Arrow (first)
@@ -55,14 +57,15 @@ import Control.DeepSeq (NFData)
 import qualified Control.Error
 import qualified Data.Binary as B
 import Data.Hashable
-import Data.List (intercalate, elemIndices)
+import Data.List (intercalate)
 import Data.Maybe (listToMaybe, mapMaybe)
 import Data.Tree
+import qualified Data.HashMap.Lazy as Map
 import GHC.Generics (Generic)
 import Data.Interner (Interner, internList, intern, emptyInterner, internListPreserveOrder, internerToArray)
 import Control.Monad.State.Lazy
 import Data.Array (Array, (!))
-import Vanda.Grammar.PMCFG.Range (Range(Epsilon), Rangevector, safeConc, singletons)
+import Vanda.Grammar.PMCFG.Range (Range(Epsilon), safeConc, singletons)
 
 errorHere :: String -> String -> a
 errorHere = Control.Error.errorHere "Vanda.Grammar.PMCFG"
@@ -231,9 +234,6 @@ prettyPrintInstantiatedFunction fs = show $ map go fs
     go (Var i j : f) = "x[" ++ show i ++ ":" ++ show j ++ "]" ++ go f
 
 
-prettyPrintRangevector :: Rangevector -> String
-prettyPrintRangevector rv = "<" ++ show rv ++  ">"
-
 
 -- | Substitutes all terminals and nonterminals with integers and saves substitutions.
 integerize :: (Eq t, Eq nt, Hashable t, Hashable nt) => WPMCFG nt wt t -> (WPMCFG Int wt Int, Interner nt, Interner t)
@@ -280,6 +280,22 @@ evaluate (Node f ts) = do
   let lookUp (Var i j) = listToMaybe (drop i tups) >>= (listToMaybe . drop j)
       lookUp (T t)     = Just [t]
   mapM (fmap concat . mapM lookUp) f
+
+
+updateGroupsWith :: (Hashable b, Eq b) 
+                 => (a -> b) 
+                 -> [a] 
+                 -> Map.HashMap b [a] 
+                 -> Map.HashMap b [a]
+updateGroupsWith f as = execState (mapM (updateGroupsWith' f) as)
+  where
+    updateGroupsWith' :: (Hashable b, Eq b) => (a -> b) -> a -> State (Map.HashMap b [a]) ()
+    updateGroupsWith' f' a = do m <- get
+                                put $ Map.alter (addtolist a) (f' a) m
+                                return ()
+    addtolist :: b -> Maybe [b] -> Maybe [b]
+    addtolist b Nothing = Just [b]
+    addtolist b (Just bs) = Just (b:bs)
 
 
 prettyPrintRule :: (Show nt, Show t) => Rule nt t -> String

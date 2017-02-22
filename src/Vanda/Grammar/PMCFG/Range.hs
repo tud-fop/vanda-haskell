@@ -13,6 +13,7 @@ module Vanda.Grammar.PMCFG.Range
   ) where
 
 import qualified Data.Vector.Unboxed as V
+import Data.Hashable (Hashable(hashWithSalt))
 import Data.List (elemIndices)
 import Data.Maybe (fromMaybe)
 
@@ -24,9 +25,15 @@ data Range = Range Int Int
            | Epsilon -- ^ empty range of ε in w
             deriving (Show, Eq, Ord)
 
+instance Hashable Range where
+  salt `hashWithSalt` Epsilon = salt `hashWithSalt` (0 :: Int) `hashWithSalt` (0 :: Int)
+  salt `hashWithSalt` (Range x y) = salt `hashWithSalt` x `hashWithSalt` y
 
 -- | A range vector is a non-overlapping sequence of ranges.
 newtype Rangevector = Rangevector (V.Vector (Int, Int)) deriving(Eq, Ord, Show)
+
+instance Hashable Rangevector where
+  salt `hashWithSalt` (Rangevector v) = V.foldl' (hashWithSalt) salt v 
 
 
 -- | Index access for Range vectors. 
@@ -61,8 +68,8 @@ vectorLength (Rangevector v) = V.length v
 
 -- | A singleton range is a range of a single character in a word.
 singletons :: (Eq t) => t -> [t] -> [Range]
-singletons c w = map singleton $ c `elemIndices` w
-  where singleton i = Range i $ i+1
+singletons c w = map singleton' $ c `elemIndices` w
+  where singleton' i = Range i $ i+1
 
 
 -- | Full range of a word.

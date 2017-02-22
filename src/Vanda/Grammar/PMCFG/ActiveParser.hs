@@ -53,101 +53,166 @@ module Vanda.Grammar.PMCFG.ActiveParser
 
 import Vanda.Grammar.PMCFG
 import Vanda.Grammar.PMCFG.Range
-import Vanda.Grammar.PMCFG.WeightedDeductiveSolver
-import qualified Data.Map.Strict as Map
-import Data.Tree (Tree)
-import Data.List (sort, elemIndices)
-import Data.Maybe (mapMaybe, maybeToList)
-import Data.Monoid ((<>))
+import Vanda.Grammar.PMCFG.DeductiveSolver
 
+import qualified Data.IntMap as IMap
+import qualified Data.HashMap.Lazy as Map
+
+import Data.Hashable (Hashable(hashWithSalt))
+import Data.Tree (Tree)
+import Data.List (partition)
+import Data.Maybe (mapMaybe, maybeToList)
+
+
+data Item nt t = Passive nt Rangevector (Derivation nt t)
+               | Active (Rule nt t) [Range] (Function t) (IMap.IntMap (Rangevector, Derivation nt t)) deriving (Eq)
+
+instance (Hashable nt, Hashable t) => Hashable (Item nt t) where
+    salt `hashWithSalt` (Passive a rho d) = salt `hashWithSalt` a `hashWithSalt` rho `hashWithSalt` d
+    salt `hashWithSalt` (Active r rs fs _) = salt `hashWithSalt` r `hashWithSalt` rs `hashWithSalt` fs
+
+instance (Show nt, Show t) => Show (Item nt t) where
+    show (Passive a rv _) = "[Passive] " ++ show a ++ " " ++ show rv
+    show (Active r rv f _) = "[Active] " ++ prettyPrintRule r ++ " " ++ show rv ++ " " ++ prettyPrintComposition f
+
+
+type Container nt t = ( Map.HashMap nt [Item nt t]
+                      , Map.HashMap (Maybe nt) [Item nt t]
+                      )
 
 -- | Top-level function to parse a word using a PMCFG.
 -- Uses weightedParse with additive costs for each rule, s.t. the number of rule applications is minimized.
-parse :: (Ord nt, Ord t) => PMCFG nt t -> [t] -> [Tree (Rule nt t)]
+parse :: (Hashable nt, Hashable t, Eq nt, Eq t) 
+  => PMCFG nt t 
+  -> Int 
+  -> [t] 
+  -> [Tree (Rule nt t)]
 parse (PMCFG s rs) = weightedParse $ WPMCFG s $ zip rs $ repeat (cost 1 :: Cost Double)
 
 
 -- | Top-level function to parse a word using a weighted PMCFG.
-weightedParse :: (Ord nt, Ord t, Ord wt, Dividable wt) => WPMCFG nt wt t -> [t] -> [Tree (Rule nt t)]
-weightedParse (WPMCFG s rs) w = map (\ (Passive _ _ (Derivation t)) -> t) 
-                                $ filter (resultfilter s $ singleton $ entire w)
-                                $ solve ds
+weightedParse :: (Hashable nt, Hashable t, Eq nt, Eq t, Ord wt, Dividable wt) 
+  => WPMCFG nt wt t 
+  -> Int 
+  -> [t] 
+  -> [Tree (Rule nt t)]
+weightedParse (WPMCFG s rs) bw w = map (\ (Passive _ _ (Derivation t)) -> t) 
+                                    $ filter (resultfilter s $ singleton $ entire w)
+                                    $ solve ds
     where
-        ds = WeightedDeductiveSolver (conversionRule : terminalCompletionRule w : (rs >>= completionRules)) 1000
-        
+        ds = DeductiveSolver (Map.empty, Map.empty) update ( conversionRule 
+                                                            : terminalCompletionRule w
+                                                            : knownNTCompletionRule 
+                                                            : (rs >>= \ r -> predictionRule r
+                                                                              : unknownNTCompletionRules r )) bw
+
+        update :: (Hashable nt, Eq nt) => Container nt t -> [Item nt t] -> Container nt t
+        update (passives, actives) items = ( updateGroupsWith (\ (Passive a _ _) -> a) passiveItems passives
+                                           , updateGroupsWith needsNTCompletion activeItems actives
+                                           )
+          where
+            (activeItems, passiveItems) = partition isActive items
+
         resultfilter :: (Eq nt) => [nt] -> Rangevector -> Item nt t -> Bool
         resultfilter start target (Passive a rho _) = a `elem` start && rho == target
         resultfilter _ _ _                          = False 
 
 
-data Item nt t = Passive nt Rangevector (Derivation nt t)
-               | Active (Rule nt t) [Range] (Function t) (Map.Map (VarT t) Range) [(Int, Derivation nt t)] deriving (Eq)
 
 
-instance (Ord nt, Ord t) => Ord (Item nt t) where
-    (Passive a rv d) `compare` (Passive a' rv' d') = compare a a' <> compare rv rv' <> compare d d'
-    (Active r rv f _ _) `compare` (Active r' rv' f' _ _) = compare r r' <> compare rv rv' <> compare f f'
-    (Active _ _ _ _ _) `compare` (Passive _ _ _) = GT
-    (Passive _ _ _) `compare` (Active _ _ _ _ _) = LT
-
-
-instance (Show nt, Show t) => Show (Item nt t) where
-    show (Passive a rv _) = "[Passive] " ++ show a ++ " " ++ show rv
-    show (Active r rv f _ _) = "[Active] " ++ prettyPrintRule r ++ " " ++ show rv ++ " " ++ prettyPrintComposition f
-
-
-conversionRule :: (Ord nt, Ord t, Monoid wt) => (DeductiveRule (Item nt t), wt)
-conversionRule = (DeductiveRule [conversionFilter] convert, mempty)
+conversionRule :: (Monoid wt) => DeductiveRule (Item nt t) wt (Container nt t)
+conversionRule = (DeductiveRule 1 gets app mempty)
   where
-    conversionFilter :: Item nt t -> Bool
-    conversionFilter (Active _ _ ([]:_) _ _) = True
-    conversionFilter _                       = False
-    
-    convert :: (Ord nt, Ord t) => [Item nt t] -> [Item nt t]
-    convert [Active r@(Rule ((a, _), _)) rs [[]] _ ts] = [Passive a rv d | rv <- maybeToList $ fromList $ reverse rs]
-      where d = node r $ snd $ unzip $ sort ts
-    convert [Active r rs ([]:fs) m ts]                 = [Active r (Epsilon:rs) fs m ts]
-    convert _                                          = []
+    gets :: Container nt t -> Item nt t -> [[Item nt t]]
+    gets _ i@(Active _ _ ([]:_) _) = [[i]]
+    gets _ _ = []
+
+    app :: [Item nt t] -> [Item nt t]
+    app [Active r@(Rule ((a, as), _)) rs [[]] completions] = [ Passive a rv d 
+                                                             | rv <- maybeToList $ fromList $ reverse rs
+                                                             , d <- return $ node r [ snd $ completions IMap.! i | i <- [0..(length as - 1)] ]
+                                                             ]
+    app [Active r rs ([]:fs) completions] = [Active r (Epsilon:rs) fs completions]
+    app _ = []
 
 
-terminalCompletionRule :: (Monoid wt, Eq t) => [t] -> (DeductiveRule (Item nt t), wt)
-terminalCompletionRule w = (DeductiveRule [completeTFilter] (completeT w), mempty)
+terminalCompletionRule :: (Monoid wt, Eq t) 
+                       => [t] 
+                       -> DeductiveRule (Item nt t) wt (Container nt t)
+terminalCompletionRule w = DeductiveRule 1 gets app mempty
   where
-    completeTFilter :: Item nt t -> Bool
-    completeTFilter (Active _ _ ((T _:_):_) _ _) = True
-    completeTFilter _                            = False
-    
-    completeT :: (Eq t) => [t] -> [Item nt t] -> [Item nt t]
-    completeT w' [Active r (ra:rs) ((T t:fs):fss) m ds] = [ Active r (ra':rs) (fs:fss) m ds 
-                                                          | ra' <- mapMaybe (safeConc ra) $ singletons t w'
-                                                          ]
-    completeT _ _                                       = []
+    gets :: Container nt t -> Item nt t -> [[Item nt t]]
+    gets _ i@(Active _ _ ((T _:_):_) _) = [[i]]
+    gets _ _ = []
+
+    -- app :: [Item nt t] -> [Item nt t]
+    app [Active r (range:rs) ((T t:fs):fss) m] = [ Active r (range':rs) (fs:fss) m
+                                                 | range' <- mapMaybe (safeConc range) $ singletons t w
+                                                 ]
+    app _ = []
 
 
-completionRules :: (Ord t, Ord nt, Dividable wt) => (Rule nt t, wt) -> [(DeductiveRule (Item nt t), wt)]
-completionRules (r@(Rule ((_, as), f)), w) = (DeductiveRule [] (\ [] -> [ Active r [Epsilon] f Map.empty [] ]), mempty)
-                                              : zip [ DeductiveRule [completeNTFilterPassive a', completeNTFilterActive r a'] completeNT
-                                                    | a' <- as 
-                                                    ] weights
+knownNTCompletionRule :: (Monoid wt) 
+                      => DeductiveRule (Item nt t) wt (Container nt t)
+knownNTCompletionRule = DeductiveRule 1 gets app mempty
   where
-    weights = divide w $ length as
-    completeNTFilterPassive :: (Eq nt) => nt -> Item nt t -> Bool
-    completeNTFilterPassive a (Passive a' _ _) = a == a'
-    completeNTFilterPassive _ _                = False
-    
-    completeNTFilterActive :: (Eq nt, Eq t) => Rule nt t -> nt -> Item nt t -> Bool
-    completeNTFilterActive r''@(Rule ((_, as'), _)) a (Active r' _ ((Var i _:_):_) _ _) = i `elem` elemIndices a as' && r'' == r'
-    completeNTFilterActive _ _ _                                                        = False
-    
-    completeNT :: (Ord t) => [Item nt t] -> [Item nt t]
-    completeNT [Passive _ rv d, Active r' (ra:ras) ((Var i j:fs):fss) m ds]
-      | Map.fromList [(Var i j', rv ! j') | j' <- [0..(vectorLength rv - 1)]] `Map.isSubmapOf` m
-        = [ Active r' (ra':ras) (fs:fss) m ds
-          | ra' <- maybeToList $ safeConc ra (rv ! j) 
-          ]
-      | not $ any (`Map.member` m) [Var i j' | j' <- [0..(vectorLength rv - 1)]]
-        = [ Active r' (ra':ras) (fs:fss) (m `Map.union` Map.fromList [(Var i j', rv ! j') | j' <- [0..(vectorLength rv - 1)]]) ((i,d):ds)
-          | ra' <- maybeToList $ safeConc ra (rv ! j)
-          ]
+    gets :: Container nt t -> Item nt t -> [[Item nt t]]
+    gets _ item@(Active _ _ ((Var i _:_):_) completions)
+      | i `IMap.member` completions = [[item]]
       | otherwise = []
-    completeNT _ = []
+    gets _ _ = []
+
+    app :: [Item nt t] -> [Item nt t]
+    app [Active r (range:rs) ((Var i j:fs):fss) completions] = [ Active r (range':rs) (fs:fss) completions
+                                                               | range' <- maybeToList $ safeConc range $ (fst $ completions IMap.! i) ! j 
+                                                               ]
+    app _ = []
+
+
+predictionRule :: (Monoid wt) 
+               => (Rule nt t, wt) 
+               -> DeductiveRule (Item nt t) wt (Container nt t)
+predictionRule (rule@(Rule (_, f)), _) = DeductiveRule 0 (\ _ _ -> [[]]) (const [Active rule [Epsilon] f IMap.empty]) mempty
+
+
+unknownNTCompletionRules :: (Hashable nt, Eq nt, Eq t, Dividable wt) 
+                         => (Rule nt t, wt) 
+                         -> [DeductiveRule (Item nt t) wt (Container nt t)]
+unknownNTCompletionRules (rule@(Rule ((_, as), _)), w) = [ DeductiveRule 2 (gets a) app singleweight
+                                                         | (a, singleweight) <- zip as ntweights
+                                                         ]
+  where
+    ntweights = divide w $ length as
+    -- gets :: nt -> Container nt t -> Item nt t -> [[Item nt t]]
+    gets a (passives, _) active@(Active rule' _ _ _)
+      | rule == rule' = case needsNTCompletion active of
+                             Nothing -> []
+                             Just a' -> [ [passive, active] 
+                                        | a == a'
+                                        , passive <- Map.lookupDefault [] a passives 
+                                        ]
+      | otherwise = []
+    gets a (_, actives) passive@(Passive a' _ _)
+      | a == a' = [ [passive, active]
+                  | active@(Active rule' _ _ _) <- Map.lookupDefault [] (Just a) actives
+                  , rule == rule'
+                  ]
+    gets _ _ _ = []
+
+    app :: [Item nt t] -> [Item nt t]
+    app [Passive _ rv d, Active r (range:rs) ((Var i j:fs):fss) completions] = [ Active r (range':rs) (fs:fss) completions'
+                                                                               | range' <- maybeToList $ safeConc range (rv ! j)
+                                                                               , completions' <- return $ IMap.insert i (rv, d) completions
+                                                                               ]
+    app _ = []
+
+
+isActive :: Item nt t -> Bool
+isActive (Passive _ _ _) = False
+isActive _ = True
+
+needsNTCompletion :: Item nt t -> Maybe nt
+needsNTCompletion (Active (Rule ((_, as), _)) _ ((Var i _:_):_) completed)
+  | not $ i `IMap.member` completed = Just $ as !! i
+  | otherwise = Nothing
+needsNTCompletion _ = Nothing

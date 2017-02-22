@@ -17,7 +17,7 @@
 -- 'weightedParse' uses a weighted PMCFG to find a list of all possible
 -- derivation trees ordered by minimal cost / maximum probability. The
 -- rules' weights need to be instances of 'Monoid' and 
--- 'Vanda.Grammar.PMCFG.WeightedDeductiveSolver.Dividable'.
+-- 'Vanda.Grammar.PMCFG.DeductiveSolver.Dividable'.
 -- 'parse' uses an unweighted grammar to find a list of derivation trees
 -- ordered by least rule applications.
 --
@@ -41,9 +41,12 @@ module Vanda.Grammar.PMCFG.CYKParser
     , weightedParse
     ) where
 
-import Vanda.Grammar.PMCFG.WeightedDeductiveSolver
+import Vanda.Grammar.PMCFG.DeductiveSolver
 import Vanda.Grammar.PMCFG.Range
 import Vanda.Grammar.PMCFG
+
+import Data.Hashable (Hashable(hashWithSalt))
+import qualified Data.HashMap.Lazy as Map
 import Data.Tree (Tree)
 import Data.Maybe (mapMaybe)
 
@@ -52,49 +55,58 @@ import Data.Maybe (mapMaybe)
 -- Tuple of non-terminal, spanning range vector, derivation tree.
 data DeductiveItem nt t = Item nt Rangevector (Derivation nt t) deriving (Eq, Ord, Show)
 
+instance (Hashable nt, Hashable t) => Hashable (DeductiveItem nt t) where
+  salt `hashWithSalt` (Item nt rv d) = salt `hashWithSalt` nt `hashWithSalt` rv `hashWithSalt` d
+
 
 -- | Top-level function to parse a word using a grammar.
-parse :: (Ord t, Ord nt)
+parse :: (Eq t, Eq nt, Hashable nt, Hashable t)
       => PMCFG nt t                               -- ^ the grammar
+      -> Int
       -> [t]                                      -- ^ the word
       -> [Tree (Rule nt t)]                       -- ^ list of derivation trees 
 parse (PMCFG s rules) = weightedParse $ WPMCFG s $ zip rules $ repeat (cost 1 :: Cost Int)
 
 
 -- | Top-level function to parse a word using a weighted grammar.
-weightedParse :: (Ord t, Ord nt, Monoid wt, Ord wt)
+weightedParse :: (Eq t, Eq nt, Hashable t, Hashable nt, Monoid wt, Ord wt)
               => WPMCFG nt wt t             -- ^ weighted grammar
+              -> Int
               -> [t]                        -- ^ word
               -> [Tree (Rule nt t)]   -- ^ parse trees and resulting weights
-weightedParse (WPMCFG s rs) word = map (\ (Item _ _ (Derivation t)) -> t) 
-                                    $ filter (\ (Item a rho _) -> (a `elem` s) && (rho == singleton (entire word))) 
-                                    $ solve 
-                                    $ WeightedDeductiveSolver (makeWeightedRules word rs) 100
-
-
--- | Constructs deduction rules using a weighted grammar.
--- Weights are stored in antecedent items and application functions of rules.
-makeWeightedRules :: (Eq nt, Eq t) 
-                  => [t]                                      -- ^ word 
-                  -> [(Rule nt t, wt)]                        -- ^ weighted grammar rules
-                  -> [(DeductiveRule (DeductiveItem nt t), wt)] -- ^ weighted deduction rules 
-makeWeightedRules w rs =  [ (DeductiveRule (map itemFilter as) (application r $ instantiate w f), weight)
-                          | (r@(Rule ((_, as), f)), weight) <- rs
-                          ]
+weightedParse (WPMCFG s rs) bw word = map (\ (Item _ _ (Derivation t)) -> t) 
+                                      $ filter (\ (Item a rho _) -> (a `elem` s) && (rho == singleton (entire word))) 
+                                      $ solve 
+                                      $ DeductiveSolver Map.empty update (map (deductiveRules word) rs) bw
   where
-    itemFilter :: (Eq nt) => nt -> DeductiveItem nt t -> Bool
-    itemFilter a (Item a' _ _)= a == a'
-    
-    application :: Rule nt t -> [InstantiatedFunction] -> [DeductiveItem nt t] -> [DeductiveItem nt t]
-    application r@(Rule ((a', _), _)) fs is = [ Item a' rv $ node r ts 
-                                              | rv <- mapMaybe (insert rvs) fs
-                                              ]
-      where
-        (rvs, ts) = foldr (\ (Item _ rv t) (rvs, ts) -> (rv:rvs, t:ts)) ([], []) is
+    update :: (Eq nt0, Hashable nt0)
+           => Map.HashMap nt0 [(DeductiveItem nt0 t0)]
+           -> [(DeductiveItem nt0 t0)]
+           -> Map.HashMap nt0 [(DeductiveItem nt0 t0)]
+    update m items = updateGroupsWith (\ (Item a _ _) -> a) items m
 
-        insert :: [Rangevector] -> InstantiatedFunction -> Maybe Rangevector
-        insert rvs = (>>= fromList) . mapM ((>>= toRange) . concVarRange . map (insert' rvs))
-          where
-            insert' :: [Rangevector] -> VarT Range -> VarT Range
-            insert' rvs' (Var x y)  = T $ rvs' !! x ! y
-            insert' _ r = r
+
+deductiveRules :: (Hashable nt, Eq nt, Eq t) 
+               => [t] 
+               -> (Rule nt t, wt)
+               -> DeductiveRule (DeductiveItem nt t) wt (Map.HashMap nt [(DeductiveItem nt t)])
+deductiveRules word (r@(Rule ((a, as), f)), w) = DeductiveRule (length as) gets complete w
+  where
+    -- gets :: (Map.HashMap nt [(DeductiveItem nt t)])
+    --      -> DeductiveItem nt t
+    --      -> [[DeductiveItem nt t]]
+    gets m i@(Item a' _ _) =  if a' `elem` as
+                              then filter (any (== i)) $ mapM (\ a'' -> Map.lookupDefault [] a'' m) as
+                              else []
+  
+    complete antecedents = [ Item a rv $ node r ds
+                           | (rvs, ds) <- return $ foldr (\ (Item _ rv t) (rvs', ts') -> (rv:rvs', t:ts')) ([], []) antecedents 
+                           , rv <- mapMaybe (insert rvs) $ instantiate word f
+                           ]
+
+    insert :: [Rangevector] -> InstantiatedFunction -> Maybe Rangevector
+    insert rvs' = (>>= fromList) . mapM ((>>= toRange) . concVarRange . map (insert' rvs'))
+      
+    insert' :: [Rangevector] -> VarT Range -> VarT Range
+    insert' rvs' (Var x y)  = T $ rvs' !! x ! y
+    insert' _ r' = r'

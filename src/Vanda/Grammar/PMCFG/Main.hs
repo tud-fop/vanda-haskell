@@ -27,6 +27,7 @@ import Data.Tree (drawTree)
 import Data.Interner
 import System.Console.CmdArgs.Explicit
 import System.Console.CmdArgs.Explicit.Misc
+import Control.Exception.Base (evaluate)
 
 import Vanda.Corpus.Negra.Text (parseNegra)
 import Vanda.Grammar.PMCFG.Functions (extractFromNegra, extractFromNegraAndBinarize)
@@ -37,7 +38,7 @@ import Vanda.Grammar.PMCFG (WPMCFG (..), PMCFG (..), prettyPrintWPMCFG, integeri
 import qualified Vanda.Grammar.PMCFG.CYKParser as CYK
 import qualified Vanda.Grammar.PMCFG.NaiveParser as Naive
 import qualified Vanda.Grammar.PMCFG.ActiveParser as Active
-import Vanda.Grammar.PMCFG.WeightedDeductiveSolver (probabilistic)
+import Vanda.Grammar.PMCFG.DeductiveSolver (probabilistic)
 
 
 data Args
@@ -50,7 +51,8 @@ data Args
   | Parse
     { flagAlgorithm :: ParsingAlgorithm
     , argGrammar :: FilePath
-    , flagWeights :: Bool
+    , useWeights :: Bool
+    , beamwidth :: Int
     }
   deriving Show
 
@@ -66,7 +68,7 @@ cmdArgs
     , modeArgs = ( [ flagArgCorpus{argRequire = True}], Nothing )
     , modeGroupFlags = toGroup [flagNoneBinarize,  flagNoneNaive, flagNoneOptimal, flagReqHybrid]
     }
-  , (modeEmpty $ Parse undefined undefined False)
+  , (modeEmpty $ Parse undefined undefined False 1000)
     { modeNames = ["parse"]
     , modeHelp = "Parses, given a (w)PMCFG, each in a sequence of sentences."
     , modeArgs = ( [ flagArgGrammar{argRequire = True} ], Nothing )
@@ -75,6 +77,7 @@ cmdArgs
                                 , flagNaive
                                 , flagActive
                                 , flagUseWeights
+                                , flagBeamwidth
                                 ]
     }
   ]
@@ -83,8 +86,10 @@ cmdArgs
       = flagArg (\ a x -> Right x{argOutput = a}) "OUTPUT"
     flagArgGrammar
       = flagArg (\ a x -> Right x{argGrammar = a}) "GRAMMAR"
+    flagBeamwidth
+      = flagReq ["limit", "bw"] (\ a x -> Right x{beamwidth = read a}) "Int" "BW"
     flagUseWeights
-      = flagNone ["w", "weighted"] (\ x -> x{flagWeights = True}) "use a weighted parsing algorithm"
+      = flagBool ["w", "weighted"] (\ b x -> x{useWeights = b}) "use a weighted parsing algorithm"
     flagUnweightedAutomaton
       = flagNone ["a", "automaton"] (\ x -> x{flagAlgorithm = UnweightedAutomaton}) "use an unweighted automaton constructed from the grammar"
     flagCYK
@@ -126,11 +131,12 @@ mainArgs (Extract outfile True strategy)
       let pmcfg = extractFromNegraAndBinarize s $ parseNegra corpus :: WPMCFG String Double String
       BS.writeFile outfile . compress $ B.encode pmcfg
       writeFile (outfile ++ ".readable") $ prettyPrintWPMCFG pmcfg
-mainArgs (Parse algorithm grFile useWeights)
+mainArgs (Parse algorithm grFile weighted bw)
   = do
       wpmcfg <- B.decode . decompress <$> BS.readFile grFile :: IO (WPMCFG String Double String)
-      let (WPMCFG inits wrs, nti, ti) = integerize wpmcfg         
-      let parse = if useWeights
+      let (WPMCFG inits wrs, nti, ti) = integerize wpmcfg
+      _ <- evaluate wrs        
+      let parse = if weighted
                   then case algorithm of CYK -> CYK.weightedParse (WPMCFG inits $ map (\ (r, w) -> (r, probabilistic w)) wrs)
                                          NaiveActive -> Naive.weightedParse (WPMCFG inits $ map (\ (r, w) -> (r, probabilistic w)) wrs)
                                          Active -> Active.weightedParse (WPMCFG inits $ map (\ (r, w) -> (r, probabilistic w)) wrs)
@@ -141,5 +147,5 @@ mainArgs (Parse algorithm grFile useWeights)
                                          UnweightedAutomaton -> error "not implemented"
                                          --UnweightedAutomaton -> UnweightedAutomaton.parse (PMCFG inits (map fst wrs))
       corpus <- TIO.getContents
-      mapM_ (putStrLn . drawTree . fmap show . head . map (deintegerize (nti, ti)) . parse . snd . internListPreserveOrder ti . map T.unpack . T.words) $ T.lines corpus
+      mapM_ (putStrLn . drawTree . fmap show . head . map (deintegerize (nti, ti)) . parse bw . snd . internListPreserveOrder ti . map T.unpack . T.words) $ T.lines corpus
  

@@ -5,7 +5,7 @@ import Test.HUnit
 import Data.Interner
 import Vanda.Grammar.PMCFG
 import Vanda.Grammar.PMCFG.CYKParser
-import Vanda.Grammar.PMCFG.WeightedDeductiveSolver
+import Vanda.Grammar.PMCFG.DeductiveSolver
 import Data.Maybe (mapMaybe)
 import Data.Hashable (hash)
 import Numeric.Log (Log)
@@ -39,15 +39,17 @@ exampleWPMCFG'' :: (WPMCFG Int (Probabilistic (Log Double)) Int, Interner Int, I
 exampleWPMCFG'' = integerize exampleWPMCFG'
 
 tests :: Test
-tests = TestList    [ TestCase $ assertEqual "Cannot reproduce exmaple derivation" [exampleDerivation] $ parse examplePMCFG "aabccd"
-                    , TestCase $ assertEqual "Cannot reproduce parsed string in yield" ["aabbccdd"] $ mapMaybe yield $ parse examplePMCFG "aabbccdd"
-                    , TestCase $ assertEqual "Cannot reproduce weighted example derivation" [exampleDerivation] $ weightedParse exampleWPMCFG' "aabccd"
+tests = TestList    [ TestCase $ assertEqual "Cannot reproduce exmaple derivation" [exampleDerivation] $ parse examplePMCFG 100 "aabccd"
+                    , TestCase $ assertEqual "Cannot reproduce parsed string in yield" ["aabbccdd"] $ mapMaybe yield $ parse examplePMCFG 100 "aabbccdd"
+                    , TestCase $ assertEqual "Cannot reproduce weighted example derivation" [exampleDerivation] $ weightedParse exampleWPMCFG' 100 "aabccd"
                     , TestCase $ assertEqual "Cannot reproduce weighted example derivation (integerized)" [exampleDerivation] 
                         $ map (deintegerize (nti, ti)) 
-                        $ weightedParse ig 
+                        $ weightedParse ig 100
                         $ snd 
                         $ internListPreserveOrder ti "aabccd"
-                    , TestCase $ assertEqual "Cannot reproduce parsed string in yield (weighted)" ["aabbccdd"] $ mapMaybe yield $ weightedParse exampleWPMCFG' "aabbccdd"
+                    , TestCase $ assertEqual "Cannot reproduce parsed string in yield (weighted)" ["aabbccdd"] 
+                                $ mapMaybe yield 
+                                $ weightedParse exampleWPMCFG' 100 "aabbccdd"
                     --, TestCase $ assertBool "instantiate Fails" $ testinstance `elem` instantiate testword testcomposition
                     , TestCase $ assertEqual "instatntiate Fails (2)" 16 $ length $ instantiate testword testcomposition
                     , TestCase $ assertBool "Derivation Equality" $ testderivation == testderivation
