@@ -66,12 +66,24 @@ updateGroups :: (Hashable b, Eq b)
 updateGroups [] _ m = m
 updateGroups (b:bs) a m = updateGroups bs a $ updateGroup b a m
 
+updateIfGreater :: (Hashable b, Eq b, Ord a)
+                => b
+                -> a
+                -> Map.HashMap b a
+                -> Map.HashMap b a
+updateIfGreater b a m = Map.alter update' b m
+  where
+    update' Nothing = Just a
+    update' (Just a')
+      | a' >= a = Just a'
+      | otherwise = Just a
+
 
 solve :: (Ord wt, Eq it, Hashable it)
       => DeductiveSolver it wt a
       -> [it]
 solve (DeductiveSolver container update rs b) = evalState (deductiveIteration rs' update b) 
-                                                          (Q.fromList $ map swap inits, Set.fromList (map fst inits), container)
+                                                          (Q.fromList $ map swap inits, Set.empty, container)
   where
     inits = rs >>= applyWithoutAntecedents
     
@@ -90,13 +102,15 @@ deductiveIteration rs update beam = do (agenda, olds, container) <- get
                                        if Q.null agenda
                                           then return []
                                           else do let ((_, item), agenda') = Q.deleteFindMax agenda
-                                                      container' = update container item
-                                                      newitems = filter (not . (`Set.member` olds) . fst) $ deductiveStep item container' rs
-                                                      olds' = olds `Set.union` (Set.fromList $ map fst newitems)
-                                                      agenda'' = Q.fromList $ Q.take beam $ agenda' `Q.union` Q.fromList (map swap newitems)
-                                                  put (agenda'', olds', container')
-                                                  is <- deductiveIteration rs update beam
-                                                  return (item:is)
+                                                  if item `Set.member` olds
+                                                     then do put (agenda', olds, container)
+                                                             deductiveIteration rs update beam
+                                                     else do let container' = update container item
+                                                                 olds' = item `Set.insert` olds
+                                                                 newitems = filter (not . (`Set.member` olds) . fst) $ deductiveStep item container' rs
+                                                                 agenda'' = Q.fromList $ Q.take beam $ agenda' `Q.union` Q.fromList (map swap newitems)
+                                                             put (agenda'', olds', container')
+                                                             fmap (item :) (deductiveIteration rs update beam)
 
 
 deductiveStep :: it 

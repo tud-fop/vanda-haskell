@@ -67,9 +67,10 @@ weightedParse (WPMCFG s rs) bw word = map (\ (Passive _ _ (Derivation t) _) -> t
                                       $ DeductiveSolver (Map.empty, Map.empty, Map.empty) update deductiveRules bw
   where
     resultFilter (Passive a rho _ _) = (a `elem` s) && (rho == singleton (entire word))
+    resultFilter _ = False
 
-    deductiveRules = completion word : (map initialPrediction ins) ++ (map prediction notins)
-    (ins, notins) = partition (\ (Rule ((a,_),_), _) -> a `elem` s) rs
+    deductiveRules = initialPrediction srules : prediction rs : [completion word]
+    srules = filter (\ (Rule ((a,_),_), _) -> a `elem` s) rs
 
     update :: (Eq nt, Hashable nt, Ord wt)
            => Container nt t wt
@@ -77,47 +78,51 @@ weightedParse (WPMCFG s rs) bw word = map (\ (Passive _ _ (Derivation t) _) -> t
            -> Container nt t wt
     update (passives, actives, insides) item@(Passive a _ _ w) = ( updateGroup a item passives
                                                                  , actives
-                                                                 , Map.alter updateins a insides
+                                                                 , updateIfGreater a w insides
                                                                  )
-      where 
-        updateins Nothing = Just w
-        updateins (Just w')
-          | w' >= w = Just w'
-          | otherwise = Just w
     update (passives, actives, insides) item@(Initial (Rule ((_, as), _), _) _ _) = ( passives
                                                                                     , updateGroups as item actives
                                                                                     , insides
                                                                                     )
-                  
+
 initialPrediction :: forall nt t wt. (Eq nt, Hashable nt, Monoid wt, Ord wt) 
-                  => (Rule nt t, wt) 
+                  => [(Rule nt t, wt)] 
                   -> DeductiveRule (Item nt t wt) wt (Container nt t wt)
-initialPrediction r@(Rule ((s, as), f), w) = DeductiveRule 0 gets app
+initialPrediction rs = DeductiveRule 0 gets app
   where
     gets :: (Container nt t wt) -> Item nt t wt -> [[Item nt t wt]]
     gets _ _ = [[]]
     
-    app :: (Eq nt, Hashable nt, Monoid wt) => (Container nt t wt) -> [Item nt t wt] -> [(Item nt t wt, wt)]
-    app (_, _, insides) [] = [(Initial r inside outside, inside <> outside)]
-      where
-        inside = w <> mconcat (map (insides Map.!) as)
-        outside = mempty
+    app :: (Eq nt, Hashable nt, Monoid wt)
+        => (Container nt t wt) 
+        -> [Item nt t wt] 
+        -> [(Item nt t wt, wt)]
+    app (_, _, insides) [] =  [ (Initial r inside mempty, inside)
+                              | r@(Rule ((a, as), f), w) <- rs
+                              , inside <- return $ w <> mconcat (map (\ a -> Map.lookupDefault mempty a insides) as)
+                              ]
     
 prediction :: forall nt t wt. (Eq nt, Hashable nt, Group wt) 
-           => (Rule nt t, wt) 
+           => [(Rule nt t, wt)] 
            -> DeductiveRule (Item nt t wt) wt (Container nt t wt)
-prediction r@(Rule ((a, as), f), w) = DeductiveRule 1 gets app
+prediction rs = DeductiveRule 1 gets app
   where
-    gets :: (Eq nt) => (Container nt t wt) -> Item nt t wt -> [[Item nt t wt]]
-    gets _ i@(Initial (Rule ((_, as'), _), _) _ _)
-      | a `elem` as' = [[i]]
-      | otherwise = []
+    gets :: (Eq nt) 
+         => (Container nt t wt) -> Item nt t wt -> [[Item nt t wt]]
+    gets _ i@(Initial _ _ _) = [[i]]
+    gets _ _ = []
     
-    app :: (Eq nt, Hashable nt, Group wt) => (Container nt t wt) -> [Item nt t wt] -> [(Item nt t wt, wt)]
-    app (_, _, insides) [Initial _ inside' outside'] = [(Initial r inside outside, inside <> outside)]
-        where
-          inside = w <> mconcat (map (insides Map.!) as)
-          outside = inside' <> invert (insides Map.! a) <> outside'
+    app :: (Eq nt, Hashable nt, Group wt) 
+        => (Container nt t wt) 
+        -> [Item nt t wt] 
+        -> [(Item nt t wt, wt)]
+    app (_, _, insides) [Initial (Rule ((_, as), f), w) inside' outside'] = [ (Initial r' inside outside, inside <> outside)
+                                                                            | r'@(Rule ((a', as'), _), w') <- rs
+                                                                            , a' `elem` as
+                                                                            , inside <- return $ w' <> mconcat (map (\ a -> Map.lookupDefault mempty a insides) as')
+                                                                            , outside <- return $ inside' <> outside' <> invert (Map.lookupDefault mempty a' insides)
+                                                                            ]
+    app _ _ = []
       
 completion :: forall nt t wt. (Eq t, Eq nt, Hashable nt, Monoid wt) 
            => [t] 
@@ -126,11 +131,11 @@ completion word = DeductiveRule 3 gets app
   where
     gets :: (Eq nt, Hashable nt) => (Container nt t wt) -> Item nt t wt -> [[Item nt t wt]]
     gets (passives, _, _) i@(Initial (Rule ((_, as), _), _) inside' outside') = [ i:candidates
-                                                                                | candidates <- mapM (passives Map.!) as
+                                                                                | candidates <- mapM (\ a -> Map.lookupDefault [] a passives) as
                                                                                 ]
     gets (passives, actives, _) i@(Passive a _ _ _) = [ active:candidates
                                                       | active@(Initial (Rule ((_, as), _), _) _ _) <- Map.lookupDefault [] a actives
-                                                      , candidates <- filter (any (== i)) $ mapM (passives Map.!) as
+                                                      , candidates <- filter (any (== i)) $ mapM (\ a -> Map.lookupDefault [] a passives) as
                                                       ]
                                                     
     app :: (Eq t, Monoid wt) => (Container nt t wt) -> [Item nt t wt] -> [(Item nt t wt, wt)]

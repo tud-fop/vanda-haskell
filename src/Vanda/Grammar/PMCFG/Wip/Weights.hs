@@ -65,4 +65,4 @@ instance (Fractional a) => Dividable (Cost a) where
 
 -- | Uses inverted comparison to find best results with least cost.
 instance (Ord a) => Ord (Cost a) where
-  (Cost x) `compare` (Cost y) = y `compare` x
+  (Cost x) `compare` (Cost y) = y `compare` x 

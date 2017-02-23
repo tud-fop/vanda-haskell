@@ -122,7 +122,6 @@ instance (B.Binary nt, B.Binary t) => B.Binary (Rule nt t) where
   get = Rule <$> B.get
   put (Rule x) = B.put x
 
-
 data PMCFG nt t = PMCFG [nt] [Rule nt t] deriving (Show, Generic, NFData)
 
 instance Functor (PMCFG nt) where
