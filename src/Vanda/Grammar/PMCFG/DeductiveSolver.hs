@@ -37,125 +37,84 @@ module Vanda.Grammar.PMCFG.DeductiveSolver
 
 import qualified Data.PQueue.Prio.Max as Q
 import qualified Data.HashMap.Lazy    as Map
+import qualified Data.HashSet         as Set
+
 import Data.Hashable
 import Control.Monad.State (State, evalState, get, put)
 import Data.Tuple (swap)
-import Data.Monoid ((<>))
-import Numeric.Log (Log(Exp), Precise)
+
+-- | Instance of a deduction system. 
+-- Consisits of a list of Rules, an instance-specific container with update function and a beam width to limit memory expense.
+data DeductiveSolver it wt a = DeductiveSolver a (a -> it -> a) [DeductiveRule it wt a] Int
+-- | A rule of a deduction system.
+-- Consists of two functions: one prepares a list of antecedent combinations using the container of that instance, and one for the rule application itself.
+data DeductiveRule it wt a = DeductiveRule Int (a -> it -> [[it]]) (a -> [it] -> [(it, wt)])
 
 
--- | Multiplicative monoid for probabilistic weights.
-newtype Probabilistic a = Probabilistic a deriving (Eq, Ord)
+-- | Adds an item to a list of items.
+updateGroup :: (Hashable b, Eq b) 
+            => b 
+            -> a
+            -> Map.HashMap b [a] 
+            -> Map.HashMap b [a]
+updateGroup b a m = Map.alter addToList b m
+  where
+    addToList Nothing = Just [a]
+    addToList (Just as) = Just (a:as)
+
+-- | Adds an item to many lists of items.
+updateGroups :: (Hashable b, Eq b) 
+             => [b] 
+             -> a
+             -> Map.HashMap b [a] 
+             -> Map.HashMap b [a]
+updateGroups [] _ m = m
+updateGroups (b:bs) a m = updateGroups bs a $ updateGroup b a m
 
 
--- | Wraps constructor to check for correct ranged values, stores value in log domain.
-probabilistic :: (Precise a, Ord a) => a -> Probabilistic (Log a)
-probabilistic x
-  | x > 0 && x <= 1 = Probabilistic $ Exp $ log x
-  | otherwise = error "probabilistic value out of range"
-
-
-instance (Show a) => Show (Probabilistic a) where
-  show (Probabilistic x) = show x
-
-
--- | Additive monoid for costs.
-newtype Cost a = Cost a deriving (Show, Eq)
-
-
--- | Wraps constructor to check for correct ranged values.
-cost :: (Num a, Ord a) => a -> Cost a
-cost x
-  | x >= 0 = Cost x
-  | otherwise = error "cost value out of range"
-
-
-class (Monoid d) => Dividable d where
-  -- | Divides an object into a given amount of subobjects.
-  -- It should be divided s.t. mconcat (divide x n) = x.
-  divide :: d -> Int -> [d]
-
-
--- | Instance of multiplicative monoid.
-instance (Num a) => Monoid (Probabilistic a) where
-  mempty = Probabilistic 1
-  (Probabilistic x) `mappend` (Probabilistic y) = Probabilistic $ x * y
-
-
--- | Uses root to divide a probability into n subprobabilities.
-instance (Floating a) => Dividable (Probabilistic a) where
-  divide (Probabilistic x) rt = replicate rt $ Probabilistic $ x ** (1 / fromIntegral rt)
-
-
--- | Instance of additive monoid.
-instance (Num a) => Monoid (Cost a) where
-  mempty = Cost 0
-  (Cost x) `mappend` (Cost y) = Cost $ x + y
-
-
--- | Divides by division.
-instance (Fractional a) => Dividable (Cost a) where
-  divide (Cost x) d = replicate d $ Cost $ x / fromIntegral d
-
-
--- | Uses inverted comparison to find best results with least cost.
-instance (Ord a) => Ord (Cost a) where
-  (Cost x) `compare` (Cost y) = y `compare` x
-
-
-data DeductiveSolver it wt a = DeductiveSolver a (a -> [it] -> a) [DeductiveRule it wt a] Int
-data DeductiveRule it wt a = DeductiveRule Int (a -> it -> [[it]]) ([it] -> [it]) wt
-
-
-solve :: (Ord wt, Monoid wt, Eq it, Hashable it)
+solve :: (Ord wt, Eq it, Hashable it)
       => DeductiveSolver it wt a
       -> [it]
 solve (DeductiveSolver container update rs b) = evalState (deductiveIteration rs' update b) 
-                                                                  (Q.fromList $ map swap inits, Map.fromList inits, initcontainer)
+                                                          (Q.fromList $ map swap inits, Set.empty, container)
   where
     inits = rs >>= applyWithoutAntecedents
-    initcontainer = update container $ fst $ unzip inits
     
-    applyWithoutAntecedents (DeductiveRule 0 _ app w) = zip (app []) (repeat w)
+    applyWithoutAntecedents (DeductiveRule 0 _ app) = app container []
     applyWithoutAntecedents _ = []
 
-    rs' = filter (\ (DeductiveRule antecedents _ _ _) -> antecedents > 0) rs
+    rs' = filter (\ (DeductiveRule antecedents _ _) -> antecedents > 0) rs
 
 
-deductiveIteration  :: (Ord wt, Eq it, Hashable it, Monoid wt)
+deductiveIteration  :: (Ord wt, Eq it, Hashable it)
                     => [DeductiveRule it wt a]
-                    -> (a -> [it] -> a)
+                    -> (a -> it -> a)
                     -> Int
-                    -> State (Q.MaxPQueue wt it, Map.HashMap it wt, a) [it]
-deductiveIteration rs update beam = do (current, weightmap, container) <- get
-                                       if Q.null current
+                    -> State (Q.MaxPQueue wt it, Set.HashSet it, a) [it]
+deductiveIteration rs update beam = do (agenda, olds, container) <- get
+                                       if Q.null agenda
                                           then return []
-                                          else do let ((_, item), c') = Q.deleteFindMax current
-                                                      newitems = filter (not . (`Map.member` weightmap) . fst) $ deductiveStep item container weightmap rs
-                                                      a'' = weightmap `Map.union` Map.fromList newitems
-                                                      c'' = Q.fromList $ Q.take beam $ c' `Q.union` Q.fromList (map swap newitems)
-                                                      uc'' = update container $ map fst newitems
-                                                  put (c'', a'', uc'')
-                                                  is <- deductiveIteration rs update beam
-                                                  return (item:is)
+                                          else do let ((_, item), agenda') = Q.deleteFindMax agenda
+                                                  if item `Set.member` olds
+                                                     then do put (agenda', olds, container)
+                                                             deductiveIteration rs update beam
+                                                     else do let container' = update container item
+                                                                 olds' = item `Set.insert` olds
+                                                                 newitems = filter (not . (`Set.member` olds) . fst) $ deductiveStep item container' rs
+                                                                 agenda'' = Q.fromList $ Q.take beam $ agenda' `Q.union` Q.fromList (map swap newitems)
+                                                             put (agenda'', olds', container')
+                                                             fmap (item :) (deductiveIteration rs update beam)
 
 
-deductiveStep :: (Eq it, Hashable it, Monoid wt)
-              => it 
+deductiveStep :: it 
               -> a
-              -> Map.HashMap it wt
               -> [DeductiveRule it wt a]
               -> [(it, wt)]
-deductiveStep item container weights rs = rs >>= ruleApplication item container weights
+deductiveStep item container rs = rs >>= ruleApplication item container
 
 
-ruleApplication :: (Eq it, Hashable it, Monoid wt)
-                => it 
+ruleApplication :: it 
                 -> a
-                -> Map.HashMap it wt
                 -> DeductiveRule it wt a
                 -> [(it, wt)]
-ruleApplication item container weights (DeductiveRule _ gets app w) = [ (cs, mconcat (map (weights Map.!) as) <> w)
-                                                                       | as <- gets container item
-                                                                       , cs <- app as
-                                                                       ]
+ruleApplication item container (DeductiveRule _ gets app) = gets container item >>= app container

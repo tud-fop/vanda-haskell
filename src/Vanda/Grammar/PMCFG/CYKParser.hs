@@ -36,12 +36,13 @@
 --
 --
 -----------------------------------------------------------------------------
-module Vanda.Grammar.PMCFG.CYKParser
-    ( parse
-    , weightedParse
-    ) where
+
+{-# LANGUAGE ScopedTypeVariables #-}
+
+module Vanda.Grammar.PMCFG.CYKParser where
 
 import Vanda.Grammar.PMCFG.DeductiveSolver
+import Vanda.Grammar.PMCFG.Weights
 import Vanda.Grammar.PMCFG.Range
 import Vanda.Grammar.PMCFG
 
@@ -49,14 +50,38 @@ import Data.Hashable (Hashable(hashWithSalt))
 import qualified Data.HashMap.Lazy as Map
 import Data.Tree (Tree)
 import Data.Maybe (mapMaybe)
+import Data.Group (Group(invert))
+import Data.Monoid ((<>))
 
 
--- | Item of naive parsing deduction. 
--- Tuple of non-terminal, spanning range vector, derivation tree.
-data DeductiveItem nt t = Item nt Rangevector (Derivation nt t) deriving (Eq, Ord, Show)
 
-instance (Hashable nt, Hashable t) => Hashable (DeductiveItem nt t) where
-  salt `hashWithSalt` (Item nt rv d) = salt `hashWithSalt` nt `hashWithSalt` rv `hashWithSalt` d
+
+data Item nt t wt = Initial (Rule nt t, wt)   -- ^ grammar rule and weight
+                            wt                -- ^ inside weight
+                            wt                -- ^ outside weight
+                  | Passive nt                -- ^ lhs's nonterminal
+                            Rangevector       -- ^ spanned subword
+                            (Derivation nt t) -- ^ grammar derivation
+                            wt                -- ^ inside weight == weight of derivation
+                  
+type Container nt t wt =  ( Map.HashMap nt [Item nt t wt]  -- ^ passive items, maps a to all passive with a on lhs
+                          , Map.HashMap nt [Item nt t wt]  -- ^ active items, maps a to all active items with a in as
+                          , Map.HashMap nt wt              -- ^ inside weights for each nonterminal
+                          )
+
+instance (Eq nt, Eq t) => Eq (Item nt t wt) where
+  (Initial (r, _) _ _) == (Initial (r', _) _ _) = r == r'
+  (Passive a rv d _) == (Passive a' rv' d' _) = a == a' && rv == rv' && d == d'
+  _ == _ = False
+
+instance (Hashable nt, Hashable t) => Hashable (Item nt t wt) where
+    salt `hashWithSalt` (Initial (r, _) _ _) = salt `hashWithSalt` r
+    salt `hashWithSalt` (Passive a rho d _) = salt `hashWithSalt` a `hashWithSalt` rho `hashWithSalt` d
+
+instance (Show nt, Show t) => Show (Item nt t wt) where
+    show (Initial (r, _) _ _) = "[active] " ++ prettyPrintRule r
+    show (Passive a rv _ _) = "[passive] " ++ show a ++ " " ++ show rv 
+
 
 
 -- | Top-level function to parse a word using a grammar.
@@ -69,44 +94,100 @@ parse (PMCFG s rules) = weightedParse $ WPMCFG s $ zip rules $ repeat (cost 1 ::
 
 
 -- | Top-level function to parse a word using a weighted grammar.
-weightedParse :: (Eq t, Eq nt, Hashable t, Hashable nt, Monoid wt, Ord wt)
+weightedParse :: (Eq t, Eq nt, Hashable t, Hashable nt, Group wt, Ord wt)
               => WPMCFG nt wt t             -- ^ weighted grammar
               -> Int
               -> [t]                        -- ^ word
               -> [Tree (Rule nt t)]   -- ^ parse trees and resulting weights
-weightedParse (WPMCFG s rs) bw word = map (\ (Item _ _ (Derivation t)) -> t) 
-                                      $ filter (\ (Item a rho _) -> (a `elem` s) && (rho == singleton (entire word))) 
+weightedParse (WPMCFG s rs) bw word = map (\ (Passive _ _ (Derivation t) _) -> t) 
+                                      $ filter resultFilter
                                       $ solve 
-                                      $ DeductiveSolver Map.empty update (map (deductiveRules word) rs) bw
+                                      $ DeductiveSolver (Map.empty, Map.empty, insideWeights rs) update deductiveRules bw
   where
-    update :: (Eq nt0, Hashable nt0)
-           => Map.HashMap nt0 [(DeductiveItem nt0 t0)]
-           -> [(DeductiveItem nt0 t0)]
-           -> Map.HashMap nt0 [(DeductiveItem nt0 t0)]
-    update m items = updateGroupsWith (\ (Item a _ _) -> a) items m
+    resultFilter (Passive a rho _ _) = (a `elem` s) && (rho == singleton (entire word))
+    resultFilter _ = False
 
+    deductiveRules = initialPrediction srules : prediction rs : [completion word]
+    srules = filter (\ (Rule ((a,_),_), _) -> a `elem` s) rs
 
-deductiveRules :: (Hashable nt, Eq nt, Eq t) 
-               => [t] 
-               -> (Rule nt t, wt)
-               -> DeductiveRule (DeductiveItem nt t) wt (Map.HashMap nt [(DeductiveItem nt t)])
-deductiveRules word (r@(Rule ((a, as), f)), w) = DeductiveRule (length as) gets complete w
+    update :: (Eq nt, Hashable nt, Ord wt)
+           => Container nt t wt
+           -> (Item nt t wt)
+           -> Container nt t wt
+    update (passives, actives, insides) item@(Passive a _ _ _) = ( updateGroup a item passives
+                                                                 , actives
+                                                                 , insides
+                                                                 )
+    update (passives, actives, insides) item@(Initial (Rule ((_, as), _), _) _ _) = ( passives
+                                                                                    , updateGroups as item actives
+                                                                                    , insides
+                                                                                    )
+
+initialPrediction :: forall nt t wt. (Eq nt, Hashable nt, Monoid wt, Ord wt) 
+                  => [(Rule nt t, wt)] 
+                  -> DeductiveRule (Item nt t wt) wt (Container nt t wt)
+initialPrediction rs = DeductiveRule 0 gets app
   where
-    -- gets :: (Map.HashMap nt [(DeductiveItem nt t)])
-    --      -> DeductiveItem nt t
-    --      -> [[DeductiveItem nt t]]
-    gets m i@(Item a' _ _) =  if a' `elem` as
-                              then filter (any (== i)) $ mapM (\ a'' -> Map.lookupDefault [] a'' m) as
-                              else []
-  
-    complete antecedents = [ Item a rv $ node r ds
-                           | (rvs, ds) <- return $ foldr (\ (Item _ rv t) (rvs', ts') -> (rv:rvs', t:ts')) ([], []) antecedents 
-                           , rv <- mapMaybe (insert rvs) $ instantiate word f
-                           ]
-
-    insert :: [Rangevector] -> InstantiatedFunction -> Maybe Rangevector
-    insert rvs' = (>>= fromList) . mapM ((>>= toRange) . concVarRange . map (insert' rvs'))
+    gets :: (Container nt t wt) -> Item nt t wt -> [[Item nt t wt]]
+    gets _ _ = [[]]
+    
+    app :: (Eq nt, Hashable nt, Monoid wt)
+        => (Container nt t wt) 
+        -> [Item nt t wt] 
+        -> [(Item nt t wt, wt)]
+    app (_, _, insides) [] =  [ (Initial r inside mempty, inside)
+                              | r@(Rule ((_, as), _), w) <- rs
+                              , inside <- return $ w <> mconcat (map (\ a -> Map.lookupDefault mempty a insides) as)
+                              ]
+    app _ _ = []
+    
+prediction :: forall nt t wt. (Eq nt, Hashable nt, Group wt) 
+           => [(Rule nt t, wt)] 
+           -> DeductiveRule (Item nt t wt) wt (Container nt t wt)
+prediction rs = DeductiveRule 1 gets app
+  where
+    gets :: (Eq nt) 
+         => (Container nt t wt) -> Item nt t wt -> [[Item nt t wt]]
+    gets _ i@(Initial _ _ _) = [[i]]
+    gets _ _ = []
+    
+    app :: (Eq nt, Hashable nt, Group wt) 
+        => (Container nt t wt) 
+        -> [Item nt t wt] 
+        -> [(Item nt t wt, wt)]
+    app (_, _, insides) [Initial (Rule ((_, as), _), _) inside' outside'] = [ (Initial r' inside outside, inside <> outside)
+                                                                            | r'@(Rule ((a', as'), _), w') <- rs
+                                                                            , a' `elem` as
+                                                                            , inside <- return $ w' <> mconcat (map (\ a -> Map.lookupDefault mempty a insides) as')
+                                                                            , outside <- return $ inside' <> outside' <> invert (Map.lookupDefault mempty a' insides)
+                                                                            ]
+    app _ _ = []
       
-    insert' :: [Rangevector] -> VarT Range -> VarT Range
-    insert' rvs' (Var x y)  = T $ rvs' !! x ! y
-    insert' _ r' = r'
+completion :: forall nt t wt. (Eq t, Eq nt, Hashable nt, Monoid wt) 
+           => [t] 
+           -> DeductiveRule (Item nt t wt) wt (Container nt t wt)
+completion word = DeductiveRule 3 gets app
+  where
+    gets :: (Eq nt, Hashable nt) => (Container nt t wt) -> Item nt t wt -> [[Item nt t wt]]
+    gets (passives, _, _) i@(Initial (Rule ((_, as), _), _) _ _) = [ i:candidates
+                                                                   | candidates <- mapM (\ a -> Map.lookupDefault [] a passives) as
+                                                                   ]
+    gets (passives, actives, _) i@(Passive a _ _ _) = [ active:candidates
+                                                      | active@(Initial (Rule ((_, as), _), _) _ _) <- Map.lookupDefault [] a actives
+                                                      , candidates <- filter (any (== i)) $ mapM (\ nta -> Map.lookupDefault [] nta passives) as
+                                                      ]
+                                                    
+    app :: (Eq t, Monoid wt) => (Container nt t wt) -> [Item nt t wt] -> [(Item nt t wt, wt)]
+    app _ (Initial (r@(Rule ((a, _), f)) , w) _ outside : pas) =  [ (Passive a rv (node r ds) inside, inside <> outside)
+                                                                  | rv <- mapMaybe (insert rvs) $ instantiate word f
+                                                                  , inside <- return $ mconcat ws <> w
+                                                                  ]
+      where
+        (rvs, ds, ws) = foldr (\ (Passive _ rv t iw) (rvs', ts', ws') -> (rv:rvs', t:ts', iw:ws')) ([], [], []) pas
+        insert :: [Rangevector] -> InstantiatedFunction -> Maybe Rangevector
+        insert rvs' = (>>= fromList) . mapM ((>>= toRange) . concVarRange . map (insert' rvs'))
+          
+        insert' :: [Rangevector] -> VarT Range -> VarT Range
+        insert' rvs' (Var x y)  = T $ rvs' !! x ! y
+        insert' _ r' = r'
+    app _ _ = []

@@ -27,6 +27,7 @@ module Vanda.Grammar.PMCFG
   , fromWeightedRules
   , integerize
   , deintegerize
+  , insideWeights
   -- * derivation trees
   , Derivation(Derivation)
   , node
@@ -48,8 +49,6 @@ module Vanda.Grammar.PMCFG
   , exampleRules
   , exampleCompositions
   , exampleWeights
-  -- * misc
-  , updateGroupsWith
   ) where
 
 import Control.Arrow (first)
@@ -60,13 +59,14 @@ import Data.Hashable
 import Data.List (intercalate)
 import Data.Maybe (listToMaybe, mapMaybe)
 import Data.Tree
-import qualified Data.HashMap.Lazy as Map
+import qualified Data.HashMap.Lazy  as Map
+import qualified Data.HashSet       as Set
 import GHC.Generics (Generic)
 import Data.Interner (Interner, internList, intern, emptyInterner, internListPreserveOrder, internerToArray)
 import Control.Monad.State.Lazy
 import Data.Array (Array, (!))
 import Vanda.Grammar.PMCFG.Range (Range(Epsilon), safeConc, singletons)
-
+import Data.Monoid((<>))
 errorHere :: String -> String -> a
 errorHere = Control.Error.errorHere "Vanda.Grammar.PMCFG"
 
@@ -111,6 +111,9 @@ instance B.Binary t => B.Binary (VarT t) where
 
 -- | 'Rule' ((A, [A₁, …, Aₖ]), f) ~ A → f(A₁, …, Aₖ).
 newtype Rule nt t = Rule ((nt, [nt]), [[VarT t]]) deriving (Eq, Ord, Show, Generic, NFData)
+
+lhs :: Rule nt t -> nt
+lhs (Rule ((a, _), _)) = a
 
 instance (Hashable nt, Hashable t) => Hashable (Rule nt t) where
   salt `hashWithSalt` (Rule tup) = salt `hashWithSalt` tup
@@ -281,22 +284,6 @@ evaluate (Node f ts) = do
   mapM (fmap concat . mapM lookUp) f
 
 
-updateGroupsWith :: (Hashable b, Eq b) 
-                 => (a -> b) 
-                 -> [a] 
-                 -> Map.HashMap b [a] 
-                 -> Map.HashMap b [a]
-updateGroupsWith f as = execState (mapM (updateGroupsWith' f) as)
-  where
-    updateGroupsWith' :: (Hashable b, Eq b) => (a -> b) -> a -> State (Map.HashMap b [a]) ()
-    updateGroupsWith' f' a = do m <- get
-                                put $ Map.alter (addtolist a) (f' a) m
-                                return ()
-    addtolist :: b -> Maybe [b] -> Maybe [b]
-    addtolist b Nothing = Just [b]
-    addtolist b (Just bs) = Just (b:bs)
-
-
 prettyPrintRule :: (Show nt, Show t) => Rule nt t -> String
 prettyPrintRule (Rule ((a, bs), f))
   = show a ++ " → " ++ prettyPrintComposition f ++ " (" ++ intercalate ", " (map show bs) ++ ")"
@@ -347,3 +334,21 @@ examplePMCFG = fromRules [0] exampleRules
 
 exampleWPMCFG :: WPMCFG Int Double Char
 exampleWPMCFG = fromWeightedRules [0] $ zip exampleRules exampleWeights
+
+
+insideWeights :: (Monoid wt, Ord wt, Hashable nt, Eq nt)
+              => [(Rule nt t, wt)] 
+              -> Map.HashMap nt wt
+insideWeights rs = (iterate (iteration ns rs) Map.empty) !! 20
+  where
+    ns = Set.toList $ Set.fromList $ map (lhs . fst) rs
+    iteration :: (Monoid wt, Ord wt, Hashable nt, Eq nt) 
+              => [nt] -> [(Rule nt t, wt)] -> Map.HashMap nt wt -> Map.HashMap nt wt
+    iteration ns' rs' m = Map.fromList  [ (a, maximum ws) 
+                                        | a <- ns'
+                                        , let ws =  [ w <> mconcat ws'
+                                                    | (Rule ((a', as), _), w) <- rs'
+                                                    , a == a'
+                                                    , let ws' = map (\ ai -> Map.lookupDefault mempty ai m) as
+                                                    ]
+                                        ]

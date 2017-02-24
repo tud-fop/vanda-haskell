@@ -1,4 +1,4 @@
-module Vanda.Grammar.PMCFG.Wip.Weights where
+module Vanda.Grammar.PMCFG.Weights where
 
 import Numeric.Log (Log(Exp), Precise)
 import Data.Group (Group(invert))
