@@ -14,6 +14,8 @@
 module Vanda.Grammar.PMCFG
   ( VarT (Var, T)
   , Rule (Rule)
+  , lhs
+  , antecedents
   , isT
   , fromT
   , isVar
@@ -112,8 +114,11 @@ instance B.Binary t => B.Binary (VarT t) where
 -- | 'Rule' ((A, [A₁, …, Aₖ]), f) ~ A → f(A₁, …, Aₖ).
 newtype Rule nt t = Rule ((nt, [nt]), [[VarT t]]) deriving (Eq, Ord, Show, Generic, NFData)
 
-lhs :: Rule nt t -> nt
-lhs (Rule ((a, _), _)) = a
+lhs :: (Rule nt t, wt) -> nt
+lhs (Rule ((a, _), _), _) = a
+
+antecedents :: (Rule nt t, wt) -> [nt]
+antecedents (Rule ((_, as),_), _) = as
 
 instance (Hashable nt, Hashable t) => Hashable (Rule nt t) where
   salt `hashWithSalt` (Rule tup) = salt `hashWithSalt` tup
@@ -341,7 +346,7 @@ insideWeights :: (Monoid wt, Ord wt, Hashable nt, Eq nt)
               -> Map.HashMap nt wt
 insideWeights rs = (iterate (iteration ns rs) Map.empty) !! 20
   where
-    ns = Set.toList $ Set.fromList $ map (lhs . fst) rs
+    ns = Set.toList $ Set.fromList $ map lhs rs
     iteration :: (Monoid wt, Ord wt, Hashable nt, Eq nt) 
               => [nt] -> [(Rule nt t, wt)] -> Map.HashMap nt wt -> Map.HashMap nt wt
     iteration ns' rs' m = Map.fromList  [ (a, maximum ws) 
