@@ -54,22 +54,30 @@ import Data.Maybe (maybeToList)
 import Data.Monoid ((<>))
 
 
-data Item nt wt = Active  Int InstantiatedFunction wt
-                | Passive nt Rangevector (Tree Int) wt
-
-type Container nt wt =  (Map.HashMap nt [Item nt wt], Map.HashMap nt [Item nt wt])
+newtype Backtrace nt t wt = Backtrace (Rule nt t) wt [Rangevector]
 
 
-instance (Eq nt) => Eq (Item nt wt) where
+data Item nt t wt = Active (Rule nt t) wt InstantiatedFunction wt
+                  | Passive nt Rangevector (Backtrace nt t wt) wt
+
+
+type Container nt t wt = ( Map.HashMap nt (Map.HashMap Rangevector ([Backtrace nt t wt], wt))
+                         , Map.HashMap nt [Item nt wt]
+                         )
+
+
+instance (Eq nt, Eq t) => Eq (Item nt wt) where
   (Active r fw _) == (Active r' fw' _) = r == r' && fw == fw' 
-  (Passive a rv d _) == (Passive a' rv' d' _) = a == a' && rv == rv' && d == d'
+  (Passive a rv _ _) == (Passive a' rv' _ _) = a == a' && rv == rv'
   _ == _ = False
 
-instance (Hashable nt) => Hashable (Item nt wt) where
+
+instance (Hashable nt, Hashable t) => Hashable (Item nt wt) where
     salt `hashWithSalt` (Active r _ _) = salt `hashWithSalt` r
     salt `hashWithSalt` (Passive a rho _ _) = salt `hashWithSalt` a `hashWithSalt` rho
 
-instance (Show nt) => Show (Item nt wt) where
+
+instance (Show nt, Show t) => Show (Item nt wt) where
     show (Active r f _) = "[active] rule #" ++ show r ++ " " ++ prettyPrintInstantiatedFunction f
     show (Passive a rv _ _) = "[passive] " ++ show a ++ " " ++ show rv 
 
@@ -77,7 +85,7 @@ instance (Show nt) => Show (Item nt wt) where
 -- | Top-level function to parse a word using a grammar.
 parse :: (Eq t, Eq nt, Hashable nt)
       => PMCFG nt t                               -- ^ the grammar
-      -> Int
+      -> Int                                      -- ^ approximation parameter
       -> [t]                                      -- ^ the word
       -> [Tree (Rule nt t)]                       -- ^ list of derivation trees 
 parse (PMCFG s rules) = weightedParse $ WPMCFG s $ zip rules $ repeat (cost 1 :: Cost Int)
@@ -108,14 +116,17 @@ weightedParse (WPMCFG s rs) bw word = map (\ (Passive _ _ t _) -> fmap (fst . (r
 
     update :: Container nt wt
            -> Item nt wt
-           -> Container nt wt
-    update (passives, actives) item@(Passive a _ _ _) = ( updateGroup a item passives
-                                                        , actives
-                                                        )
+           -> (Container nt wt, Bool)
+    update (passives, actives) item@(Passive a rho bt iw) = ( case Map.lookup a passives of
+                                                                   Nothing -> (Map.insert a (Map.singleton rho ([bt], iw)) passives, True)
+                                                                   Just pa -> case Map.lookup rho pa of
+                                                                                   Nothing -> (Map.adjust (Map.insert rho ([bt], wt), pa) a passives, True)
+                                                                                   Just (bts, w) -> (Map.adjust (Map.insert rho (bt:bts, w) pa) a passives, False)
+                                                            , actives
+                                                            )
     update (passives, actives) item@(Active r _ _) =  ( passives
-                                                        , updateGroups as item actives
-                                                        )
-      where as = antecedents $ rs' A.! r
+                                                      , updateGroups as item actives
+                                                      )
 
 initialPrediction :: forall nt t wt. (Eq nt, Eq t, Hashable nt, Monoid wt) 
                   => [t]
