@@ -29,7 +29,7 @@ import Vanda.Hypergraph
 
 import qualified Data.List as L
 import qualified Data.Map as M
-import Data.Tree
+import Data.Tree hiding(foldTree)
 
 
 -- | Represents a 'Hypergraph' with the following 'Hyperedge's:

@@ -30,6 +30,7 @@ module Vanda.Grammar.PMCFG
   , integerize
   , deintegerize
   , insideWeights
+  , outsideWeights
   -- * derivation trees
   , Derivation(Derivation)
   , node
@@ -59,7 +60,7 @@ import qualified Control.Error
 import qualified Data.Binary as B
 import Data.Hashable
 import Data.List (intercalate)
-import Data.Maybe (listToMaybe, mapMaybe)
+import Data.Maybe (listToMaybe, mapMaybe, catMaybes)
 import Data.Tree
 import qualified Data.HashMap.Lazy  as Map
 import qualified Data.HashSet       as Set
@@ -344,12 +345,12 @@ exampleWPMCFG = fromWeightedRules [0] $ zip exampleRules exampleWeights
 insideWeights :: (Monoid wt, Ord wt, Hashable nt, Eq nt)
               => [(Rule nt t, wt)] 
               -> Map.HashMap nt wt
-insideWeights rs = (iterate (iteration ns rs) Map.empty) !! 20
+insideWeights rs = convergence $ iterate (iteration ns rs) Map.empty
   where
     ns = Set.toList $ Set.fromList $ map lhs rs
     iteration :: (Monoid wt, Ord wt, Hashable nt, Eq nt) 
               => [nt] -> [(Rule nt t, wt)] -> Map.HashMap nt wt -> Map.HashMap nt wt
-    iteration ns' rs' m = Map.fromList  [ (a, maximum ws) 
+    iteration ns' rs' m = Map.fromList  [ (a, minimum ws) 
                                         | a <- ns'
                                         , let ws =  [ w <> mconcat ws'
                                                     | (Rule ((a', as), _), w) <- rs'
@@ -357,3 +358,35 @@ insideWeights rs = (iterate (iteration ns rs) Map.empty) !! 20
                                                     , let ws' = map (\ ai -> Map.lookupDefault mempty ai m) as
                                                     ]
                                         ]
+
+
+outsideWeights :: (Monoid wt, Ord wt, Hashable nt, Eq nt)
+               => Map.HashMap nt wt
+               -> [(Rule nt t, wt)]
+               -> [nt]
+               -> Map.HashMap nt wt
+outsideWeights insides rs s = convergence $ iterate (iteration insides ns rs) init
+  where
+    init = Map.fromList $ zip s $ repeat mempty
+    ns = Set.toList $ Set.fromList $ map lhs rs
+    
+    rfo (x:xs) y
+      | x == y = xs
+      | otherwise = x : rfo xs y
+    rfo [] _ = []
+
+    iteration insides ns rs outsides = Map.fromList [ (a, minimum outs) 
+                                                    | a <- ns
+                                                    , let outs = catMaybes [ ((w <> was) <>) <$> Map.lookup b outsides
+                                                                           | (Rule ((b, as), _), w) <- rs
+                                                                           , a `elem` as
+                                                                           , let was = mconcat (map (insides Map.!) $ rfo as a)
+                                                                           ]
+                                                    , not $ null outs
+                                                    ] `Map.union` outsides
+
+convergence :: (Hashable a, Eq a, Eq b)
+            => [Map.HashMap a b] -> Map.HashMap a b
+convergence (m1:m2:ms)
+  | m1 == m2 = m1
+  | otherwise = convergence (m2:ms)

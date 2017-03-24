@@ -29,7 +29,7 @@ library
     , bytestring
     , bytestring-lexing
     , cmdargs
-    , containers >= 0.5.0
+    , containers >= 0.5.9.1
     , deepseq
     , directory
     , filepath
@@ -42,10 +42,10 @@ library
     , mtl
     , parallel >= 3.2
     , parsec >= 3.1.2
-    , pqueue
     , pretty
     , QuickCheck
     , random
+    , semiring-simple
     , split
     , stm
     , text
@@ -59,6 +59,7 @@ library
       CodingConventions
     , Control.Error
     , Data.Interner
+    , Data.LimitedQueue
     , Data.List.Extra
     , Data.List.Shuffle
     , Data.Maybe.Extra
@@ -162,8 +163,8 @@ library
     , Vanda.Util.Timestamps
     , Vanda.Util.Tree
   hs-source-dirs:  src
-  GHC-Options:      -Wall -fwarn-incomplete-record-updates -O1
-  ghc-prof-options: -Wall -fwarn-incomplete-record-updates -fprof-auto -O1
+  GHC-Options:      -Wall -fwarn-incomplete-record-updates
+  ghc-prof-options: -Wall -fwarn-incomplete-record-updates
 
 executable Vanda
   build-depends:
@@ -178,6 +179,7 @@ executable Vanda
     , deepseq
     , directory
     , filepath
+    , groups
     , hashable
     , heap
     , JuicyPixels
@@ -186,11 +188,11 @@ executable Vanda
     , mtl
     , parallel >= 3.2
     , parsec >= 3.1.2
-    , pqueue
     , pretty
     , QuickCheck
     , random
     , split
+    , semiring-simple
     , stm
     , text
     , time

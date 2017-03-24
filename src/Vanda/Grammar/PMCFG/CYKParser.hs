@@ -51,34 +51,31 @@ import qualified Data.HashMap.Lazy  as Map
 import qualified Data.Array         as A
 import Data.Tree (Tree(Node))
 import Data.Maybe (maybeToList)
-import Data.Group (Group(invert))
 import Data.Monoid ((<>))
 
 
-
-
-data Item nt wt = Active  Int InstantiatedFunction wt wt
+data Item nt wt = Active  Int InstantiatedFunction wt
                 | Passive nt Rangevector (Tree Int) wt
 
-type Container nt wt =  ( Map.HashMap nt [Item nt wt], Map.HashMap nt [Item nt wt])
+type Container nt wt =  (Map.HashMap nt [Item nt wt], Map.HashMap nt [Item nt wt])
+
 
 instance (Eq nt) => Eq (Item nt wt) where
-  (Active r fw _ _) == (Active r' fw' _ _) = r == r'&& fw == fw' 
+  (Active r fw _) == (Active r' fw' _) = r == r' && fw == fw' 
   (Passive a rv d _) == (Passive a' rv' d' _) = a == a' && rv == rv' && d == d'
   _ == _ = False
 
 instance (Hashable nt) => Hashable (Item nt wt) where
-    salt `hashWithSalt` (Active r _ _ _) = salt `hashWithSalt` r
+    salt `hashWithSalt` (Active r _ _) = salt `hashWithSalt` r
     salt `hashWithSalt` (Passive a rho _ _) = salt `hashWithSalt` a `hashWithSalt` rho
 
 instance (Show nt) => Show (Item nt wt) where
-    show (Active r f _ _) = "[active] rule #" ++ show r ++ " " ++ prettyPrintInstantiatedFunction f
+    show (Active r f _) = "[active] rule #" ++ show r ++ " " ++ prettyPrintInstantiatedFunction f
     show (Passive a rv _ _) = "[passive] " ++ show a ++ " " ++ show rv 
 
 
-
 -- | Top-level function to parse a word using a grammar.
-parse :: (Eq t, Eq nt, Hashable nt, Hashable t)
+parse :: (Eq t, Eq nt, Hashable nt)
       => PMCFG nt t                               -- ^ the grammar
       -> Int
       -> [t]                                      -- ^ the word
@@ -87,7 +84,7 @@ parse (PMCFG s rules) = weightedParse $ WPMCFG s $ zip rules $ repeat (cost 1 ::
 
 
 -- | Top-level function to parse a word using a weighted grammar.
-weightedParse :: forall nt t wt. (Eq t, Eq nt, Hashable t, Hashable nt, Group wt, Ord wt)
+weightedParse :: forall nt t wt. (Eq t, Eq nt, Hashable nt, Monoid wt, Ord wt)
               => WPMCFG nt wt t             -- ^ weighted grammar
               -> Int                        -- ^ beam width
               -> [t]                        -- ^ word
@@ -103,94 +100,95 @@ weightedParse (WPMCFG s rs) bw word = map (\ (Passive _ _ t _) -> fmap (fst . (r
     resultFilter _ = False
     
     insides = insideWeights rs
+    outsides = outsideWeights insides rs s
 
-    deductiveRules = initialPrediction s rs' insides word 
-                      : prediction rs' insides word 
-                      : [completion rs']
+    deductiveRules = initialPrediction word s rs' insides 
+                      : prediction word rs' insides outsides
+                      : [completion rs' outsides]
 
-    update :: (Eq nt, Hashable nt, Ord wt)
-           => Container nt wt
-           -> (Item nt wt)
+    update :: Container nt wt
+           -> Item nt wt
            -> Container nt wt
     update (passives, actives) item@(Passive a _ _ _) = ( updateGroup a item passives
                                                         , actives
                                                         )
-    update (passives, actives) item@(Active r _ _ _) =  ( passives
+    update (passives, actives) item@(Active r _ _) =  ( passives
                                                         , updateGroups as item actives
                                                         )
       where as = antecedents $ rs' A.! r
 
-initialPrediction :: forall nt t wt. (Eq nt, Eq t, Hashable nt, Monoid wt, Ord wt) 
-                  => [nt]
+initialPrediction :: forall nt t wt. (Eq nt, Eq t, Hashable nt, Monoid wt) 
+                  => [t]
+                  -> [nt]
                   -> A.Array Int (Rule nt t, wt)
                   -> Map.HashMap nt wt
-                  -> [t]
                   -> DeductiveRule (Item nt wt) wt (Container nt wt)
-initialPrediction s rs insides word = DeductiveRule 0 gets app
+initialPrediction word s rs insides = DeductiveRule 0 gets app
   where
     srules = filter (\ (_, (Rule ((a, _), _), _)) -> a `elem` s) $ A.assocs rs
     
-    gets :: (Container nt wt) -> Item nt wt -> [[Item nt wt]]
+    gets :: Container nt wt -> Item nt wt -> [[Item nt wt]]
     gets _ _ = [[]]
     
-    app :: (Eq nt, Hashable nt, Monoid wt)
-        => (Container nt wt) 
+    app :: Container nt wt
         -> [Item nt wt] 
         -> [(Item nt wt, wt)]
-    app _ [] =  [ (Active r fw inside mempty, inside)
+    app _ [] =  [ (Active r fw inside, inside)
                 | (r, (Rule ((_, as), f), w)) <- srules
                 , fw <- instantiate word f
                 , let inside = w <> mconcat (map (insides Map.!) as)
                 ]
     app _ _ = []
     
-prediction :: forall nt t wt. (Eq nt, Eq t, Hashable nt, Group wt) 
-           => A.Array Int (Rule nt t, wt)
+prediction :: forall nt t wt. (Eq nt, Eq t, Hashable nt, Monoid wt) 
+           => [t]
+           -> A.Array Int (Rule nt t, wt)
            -> Map.HashMap nt wt
-           -> [t]
+           -> Map.HashMap nt wt
            -> DeductiveRule (Item nt wt) wt (Container nt wt)
-prediction rs insides word = DeductiveRule 1 gets app
+prediction word rs insides outsides = DeductiveRule 1 gets app
   where
-    gets :: (Container nt wt) -> Item nt wt -> [[Item nt wt]]
-    gets _ i@(Active _ _ _ _) = [[i]]
+    gets :: Container nt wt -> Item nt wt -> [[Item nt wt]]
+    gets _ i@Active{} = [[i]]
     gets _ _ = []
     
-    app :: (Eq nt, Eq t, Hashable nt, Group wt) 
-        => (Container nt wt) 
+    app :: Container nt wt 
         -> [Item nt wt] 
         -> [(Item nt wt, wt)]
-    app _ [Active r _ inside' outside'] = [ (Active r' fw inside outside, inside <> outside)
-                                          | let as = antecedents $ rs A.! r
-                                          , (r', (Rule ((a', as'), f'), w')) <- A.assocs rs
-                                          , a' `elem` as
-                                          , fw <- instantiate word f'
-                                          , let inside = w' <> mconcat (map (insides Map.!) as')
-                                                outside = inside' <> outside' <> invert (insides Map.! a')
-                                          ]
+    app _ [Active r _ _] = [ (Active r' fw inside, inside <> outside)
+                           | let as = antecedents $ rs A.! r
+                           , (r', (Rule ((a', as'), f'), w')) <- A.assocs rs
+                           , a' `elem` as
+                           , fw <- instantiate word f'
+                           , let inside = w' <> mconcat (map (insides Map.!) as')
+                                 outside = outsides Map.! a'
+                           ]
     app _ _ = []
       
-completion :: forall nt t wt. (Eq t, Eq nt, Hashable nt, Monoid wt) 
+completion :: forall nt t wt. (Eq nt, Hashable nt, Monoid wt) 
            => A.Array Int (Rule nt t, wt)
+           -> Map.HashMap nt wt
            -> DeductiveRule (Item nt wt) wt (Container nt wt)
-completion rs = DeductiveRule 3 gets app
+completion rs outsides = DeductiveRule 3 gets app
   where
-    gets :: (Eq nt, Hashable nt) => (Container nt wt) -> Item nt wt -> [[Item nt wt]]
-    gets (passives, _) i@(Active r _ _ _) = [ i:candidates
-                                            | let as = antecedents $ rs A.! r
-                                            , candidates <- mapM (\ a -> Map.lookupDefault [] a passives) as
-                                            ]
+    gets :: Container nt wt -> Item nt wt -> [[Item nt wt]]
+    gets (passives, _) i@(Active r _ _) = [ i:candidates
+                                          | let as = antecedents $ rs A.! r
+                                          , candidates <- mapM (\ a -> Map.lookupDefault [] a passives) as
+                                          ]
     gets (passives, actives) i@(Passive a _ _ _) = [ active:candidates
-                                                   | active@(Active r _ _ _) <- Map.lookupDefault [] a actives
+                                                   | active@(Active r _ _ ) <- Map.lookupDefault [] a actives
                                                    , let as = antecedents $ rs A.! r
-                                                   , candidates <- filter (any (== i)) $ mapM (\ nta -> Map.lookupDefault [] nta passives) as
+                                                   , candidates <- filter (elem i) $ mapM (\ nta -> Map.lookupDefault [] nta passives) as
                                                    ]
     
-    app :: (Eq t, Monoid wt) => (Container nt wt) -> [Item nt wt] -> [(Item nt wt, wt)]
-    app _ (Active r fw _ outside : pas) =  [ (Passive a rv (Node r ds) inside, inside <> outside)
-                                           | rv <- maybeToList $ insert rvs fw
-                                           , let (Rule ((a,_),_), w) = rs A.! r
-                                                 inside = mconcat ws <> w
-                                           ]
+    app :: Container nt wt -> [Item nt wt] -> [(Item nt wt, wt)]
+    app _ (Active r fw _: pas) = [ (Passive a rv (Node r ds) inside, inside <> outside)
+                                 | rv <- maybeToList $ insert rvs fw
+                                 , let (Rule ((a,_),_), w) = rs A.! r
+                                       inside = mconcat ws <> w
+                                       outside = outsides Map.! a
+                                 ]
       where
         (rvs, ds, ws) = foldr (\ (Passive _ rv t iw) (rvs', ts', ws') -> (rv:rvs', t:ts', iw:ws')) ([], [], []) pas
         

@@ -35,9 +35,9 @@ module Vanda.Grammar.PMCFG.DeductiveSolver
   -- , cost
   -- ) where
 
-import qualified Data.PQueue.Prio.Max as Q
-import qualified Data.HashMap.Lazy    as Map
-import qualified Data.HashSet         as Set
+import qualified Data.LimitedQueue as Q
+import qualified Data.HashMap.Lazy as Map
+import qualified Data.HashSet      as Set
 
 import Data.Hashable
 import Control.Monad.State (State, evalState, get, put)
@@ -57,7 +57,7 @@ updateGroup :: (Hashable b, Eq b)
             -> a
             -> Map.HashMap b [a] 
             -> Map.HashMap b [a]
-updateGroup b a m = Map.alter addToList b m
+updateGroup b a = Map.alter addToList b
   where
     addToList Nothing = Just [a]
     addToList (Just as) = Just (a:as)
@@ -75,8 +75,8 @@ updateGroups (b:bs) a m = updateGroups bs a $ updateGroup b a m
 solve :: (Ord wt, Eq it, Hashable it)
       => DeductiveSolver it wt a
       -> [it]
-solve (DeductiveSolver container update rs b) = evalState (deductiveIteration rs' update b) 
-                                                          (Q.fromList $ map swap inits, Set.empty, container)
+solve (DeductiveSolver container update rs b) = evalState (deductiveIteration rs' update) 
+                                                          (Q.fromList b inits, container)
   where
     inits = rs >>= applyWithoutAntecedents
     
@@ -89,21 +89,15 @@ solve (DeductiveSolver container update rs b) = evalState (deductiveIteration rs
 deductiveIteration  :: (Ord wt, Eq it, Hashable it)
                     => [DeductiveRule it wt a]
                     -> (a -> it -> a)
-                    -> Int
-                    -> State (Q.MaxPQueue wt it, Set.HashSet it, a) [it]
-deductiveIteration rs update beam = do (agenda, olds, container) <- get
-                                       if Q.null agenda
-                                          then return []
-                                          else do let ((_, item), agenda') = Q.deleteFindMax agenda
-                                                  if item `Set.member` olds
-                                                     then do put (agenda', olds, container)
-                                                             deductiveIteration rs update beam
-                                                     else do let container' = update container item
-                                                                 olds' = item `Set.insert` olds
-                                                                 newitems = filter (not . (`Set.member` olds) . fst) $ deductiveStep item container' rs
-                                                                 agenda'' = Q.fromList $ Q.take beam $ agenda' `Q.union` Q.fromList (map swap newitems)
-                                                             put (agenda'', olds', container')
-                                                             fmap (item :) (deductiveIteration rs update beam)
+                    -> State (Q.Queue it wt, a) [it]
+deductiveIteration rs update = do (agenda, container) <- get
+                                  if Q.null agenda
+                                    then return []
+                                    else do let (agenda', item) = Q.deq agenda
+                                                container' = update container item
+                                                agenda'' = agenda' `Q.enqList` deductiveStep item container' rs
+                                            put (agenda'', container')
+                                            fmap (item :) (deductiveIteration rs update)
 
 
 deductiveStep :: it 
