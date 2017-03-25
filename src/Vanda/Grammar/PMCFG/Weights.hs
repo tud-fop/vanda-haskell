@@ -1,7 +1,7 @@
 module Vanda.Grammar.PMCFG.Weights where
 
 import Numeric.Log (Log(Exp), Precise)
-import Data.Group (Group(invert))
+import Data.Semiring
 
 
 -- | Multiplicative monoid for probabilistic weights.
@@ -31,21 +31,23 @@ cost x
 
 
 -- | Instance of multiplicative monoid.
-instance (Num a) => Monoid (Probabilistic a) where
-  mempty = Probabilistic 1
-  (Probabilistic x) `mappend` (Probabilistic y) = Probabilistic $ x * y
+instance (Num a, Ord a, Fractional a) => Monoid (Probabilistic a) where
+  mempty = Probabilistic (1/0)
+  (Probabilistic x) `mappend` (Probabilistic y) = Probabilistic $ min x y
 
 
 -- | Probabilistic group
-instance (Floating a) => Group (Probabilistic a) where
-  invert (Probabilistic x) = Probabilistic $ 1 / x
+instance (Num a, Ord a, Fractional a) => Semiring (Probabilistic a) where
+  one = Probabilistic 1
+  (Probabilistic x) <.> (Probabilistic y) = Probabilistic $ x * y
 
 
 -- | Instance of additive monoid.
-instance (Num a) => Monoid (Cost a) where
-  mempty = Cost 0
-  (Cost x) `mappend` (Cost y) = Cost $ x + y
+instance (Num a, Ord a, Fractional a) => Monoid (Cost a) where
+  mempty = Cost (1/0)
+  (Cost x) `mappend` (Cost y) = Cost $ min x y
 
 
-instance (Num a) => Group (Cost a) where
-  invert (Cost x) = Cost $ negate x
+instance (Num a, Ord a, Fractional a) => Semiring (Cost a) where
+  one = Cost 0
+  (Cost x) <.> (Cost y) = Cost $ x + y 
