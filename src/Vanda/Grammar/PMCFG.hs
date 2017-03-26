@@ -69,7 +69,7 @@ import Data.Interner (Interner, internList, intern, emptyInterner, internListPre
 import Control.Monad.State.Lazy
 import Data.Array (Array, (!))
 import Vanda.Grammar.PMCFG.Range (Range(Epsilon), safeConc, singletons)
-import Data.Monoid((<>))
+import Data.Semiring
 errorHere :: String -> String -> a
 errorHere = Control.Error.errorHere "Vanda.Grammar.PMCFG"
 
@@ -342,17 +342,17 @@ exampleWPMCFG :: WPMCFG Int Double Char
 exampleWPMCFG = fromWeightedRules [0] $ zip exampleRules exampleWeights
 
 
-insideWeights :: (Monoid wt, Ord wt, Hashable nt, Eq nt)
+insideWeights :: (Semiring wt, Eq wt, Hashable nt, Eq nt)
               => [(Rule nt t, wt)] 
               -> Map.HashMap nt wt
 insideWeights rs = convergence $ iterate (iteration ns rs) Map.empty
   where
     ns = Set.toList $ Set.fromList $ map lhs rs
-    iteration :: (Monoid wt, Ord wt, Hashable nt, Eq nt) 
+    iteration :: (Semiring wt, Hashable nt, Eq nt) 
               => [nt] -> [(Rule nt t, wt)] -> Map.HashMap nt wt -> Map.HashMap nt wt
-    iteration ns' rs' m = Map.fromList  [ (a, minimum ws) 
+    iteration ns' rs' m = Map.fromList  [ (a, foldl (<+>) zero ws) 
                                         | a <- ns'
-                                        , let ws =  [ w <> mconcat ws'
+                                        , let ws =  [ w <.> foldl (<.>) one ws'
                                                     | (Rule ((a', as), _), w) <- rs'
                                                     , a == a'
                                                     , let ws' = map (\ ai -> Map.lookupDefault mempty ai m) as
@@ -360,7 +360,7 @@ insideWeights rs = convergence $ iterate (iteration ns rs) Map.empty
                                         ]
 
 
-outsideWeights :: (Monoid wt, Ord wt, Hashable nt, Eq nt)
+outsideWeights :: (Semiring wt, Eq wt, Hashable nt, Eq nt)
                => Map.HashMap nt wt
                -> [(Rule nt t, wt)]
                -> [nt]
@@ -375,9 +375,9 @@ outsideWeights insides rs s = convergence $ iterate (iteration insides ns rs) in
       | otherwise = x : rfo xs y
     rfo [] _ = []
 
-    iteration insides ns rs outsides = Map.fromList [ (a, minimum outs) 
+    iteration insides ns rs outsides = Map.fromList [ (a, foldl (<+>) zero outs) 
                                                     | a <- ns
-                                                    , let outs = catMaybes [ ((w <> was) <>) <$> Map.lookup b outsides
+                                                    , let outs = catMaybes [ ((w <.> was) <.>) <$> Map.lookup b outsides
                                                                            | (Rule ((b, as), _), w) <- rs
                                                                            , a `elem` as
                                                                            , let was = mconcat (map (insides Map.!) $ rfo as a)

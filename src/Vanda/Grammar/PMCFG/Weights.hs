@@ -20,8 +20,14 @@ probabilistic x
 
 
 -- | Additive monoid for costs.
-newtype Cost a = Cost a deriving (Show, Eq, Ord)
+data Cost a = Cost a | Infinity deriving (Show, Eq)
 
+
+instance (Ord a) => Ord (Cost a) where
+  Infinity `compare` Infinity = EQ
+  Infinity `compare` (Cost _) = GT
+  (Cost _) `compare` Infinity = LT
+  (Cost x) `compare` (Cost y) = x `compare` y
 
 -- | Wraps constructor to check for correct ranged values.
 cost :: (Num a, Ord a) => a -> Cost a
@@ -31,23 +37,27 @@ cost x
 
 
 -- | Instance of multiplicative monoid.
-instance (Num a, Ord a, Fractional a) => Monoid (Probabilistic a) where
-  mempty = Probabilistic (1/0)
-  (Probabilistic x) `mappend` (Probabilistic y) = Probabilistic $ min x y
+instance (Num a, Ord a) => Monoid (Probabilistic a) where
+  mempty = Probabilistic 0
+  (Probabilistic x) `mappend` (Probabilistic y) = Probabilistic $ max x y
 
 
 -- | Probabilistic group
-instance (Num a, Ord a, Fractional a) => Semiring (Probabilistic a) where
+instance (Num a, Ord a) => Semiring (Probabilistic a) where
   one = Probabilistic 1
   (Probabilistic x) <.> (Probabilistic y) = Probabilistic $ x * y
 
 
 -- | Instance of additive monoid.
-instance (Num a, Ord a, Fractional a) => Monoid (Cost a) where
-  mempty = Cost (1/0)
+instance (Num a, Ord a) => Monoid (Cost a) where
+  mempty = Infinity
   (Cost x) `mappend` (Cost y) = Cost $ min x y
+  Infinity `mappend` x = x
+  x `mappend` Infinity = x
 
 
-instance (Num a, Ord a, Fractional a) => Semiring (Cost a) where
+instance (Num a, Ord a) => Semiring (Cost a) where
   one = Cost 0
+  Infinity <.> x = Infinity
+  x <.> Infinity = Infinity
   (Cost x) <.> (Cost y) = Cost $ x + y 
