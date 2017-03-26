@@ -40,7 +40,7 @@ import qualified Data.HashMap.Lazy as Map
 import qualified Data.HashSet      as Set
 
 import Data.Hashable
-import Control.Monad.State (State, evalState, get, put)
+import Control.Monad.State (State, evalState, execState, get, put)
 import Data.Tuple (swap)
 
 -- | Instance of a deduction system. 
@@ -71,6 +71,35 @@ updateGroups :: (Hashable b, Eq b)
 updateGroups [] _ m = m
 updateGroups (b:bs) a m = updateGroups bs a $ updateGroup b a m
 
+
+chart :: (Ord wt, Eq it, Hashable it)
+      => a -> (a -> it -> (a, Bool)) -> [DeductiveRule it wt a] -> Int
+      -> a
+chart container update rs b = snd $ execState (chartIteration rs' update) 
+                                                                (Q.fromList b inits, container)
+  where
+    inits = rs >>= applyWithoutAntecedents
+    
+    applyWithoutAntecedents (DeductiveRule 0 _ app) = app container []
+    applyWithoutAntecedents _ = []
+
+    rs' = filter (\ (DeductiveRule antecedents _ _) -> antecedents > 0) rs
+
+chartIteration :: (Ord wt, Eq it, Hashable it)
+               => [DeductiveRule it wt a]
+               -> (a -> it -> (a, Bool))
+               -> State (Q.Queue it wt, a) ()
+chartIteration rs update = do (agenda, container) <- get
+                              if Q.null agenda
+                                 then return ()
+                                 else do let (agenda', item) = Q.deq agenda
+                                             (container', newConsequence) = update container item
+                                         if newConsequence
+                                            then do let agenda'' = agenda' `Q.enqList` deductiveStep item container' rs
+                                                    put (agenda'', container')
+                                                    chartIteration rs update
+                                            else do put (agenda', container')
+                                                    chartIteration rs update
 
 solve :: (Ord wt, Eq it, Hashable it)
       => DeductiveSolver it wt a
