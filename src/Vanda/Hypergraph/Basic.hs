@@ -73,6 +73,26 @@ data Hyperedge v l i
     , ident :: !i
     }
 
+instance (Ord i, Eq v, Eq l) => Ord (Hyperedge v l i) where
+  Nullary{ident=i1} `compare` Hyperedge{ident=i2} = i1 `compare` i2
+  Nullary{ident=i1} `compare` Unary{ident=i2} = i1 `compare` i2
+  Nullary{ident=i1} `compare` Binary{ident=i2} = i1 `compare` i2
+  Nullary{ident=i1} `compare` Nullary{ident=i2} = i1 `compare` i2
+
+  Unary{ident=i1} `compare` Hyperedge{ident=i2} = i1 `compare` i2
+  Unary{ident=i1} `compare` Unary{ident=i2} = i1 `compare` i2
+  Unary{ident=i1} `compare` Binary{ident=i2} = i1 `compare` i2
+  Unary{ident=i1} `compare` Nullary{ident=i2} = i1 `compare` i2
+
+  Binary{ident=i1} `compare` Hyperedge{ident=i2} = i1 `compare` i2
+  Binary{ident=i1} `compare` Unary{ident=i2} = i1 `compare` i2
+  Binary{ident=i1} `compare` Binary{ident=i2} = i1 `compare` i2
+  Binary{ident=i1} `compare` Nullary{ident=i2} = i1 `compare` i2
+
+  Hyperedge{ident=i1} `compare` Hyperedge{ident=i2} = i1 `compare` i2
+  Hyperedge{ident=i1} `compare` Unary{ident=i2} = i1 `compare` i2
+  Hyperedge{ident=i1} `compare` Binary{ident=i2} = i1 `compare` i2
+  Hyperedge{ident=i1} `compare` Nullary{ident=i2} = i1 `compare` i2
 
 instance (NFData v, NFData l, NFData i) => NFData (Hyperedge v l i) where
   rnf (Nullary t l i) = rnf t `seq` rnf l `seq` rnf i

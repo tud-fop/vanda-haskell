@@ -2,9 +2,9 @@ module Data.Weight
   ( Inside(Inside)
   , unpack
   , Weight(..)
-  , Probabilistic
+  , Probabilistic(..)
   , probabilistic
-  , Cost
+  , Cost(..)
   , cost
   ) where
 
@@ -18,9 +18,6 @@ class (Semiring wt) => Weight wt where
   (</>) x y = x <.> inverse y
   inverse :: wt -> wt
   inverse x = one </> x
-  
-class Converging a where
-  similar :: a -> a -> Bool
 
 
 -- | Multiplicative monoid for probabilistic weights.
@@ -37,10 +34,6 @@ probabilistic x
   | x > 0 && x <= 1 = Probabilistic $ Exp $ log x
   | otherwise = error "probabilistic value out of range"
 
-
-instance (Floating a, Ord a) => Converging (Probabilistic a) where
-  (Probabilistic x) `similar` (Probabilistic y) = quotient < 1.01 || quotient > 0.99
-    where quotient = x/y
 
 -- | Instance of multiplicative monoid.
 instance (Num a, Ord a) => Monoid (Probabilistic a) where
@@ -74,10 +67,6 @@ cost x
   | x >= 0 = Cost x
   | otherwise = error "cost value out of range"
 
-
-instance (Num a, Ord a) => Converging (Cost a) where
-  (Cost x) `similar` (Cost y) = difference <= 1 || difference >= -1
-    where difference = x - y
 
 -- | Instance of additive monoid.
 instance (Num a, Ord a) => Monoid (Cost a) where

@@ -29,9 +29,7 @@ module Vanda.Grammar.PMCFG
   , fromWeightedRules
   , integerize
   , deintegerize
-  , insideWeights
-  , outsideWeights
-  , outsideWeights'
+  , ioWeights
   -- * derivation trees
   , Derivation(Derivation)
   , node
@@ -61,16 +59,22 @@ import qualified Control.Error
 import qualified Data.Binary as B
 import Data.Hashable
 import Data.List (intercalate)
-import Data.Maybe (listToMaybe, mapMaybe, catMaybes)
+import Data.Maybe (listToMaybe, mapMaybe, catMaybes, maybeToList)
 import Data.Tree
 import qualified Data.HashMap.Lazy  as Map
 import qualified Data.HashSet       as Set
+import qualified Data.Map           as M
+import qualified Data.Vector        as V
+import qualified Data.Set           as S
 import GHC.Generics (Generic)
 import Data.Interner (Interner, internList, intern, emptyInterner, internListPreserveOrder, internerToArray)
 import Control.Monad.State.Lazy
 import Data.Array (Array, (!))
 import Vanda.Grammar.PMCFG.Range (Range(Epsilon), safeConc, singletons)
+import Vanda.Hypergraph (Hyperedge(Hyperedge), EdgeList(EdgeList))
+import Vanda.Algorithms.InsideOutsideWeights (insideOutside', Converging(converged))
 import Data.Semiring
+
 errorHere :: String -> String -> a
 errorHere = Control.Error.errorHere "Vanda.Grammar.PMCFG"
 
@@ -343,74 +347,19 @@ exampleWPMCFG :: WPMCFG Int Double Char
 exampleWPMCFG = fromWeightedRules [0] $ zip exampleRules exampleWeights
 
 
-insideWeights :: (Semiring wt, Eq wt, Hashable nt, Eq nt)
-              => [(Rule nt t, wt)] 
-              -> Map.HashMap nt wt
-insideWeights rs = convergence $ iterate (iteration ns rs) Map.empty
+ioWeights :: (Converging wt, Semiring wt, Hashable nt, Eq nt, Ord nt)
+          => [nt] -> [(Rule nt t, wt)] -> Map.HashMap nt (wt, wt)
+ioWeights ss rs = toHashMap $ insideOutside' converged (M.fromList esw M.!) Nothing (EdgeList vs (map fst esw))
   where
-    ns = Set.toList $ Set.fromList $ map lhs rs
-    iteration :: (Semiring wt, Hashable nt, Eq nt) 
-              => [nt] -> [(Rule nt t, wt)] -> Map.HashMap nt wt -> Map.HashMap nt wt
-    iteration ns' rs' m = Map.fromList  [ (a, foldl (<+>) zero ws) 
-                                        | a <- ns'
-                                        , let ws =  [ w <.> foldl (<.>) one ws'
-                                                    | (Rule ((a', as), _), w) <- rs'
-                                                    , a == a'
-                                                    , let ws' = map (\ ai -> Map.lookupDefault one ai m) as
-                                                    ]
-                                        ]
+    vs = S.fromList $ Nothing : map (Just . lhs) rs
+    esw = zipWith (\ (f, w) i -> (f i, w)) (targets ++ map ruleToHyperEdge rs) [(1::Int)..]
 
-outsideWeights' :: (Semiring wt, Eq wt, Hashable nt, Eq nt)
-               => Map.HashMap nt wt
-               -> [(Rule nt t, wt)]
-               -> [nt]
-               -> [Map.HashMap nt wt]
-outsideWeights' insides rs s = iterate (iteration insides ns rs) init
-  where
-    init = Map.fromList $ zip s $ repeat one
-    ns = Set.toList $ Set.fromList $ map lhs rs
+    ruleToHyperEdge (r@(Rule ((a, as), _)), w) = (Hyperedge (Just a) (V.fromList $ map Just as) (Just a, as), w)
+    targets = [ (Hyperedge Nothing (V.singleton $ Just s) (Nothing, [s]), one)
+              | s <- ss
+              ]
     
-    rfo (x:xs) y
-      | x == y = xs
-      | otherwise = x : rfo xs y
-    rfo [] _ = []
-
-    iteration insides ns rs outsides = Map.fromList [ (a, foldl (<+>) zero outs) 
-                                                    | a <- ns
-                                                    , let outs = [ w <.> was <.> Map.lookupDefault zero b outsides
-                                                                 | (Rule ((b, as), _), w) <- rs
-                                                                 , a `elem` as
-                                                                 , let was = foldl (<.>) one (map (insides Map.!) $ rfo as a)
-                                                                 ]
-                                                    ] `Map.union` outsides
-
-outsideWeights :: (Semiring wt, Eq wt, Hashable nt, Eq nt)
-               => Map.HashMap nt wt
-               -> [(Rule nt t, wt)]
-               -> [nt]
-               -> Map.HashMap nt wt
-outsideWeights insides rs s = convergence $ iterate (iteration insides ns rs) init
-  where
-    init = Map.fromList $ zip s $ repeat one
-    ns = Set.toList $ Set.fromList $ map lhs rs
-    
-    rfo (x:xs) y
-      | x == y = xs
-      | otherwise = x : rfo xs y
-    rfo [] _ = []
-
-    iteration insides ns rs outsides = Map.fromList [ (a, foldl (<+>) zero outs) 
-                                                    | a <- ns
-                                                    , let outs = [ w <.> was <.> Map.lookupDefault zero b outsides
-                                                                 | (Rule ((b, as), _), w) <- rs
-                                                                 , a `elem` as
-                                                                 , let was = foldl (<.>) one (map (insides Map.!) $ rfo as a)
-                                                                 ]
-                                                    ]
-
-
-convergence :: (Hashable a, Eq a, Eq b)
-            => [Map.HashMap a b] -> Map.HashMap a b
-convergence (m1:m2:ms)
-  | m1 == m2 = m1
-  | otherwise = convergence (m2:ms)
+    toHashMap m = Map.fromList [ (a, io)
+                               | (ma, io) <- M.toList m
+                               , a <- maybeToList ma
+                               ]

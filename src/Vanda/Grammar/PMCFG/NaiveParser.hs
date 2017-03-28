@@ -31,6 +31,7 @@ module Vanda.Grammar.PMCFG.NaiveParser
     -- , parse
     -- ) where
 
+import Vanda.Algorithms.InsideOutsideWeights (Converging)
 import Vanda.Grammar.PMCFG.DeductiveSolver
 import Data.Weight
 import Vanda.Grammar.PMCFG.Range
@@ -63,16 +64,16 @@ instance (Show nt, Show t) => Show (Item nt t wt) where
   show (Passive a rv _ _) = "[passive] " ++ show a ++ " " ++ show rv 
 
 -- | Top-level function to parse a word using a PMCFG.
-parse :: (Hashable nt, Hashable t, Eq nt, Eq t) 
+parse :: (Hashable nt, Hashable t, Eq nt, Eq t, Ord nt) 
       => PMCFG nt t         -- ^ unweighted grammar
       -> Int                -- ^ beam width
       -> [t]                -- ^ terminal word
       -> [Tree (Rule nt t)] -- ^ derivation tree of applied rules
-parse (PMCFG s rs) = weightedParse $ WPMCFG s $ zip rs $ repeat (cost 1 :: Cost Double)
+parse (PMCFG s rs) = weightedParse $ WPMCFG s $ zip rs $ repeat (cost 1 :: Cost Float)
 
 
 -- | Top-level function to parse a word using a weighted PMCFG.
-weightedParse :: forall nt t wt. (Hashable nt, Hashable t, Eq nt, Eq t, Ord wt, Weight wt) 
+weightedParse :: forall nt t wt. (Hashable nt, Hashable t, Eq nt, Eq t, Ord wt, Weight wt, Ord nt, Converging wt) 
               => WPMCFG nt wt t     -- ^ weighted grammar
               -> Int                -- ^ beam width
               -> [t]                -- ^ terminal word
@@ -80,13 +81,12 @@ weightedParse :: forall nt t wt. (Hashable nt, Hashable t, Eq nt, Eq t, Ord wt, 
 weightedParse (WPMCFG s rs) bw word = C.readoff s (singleton $ entire word)
                                         $ fst $ chart (C.empty, Map.empty) update rules bw
   where
-    rules = initialPrediction word (filter ((`elem` s) . lhs) rs) insides
-            : predictionRule word rs insides outsides
-            : conversionRule outsides
-            : [completionRule insides outsides]
+    rules = initialPrediction word (filter ((`elem` s) . lhs) rs) ios
+            : predictionRule word rs ios
+            : conversionRule ios
+            : [completionRule ios]
     
-    insides = insideWeights rs
-    outsides = outsideWeights insides rs s
+    ios = ioWeights s rs
 
     update :: Container nt t wt
             -> Item nt t wt 
@@ -99,9 +99,9 @@ weightedParse (WPMCFG s rs) bw word = C.readoff s (singleton $ entire word)
 initialPrediction :: forall nt t wt. (Hashable nt, Eq nt, Eq t, Semiring wt)
                   => [t]
                   -> [(Rule nt t, wt)]
-                  -> Map.HashMap nt wt
+                  -> Map.HashMap nt (wt, wt)
                   -> DeductiveRule (Item nt t wt) wt (Container nt t wt)
-initialPrediction word srules insides = DeductiveRule 0 gets app
+initialPrediction word srules ios = DeductiveRule 0 gets app
   where
     gets :: Container nt t wt -> Item nt t wt -> [[Item nt t wt]]
     gets _ _ = [[]]
@@ -112,7 +112,7 @@ initialPrediction word srules insides = DeductiveRule 0 gets app
     app _ [] =  [ (Active r w as 0 [] fw inside, inside)
                 | (r@(Rule ((_, as), f)), w) <- srules
                 , fw <- instantiate word f
-                , let inside = w <.> foldl (<.>) one (map (insides Map.!) as)
+                , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
                 ]
     app _ _ = []
 
@@ -121,10 +121,9 @@ initialPrediction word srules insides = DeductiveRule 0 gets app
 predictionRule :: forall nt t wt. (Eq t, Eq nt, Hashable nt, Semiring wt) 
                => [t] 
                -> [(Rule nt t, wt)]
-               -> Map.HashMap nt wt
-               -> Map.HashMap nt wt
+               -> Map.HashMap nt (wt, wt)
                -> DeductiveRule (Item nt t wt) wt (Container nt t wt)
-predictionRule word rs insides outsides = DeductiveRule 1 gets app
+predictionRule word rs ios = DeductiveRule 1 gets app
   where
     gets :: Container nt t wt -> Item nt t wt -> [[Item nt t wt]]
     gets _ i@(Active _ _ (_:_) _ _ _ _) = [[i]]
@@ -137,8 +136,8 @@ predictionRule word rs insides outsides = DeductiveRule 1 gets app
                                        | (r'@(Rule ((a', as'), f')), w') <- rs
                                        , a' == a
                                        , fw <- instantiate word f'
-                                       , let inside = w' <.> foldl (<.>) one (map (insides Map.!) as')
-                                             outside = outsides Map.! a
+                                       , let inside = w' <.> foldl (<.>) one (map (fst . (ios Map.!)) as')
+                                             outside = snd $ ios Map.! a
                                        ]
     app _ _ = []
 
@@ -146,9 +145,9 @@ predictionRule word rs insides outsides = DeductiveRule 1 gets app
 -- | Constructs deductive rules using one rule of a grammar.
 -- * conversion: converts an active item into a passive one, if there are no variables left
 conversionRule :: forall nt t wt. (Semiring wt, Eq nt, Hashable nt) 
-               => Map.HashMap nt wt
+               => Map.HashMap nt (wt, wt)
                -> DeductiveRule (Item nt t wt) wt (Container nt t wt)
-conversionRule outsides = DeductiveRule 1 gets app
+conversionRule ios = DeductiveRule 1 gets app
   where
     gets :: Container nt t wt -> Item nt t wt -> [[Item nt t wt]]
     gets _ i@(Active _ _ [] _ _ _ _ ) = [[i]]
@@ -158,7 +157,7 @@ conversionRule outsides = DeductiveRule 1 gets app
     app _ [Active r w [] _ rss fs inside] = [ (Passive a rv' (C.Backtrace r w (reverse rss)) inside, inside <.> outside)
                                             | rv' <- maybeToList $ mapM ((>>= toRange) . concVarRange) fs >>= fromList
                                             , let (Rule ((a,_),_)) = r
-                                                  outside = outsides Map.! a
+                                                  outside = snd $ ios Map.! a
                                             ]
     app _ _ = []
 
@@ -166,10 +165,9 @@ conversionRule outsides = DeductiveRule 1 gets app
 -- | Constructs deductive rules using one rule of a grammar.
 -- * completion: step-by-step substituting of variables in instantiated function using ranges of passive items
 completionRule :: forall nt wt t. (Hashable nt, Eq nt, Weight wt)
-               => Map.HashMap nt wt
-               -> Map.HashMap nt wt
+               => Map.HashMap nt (wt, wt)
                -> DeductiveRule (Item nt t wt) wt (Container nt t wt)
-completionRule insides outsides = DeductiveRule 2 gets app
+completionRule ios = DeductiveRule 2 gets app
   where
     gets :: Container nt t wt -> Item nt t wt -> [[Item nt t wt]]
     gets (passives, _)  i@(Active _ _ (next:_) _ _ _ _) =  [ [i, passive]
@@ -183,9 +181,9 @@ completionRule insides outsides = DeductiveRule 2 gets app
     app :: Container nt t wt -> [Item nt t wt] -> [(Item nt t wt, wt)]
     app _ [Active r w (a:as) offset rss fs ain, Passive _ rv _ pin] = [ (Active r w as (offset+1) (rv:rss) fs' inside, inside <.> outside)
                                                                       | fs' <- maybeToList $ mapM concVarRange $ insert offset rv fs
-                                                                      , let inside = ain <.> (pin </> (insides Map.! a))
+                                                                      , let inside = ain <.> (pin </> fst (ios Map.! a))
                                                                             (Rule ((s,_),_)) = r 
-                                                                            outside = outsides Map.! s
+                                                                            outside = snd $ ios Map.! s
                                                                       ]
     app _ _ = []
 

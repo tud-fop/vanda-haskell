@@ -29,8 +29,10 @@ module Vanda.Algorithms.InsideOutsideWeights (
 import Vanda.Hypergraph
 
 import Control.Arrow hiding ((<+>))
-import Data.Weight (Inside(Inside), unpack)
+import Data.Weight
 import Data.Semiring
+import Numeric.Log (Log(Exp), Precise)
+
 import qualified Data.Map as M
 import qualified Data.Set as S
 
@@ -216,12 +218,7 @@ checkMaps c m1 m2
   = and
   $ M.elems
   $ M.intersectionWith c m1 m2
-  {-
-  = and
-  $ M.elems
-  $ M.mergeWithKey
-    (\ k x1 x2 -> Just $ c x1 x2) (const M.Tip) (const M.Tip) m1 m2
-  -}
+
 
 -- | The property @convergedRatio epsilon x y@ holds, iff the ratio between
 -- @x@ and @y@ differs at most @epsilon@ from @1@.
@@ -235,15 +232,6 @@ convergedRatio epsilon x y
 convergedRealFloat :: (RealFloat a) => a -> a -> Bool
 convergedRealFloat x y = x == y || (isNaN x && isNaN y)
 
-{-
-convergedRealFloat x y
-  = let (mi, ma) = if x < y then (x, y) else (y, x)
-    in (uncurry encodeFloat $ mapFst (1 +) $ decodeFloat mi) >= ma
-
-
-convergedRealFloat
-  = convergedRatio (encodeFloat 1 (negate (floatDigits undefined) + 1))
--}
 
 -- | The class contains types whose elements can converge against a fixpoint
 -- of a function.
@@ -260,8 +248,19 @@ instance Converging Float where
 instance Converging Double where
   converged = convergedRealFloat
 
+instance (Converging a) => Converging (Log a) where
+  converged (Exp e1) (Exp e2) = e1 `converged` e2
+
 instance (Converging a) =>  Converging (Inside a) where
   (Inside x) `converged` (Inside y) = x `converged` y
+
+instance (Converging a) => Converging (Probabilistic a) where
+  (Probabilistic x) `converged` (Probabilistic y) = x `converged` y
+
+instance (Converging a) => Converging (Cost a) where
+  (Cost x) `converged` (Cost y) = x `converged` y
+  Infinity `converged` Infinity = True
+  converged _ _ = False
 
 -- | This wrapper should allow us to use the same fixpoint computation
 -- we used to compute inside/outside sums in order to calculate
