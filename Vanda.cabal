@@ -123,6 +123,7 @@ library
     , Vanda.Grammar.PCFG.Main
     , Vanda.Grammar.PMCFG
     , Vanda.Grammar.PMCFG.ActiveParser
+    , Vanda.Grammar.PMCFG.Chart
     , Vanda.Grammar.PMCFG.CYKParser
     , Vanda.Grammar.PMCFG.DeductiveSolver
     , Vanda.Grammar.PMCFG.Functions

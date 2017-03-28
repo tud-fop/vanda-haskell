@@ -31,6 +31,7 @@ module Vanda.Grammar.PMCFG
   , deintegerize
   , insideWeights
   , outsideWeights
+  , outsideWeights'
   -- * derivation trees
   , Derivation(Derivation)
   , node
@@ -355,19 +356,18 @@ insideWeights rs = convergence $ iterate (iteration ns rs) Map.empty
                                         , let ws =  [ w <.> foldl (<.>) one ws'
                                                     | (Rule ((a', as), _), w) <- rs'
                                                     , a == a'
-                                                    , let ws' = map (\ ai -> Map.lookupDefault mempty ai m) as
+                                                    , let ws' = map (\ ai -> Map.lookupDefault one ai m) as
                                                     ]
                                         ]
 
-
-outsideWeights :: (Semiring wt, Eq wt, Hashable nt, Eq nt)
+outsideWeights' :: (Semiring wt, Eq wt, Hashable nt, Eq nt)
                => Map.HashMap nt wt
                -> [(Rule nt t, wt)]
                -> [nt]
-               -> Map.HashMap nt wt
-outsideWeights insides rs s = convergence $ iterate (iteration insides ns rs) init
+               -> [Map.HashMap nt wt]
+outsideWeights' insides rs s = iterate (iteration insides ns rs) init
   where
-    init = Map.fromList $ zip s $ repeat mempty
+    init = Map.fromList $ zip s $ repeat one
     ns = Set.toList $ Set.fromList $ map lhs rs
     
     rfo (x:xs) y
@@ -377,13 +377,37 @@ outsideWeights insides rs s = convergence $ iterate (iteration insides ns rs) in
 
     iteration insides ns rs outsides = Map.fromList [ (a, foldl (<+>) zero outs) 
                                                     | a <- ns
-                                                    , let outs = catMaybes [ ((w <.> was) <.>) <$> Map.lookup b outsides
-                                                                           | (Rule ((b, as), _), w) <- rs
-                                                                           , a `elem` as
-                                                                           , let was = mconcat (map (insides Map.!) $ rfo as a)
-                                                                           ]
-                                                    , not $ null outs
+                                                    , let outs = [ w <.> was <.> Map.lookupDefault zero b outsides
+                                                                 | (Rule ((b, as), _), w) <- rs
+                                                                 , a `elem` as
+                                                                 , let was = foldl (<.>) one (map (insides Map.!) $ rfo as a)
+                                                                 ]
                                                     ] `Map.union` outsides
+
+outsideWeights :: (Semiring wt, Eq wt, Hashable nt, Eq nt)
+               => Map.HashMap nt wt
+               -> [(Rule nt t, wt)]
+               -> [nt]
+               -> Map.HashMap nt wt
+outsideWeights insides rs s = convergence $ iterate (iteration insides ns rs) init
+  where
+    init = Map.fromList $ zip s $ repeat one
+    ns = Set.toList $ Set.fromList $ map lhs rs
+    
+    rfo (x:xs) y
+      | x == y = xs
+      | otherwise = x : rfo xs y
+    rfo [] _ = []
+
+    iteration insides ns rs outsides = Map.fromList [ (a, foldl (<+>) zero outs) 
+                                                    | a <- ns
+                                                    , let outs = [ w <.> was <.> Map.lookupDefault zero b outsides
+                                                                 | (Rule ((b, as), _), w) <- rs
+                                                                 , a `elem` as
+                                                                 , let was = foldl (<.>) one (map (insides Map.!) $ rfo as a)
+                                                                 ]
+                                                    ]
+
 
 convergence :: (Hashable a, Eq a, Eq b)
             => [Map.HashMap a b] -> Map.HashMap a b

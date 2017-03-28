@@ -45,24 +45,20 @@ import Vanda.Grammar.PMCFG.DeductiveSolver
 import Vanda.Grammar.PMCFG.Weights
 import Vanda.Grammar.PMCFG.Range
 import Vanda.Grammar.PMCFG
+import qualified Vanda.Grammar.PMCFG.Chart as C
 
 import Data.Hashable (Hashable(hashWithSalt))
 import qualified Data.HashMap.Lazy  as Map
-import qualified Data.Array         as A
-import Data.Tree (Tree(Node))
 import Data.Maybe (maybeToList)
-import Data.Monoid ((<>))
 import Data.Semiring
-
-
-data Backtrace nt t wt = Backtrace (Rule nt t) wt [Rangevector]
+import Data.Tree (Tree)
 
 
 data Item nt t wt = Active (Rule nt t) wt InstantiatedFunction wt
-                  | Passive nt Rangevector (Backtrace nt t wt) wt
+                  | Passive nt Rangevector (C.Backtrace nt t wt) wt
 
 
-type Container nt t wt = ( Map.HashMap nt (Map.HashMap Rangevector ([Backtrace nt t wt], wt))
+type Container nt t wt = ( C.Chart nt t wt
                          , Map.HashMap nt [Item nt t wt]
                          )
 
@@ -98,45 +94,31 @@ weightedParse :: forall nt t wt. (Eq t, Eq nt, Hashable nt, Hashable t, Semiring
               -> Int                        -- ^ beam width
               -> [t]                        -- ^ word
               -> [Tree (Rule nt t)]   -- ^ parse trees and resulting weights
-weightedParse (WPMCFG s rs) bw word = readParseTrees s (singleton $ entire word)
-                                      $ fst $ chart (Map.empty, Map.empty) update deductiveRules bw
+weightedParse (WPMCFG s rs) bw word = C.readoff s (singleton $ entire word)
+                                      $ fst $ chart (C.empty, Map.empty) update deductiveRules bw
   where
     insides = insideWeights rs
     outsides = outsideWeights insides rs s
 
-    deductiveRules = initialPrediction word s rs insides 
+    deductiveRules = initialPrediction word (filter ((`elem` s) . lhs) rs) insides 
                       : prediction word rs insides outsides
                       : [completion outsides]
 
     update :: Container nt t wt
            -> Item nt t wt
            -> (Container nt t wt, Bool)
-    update (passives, actives) item@(Passive a rho bt iw) = case  Map.lookup a passives of
-                                                                  Nothing -> ((Map.insert a (Map.singleton rho ([bt], iw)) passives, actives), True)
-                                                                  Just pa -> case Map.lookup rho pa of
-                                                                                  Nothing -> ((Map.adjust (Map.insert rho ([bt], iw)) a passives, actives), True)
-                                                                                  Just (bts, w) -> ((Map.adjust (Map.insert rho (bt:bts, w <+> iw)) a passives, actives), False)
+    update (passives, actives) (Passive a rho bt iw) = case C.insert passives a rho bt iw of
+                                                            (passives', isnew) -> ((passives', actives), isnew)
     update (passives, actives) item@(Active (Rule ((_, as), _)) _ _ _) = ((passives, updateGroups as item actives), True)
-
-readParseTrees :: (Eq nt, Hashable nt) => [nt] -> Rangevector -> Map.HashMap nt (Map.HashMap Rangevector ([Backtrace nt t wt], wt)) -> [Tree (Rule nt t)]
-readParseTrees s rv passives = [ Node r children
-                               | a <- s
-                               , (Backtrace r@(Rule ((_, as), _)) w rvs) <- fst $ (passives Map.! a) Map.! rv
-                               , let childbt = zip ((:[]) <$> as) rvs
-                               , children <- sequence $ uncurry readParseTrees <$> childbt <*> [passives]
-                               ]
 
 
 initialPrediction :: forall nt t wt. (Eq nt, Eq t, Hashable nt, Semiring wt) 
                   => [t]
-                  -> [nt]
                   -> [(Rule nt t, wt)]
                   -> Map.HashMap nt wt
                   -> DeductiveRule (Item nt t wt) wt (Container nt t wt)
-initialPrediction word s rs insides = DeductiveRule 0 gets app
+initialPrediction word srules insides = DeductiveRule 0 gets app
   where
-    srules = filter ((`elem` s) . lhs) rs
-    
     gets :: Container nt t wt -> Item nt t wt -> [[Item nt t wt]]
     gets _ _ = [[]]
     
@@ -146,7 +128,7 @@ initialPrediction word s rs insides = DeductiveRule 0 gets app
     app _ [] =  [ (Active r w fw inside, inside)
                 | (r@(Rule ((_, as), f)), w) <- srules
                 , fw <- instantiate word f
-                , let inside = w <> mconcat (map (insides Map.!) as)
+                , let inside = w <.> foldl (<.>) one (map (insides Map.!) as)
                 ]
     app _ _ = []
     
@@ -169,7 +151,7 @@ prediction word rs insides outsides = DeductiveRule 1 gets app
                                                | (r'@(Rule ((a', as'), f')), w') <- rs
                                                , a' `elem` as
                                                , fw <- instantiate word f'
-                                               , let inside = w' <> mconcat (map (insides Map.!) as')
+                                               , let inside = w' <.> foldl (<.>) one (map (insides Map.!) as')
                                                      outside = outsides Map.! a'
                                                ]
     app _ _ = []
@@ -181,21 +163,15 @@ completion outsides = DeductiveRule 3 gets app
   where
     gets :: Container nt t wt -> Item nt t wt -> [[Item nt t wt]]
     gets (passives, _) i@(Active (Rule ((_, as), _)) _ _ _) = [ i:candidates
-                                                              | candidates <- mapM (passivelookup passives) as
+                                                              | candidates <- mapM (C.lookupWith Passive passives) as
                                                               ]
     gets (passives, actives) i@(Passive a _ _ _) = [ active:candidates
                                                    | active@(Active (Rule ((_, as), _)) _ _ _ ) <- Map.lookupDefault [] a actives
-                                                   , candidates <- filter (elem i) $ mapM (passivelookup passives) as
+                                                   , candidates <- filter (elem i) $ mapM (C.lookupWith Passive passives) as
                                                    ]
-
-    passivelookup :: Map.HashMap nt (Map.HashMap Rangevector ([Backtrace nt t wt], wt)) -> nt -> [Item nt t wt]                                            
-    passivelookup passives nta = [ Passive nta rv (head bts) w
-                                 | rvmap <- maybeToList $ Map.lookup nta passives
-                                 , (rv, (bts, w)) <- Map.toList rvmap
-                                 ]
     
     app :: Container nt t wt -> [Item nt t wt] -> [(Item nt t wt, wt)]
-    app _ (Active r@(Rule ((a, _), _)) w fw _: pas) = [ (Passive a rv (Backtrace r w rvs) inside, inside <.> outside)
+    app _ (Active r@(Rule ((a, _), _)) w fw _: pas) = [ (Passive a rv (C.Backtrace r w rvs) inside, inside <.> outside)
                                                       | rv <- maybeToList $ insert rvs fw
                                                       , let inside = mconcat ws <.> w
                                                             outside = outsides Map.! a
