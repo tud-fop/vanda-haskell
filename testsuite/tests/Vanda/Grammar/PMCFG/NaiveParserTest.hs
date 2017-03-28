@@ -5,7 +5,7 @@ import Test.HUnit
 import Vanda.Grammar.PMCFG
 import Vanda.Grammar.PMCFG.NaiveParser
 import Vanda.Grammar.PMCFG.DeductiveSolver
-import Vanda.Grammar.PMCFG.Weights
+import Data.Weight
 import Data.Maybe (mapMaybe)
 import Numeric.Log (Log)
 

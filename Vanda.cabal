@@ -67,6 +67,7 @@ library
     , Data.NTT
     , Data.Queue
     , Data.RevMap
+    , Data.Weight
     , Data.WTA
     , System.Console.CmdArgs.Explicit.Misc
     , Vanda.Algorithms.Earley
@@ -131,7 +132,6 @@ library
     , Vanda.Grammar.PMCFG.NaiveParser
     , Vanda.Grammar.PMCFG.Parse
     , Vanda.Grammar.PMCFG.Range
-    , Vanda.Grammar.PMCFG.Weights
     , Vanda.Grammar.XRS.Binarize
     , Vanda.Grammar.XRS.Functions
     , Vanda.Grammar.XRS.GHKM

@@ -42,7 +42,7 @@
 module Vanda.Grammar.PMCFG.CYKParser where
 
 import Vanda.Grammar.PMCFG.DeductiveSolver
-import Vanda.Grammar.PMCFG.Weights
+import Data.Weight
 import Vanda.Grammar.PMCFG.Range
 import Vanda.Grammar.PMCFG
 import qualified Vanda.Grammar.PMCFG.Chart as C

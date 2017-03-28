@@ -38,7 +38,7 @@ import Vanda.Grammar.PMCFG (WPMCFG (..), PMCFG (..), prettyPrintWPMCFG, integeri
 import qualified Vanda.Grammar.PMCFG.CYKParser as CYK
 import qualified Vanda.Grammar.PMCFG.NaiveParser as Naive
 import qualified Vanda.Grammar.PMCFG.ActiveParser as Active
-import Vanda.Grammar.PMCFG.Weights (probabilistic)
+import Data.Weight (probabilistic)
 
 
 data Args

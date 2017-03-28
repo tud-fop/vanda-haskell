@@ -58,7 +58,7 @@ module Vanda.Grammar.PMCFG.ActiveParser
 import Vanda.Grammar.PMCFG
 import Vanda.Grammar.PMCFG.Range
 import Vanda.Grammar.PMCFG.DeductiveSolver
-import Vanda.Grammar.PMCFG.Weights
+import Data.Weight
 import qualified Vanda.Grammar.PMCFG.Chart as C
 
 import qualified Data.IntMap       as IMap

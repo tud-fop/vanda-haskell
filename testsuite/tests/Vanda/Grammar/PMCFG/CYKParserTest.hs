@@ -6,7 +6,7 @@ import Data.Interner
 import Vanda.Grammar.PMCFG
 import Vanda.Grammar.PMCFG.CYKParser
 import Vanda.Grammar.PMCFG.DeductiveSolver
-import Vanda.Grammar.PMCFG.Weights
+import Data.Weight
 import Data.Maybe (mapMaybe)
 import Data.Hashable (hash)
 import Numeric.Log (Log)

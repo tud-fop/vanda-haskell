@@ -28,11 +28,11 @@ module Vanda.Algorithms.InsideOutsideWeights (
 
 import Vanda.Hypergraph
 
-import Control.Arrow
+import Control.Arrow hiding ((<+>))
+import Data.Weight (Inside(Inside), unpack)
+import Data.Semiring
 import qualified Data.Map as M
 import qualified Data.Set as S
-
--- import Debug.Trace
 
 
 -- | Computes the inside and outside weights for a given 'Hypergraph'.
@@ -43,14 +43,14 @@ insideOutside
   -> v          -- ^ target node
   -> h v l i
   -> M.Map v (w, w)        -- ^ maps a vertex to its inside and outside weight
-insideOutside w v g = insideOutside' converged w v g
+insideOutside w v h = M.map (unpack *** unpack) $ insideOutside' converged (Inside . w) v h
 
 
 -- | The same as 'insideOutside', but a property to check if the fixpoint
 -- iteration can be finished using two consecutive values in the fixpoint
 -- iteration must be given.
 insideOutside'
-  :: (Ord v, Num w, Hypergraph h)
+  :: (Ord v, Semiring w, Hypergraph h)
   => (w -> w -> Bool)
   -> (Hyperedge v l i -> w)
   -> v
@@ -60,8 +60,8 @@ insideOutside' c w target g
   = let mIn = inside' c g w
     in M.unionWith
       (\ (i, _) (_, o) -> (i, o))
-      (M.map (\ i -> (i, 0)) mIn)
-      (M.map (\ o -> (0, o)) (outside' c w mIn target g))
+      (M.map (\ i -> (i, zero)) mIn)
+      (M.map (\ o -> (zero, o)) (outside' c w mIn target g))
 
 
 -- Inside Weights ------------------------------------------------------------
@@ -70,20 +70,20 @@ insideOutside' c w target g
 inside
   :: (Ord v, Converging w, Num w, Hypergraph h)
   => (Hyperedge v l i -> w) -> h v l i -> M.Map v w
-inside w g = inside' converged g w
+inside w g = M.map unpack $ inside' converged g (Inside . w)
 
 
 -- | The same as 'inside', but a property to check if the fixpoint
 -- iteration can be finished using two consecutive values in the fixpoint
 -- iteration must be given.
 inside'
-  :: (Ord v, Num w, Hypergraph h)
+  :: (Ord v, Semiring w, Hypergraph h)
   => (w -> w -> Bool)
   -> h v l i
   -> (Hyperedge v l i -> w)
   -> M.Map v w
 inside' c g w
-  = go $ M.fromList [ (v, 0) | v <- S.toList $ nodes g ]-- M.empty
+  = go $ M.fromList [ (v, zero) | v <- S.toList $ nodes g ]
   where
     b = toBackwardStar g
     go m
@@ -95,7 +95,7 @@ inside' c g w
 
 -- | Do one iteration step for the fixpoint computation of the inside weights.
 insideStep
-  :: (Num w, Ord v)
+  :: (Semiring w, Ord v)
   => BackwardStar v l i
   -> (Hyperedge v l i -> w)
   -> M.Map v w
@@ -104,13 +104,13 @@ insideStep g w m
   = M.fromList
       [ (v, ins)
       | v <- S.toList $ nodes g
-      , let ins = inH (backStar g v) 0
+      , let ins = inH (backStar g v) zero
       , ins `seq` True
       ]
   where
-    inH (e : es) s = s `seq` inH es (s + w e * inT (from e) 1)
+    inH (e : es) s = s `seq` inH es (s <+> w e <.> inT (from e) one)
     inH []       s = s
-    inT (v : vs) p = p `seq` inT vs (p * (M.findWithDefault 0 v m))
+    inT (v : vs) p = p `seq` inT vs (p <.> M.findWithDefault zero v m)
     inT []       p = p
 
 
@@ -124,14 +124,14 @@ outside
   -> v                 -- ^ target node
   -> h v l i
   -> M.Map v w
-outside = outside' converged
+outside w m v h = M.map unpack $ outside' converged (Inside . w) (M.map Inside m) v h
 
 
 -- | The same as 'outside', but a property to check if the fixpoint
 -- iteration can be finished using two consecutive values in the fixpoint
 -- iteration must be given.
 outside'
-  :: (Ord v, Num w, Hypergraph h)
+  :: (Ord v, Semiring w, Hypergraph h)
   => (w -> w -> Bool)
   -> (Hyperedge v l i -> w)
   -> M.Map v w
@@ -143,7 +143,7 @@ outside' c w inm target g
   where
     initial
       = M.fromList
-      $ (target, 1) : [ (v, 0) | v <- S.toList (nodes g), v /= target ]
+      $ (target, one) : [ (v, zero) | v <- S.toList (nodes g), v /= target ]
     aux = initOutsideAux w inm g
     go m'
       = {-trace "Dong!" $-}
@@ -156,16 +156,16 @@ outside' c w inm target g
 -- | Do one iteration step for the fixpoint computation of the outside
 -- weights.
 outsideStep
-  :: (Num w, Ord v)
+  :: (Semiring w, Ord v)
   => v
   -> [(v, [(v, w)])]
   -> M.Map v w
   -> M.Map v w
 outsideStep target aux m
-  = M.insertWith (+) target 1 -- M.update (Just . (1 +)) target
-  $ M.fromList [ (v, f lst 0) | (v, lst) <- aux ]
+  = M.insertWith (<+>) target one
+  $ M.fromList [ (v, f lst zero) | (v, lst) <- aux ]
   where
-    f ((v, w) : xs) s = s `seq` f xs (s + (M.findWithDefault 0 v m) * w)
+    f ((v, w) : xs) s = s `seq` f xs (s <+> M.findWithDefault zero v m <.> w)
     f [] s = s
 
 
@@ -180,24 +180,24 @@ outsideStep target aux m
 --
 -- The constant part is precomputed for every combination of @A@ and @B@.
 initOutsideAux
-  :: (Num w, Ord v, Hypergraph h)
+  :: (Semiring w, Ord v, Hypergraph h)
   => (Hyperedge v l i -> w)
   -> M.Map v w              -- ^ inside weights
   -> h v l i
   -> [(v, [(v, w)])]
 initOutsideAux w m
   = M.toList
-  . M.map (M.toList . M.fromListWith (+))
+  . M.map (M.toList . M.fromListWith (<+>))
   . M.fromListWith (++)
   . concatMap
       (\ e ->
         let hd = to e
             tl = from e
-            ws = map (\ v -> M.findWithDefault 0 v m) tl
-            ls = scanl (*) 1 ws
-            rs = scanr (*) 1 ws
+            ws = map (\ v -> M.findWithDefault zero v m) tl
+            ls = scanl (<.>) one ws
+            rs = scanr (<.>) one ws
             ew = w e
-        in zipWith3 (\ v l r -> (v, [(hd, ew * l * r)])) tl ls (tail rs)
+        in zipWith3 (\ v l r -> (v, [(hd, ew <.> l <.> r)])) tl ls (tail rs)
       )
   . edges
 
@@ -260,6 +260,8 @@ instance Converging Float where
 instance Converging Double where
   converged = convergedRealFloat
 
+instance (Converging a) =>  Converging (Inside a) where
+  (Inside x) `converged` (Inside y) = x `converged` y
 
 -- | This wrapper should allow us to use the same fixpoint computation
 -- we used to compute inside/outside sums in order to calculate

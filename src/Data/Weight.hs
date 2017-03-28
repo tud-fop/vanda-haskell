@@ -1,4 +1,12 @@
-module Vanda.Grammar.PMCFG.Weights where
+module Data.Weight
+  ( Inside(Inside)
+  , unpack
+  , Weight(..)
+  , Probabilistic
+  , probabilistic
+  , Cost
+  , cost
+  ) where
 
 import Numeric.Log (Log(Exp), Precise)
 import Data.Semiring
@@ -88,3 +96,17 @@ instance (Num a, Ord a) => Semiring (Cost a) where
 instance (Num a, Ord a) => Weight (Cost a) where
   (Cost x) </> (Cost y) = Cost $ x - y
   _ </> _ = Infinity
+
+
+newtype Inside a = Inside a deriving (Show, Eq, Ord)
+
+unpack :: Inside a -> a
+unpack (Inside a) = a
+
+instance (Num a) => Monoid (Inside a) where
+  mempty = Inside 0
+  (Inside x) `mappend` (Inside y) = Inside $ x + y
+
+instance (Num a) => Semiring (Inside a) where
+  one = Inside 1
+  (Inside x) <.> (Inside y) = Inside $ x * y
