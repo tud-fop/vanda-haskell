@@ -55,21 +55,22 @@ module Vanda.Grammar.PMCFG
 
 import Control.Arrow (first)
 import Control.DeepSeq (NFData)
-import qualified Control.Error
-import qualified Data.Binary as B
-import Data.Hashable
-import Data.List (intercalate)
-import Data.Maybe (listToMaybe, mapMaybe, maybeToList)
-import Data.Tree
-import GHC.Generics (Generic)
-import Data.Interner (Interner, internList, intern, emptyInterner, internListPreserveOrder, internerToArray)
 import Control.Monad.State.Lazy
 import Data.Array (Array, (!))
+import Data.Converging (Converging(converged))
+import Data.Hashable
+import Data.Interner (Interner, internList, intern, emptyInterner, internListPreserveOrder, internerToArray)
+import Data.List (intercalate)
+import Data.Maybe (listToMaybe, mapMaybe, maybeToList)
+import Data.Semiring
+import Data.Tree
+import GHC.Generics (Generic)
 import Vanda.Grammar.PMCFG.Range (Range(Epsilon), safeConc, singletons)
 import Vanda.Hypergraph (Hyperedge(Hyperedge), EdgeList(EdgeList))
-import Vanda.Algorithms.InsideOutsideWeights (insideOutside', Converging(converged))
-import Data.Semiring
+import Vanda.Algorithms.InsideOutsideWeights (insideOutside')
 
+import qualified Control.Error
+import qualified Data.Binary as B
 import qualified Data.HashMap.Lazy  as Map
 import qualified Data.Map           as M
 import qualified Data.Vector        as V
@@ -347,19 +348,26 @@ exampleWPMCFG :: WPMCFG Int Double Char
 exampleWPMCFG = fromWeightedRules [0] $ zip exampleRules exampleWeights
 
 
+-- | Calculates inside and outside weights for a given grammar with semiring weights.
 ioWeights :: (Converging wt, Semiring wt, Hashable nt, Ord nt)
           => [nt] -> [(Rule nt t, wt)] -> Map.HashMap nt (wt, wt)
-ioWeights ss rs = toHashMap $ insideOutside' converged (M.fromList esw M.!) Nothing (EdgeList vs (map fst esw))
-  where
-    vs = S.fromList $ Nothing : map (Just . lhs) rs
-    esw = zipWith (\ (f, w) i -> (f i, w)) (targets ++ map ruleToHyperEdge rs) [(1::Int)..]
+ioWeights ss rs
+  = toHashMap 
+  $ insideOutside' converged (M.fromList esw M.!) Nothing (EdgeList vs (map fst esw))
+    where
+      vs = S.fromList $ Nothing : map (Just . lhs) rs
+      esw = zipWith (\ (f, w) i -> (f i, w)) 
+                    (targets ++ map ruleToHyperEdge rs) 
+                    [(1::Int)..]
 
-    ruleToHyperEdge (Rule ((a, as), _), w) = (Hyperedge (Just a) (V.fromList $ map Just as) (Just a, as), w)
-    targets = [ (Hyperedge Nothing (V.singleton $ Just s) (Nothing, [s]), one)
-              | s <- ss
-              ]
-    
-    toHashMap m = Map.fromList [ (a, io)
-                               | (ma, io) <- M.toList m
-                               , a <- maybeToList ma
-                               ]
+      ruleToHyperEdge (Rule ((a, as), _), w) 
+        = (Hyperedge (Just a) (V.fromList $ map Just as) (Just a, as), w)
+      
+      targets = [ (Hyperedge Nothing (V.singleton $ Just s) (Nothing, [s]), one)
+                | s <- ss
+                ]
+      
+      toHashMap m = Map.fromList [ (a, io)
+                                 | (ma, io) <- M.toList m
+                                 , a <- maybeToList ma
+                                 ]

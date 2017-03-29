@@ -55,7 +55,7 @@ module Vanda.Grammar.PMCFG.ActiveParser
     , weightedParse
     ) where
 
-import Vanda.Algorithms.InsideOutsideWeights (Converging)
+import Data.Converging (Converging)
 import Vanda.Grammar.PMCFG
 import Vanda.Grammar.PMCFG.Range
 import Vanda.Grammar.PMCFG.DeductiveSolver
@@ -76,21 +76,36 @@ data Item nt t wt = Passive nt Rangevector (C.Backtrace nt t wt) wt
 
 
 instance (Eq nt, Eq t) => Eq (Item nt t wt) where
-  (Active r _ rs fs completions _) == (Active r' _ rs' fs' completions' _) = r == r' && rs == rs' && completions == completions' && fs == fs'
-  (Passive a rv bt _ ) == (Passive a' rv' bt' _) = a == a' && rv == rv' && bt == bt'
+  (Active r _ rs fs completions _) == (Active r' _ rs' fs' completions' _) 
+    =  r           == r' 
+    && rs          == rs' 
+    && completions == completions'
+    && fs          == fs'
+  (Passive a rv bt _ ) == (Passive a' rv' bt' _) 
+    = a   == a'
+    && rv == rv' 
+    && bt == bt'
   _ == _ = False
 
+
 instance (Hashable nt, Hashable t) => Hashable (Item nt t wt) where
-  salt `hashWithSalt` (Passive a rho _ _) = salt `hashWithSalt` a `hashWithSalt` rho
-  salt `hashWithSalt` (Active r _ rhos _ _ _) = salt `hashWithSalt` r `hashWithSalt` rhos
-    
+  salt `hashWithSalt` (Passive a rho _ _) 
+    = salt `hashWithSalt` a `hashWithSalt` rho
+  salt `hashWithSalt` (Active r _ rhos _ _ _) 
+    = salt `hashWithSalt` r `hashWithSalt` rhos
+
 
 instance (Show nt, Show t) => Show (Item nt t wt) where
-  show (Passive a rv _ _) = "[Passive] " ++ show a ++ " " ++ show rv
-  show (Active r _ rv f _ _) = "[Active] rule #" ++ show r ++ " " ++ show rv ++ " " ++ prettyPrintComposition f
+  show (Passive a rv _ _)
+    = "[Passive] " ++ show a ++ " → " ++ show rv
+  show (Active r _ rv f _ _)
+    = "[Active] " ++ show r ++ "\n" 
+    ++ "current status: " ++ show (reverse rv) ++ " • " ++ prettyPrintComposition f
 
 
-type Container nt t wt =  (C.Chart nt t wt, Map.HashMap nt [Item nt t wt])
+-- | Container with two charts.
+type Container nt t wt = (C.Chart nt t wt, Map.HashMap nt [Item nt t wt])
+
 
 -- | Top-level function to parse a word using a PMCFG.
 -- Uses weightedParse with additive costs for each rule, s.t. the number of rule applications is minimized.
@@ -99,130 +114,138 @@ parse :: (Hashable nt, Hashable t, Eq t, Ord nt)
   -> Int 
   -> [t] 
   -> [Tree (Rule nt t)]
-parse (PMCFG s rs) = weightedParse $ WPMCFG s $ zip rs $ repeat (cost 1 :: Cost Int)
+parse (PMCFG s rs) 
+  = weightedParse 
+  $ WPMCFG s 
+  $ zip rs 
+  $ repeat (cost 1 :: Cost Int)
 
 
 -- | Top-level function to parse a word using a weighted PMCFG.
-weightedParse :: forall nt t wt. (Hashable nt, Hashable t, Eq t, Ord wt, Weight wt, Ord nt, Converging wt) 
+weightedParse :: forall nt t wt.(Hashable nt, Hashable t, Eq t, Ord wt, Weight wt, Ord nt, Converging wt) 
               => WPMCFG nt wt t 
               -> Int 
               -> [t] 
               -> [Tree (Rule nt t)]
-weightedParse (WPMCFG s rs) bw w = C.readoff s (singleton $ entire w)
-                                    $ fst $ chart (C.empty, Map.empty) update rules bw
+weightedParse (WPMCFG s rs) bw w
+  = C.readoff s (singleton $ entire w)
+  $ fst 
+  $ C.chart (C.empty, Map.empty) update rules bw
     where
-        iow = ioWeights s rs
-        
-        rules = initialPrediction w (filter ((`elem` s) . lhs) rs) iow
-                : predictionRule w rs iow
-                : conversionRule iow
-                : [completionRule w iow]
+      iow = ioWeights s rs
+      
+      rules = initialPrediction w (filter ((`elem` s) . lhs) rs) iow
+              : predictionRule w rs iow
+              : conversionRule iow
+              : [completionRule w iow]
 
-        update :: Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
-        update (p, a) (Passive nta rho bt iw) = case C.insert p nta rho bt iw of
-                                                     (p', isnew) -> ((p', a), isnew)
-        update (p, a) item@(Active (Rule ((_, as),_)) _ _ ((Var i _:_):_) _ _)  = ((p, updateGroup (as !! i) item a), True)
-        update (p, a) _ = ((p, a), True)
+      update :: Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
+      update (p, a) (Passive nta rho bt iw)
+        = case C.insert p nta rho bt iw of
+               (p', isnew) -> ((p', a), isnew)
+      update (p, a) item@(Active (Rule ((_, as),_)) _ _ ((Var i _:_):_) _ _)
+        = ((p, updateGroup (as !! i) item a), True)
+      update (p, a) _ = ((p, a), True)
 
 
+-- | Prediction rule for rules of initial nonterminals.
 initialPrediction :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t) 
                   => [t]
                   -> [(Rule nt t, wt)]
                   -> Map.HashMap nt (wt, wt)
-                  -> DeductiveRule (Item nt t wt) wt (Container nt t wt)
-initialPrediction word srules ios = DeductiveRule 0 gets app
-  where
-    gets :: Container nt t wt -> Item nt t wt -> [[Item nt t wt]]
-    gets _ _ = [[]]
-
-    app :: Container nt t wt -> [Item nt t wt] -> [(Item nt t wt, wt)]
-    app _ [] =  [ (Active r w rho' f' IMap.empty inside, inside) 
-                | (r@(Rule ((_, as), f)), w) <- srules
-                , (rho', f') <- completeKnownTokens word IMap.empty [Epsilon] f
-                , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
-                ]
-    app _ _ = []
-
+                  -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
+initialPrediction word srules ios 
+  = Left [ (Active r w rho' f' IMap.empty inside, inside) 
+         | (r@(Rule ((_, as), f)), w) <- srules
+         , (rho', f') <- completeKnownTokens word IMap.empty [Epsilon] f
+         , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
+         ]
 
 
 predictionRule :: forall nt t wt. (Weight wt, Eq nt, Hashable nt, Eq t) 
                => [t]
                -> [(Rule nt t, wt)]
                -> Map.HashMap nt (wt, wt)
-               -> DeductiveRule (Item nt t wt) wt (Container nt t wt)
-predictionRule word rs ios = DeductiveRule 1 gets app
+               -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
+predictionRule word rs ios = Right app
   where
-    gets :: Container nt t wt -> Item nt t wt -> [[Item nt t wt]]
-    gets _ item@(Active _ _ _ ((Var _ _:_):_) _ _) = [[item]]
-    gets _ _ = []
-    
-    app :: Container nt t wt 
-        -> [Item nt t wt] 
+    app :: Item nt t wt
+        -> Container nt t wt 
         -> [(Item nt t wt, wt)]
-    app _ [Active (Rule ((_, as), _)) w _ ((Var i _:_):_) _ _] = [ (Active r' w rho'' f'' IMap.empty inside, inside <.> outside)
-                                                                 | (r'@(Rule ((a', as'), f')), w') <- rs
-                                                                 , a' == (as !! i)
-                                                                 , (rho'', f'') <- completeKnownTokens word IMap.empty [Epsilon] f'
-                                                                 , let inside = w' <.> foldl (<.>) one (map (fst . (ios Map.!)) as')
-                                                                       outside = snd $ ios Map.! a'
-                                                                 ]
+    app (Active (Rule ((_, as), _)) w _ ((Var i _:_):_) _ _) _
+      = [ (Active r' w rho'' f'' IMap.empty inside, inside <.> outside)
+        | (r'@(Rule ((a', as'), f')), w') <- rs
+        , a' == (as !! i)
+        , (rho'', f'') <- completeKnownTokens word IMap.empty [Epsilon] f'
+        , let inside = w' <.> foldl (<.>) one (map (fst . (ios Map.!)) as')
+              outside = snd $ ios Map.! a'
+        ]
     app _ _ = []
 
 
 
 conversionRule :: forall nt t wt. (Semiring wt, Hashable nt, Eq nt)
                => Map.HashMap nt (wt, wt)
-               -> DeductiveRule (Item nt t wt) wt (Container nt t wt)
-conversionRule ios = DeductiveRule 1 gets app
+               -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
+conversionRule ios = Right app
   where
-    gets :: Container nt t wt -> Item nt t wt -> [[Item nt t wt]]
-    gets _ i@(Active _ _ _ [] _ _) = [[i]]
-    gets _ _ = []
-
-    app :: Container nt t wt -> [Item nt t wt] -> [(Item nt t wt, wt)]
-    app _ [Active r w rs [] completions inside] = [ (Passive a rv (C.Backtrace r w rvs) inside, inside <.> outside)
-                                                  | rv <- maybeToList $ fromList $ reverse rs
-                                                  , let rvs = IMap.elems completions
-                                                        (Rule ((a, _), _)) = r
-                                                        outside = snd $ ios Map.! a
-                                                  ]
+    app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
+    app (Active r w rs [] completions inside) _
+      = [ (Passive a rv (C.Backtrace r w rvs) inside, inside <.> outside)
+        | rv <- maybeToList $ fromList $ reverse rs
+        , let rvs = IMap.elems completions
+              (Rule ((a, _), _)) = r
+              outside = snd $ ios Map.! a
+        ]
     app _ _ = []
 
-completeKnownTokens :: (Eq t) => [t] -> IMap.IntMap Rangevector -> [Range] -> Function t -> [([Range], Function t)]
+completeKnownTokens :: (Eq t)
+                    => [t] 
+                    -> IMap.IntMap Rangevector 
+                    -> [Range] 
+                    -> Function t 
+                    -> [([Range], Function t)]
 completeKnownTokens _ _ rs [[]] = [(rs, [])]
 completeKnownTokens w m rs ([]:fs) = completeKnownTokens w m (Epsilon:rs) fs
-completeKnownTokens w m (r:rs) ((T t:fs):fss) = [ (r':rs, fs:fss)
-                                                | r' <- mapMaybe (safeConc r) $ singletons t w
-                                                ] >>= uncurry (completeKnownTokens w m)
-completeKnownTokens w m (r:rs) ((Var i j:fs):fss) = case i `IMap.lookup` m of
-                                                         Just rv -> case safeConc r (rv ! j) of
-                                                                         Just r' -> completeKnownTokens w m (r':rs) (fs:fss)
-                                                                         Nothing -> []
-                                                         Nothing -> [(r:rs, (Var i j:fs):fss)]
+completeKnownTokens w m (r:rs) ((T t:fs):fss) 
+  = [ (r':rs, fs:fss)
+    | r' <- mapMaybe (safeConc r) $ singletons t w
+    ] >>= uncurry (completeKnownTokens w m)
+completeKnownTokens w m (r:rs) ((Var i j:fs):fss) 
+  = case i `IMap.lookup` m of
+         Just rv -> case safeConc r (rv ! j) of
+                         Just r' -> completeKnownTokens w m (r':rs) (fs:fss)
+                         Nothing -> []
+         Nothing -> [(r:rs, (Var i j:fs):fss)]
 completeKnownTokens _ _ _ _ = []
     
 
 completionRule :: forall nt t wt. (Hashable nt, Eq nt, Eq t, Weight wt) 
                => [t]
                -> Map.HashMap nt (wt, wt)
-               -> DeductiveRule (Item nt t wt) wt (Container nt t wt)
-completionRule word ios = DeductiveRule 2 gets app
+               -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
+completionRule word ios = Right app
   where
-    gets :: Container nt t wt -> Item nt t wt -> [[Item nt t wt]]
-    gets (passives, _) active@(Active (Rule ((_, as), _)) _ _ ((Var i _:_):_) _ _) = [ [passive, active]
-                                                                                     | passive <- C.lookupWith Passive passives (as !! i) 
-                                                                                     ]
-    gets (_, actives) passive@(Passive a _ _ _) =  [ [passive, active]
-                                                   | active <- Map.lookupDefault [] a actives
-                                                   ]
-    gets _ _ = []
-
-    app :: Container nt t wt -> [Item nt t wt] -> [(Item nt t wt, wt)]
-    app _ [Passive a rv _ piw, Active r w (range:rho) ((Var i j:fs):fss) c aiw] = [ (Active r w rho' f' c' inside, inside <.> outside)
-                                                                                  | range' <- maybeToList $ safeConc range (rv ! j)
-                                                                                  , let c' = IMap.insert i rv c
-                                                                                        inside = aiw <.> (piw </> fst (ios Map.! a))
-                                                                                        outside = snd $ ios Map.! a
-                                                                                  , (rho', f') <- completeKnownTokens word c' (range':rho) (fs:fss)
-                                                                                  ]
+    app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
+    app active@(Active (Rule ((_, as), _)) _ _ ((Var i _:_):_) _ _) (ps, _) 
+      = [ consequence
+        | passive <- C.lookupWith Passive ps (as !! i)
+        , consequence <- consequences active passive
+        ]
+    app passive@(Passive a _ _ _) (_, acts)
+      = [ consequence
+        | active <- Map.lookupDefault [] a acts
+        , consequence <- consequences active passive
+        ]
     app _ _ = []
+
+    consequences :: Item nt t wt -> Item nt t wt -> [(Item nt t wt, wt)]
+    consequences (Active r w (range:rho) ((Var i j:fs):fss) c aiw) (Passive a rv _ piw)
+      = [ (Active r w rho' f' c' inside, inside <.> outside)
+        | range' <- maybeToList $ safeConc range (rv ! j)
+        , let c' = IMap.insert i rv c
+              inside = aiw <.> (piw </> fst (ios Map.! a))
+              outside = snd $ ios Map.! a
+        , (rho', f') <- completeKnownTokens word c' (range':rho) (fs:fss)
+        ]
+    consequences _ _ = []

@@ -37,16 +37,19 @@ removeMax maxkey m = (fst <$> M.lookupMax m', m')
 
     removeHead [_] = Nothing
     removeHead (_:xs) = Just xs
+    removeHead _ = error "remove head: empty list"
 
 removeMin :: (Ord k) => M.Map k [a] -> (a, M.Map k [a])
 removeMin m = case M.deleteFindMin m of
-                   ((k, [a]), m') -> (a, m')
+                   ((_, [a]), m') -> (a, m')
                    ((k, a:as), m') -> (a, M.insert k as m')
+                   _ -> error "map containing an empty list"
 
 addSingle :: (Ord k) => M.Map k [a] -> k -> a -> M.Map k [a]
 addSingle m key val = M.insertWith prepend key [val] m
   where
     prepend [a] as = a:as
+    prepend _ _ = error "prepend: non-singleton list used"
 
 
 -- | Enqueue a (value, priority) tuple. 

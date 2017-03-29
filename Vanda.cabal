@@ -58,6 +58,7 @@ library
   exposed-modules:
       CodingConventions
     , Control.Error
+    , Data.Converging
     , Data.Interner
     , Data.LimitedQueue
     , Data.List.Extra

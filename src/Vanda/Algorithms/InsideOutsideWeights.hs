@@ -19,9 +19,6 @@ module Vanda.Algorithms.InsideOutsideWeights (
   insideOutside, insideOutside'
 , inside, inside'
 , outside, outside'
--- * Fixpoint convergence
-, Converging(..)
-, convergedRatio
 , viterbiInsideOutside
 ) where
 
@@ -29,9 +26,9 @@ module Vanda.Algorithms.InsideOutsideWeights (
 import Vanda.Hypergraph
 
 import Control.Arrow hiding ((<+>))
-import Data.Weight
+import Data.Converging
 import Data.Semiring
-import Numeric.Log (Log(Exp))
+import Data.Weight (Inside(Inside), unpack)
 
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -219,67 +216,6 @@ checkMaps c m1 m2
   $ M.elems
   $ M.intersectionWith c m1 m2
 
-
--- | The property @convergedRatio epsilon x y@ holds, iff the ratio between
--- @x@ and @y@ differs at most @epsilon@ from @1@.
-convergedRatio :: (Ord a, Num a) => a -> a -> a -> Bool
-convergedRatio epsilon x y
-  = let (mi, ma) = if x < y then (x, y) else (y, x)
-    in ma - mi <= ma * epsilon
-
-
--- | @True@, iff both arguments are equal or both are @NaN@.
-convergedRealFloat :: (RealFloat a) => a -> a -> Bool
-convergedRealFloat x y = x == y || (isNaN x && isNaN y)
-
-
--- | The class contains types whose elements can converge against a fixpoint
--- of a function.
-class Converging a where
-  -- | The property @converged x y@ holds, iff @x@ and @y@ are values of
-  -- consecutive steps in a fixpoint iteration and @x@ and @y@ are close
-  -- enough such that another iteration step would probably not improve
-  -- the result significantly.
-  converged :: a -> a -> Bool
-
-instance Converging Float where
-  converged = convergedRealFloat
-
-instance Converging Double where
-  converged = convergedRealFloat
-
-instance Converging Int where
-  converged = (==)
-
-instance (Converging a) => Converging (Log a) where
-  converged (Exp e1) (Exp e2) = e1 `converged` e2
-
-instance (Converging a) =>  Converging (Inside a) where
-  (Inside x) `converged` (Inside y) = x `converged` y
-
-instance (Converging a) => Converging (Probabilistic a) where
-  (Probabilistic x) `converged` (Probabilistic y) = x `converged` y
-
-instance (Converging a) => Converging (Cost a) where
-  (Cost x) `converged` (Cost y) = x `converged` y
-  Infinity `converged` Infinity = True
-  converged _ _ = False
-
--- | This wrapper should allow us to use the same fixpoint computation
--- we used to compute inside/outside sums in order to calculate
--- Viterbi scores.
-newtype Viterbi a = Viterbi { unViterbi :: a } deriving (Eq, Ord, Show)
-
-instance (Ord a, Num a) => Num (Viterbi a) where
-  a + b       = Viterbi (unViterbi a `max` unViterbi b)
-  (-)         = undefined
-  a * b       = Viterbi (unViterbi a * unViterbi b)
-  abs         = Viterbi . abs . unViterbi
-  fromInteger = Viterbi . fromInteger
-  signum      = Viterbi . signum . unViterbi
-
-instance Converging a => Converging (Viterbi a) where
-  a `converged` b = unViterbi a `converged` unViterbi b
 
 viterbiInsideOutside
   :: (Ord v, Converging w, Ord w, Num w, Hypergraph h)

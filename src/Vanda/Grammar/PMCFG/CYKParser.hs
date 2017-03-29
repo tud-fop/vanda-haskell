@@ -39,13 +39,16 @@
 
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Vanda.Grammar.PMCFG.CYKParser where
+module Vanda.Grammar.PMCFG.CYKParser 
+  ( weightedParse
+  , parse
+  ) where
 
-import Vanda.Algorithms.InsideOutsideWeights (Converging)
-import Vanda.Grammar.PMCFG.DeductiveSolver
+import Data.Converging (Converging)
 import Data.Weight
 import Vanda.Grammar.PMCFG.Range
 import Vanda.Grammar.PMCFG
+import Vanda.Grammar.PMCFG.DeductiveSolver
 import qualified Vanda.Grammar.PMCFG.Chart as C
 
 import Data.Hashable (Hashable(hashWithSalt))
@@ -55,18 +58,23 @@ import Data.Semiring
 import Data.Tree (Tree)
 
 
+-- | Active and passive items for cyk parser.
 data Item nt t wt = Active (Rule nt t) wt InstantiatedFunction wt
                   | Passive nt Rangevector (C.Backtrace nt t wt) wt
 
 
+-- | Container type contains a chart for produced passive items and a map for
+-- active items that maps each rhs nonterminal of a rule to its corresponding
+-- passive item.
 type Container nt t wt = ( C.Chart nt t wt
                          , Map.HashMap nt [Item nt t wt]
                          )
 
 
+-- | Eq ignores weights, since they can be derived from the rule.
 instance (Eq nt, Eq t) => Eq (Item nt t wt) where
   (Active r _ fw _) == (Active r' _ fw' _) = r == r' && fw == fw' 
-  (Passive a rv _ _) == (Passive a' rv' _ _) = a == a' && rv == rv'
+  (Passive a rv bt _) == (Passive a' rv' bt' _) = a == a' && rv == rv' && bt' == bt
   _ == _ = False
 
 
@@ -76,17 +84,24 @@ instance (Hashable nt, Hashable t) => Hashable (Item nt t wt) where
 
 
 instance (Show nt, Show t) => Show (Item nt t wt) where
-    show (Active r _ f _) = "[active] rule #" ++ show r ++ " " ++ prettyPrintInstantiatedFunction f
-    show (Passive a rv _ _) = "[passive] " ++ show a ++ " " ++ show rv 
+    show (Active (Rule ((a,as),_)) _ f _)
+      = "[active] " ++ show a ++ " → " ++ prettyPrintInstantiatedFunction f ++ show as
+    show (Passive a rv _ _)
+      = "[passive] " ++ show a ++ " → " ++ show rv 
 
 
 -- | Top-level function to parse a word using a grammar.
+-- The grammar rules are implicitly annotated with additive weigts to encurage
+-- derivations with least rule applications.
 parse :: (Eq t, Hashable nt, Hashable t, Ord nt)
       => PMCFG nt t                               -- ^ the grammar
       -> Int                                      -- ^ approximation parameter
       -> [t]                                      -- ^ the word
       -> [Tree (Rule nt t)]                       -- ^ list of derivation trees 
-parse (PMCFG s rules) = weightedParse $ WPMCFG s $ zip rules $ repeat (cost 1 :: Cost Int)
+parse (PMCFG s rules) = weightedParse 
+                      $ WPMCFG s 
+                      $ zip rules 
+                      $ repeat (cost 1 :: Cost Int)
 
 
 -- | Top-level function to parse a word using a weighted grammar.
@@ -95,11 +110,11 @@ weightedParse :: forall nt t wt. (Eq t, Hashable nt, Hashable t, Semiring wt, Or
               -> Int                        -- ^ beam width
               -> [t]                        -- ^ word
               -> [Tree (Rule nt t)]   -- ^ parse trees and resulting weights
-weightedParse (WPMCFG s rs) bw word = C.readoff s (singleton $ entire word)
-                                      $ fst $ chart (C.empty, Map.empty) update deductiveRules bw
+weightedParse (WPMCFG s rs) bw word 
+  = C.readoff s (singleton $ entire word)
+  $ fst $ C.chart (C.empty, Map.empty) update deductiveRules bw
   where
     ios = ioWeights s rs
-
     deductiveRules = initialPrediction word (filter ((`elem` s) . lhs) rs) ios 
                       : prediction word rs ios
                       : [completion ios]
@@ -107,81 +122,85 @@ weightedParse (WPMCFG s rs) bw word = C.readoff s (singleton $ entire word)
     update :: Container nt t wt
            -> Item nt t wt
            -> (Container nt t wt, Bool)
-    update (passives, actives) (Passive a rho bt iw) = case C.insert passives a rho bt iw of
-                                                            (passives', isnew) -> ((passives', actives), isnew)
-    update (passives, actives) item@(Active (Rule ((_, as), _)) _ _ _) = ((passives, updateGroups as item actives), True)
+    update (passives, actives) (Passive a rho bt iw) 
+      = case C.insert passives a rho bt iw of
+             (passives', isnew) -> ((passives', actives), isnew)
+    update (passives, actives) item@(Active (Rule ((_, as), _)) _ _ _)
+      = ((passives, updateGroups as item actives), True)
 
 
+-- | Prediction rule for rules of initial nonterminals
 initialPrediction :: forall nt t wt. (Eq nt, Eq t, Hashable nt, Semiring wt) 
                   => [t]
                   -> [(Rule nt t, wt)]
                   -> Map.HashMap nt (wt, wt)
-                  -> DeductiveRule (Item nt t wt) wt (Container nt t wt)
-initialPrediction word srules ios = DeductiveRule 0 gets app
-  where
-    gets :: Container nt t wt -> Item nt t wt -> [[Item nt t wt]]
-    gets _ _ = [[]]
-    
-    app :: Container nt t wt
-        -> [Item nt t wt] 
-        -> [(Item nt t wt, wt)]
-    app _ [] =  [ (Active r w fw inside, inside)
-                | (r@(Rule ((_, as), f)), w) <- srules
-                , fw <- instantiate word f
-                , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
-                ]
-    app _ _ = []
-    
+                  -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
+initialPrediction word srules ios 
+  = Left  [ (Active r w fw inside, inside)
+          | (r@(Rule ((_, as), f)), w) <- srules
+          , fw <- instantiate word f
+          , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
+          ]
+
+
+-- | Prediction rule of the cyk parser. Initializes a passive item
+-- for each rhs nonterminal of a rule that needs to be applied.
 prediction :: forall nt t wt. (Eq nt, Eq t, Hashable nt, Semiring wt) 
            => [t]
            -> [(Rule nt t, wt)]
            -> Map.HashMap nt (wt, wt)
-           -> DeductiveRule (Item nt t wt) wt (Container nt t wt)
-prediction word rs ios = DeductiveRule 1 gets app
+           -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
+prediction word rs ios = Right app
   where
-    gets :: Container nt t wt -> Item nt t wt -> [[Item nt t wt]]
-    gets _ i@Active{} = [[i]]
-    gets _ _ = []
-    
-    app :: Container nt t wt 
-        -> [Item nt t wt] 
-        -> [(Item nt t wt, wt)]
-    app _ [Active (Rule ((_, as), _)) _ _ _] = [ (Active r' w' fw inside, inside <.> outside)
-                                               | (r'@(Rule ((a', as'), f')), w') <- rs
-                                               , a' `elem` as
-                                               , fw <- instantiate word f'
-                                               , let inside = w' <.> foldl (<.>) one (map (fst . (ios Map.!)) as')
-                                                     outside = snd $ ios Map.! a'
-                                               ]
+    app (Active (Rule ((_, as), _)) _ _ _) _
+      = [ (Active r' w' fw inside, inside <.> outside)
+        | (r'@(Rule ((a', as'), f')), w') <- rs
+        , a' `elem` as
+        , fw <- instantiate word f'
+        , let inside = w' <.> foldl (<.>) one (map (fst . (ios Map.!)) as')
+              outside = snd $ ios Map.! a'
+        ]
     app _ _ = []
-      
+
+
+-- | Completion rule of the cyk parser. Applies instantiated function
+-- on a sequence of 'Rangevector's to yield a range vector.
+-- The result is wrapped in a passive item.
 completion :: forall nt t wt. (Eq nt, Eq t, Hashable nt, Semiring wt) 
            => Map.HashMap nt (wt, wt)
-           -> DeductiveRule (Item nt t wt) wt (Container nt t wt)
-completion ios = DeductiveRule 3 gets app
+           -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
+completion ios = Right app
   where
-    gets :: Container nt t wt -> Item nt t wt -> [[Item nt t wt]]
-    gets (passives, _) i@(Active (Rule ((_, as), _)) _ _ _) = [ i:candidates
-                                                              | candidates <- mapM (C.lookupWith Passive passives) as
-                                                              ]
-    gets (passives, actives) i@(Passive a _ _ _) = [ active:candidates
-                                                   | active@(Active (Rule ((_, as), _)) _ _ _ ) <- Map.lookupDefault [] a actives
-                                                   , candidates <- filter (elem i) $ mapM (C.lookupWith Passive passives) as
-                                                   ]
-    
-    app :: Container nt t wt -> [Item nt t wt] -> [(Item nt t wt, wt)]
-    app _ (Active r@(Rule ((a, _), _)) w fw _: pas) = [ (Passive a rv (C.Backtrace r w rvs) inside, inside <.> outside)
-                                                      | rv <- maybeToList $ insert rvs fw
-                                                      , let inside = w <.> foldl (<.>) one ws
-                                                            outside = snd $ ios Map.! a
-                                                      ]
+    app item@(Active (Rule ((_, as), _)) _ _ _) (ps, _) 
+      = [ consequence
+        | pas <- mapM (C.lookupWith Passive ps) as
+        , consequence <- consequences (item:pas)
+        ]
+    app item@(Passive a _ _ _) (ps, acts) 
+      = [ consequence
+        | act@(Active (Rule ((_, as), _)) _ _ _ ) <- Map.lookupDefault [] a acts
+        , pas <- filter (elem item) $ mapM (C.lookupWith Passive ps) as
+        , consequence <- consequences (act:pas)
+        ]
+
+    consequences (Active r@(Rule ((a, _), _)) w fw _: pas) 
+      = [ (Passive a rv (C.Backtrace r w rvs) inside, inside <.> outside)
+        | rv <- maybeToList $ insert rvs fw
+        , let inside = w <.> foldl (<.>) one ws
+              outside = snd $ ios Map.! a
+        ]
       where
         (rvs, ws) = foldr (\ (Passive _ rv _ iw) (rvs', ws') -> (rv:rvs', iw:ws')) ([], []) pas
-        
-        insert :: [Rangevector] -> InstantiatedFunction -> Maybe Rangevector
-        insert rvs' = (>>= fromList) . mapM ((>>= toRange) . concVarRange . map (insert' rvs'))
-          
-        insert' :: [Rangevector] -> VarT Range -> VarT Range
-        insert' rvs' (Var x y)  = T $ rvs' !! x ! y
-        insert' _ r' = r'
-    app _ _ = []
+    consequences _ = []
+
+-- | Substitutes variables in an instantiated function with ranges out of a
+-- list of range vectors, yields a Rangevector on success.
+insert :: [Rangevector] -> InstantiatedFunction -> Maybe Rangevector
+insert rvs = (>>= fromList) 
+            . mapM ((>>= toRange) 
+            . concVarRange 
+            . map (insert' rvs))
+  where
+    insert' :: [Rangevector] -> VarT Range -> VarT Range
+    insert' rvs' (Var x y)  = T $ rvs' !! x ! y
+    insert' _ r' = r'

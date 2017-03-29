@@ -20,6 +20,7 @@ module Vanda.Algorithms.ExpectationMaximization (
 
 import Control.Arrow ( second )
 
+import Data.Converging
 import Vanda.Algorithms.InsideOutsideWeights
 import Vanda.Hypergraph
 
