@@ -75,14 +75,14 @@ data Item nt t wt = Passive nt Rangevector (C.Backtrace nt t wt) wt
                   | Active (Rule nt t) wt [Range] (Function t) (IMap.IntMap Rangevector) wt
 
 
-instance (Eq nt, Eq t) => Eq (Item nt t wt)where
+instance (Eq nt, Eq t) => Eq (Item nt t wt) where
   (Active r _ rs fs completions _) == (Active r' _ rs' fs' completions' _) = r == r' && rs == rs' && completions == completions' && fs == fs'
   (Passive a rv bt _ ) == (Passive a' rv' bt' _) = a == a' && rv == rv' && bt == bt'
   _ == _ = False
 
 instance (Hashable nt, Hashable t) => Hashable (Item nt t wt) where
   salt `hashWithSalt` (Passive a rho _ _) = salt `hashWithSalt` a `hashWithSalt` rho
-  salt `hashWithSalt` (Active r _ _ fss _ _) = salt `hashWithSalt` r `hashWithSalt` length (concat fss)
+  salt `hashWithSalt` (Active r _ rhos _ _ _) = salt `hashWithSalt` r `hashWithSalt` rhos
     
 
 instance (Show nt, Show t) => Show (Item nt t wt) where
