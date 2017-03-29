@@ -81,16 +81,16 @@ instance (Show nt, Show t) => Show (Item nt t wt) where
 
 
 -- | Top-level function to parse a word using a grammar.
-parse :: (Eq t, Eq nt, Hashable nt, Hashable t, Ord nt)
+parse :: (Eq t, Hashable nt, Hashable t, Ord nt)
       => PMCFG nt t                               -- ^ the grammar
       -> Int                                      -- ^ approximation parameter
       -> [t]                                      -- ^ the word
       -> [Tree (Rule nt t)]                       -- ^ list of derivation trees 
-parse (PMCFG s rules) = weightedParse $ WPMCFG s $ zip rules $ repeat (cost 1 :: Cost Float)
+parse (PMCFG s rules) = weightedParse $ WPMCFG s $ zip rules $ repeat (cost 1 :: Cost Int)
 
 
 -- | Top-level function to parse a word using a weighted grammar.
-weightedParse :: forall nt t wt. (Eq t, Eq nt, Hashable nt, Hashable t, Semiring wt, Ord wt, Ord nt, Converging wt)
+weightedParse :: forall nt t wt. (Eq t, Hashable nt, Hashable t, Semiring wt, Ord wt, Ord nt, Converging wt)
               => WPMCFG nt wt t             -- ^ weighted grammar
               -> Int                        -- ^ beam width
               -> [t]                        -- ^ word
@@ -172,7 +172,7 @@ completion ios = DeductiveRule 3 gets app
     app :: Container nt t wt -> [Item nt t wt] -> [(Item nt t wt, wt)]
     app _ (Active r@(Rule ((a, _), _)) w fw _: pas) = [ (Passive a rv (C.Backtrace r w rvs) inside, inside <.> outside)
                                                       | rv <- maybeToList $ insert rvs fw
-                                                      , let inside = mconcat ws <.> w
+                                                      , let inside = w <.> foldl (<.>) one ws
                                                             outside = snd $ ios Map.! a
                                                       ]
       where

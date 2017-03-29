@@ -31,7 +31,7 @@ import Vanda.Hypergraph
 import Control.Arrow hiding ((<+>))
 import Data.Weight
 import Data.Semiring
-import Numeric.Log (Log(Exp), Precise)
+import Numeric.Log (Log(Exp))
 
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -247,6 +247,9 @@ instance Converging Float where
 
 instance Converging Double where
   converged = convergedRealFloat
+
+instance Converging Int where
+  converged = (==)
 
 instance (Converging a) => Converging (Log a) where
   converged (Exp e1) (Exp e2) = e1 `converged` e2

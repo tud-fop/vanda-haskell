@@ -64,16 +64,16 @@ instance (Show nt, Show t) => Show (Item nt t wt) where
   show (Passive a rv _ _) = "[passive] " ++ show a ++ " " ++ show rv 
 
 -- | Top-level function to parse a word using a PMCFG.
-parse :: (Hashable nt, Hashable t, Eq nt, Eq t, Ord nt) 
+parse :: (Hashable nt, Hashable t, Eq t, Ord nt) 
       => PMCFG nt t         -- ^ unweighted grammar
       -> Int                -- ^ beam width
       -> [t]                -- ^ terminal word
       -> [Tree (Rule nt t)] -- ^ derivation tree of applied rules
-parse (PMCFG s rs) = weightedParse $ WPMCFG s $ zip rs $ repeat (cost 1 :: Cost Float)
+parse (PMCFG s rs) = weightedParse $ WPMCFG s $ zip rs $ repeat (cost 1 :: Cost Int)
 
 
 -- | Top-level function to parse a word using a weighted PMCFG.
-weightedParse :: forall nt t wt. (Hashable nt, Hashable t, Eq nt, Eq t, Ord wt, Weight wt, Ord nt, Converging wt) 
+weightedParse :: forall nt t wt. (Hashable nt, Hashable t, Eq t, Ord wt, Weight wt, Ord nt, Converging wt) 
               => WPMCFG nt wt t     -- ^ weighted grammar
               -> Int                -- ^ beam width
               -> [t]                -- ^ terminal word

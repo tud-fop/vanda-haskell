@@ -94,16 +94,16 @@ type Container nt t wt =  (C.Chart nt t wt, Map.HashMap nt [Item nt t wt])
 
 -- | Top-level function to parse a word using a PMCFG.
 -- Uses weightedParse with additive costs for each rule, s.t. the number of rule applications is minimized.
-parse :: (Hashable nt, Hashable t, Eq nt, Eq t, Ord nt) 
+parse :: (Hashable nt, Hashable t, Eq t, Ord nt) 
   => PMCFG nt t 
   -> Int 
   -> [t] 
   -> [Tree (Rule nt t)]
-parse (PMCFG s rs) = weightedParse $ WPMCFG s $ zip rs $ repeat (cost 1 :: Cost Float)
+parse (PMCFG s rs) = weightedParse $ WPMCFG s $ zip rs $ repeat (cost 1 :: Cost Int)
 
 
 -- | Top-level function to parse a word using a weighted PMCFG.
-weightedParse :: forall nt t wt. (Hashable nt, Hashable t, Eq nt, Eq t, Ord wt, Weight wt, Ord nt, Converging wt) 
+weightedParse :: forall nt t wt. (Hashable nt, Hashable t, Eq t, Ord wt, Weight wt, Ord nt, Converging wt) 
               => WPMCFG nt wt t 
               -> Int 
               -> [t] 

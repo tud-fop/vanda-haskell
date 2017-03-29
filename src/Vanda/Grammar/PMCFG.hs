@@ -59,13 +59,8 @@ import qualified Control.Error
 import qualified Data.Binary as B
 import Data.Hashable
 import Data.List (intercalate)
-import Data.Maybe (listToMaybe, mapMaybe, catMaybes, maybeToList)
+import Data.Maybe (listToMaybe, mapMaybe, maybeToList)
 import Data.Tree
-import qualified Data.HashMap.Lazy  as Map
-import qualified Data.HashSet       as Set
-import qualified Data.Map           as M
-import qualified Data.Vector        as V
-import qualified Data.Set           as S
 import GHC.Generics (Generic)
 import Data.Interner (Interner, internList, intern, emptyInterner, internListPreserveOrder, internerToArray)
 import Control.Monad.State.Lazy
@@ -74,6 +69,11 @@ import Vanda.Grammar.PMCFG.Range (Range(Epsilon), safeConc, singletons)
 import Vanda.Hypergraph (Hyperedge(Hyperedge), EdgeList(EdgeList))
 import Vanda.Algorithms.InsideOutsideWeights (insideOutside', Converging(converged))
 import Data.Semiring
+
+import qualified Data.HashMap.Lazy  as Map
+import qualified Data.Map           as M
+import qualified Data.Vector        as V
+import qualified Data.Set           as S
 
 errorHere :: String -> String -> a
 errorHere = Control.Error.errorHere "Vanda.Grammar.PMCFG"
@@ -347,14 +347,14 @@ exampleWPMCFG :: WPMCFG Int Double Char
 exampleWPMCFG = fromWeightedRules [0] $ zip exampleRules exampleWeights
 
 
-ioWeights :: (Converging wt, Semiring wt, Hashable nt, Eq nt, Ord nt)
+ioWeights :: (Converging wt, Semiring wt, Hashable nt, Ord nt)
           => [nt] -> [(Rule nt t, wt)] -> Map.HashMap nt (wt, wt)
 ioWeights ss rs = toHashMap $ insideOutside' converged (M.fromList esw M.!) Nothing (EdgeList vs (map fst esw))
   where
     vs = S.fromList $ Nothing : map (Just . lhs) rs
     esw = zipWith (\ (f, w) i -> (f i, w)) (targets ++ map ruleToHyperEdge rs) [(1::Int)..]
 
-    ruleToHyperEdge (r@(Rule ((a, as), _)), w) = (Hyperedge (Just a) (V.fromList $ map Just as) (Just a, as), w)
+    ruleToHyperEdge (Rule ((a, as), _), w) = (Hyperedge (Just a) (V.fromList $ map Just as) (Just a, as), w)
     targets = [ (Hyperedge Nothing (V.singleton $ Just s) (Nothing, [s]), one)
               | s <- ss
               ]

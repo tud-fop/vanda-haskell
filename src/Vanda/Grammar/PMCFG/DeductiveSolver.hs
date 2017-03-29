@@ -37,11 +37,9 @@ module Vanda.Grammar.PMCFG.DeductiveSolver
 
 import qualified Data.LimitedQueue as Q
 import qualified Data.HashMap.Lazy as Map
-import qualified Data.HashSet      as Set
 
 import Data.Hashable
 import Control.Monad.State (State, evalState, execState, get, put)
-import Data.Tuple (swap)
 import Data.Semiring
 
 -- | Instance of a deduction system. 
