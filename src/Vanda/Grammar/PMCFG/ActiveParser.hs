@@ -56,19 +56,19 @@ module Vanda.Grammar.PMCFG.ActiveParser
     ) where
 
 import Data.Converging (Converging)
+import Data.Hashable (Hashable(hashWithSalt))
+import Data.Maybe (mapMaybe, maybeToList)
+import Data.Semiring
+import Data.Tree (Tree)
+import Data.Weight
 import Vanda.Grammar.PMCFG
 import Vanda.Grammar.PMCFG.Range
 import Vanda.Grammar.PMCFG.DeductiveSolver
-import Data.Weight
+
+import qualified Data.IntMap        as IMap
+import qualified Data.HashMap.Lazy  as Map
+import qualified Data.HashSet       as Set
 import qualified Vanda.Grammar.PMCFG.Chart as C
-
-import qualified Data.IntMap       as IMap
-import qualified Data.HashMap.Lazy as Map
-
-import Data.Hashable (Hashable(hashWithSalt))
-import Data.Tree (Tree)
-import Data.Maybe (mapMaybe, maybeToList)
-import Data.Semiring
 
 
 data Item nt t wt = Passive nt Rangevector (C.Backtrace nt t wt) wt
@@ -104,7 +104,10 @@ instance (Show nt, Show t) => Show (Item nt t wt) where
 
 
 -- | Container with two charts.
-type Container nt t wt = (C.Chart nt t wt, Map.HashMap nt [Item nt t wt])
+type Container nt t wt = ( C.Chart nt t wt
+                         , Map.HashMap nt [Item nt t wt]
+                         , Set.HashSet nt
+                         )
 
 
 -- | Top-level function to parse a word using a PMCFG.
@@ -127,11 +130,13 @@ weightedParse :: forall nt t wt.(Hashable nt, Hashable t, Eq t, Ord wt, Weight w
               -> Int 
               -> [t] 
               -> [Tree (Rule nt t)]
-weightedParse (WPMCFG s rs) bw w
+weightedParse (WPMCFG s grs) bw w
   = C.readoff s (singleton $ entire w)
-  $ fst 
-  $ C.chart (C.empty, Map.empty) update rules bw
+  $ (\ (e, _, _) -> e)
+  $ C.chart (C.empty, Map.empty, nset) update rules bw
     where
+      rs = filter (not . null . instantiate w . (\ (Rule (_, f), _) -> f)) grs
+      nset = Set.fromList $ filter (not . (`elem` s)) $ map lhs rs
       iow = ioWeights s rs
       
       rules = initialPrediction w (filter ((`elem` s) . lhs) rs) iow
@@ -140,12 +145,12 @@ weightedParse (WPMCFG s rs) bw w
               : [completionRule w iow]
 
       update :: Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
-      update (p, a) (Passive nta rho bt iw)
+      update (p, a, n) (Passive nta rho bt iw)
         = case C.insert p nta rho bt iw of
-               (p', isnew) -> ((p', a), isnew)
-      update (p, a) item@(Active (Rule ((_, as),_)) _ _ ((Var i _:_):_) _ _)
-        = ((p, updateGroup (as !! i) item a), True)
-      update (p, a) _ = ((p, a), True)
+               (p', isnew) -> ((p', a, n), isnew)
+      update (p, a, n) item@(Active (Rule ((nta, as),_)) _ _ ((Var i _:_):_) _ _)
+        = ((p, updateGroup (as !! i) item a, nta `Set.delete` n), True)
+      update (p, a, n) _ = ((p, a, n), True)
 
 
 -- | Prediction rule for rules of initial nonterminals.
@@ -172,10 +177,12 @@ predictionRule word rs ios = Right app
     app :: Item nt t wt
         -> Container nt t wt 
         -> [(Item nt t wt, wt)]
-    app (Active (Rule ((_, as), _)) w _ ((Var i _:_):_) _ _) _
+    app (Active (Rule ((_, as), _)) w _ ((Var i _:_):_) _ _) (_, _, inits)
       = [ (Active r' w rho'' f'' IMap.empty inside, inside <.> outside)
-        | (r'@(Rule ((a', as'), f')), w') <- rs
-        , a' == (as !! i)
+        | let a = as !! i
+        , a `Set.member` inits
+        , (r'@(Rule ((a', as'), f')), w') <- rs
+        , a' == a
         , (rho'', f'') <- completeKnownTokens word IMap.empty [Epsilon] f'
         , let inside = w' <.> foldl (<.>) one (map (fst . (ios Map.!)) as')
               outside = snd $ ios Map.! a'
@@ -227,12 +234,12 @@ completionRule :: forall nt t wt. (Hashable nt, Eq nt, Eq t, Weight wt)
 completionRule word ios = Right app
   where
     app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
-    app active@(Active (Rule ((_, as), _)) _ _ ((Var i _:_):_) _ _) (ps, _) 
+    app active@(Active (Rule ((_, as), _)) _ _ ((Var i _:_):_) _ _) (ps, _, _) 
       = [ consequence
         | passive <- C.lookupWith Passive ps (as !! i)
         , consequence <- consequences active passive
         ]
-    app passive@(Passive a _ _ _) (_, acts)
+    app passive@(Passive a _ _ _) (_, acts, _)
       = [ consequence
         | active <- Map.lookupDefault [] a acts
         , consequence <- consequences active passive

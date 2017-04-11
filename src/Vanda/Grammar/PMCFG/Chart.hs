@@ -11,6 +11,7 @@ module Vanda.Grammar.PMCFG.Chart
   , chart
   ) where
 
+import Control.Monad (unless)
 import Control.Monad.State (State, execState, get, put)
 import Vanda.Grammar.PMCFG (Rule(Rule))
 import Vanda.Grammar.PMCFG.Range (Rangevector)
@@ -107,18 +108,17 @@ chartIteration :: (Eq it, Ord wt, Semiring wt, Hashable it)
                -> State (Q.Queue it wt, ct) ()
 chartIteration rules update
   = do (agenda, container) <- get
-       if Q.null agenda
-          then return ()
-          else do let (agenda', item) = Q.deq agenda
-                      (container', isnew) = update container item
-                  if isnew
-                     then do let agenda'' = Q.enqList agenda'
-                                          $ filter ((/= zero) . snd) 
-                                          $ chartStep item container' rules
-                             put (agenda'', container')
-                             chartIteration rules update
-                     else do put (agenda', container')
-                             chartIteration rules update
+       unless (Q.null agenda)
+        $ do let (agenda', item) = Q.deq agenda
+                 (container', isnew) = update container item
+             if isnew
+                then do let agenda'' = Q.enqList agenda'
+                                     $ filter ((/= zero) . snd) 
+                                     $ chartStep item container' rules
+                        put (agenda'', container')
+                        chartIteration rules update
+                else do put (agenda', container')
+                        chartIteration rules update
 
 
 chartStep :: it 
