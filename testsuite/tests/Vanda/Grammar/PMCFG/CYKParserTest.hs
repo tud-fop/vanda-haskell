@@ -40,17 +40,17 @@ exampleWPMCFG'' :: (WPMCFG Int (Probabilistic (Log Double)) Int, Interner Int, I
 exampleWPMCFG'' = integerize exampleWPMCFG'
 
 tests :: Test
-tests = TestList    [ TestCase $ assertEqual "Cannot reproduce exmaple derivation" [exampleDerivation] $ parse examplePMCFG 100 "aabccd"
-                    , TestCase $ assertEqual "Cannot reproduce parsed string in yield" ["aabbccdd"] $ mapMaybe yield $ parse examplePMCFG 100 "aabbccdd"
-                    , TestCase $ assertEqual "Cannot reproduce weighted example derivation" [exampleDerivation] $ weightedParse exampleWPMCFG' 100 "aabccd"
+tests = TestList    [ TestCase $ assertEqual "Cannot reproduce exmaple derivation" [exampleDerivation] $ parse examplePMCFG 100 1 "aabccd"
+                    , TestCase $ assertEqual "Cannot reproduce parsed string in yield" ["aabbccdd"] $ mapMaybe yield $ parse examplePMCFG 100 1 "aabbccdd"
+                    , TestCase $ assertEqual "Cannot reproduce weighted example derivation" [exampleDerivation] $ weightedParse exampleWPMCFG' 100 1 "aabccd"
                     , TestCase $ assertEqual "Cannot reproduce weighted example derivation (integerized)" [exampleDerivation] 
                         $ map (deintegerize (nti, ti)) 
-                        $ weightedParse ig 100
+                        $ weightedParse ig 100 1
                         $ snd 
                         $ internListPreserveOrder ti "aabccd"
                     , TestCase $ assertEqual "Cannot reproduce parsed string in yield (weighted)" ["aabbccdd"] 
                                 $ mapMaybe yield 
-                                $ weightedParse exampleWPMCFG' 100 "aabbccdd"
+                                $ weightedParse exampleWPMCFG' 100 1 "aabbccdd"
                     --, TestCase $ assertBool "instantiate Fails" $ testinstance `elem` instantiate testword testcomposition
                     , TestCase $ assertEqual "instatntiate Fails (2)" 16 $ length $ instantiate testword testcomposition
                     , TestCase $ assertBool "Derivation Equality" $ testderivation == testderivation

@@ -51,8 +51,9 @@ data Args
   | Parse
     { flagAlgorithm :: ParsingAlgorithm
     , argGrammar :: FilePath
-    , useWeights :: Bool
+    , unweighted :: Bool
     , beamwidth :: Int
+    , maxAmount :: Int
     }
   deriving Show
 
@@ -68,7 +69,7 @@ cmdArgs
     , modeArgs = ( [ flagArgCorpus{argRequire = True}], Nothing )
     , modeGroupFlags = toGroup [flagNoneBinarize,  flagNoneNaive, flagNoneOptimal, flagReqHybrid]
     }
-  , (modeEmpty $ Parse undefined undefined False 1000)
+  , (modeEmpty $ Parse undefined undefined False 1000 10)
     { modeNames = ["parse"]
     , modeHelp = "Parses, given a (w)PMCFG, each in a sequence of sentences."
     , modeArgs = ( [ flagArgGrammar{argRequire = True} ], Nothing )
@@ -78,6 +79,7 @@ cmdArgs
                                 , flagActive
                                 , flagUseWeights
                                 , flagBeamwidth
+                                , flagMax
                                 ]
     }
   ]
@@ -87,9 +89,11 @@ cmdArgs
     flagArgGrammar
       = flagArg (\ a x -> Right x{argGrammar = a}) "GRAMMAR"
     flagBeamwidth
-      = flagReq ["limit", "bw"] (\ a x -> Right x{beamwidth = read a}) "Int" "BW"
+      = flagReq ["blimit", "bw"] (\ a x -> Right x{beamwidth = read a}) "Int" "beam width: limits the number of items held in memory"
+    flagMax
+      = flagReq ["plimit", "ts"] (\ a x -> Right x{maxAmount = read a}) "Int" "limits the maximum amount of output parse trees"
     flagUseWeights
-      = flagBool ["w", "weighted"] (\ b x -> x{useWeights = b}) "use a weighted parsing algorithm"
+      = flagBool ["u", "unweighted"] (\ b x -> x{unweighted = b}) "use an unweighted parsing algorithm"
     flagUnweightedAutomaton
       = flagNone ["a", "automaton"] (\ x -> x{flagAlgorithm = UnweightedAutomaton}) "use an unweighted automaton constructed from the grammar"
     flagCYK
@@ -131,21 +135,23 @@ mainArgs (Extract outfile True strategy)
       let pmcfg = extractFromNegraAndBinarize s $ parseNegra corpus :: WPMCFG String Double String
       BS.writeFile outfile . compress $ B.encode pmcfg
       writeFile (outfile ++ ".readable") $ prettyPrintWPMCFG pmcfg
-mainArgs (Parse algorithm grFile weighted bw)
+mainArgs (Parse algorithm grFile unweighted bw trees)
   = do
       wpmcfg <- B.decode . decompress <$> BS.readFile grFile :: IO (WPMCFG String Double String)
       let (WPMCFG inits wrs, nti, ti) = integerize wpmcfg
       _ <- evaluate wrs        
-      let parse = if weighted
-                  then case algorithm of CYK -> CYK.weightedParse (WPMCFG inits $ map (\ (r, w) -> (r, probabilistic w)) wrs)
-                                         NaiveActive -> Naive.weightedParse (WPMCFG inits $ map (\ (r, w) -> (r, probabilistic w)) wrs)
-                                         Active -> Active.weightedParse (WPMCFG inits $ map (\ (r, w) -> (r, probabilistic w)) wrs)
-                                         UnweightedAutomaton -> error "not implemented"
-                  else case algorithm of CYK -> CYK.parse (PMCFG inits (map fst wrs))
-                                         NaiveActive -> Naive.parse (PMCFG inits (map fst wrs))
-                                         Active -> Active.parse (PMCFG inits (map fst wrs))
-                                         UnweightedAutomaton -> error "not implemented"
-                                         --UnweightedAutomaton -> UnweightedAutomaton.parse (PMCFG inits (map fst wrs))
+      let parse = if unweighted
+                  then let urs = (PMCFG inits (map fst wrs)) in
+                           case algorithm of CYK -> CYK.parse urs
+                                             NaiveActive -> Naive.parse urs
+                                             Active -> Active.parse urs
+                                             UnweightedAutomaton -> error "not implemented"
+                                            --UnweightedAutomaton -> UnweightedAutomaton.parse urs
+                  else let wrs' = (WPMCFG inits $ map (\ (r, w) -> (r, probabilistic w)) wrs) in
+                           case algorithm of CYK -> CYK.weightedParse wrs'
+                                             NaiveActive -> Naive.weightedParse wrs'
+                                             Active -> Active.weightedParse wrs'
+                                             UnweightedAutomaton -> error "not implemented"
       corpus <- TIO.getContents
-      mapM_ (putStrLn . drawTree . fmap show . head . map (deintegerize (nti, ti)) . parse bw . snd . internListPreserveOrder ti . map T.unpack . T.words) $ T.lines corpus
+      mapM_ (putStrLn . drawTree . fmap show . head . map (deintegerize (nti, ti)) . parse bw trees . snd . internListPreserveOrder ti . map T.unpack . T.words) $ T.lines corpus
  

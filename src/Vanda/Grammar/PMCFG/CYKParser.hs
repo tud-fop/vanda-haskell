@@ -95,7 +95,8 @@ instance (Show nt, Show t) => Show (Item nt t wt) where
 -- derivations with least rule applications.
 parse :: (Eq t, Hashable nt, Hashable t, Ord nt)
       => PMCFG nt t                               -- ^ the grammar
-      -> Int                                      -- ^ approximation parameter
+      -> Int                                      -- ^ approximation parameter 1 &
+      -> Int                                      -- ^ approximation parameter 2
       -> [t]                                      -- ^ the word
       -> [Tree (Rule nt t)]                       -- ^ list of derivation trees 
 parse (PMCFG s rules) = weightedParse 
@@ -108,11 +109,13 @@ parse (PMCFG s rules) = weightedParse
 weightedParse :: forall nt t wt. (Eq t, Hashable nt, Hashable t, Semiring wt, Ord wt, Ord nt, Converging wt)
               => WPMCFG nt wt t             -- ^ weighted grammar
               -> Int                        -- ^ beam width
+              -> Int                        -- ^ maximum number of returned trees
               -> [t]                        -- ^ word
               -> [Tree (Rule nt t)]   -- ^ parse trees and resulting weights
-weightedParse (WPMCFG s rs) bw word 
-  = C.readoff s (singleton $ entire word)
-  $ fst $ C.chart (C.empty, Map.empty) update deductiveRules bw
+weightedParse (WPMCFG s rs) bw trees word
+  = C.parseTrees trees s (singleton $ entire word)
+  $ fst 
+  $ C.chart (C.empty, Map.empty) update deductiveRules bw trees
   where
     ios = ioWeights s rs
     deductiveRules = initialPrediction word (filter ((`elem` s) . lhs) rs) ios 

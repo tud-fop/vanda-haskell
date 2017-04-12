@@ -83,9 +83,10 @@ instance (Show nt, Show t) => Show (Item nt t wt) where
 parse :: (Hashable nt, Hashable t, Eq t, Ord nt) 
       => PMCFG nt t         -- ^ unweighted grammar
       -> Int                -- ^ beam width
+      -> Int                -- ^ max number of parse trees
       -> [t]                -- ^ terminal word
       -> [Tree (Rule nt t)] -- ^ derivation tree of applied rules
-parse (PMCFG s rs) 
+parse (PMCFG s rs)
   = weightedParse 
   $ WPMCFG s 
   $ zip rs 
@@ -96,12 +97,13 @@ parse (PMCFG s rs)
 weightedParse :: forall nt t wt. (Hashable nt, Hashable t, Eq t, Ord wt, Weight wt, Ord nt, Converging wt) 
               => WPMCFG nt wt t     -- ^ weighted grammar
               -> Int                -- ^ beam width
+              -> Int                -- ^ max number of parse trees
               -> [t]                -- ^ terminal word
               -> [Tree (Rule nt t)] -- ^ derivation tree of applied rules
-weightedParse (WPMCFG s rs) bw word 
-  = C.readoff s (singleton $ entire word)
+weightedParse (WPMCFG s rs) bw trees word 
+  = C.parseTrees trees s (singleton $ entire word)
   $ fst 
-  $ C.chart (C.empty, Map.empty) update rules bw
+  $ C.chart (C.empty, Map.empty) update rules bw trees
     where
       rules = initialPrediction word (filter ((`elem` s) . lhs) rs) ios
               : predictionRule word rs ios

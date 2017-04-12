@@ -7,19 +7,20 @@ module Vanda.Grammar.PMCFG.Chart
     -- * chart operations
   , lookupWith
   , insert
-  , readoff
   , chart
+  , parseTrees
   ) where
 
 import Control.Monad (unless)
 import Control.Monad.State (State, execState, get, put)
 import Vanda.Grammar.PMCFG (Rule(Rule))
 import Vanda.Grammar.PMCFG.Range (Rangevector)
-import Data.Semiring
-import Data.Hashable (Hashable)
-import Data.Tree (Tree(Node))
-import Data.Maybe (maybeToList)
 import Data.Either (rights, lefts)
+import Data.Hashable (Hashable)
+import Data.List (foldl', sortOn)
+import Data.Maybe (maybeToList)
+import Data.Semiring
+import Data.Tree (Tree(Node))
 
 import qualified Data.LimitedQueue as Q
 import qualified Data.HashMap.Lazy as Map
@@ -72,18 +73,26 @@ insert passives a rho bt iw
 
 
 -- | Reads all derivation trees off a chart that produce a passive item (s, rv).
-readoff :: (Eq nt, Hashable nt) 
-        => [nt]               -- ^ list of starting nonterminals
-        -> Rangevector        -- ^ root's range vector
-        -> Chart nt t wt      -- ^ chart of passive items
-        -> [Tree (Rule nt t)] -- ^ list of derivation trees
-readoff ss rv passive 
-  = [ Node r children
-    | a <- ss
-    , (Backtrace r@(Rule ((_, as), _)) _ rvs) <- fst $ (passive Map.! a) Map.! rv
-    , let childbt = zip ((:[]) <$> as) rvs
-    , children <- sequence $ uncurry readoff <$> childbt <*> [passive]
-    ]
+parseTrees :: (Eq nt, Hashable nt, Semiring wt, Ord wt)
+           => Int
+           -> [nt]
+           -> Rangevector
+           -> Chart nt t wt
+           -> [Tree (Rule nt t)]
+parseTrees tops ss rv c = map fst $ take tops $ sortOn snd $ ss >>= parseTrees' tops c' rv
+  where
+    c' = Map.map (\ m -> Map.map (\ (bts, wt) -> (take tops $ reverse bts, wt)) m) c
+    parseTrees' :: (Eq nt, Hashable nt, Semiring wt, Ord wt) 
+                =>Int -> Chart nt t wt -> Rangevector -> nt -> [(Tree (Rule nt t), wt)]
+    parseTrees' tops chart rho a
+      = take tops $ sortOn snd [ (Node r ds, weight)
+                               | amap <- maybeToList $ a `Map.lookup` chart
+                               , (bts, _) <- maybeToList $ rho `Map.lookup` amap
+                               , (Backtrace r@(Rule ((_,as),_)) wr rhos) <- bts
+                               , children <- sequence $ uncurry (parseTrees' tops chart) <$> zip rhos as
+                               , let (ds, ws) = unzip children
+                                     weight = wr <.> foldl' (<.>) one ws
+                               ]
 
 
 -- | Deduction rule consists of a function
@@ -96,8 +105,9 @@ chart :: (Eq it, Ord wt, Semiring wt, Hashable it)
       -> (ct -> it -> (ct, Bool)) -- ^ update container
       -> [ChartRule it wt ct]     -- ^ deduction rules
       -> Int                      -- ^ beam width
+      -> Int                      -- ^ maximum amount of chart entries per cell
       -> ct                       -- ^ final chart
-chart container update rules beam 
+chart container update rules beam tops
   = snd $ execState (chartIteration (rights rules) update) 
                     (Q.fromList beam (concat $ lefts rules), container)
 
