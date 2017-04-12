@@ -32,9 +32,6 @@
 -- if all non-terminal and terminal symbols in the composition function of
 -- the rule are replaced by the possible ranges in the word and concatenated,
 -- s.t. they have to fit.
---
---
---
 -----------------------------------------------------------------------------
 
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -44,18 +41,20 @@ module Vanda.Grammar.PMCFG.CYKParser
   , parse
   ) where
 
-import Data.Converging (Converging)
-import Data.Weight
-import Vanda.Grammar.PMCFG.Range
-import Vanda.Grammar.PMCFG
-import Vanda.Grammar.PMCFG.DeductiveSolver
-import qualified Vanda.Grammar.PMCFG.Chart as C
 
+import Data.Converging (Converging)
 import Data.Hashable (Hashable(hashWithSalt))
-import qualified Data.HashMap.Lazy  as Map
 import Data.Maybe (maybeToList)
+import Data.Range
 import Data.Semiring
 import Data.Tree (Tree)
+import Data.Weight
+import Vanda.Grammar.PMCFG
+import Vanda.Grammar.PMCFG.DeductiveSolver
+
+import qualified Data.HashMap.Lazy  as Map
+import qualified Vanda.Grammar.PMCFG.Chart as C
+
 
 
 -- | Active and passive items for cyk parser.
@@ -83,7 +82,7 @@ instance (Hashable nt, Hashable t) => Hashable (Item nt t wt) where
     salt `hashWithSalt` (Passive a rho _ _) = salt `hashWithSalt` a `hashWithSalt` rho
 
 
-instance (Show nt, Show t) => Show (Item nt t wt) where
+instance (Show nt) => Show (Item nt t wt) where
     show (Active (Rule ((a,as),_)) _ f _)
       = "[active] " ++ show a ++ " → " ++ prettyPrintInstantiatedFunction f ++ show as
     show (Passive a rv _ _)
@@ -115,7 +114,7 @@ weightedParse :: forall nt t wt. (Eq t, Hashable nt, Hashable t, Semiring wt, Or
 weightedParse (WPMCFG s rs) bw trees word
   = C.parseTrees trees s (singleton $ entire word)
   $ fst 
-  $ C.chart (C.empty, Map.empty) update deductiveRules bw trees
+  $ C.chartify (C.empty, Map.empty) update deductiveRules bw trees
   where
     ios = ioWeights s rs
     deductiveRules = initialPrediction word (filter ((`elem` s) . lhs) rs) ios 

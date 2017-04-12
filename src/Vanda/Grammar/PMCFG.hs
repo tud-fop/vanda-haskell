@@ -62,10 +62,10 @@ import Data.Hashable
 import Data.Interner (Interner, internList, intern, emptyInterner, internListPreserveOrder, internerToArray)
 import Data.List (intercalate)
 import Data.Maybe (listToMaybe, mapMaybe, maybeToList)
+import Data.Range (Range(Epsilon), safeConc, singletons)
 import Data.Semiring
 import Data.Tree
 import GHC.Generics (Generic)
-import Vanda.Grammar.PMCFG.Range (Range(Epsilon), safeConc, singletons)
 import Vanda.Hypergraph (Hyperedge(Hyperedge), EdgeList(EdgeList))
 import Vanda.Algorithms.InsideOutsideWeights (insideOutside')
 

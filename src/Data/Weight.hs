@@ -1,3 +1,20 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  LimitedQueue
+-- Copyright   :  (c) Thomas Ruprecht 2017
+-- License     :  Redistribution and use in source and binary forms, with
+--                or without modification, is ONLY permitted for teaching
+--                purposes at Technische Universität Dresden AND IN
+--                COORDINATION with the Chair of Foundations of Programming.
+--
+-- Maintainer  :  thomas.ruprecht@tu-dresden.de
+-- Stability   :  unknown
+-- Portability :  portable
+--
+-- Contains a wrapper of "Data.Semiring" used for an efficient update of
+-- weights and instances for "Data.Semiring" and 'Weight'.
+-----------------------------------------------------------------------------
+
 module Data.Weight
   ( -- * weight class
     Weight(..)

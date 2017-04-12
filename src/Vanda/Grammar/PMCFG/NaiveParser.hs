@@ -31,18 +31,18 @@ module Vanda.Grammar.PMCFG.NaiveParser
   ) where
 
 import Data.Converging (Converging)
-import Vanda.Grammar.PMCFG.DeductiveSolver
-import Data.Weight
-import Vanda.Grammar.PMCFG.Range
-import Vanda.Grammar.PMCFG
-import qualified Vanda.Grammar.PMCFG.Chart as C
-
 import Data.Hashable (Hashable(hashWithSalt))
+import Data.Maybe (maybeToList)
+import Data.Range
+import Data.Semiring
+import Data.Tree (Tree)
+import Data.Weight
+import Vanda.Grammar.PMCFG
+import Vanda.Grammar.PMCFG.DeductiveSolver
+
+import qualified Vanda.Grammar.PMCFG.Chart as C
 import qualified Data.HashMap.Lazy as Map
 
-import Data.Tree (Tree)
-import Data.Maybe (maybeToList)
-import Data.Semiring
 
 -- | Passive and active items.
 data Item nt t wt 
@@ -71,7 +71,7 @@ instance (Hashable nt, Hashable t) => Hashable (Item nt t wt) where
 
 
 instance (Show nt, Show t) => Show (Item nt t wt) where
-  show (Active r _ as i _ fs _) 
+  show (Active r _ as _ _ fs _) 
     = "[active] " ++ show r ++ "\n"
     ++ "nonterminals left: " ++ show as ++ "\n"
     ++ "current status: " ++ prettyPrintInstantiatedFunction fs
@@ -103,7 +103,7 @@ weightedParse :: forall nt t wt. (Hashable nt, Hashable t, Eq t, Ord wt, Weight 
 weightedParse (WPMCFG s rs) bw trees word 
   = C.parseTrees trees s (singleton $ entire word)
   $ fst 
-  $ C.chart (C.empty, Map.empty) update rules bw trees
+  $ C.chartify (C.empty, Map.empty) update rules bw trees
     where
       rules = initialPrediction word (filter ((`elem` s) . lhs) rs) ios
               : predictionRule word rs ios

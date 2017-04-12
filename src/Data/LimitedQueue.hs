@@ -1,13 +1,35 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  LimitedQueue
+-- Copyright   :  (c) Thomas Ruprecht 2017
+-- License     :  Redistribution and use in source and binary forms, with
+--                or without modification, is ONLY permitted for teaching
+--                purposes at Technische Universität Dresden AND IN
+--                COORDINATION with the Chair of Foundations of Programming.
+--
+-- Maintainer  :  thomas.ruprecht@tu-dresden.de
+-- Stability   :  unknown
+-- Portability :  portable
+--
+-- This module implements a search queue that:
+--
+-- * is limited to a fixed number of elements that it contains at once
+-- * will never contain an element twice; even if it was dequeued, the item
+-- will just be neglected disregarding of its weight
+--
+-- It is implemented using the 'findMin' and 'findMax' API of "Data.Map.Strict"
+-- and ordered minimum first.
+-----------------------------------------------------------------------------
+
 module Data.LimitedQueue 
-    ( Queue
-    -- * constructor
+    ( -- * type and constructors
+      Queue
     , empty
     , fromList
-    -- * i/o
+      -- * operations
     , enq
     , enqList
     , deq
-    -- * query
     , null
     ) where
 
@@ -20,13 +42,18 @@ import Prelude hiding(null)
 data Queue v p = LPQ (M.Map p [v]) (S.HashSet v) p Int Int
 
 instance (Show v, Show p) => Show (Queue v p) where
-  show (LPQ _ known _ 0 limit) = "Empty queue (0/" ++ show limit ++ ")\n already visited: " ++ (unlines $ map show $ S.toList known)
-  show (LPQ q known least current limit) = "Queue (" ++ show current ++ "/" ++ show limit ++ "//" ++ show least ++ ") with elements: \n" 
-                                            ++ show q ++ "\n already visited: " ++ (unlines $ map show $ S.toList known)
+  show (LPQ _ known _ 0 limit) 
+    = "Empty queue (0 of " ++ show limit ++ " elements)\n" 
+    ++ "already visited: " ++ unlines (map show $ S.toList known)
+  show (LPQ q known least current limit) 
+    = "Queue (" ++ show current ++ " of " ++ show limit ++ " elements)\n"
+    ++ "currently contains " ++ show q ++ "\n"
+    ++ "already visited: " ++ unlines (map show $ S.toList known)
 
 
--- | Safe constructor, initializes an empty priority queue that is limited to a certain bound.
-empty :: Int -> Queue v p
+-- | Initializes an empty priority queue that is limited to a certain bound.
+empty :: Int        -- ^ maximum elements simultanously contained in queue
+      -> Queue v p  -- ^ empty queue
 empty = LPQ M.empty S.empty undefined 0
 
 
@@ -52,9 +79,12 @@ addSingle m key val = M.insertWith prepend key [val] m
     prepend _ _ = error "prepend: non-singleton list used"
 
 
--- | Enqueue a (value, priority) tuple. 
+-- | Enqueue a /(value, priority)/ tuple. 
 -- If the queue reached its size limit in a previous step, the element with least priority is thrown away. 
-enq :: (Ord p, Hashable v, Eq v) => Queue v p -> (v, p) -> Queue v p
+enq :: (Ord p, Hashable v, Eq v)
+    => Queue v p
+    -> (v, p) 
+    -> Queue v p
 enq (LPQ q known _ 0 lmt) (value, prio)
   | not $ value `S.member` known = LPQ (M.singleton prio [value]) (S.insert value known) prio 1 lmt
   | otherwise = LPQ q known undefined 0 lmt
@@ -65,8 +95,8 @@ enq (LPQ q known least current limit) (value, prio)
                                    (Nothing, q') -> LPQ (addSingle q' prio value) known' prio limit limit
   | otherwise = LPQ q known least current limit
     where 
-      unknown = {-# SCC known_member #-} not $ value `S.member` known
-      known' = {-# SCC known_insert #-} S.insert value known
+      unknown = not $ value `S.member` known
+      known' = S.insert value known
 
 
 -- | Enqueue a list of elements from left to right.

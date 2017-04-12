@@ -67,6 +67,7 @@ library
     , Data.MultiMap
     , Data.NTT
     , Data.Queue
+    , Data.Range
     , Data.RevMap
     , Data.Weight
     , Data.WTA
@@ -127,12 +128,10 @@ library
     , Vanda.Grammar.PMCFG.ActiveParser
     , Vanda.Grammar.PMCFG.Chart
     , Vanda.Grammar.PMCFG.CYKParser
-    , Vanda.Grammar.PMCFG.DeductiveSolver
     , Vanda.Grammar.PMCFG.Functions
     , Vanda.Grammar.PMCFG.Main
     , Vanda.Grammar.PMCFG.NaiveParser
     , Vanda.Grammar.PMCFG.Parse
-    , Vanda.Grammar.PMCFG.Range
     , Vanda.Grammar.XRS.Binarize
     , Vanda.Grammar.XRS.Functions
     , Vanda.Grammar.XRS.GHKM
