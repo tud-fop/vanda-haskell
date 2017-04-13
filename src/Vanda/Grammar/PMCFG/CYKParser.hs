@@ -121,7 +121,7 @@ weightedParse (WPMCFG s rs) bw trees word
       rmap = instantiableRules word rs
 
       nset = Set.fromList $ filter (not . (`elem` s)) $ Map.keys rmap
-      iow = ioWeights s $ MMap.elems rmap
+      iow = ioWeights s rmap
 
       deductiveRules = initialPrediction word (s >>= (`MMap.lookup` rmap)) iow
                         : prediction word rmap iow

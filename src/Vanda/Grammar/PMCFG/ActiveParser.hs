@@ -139,7 +139,7 @@ weightedParse (WPMCFG s grs) bw tops w
       rmap = instantiableRules w grs
 
       nset = Set.fromList $ filter (not . (`elem` s)) $ Map.keys rmap
-      iow = ioWeights s $ MMap.elems rmap
+      iow = ioWeights s rmap
       
       rules = initialPrediction w (s >>= (`MMap.lookup` rmap)) iow
               : predictionRule w rmap iow
@@ -149,7 +149,7 @@ weightedParse (WPMCFG s grs) bw tops w
       update (p, a, n) (Passive nta rho bt iw)
         = case C.insert p nta rho bt iw of
                (p', isnew) -> ((p', a, n), isnew)
-      update (p, a, n) item@(Active (Rule ((nta, as),_)) _ _ ((Var i _:_):_) _ _)
+      update (p, a, n) item@(Active (Rule ((_, as),_)) _ _ ((Var i _:_):_) _ _)
         = ((p, MMap.insert (as !! i) item a, (as !! i) `Set.delete` n), True)
       update (p, a, n) _ = ((p, a, n), True)
 
@@ -219,6 +219,7 @@ convert (Active r w rs [] completions inside, heuristic)
 convert i@(Active _ _ rs _ _ _, _)
   | isNonOverlapping rs = Just i
   | otherwise = Nothing
+convert _ = Nothing
 
 completeKnownTokens :: (Eq t)
                     => [t] 

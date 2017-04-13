@@ -354,18 +354,24 @@ exampleWPMCFG = fromWeightedRules [0] $ zip exampleRules exampleWeights
 
 -- | Calculates inside and outside weights for a given grammar with semiring weights.
 ioWeights :: (Converging wt, Semiring wt, Hashable nt, Ord nt)
-          => [nt] -> [(Rule nt t, wt)] -> Map.HashMap nt (wt, wt)
+          => [nt]
+          -> MMap.MultiMap nt (Rule nt t, wt)
+          -> Map.HashMap nt (wt, wt)
 ioWeights ss rs
   = toHashMap 
-  $ insideOutside' converged (M.fromList esw M.!) Nothing (EdgeList vs (map fst esw))
+  $ insideOutside' converged 
+                   (M.fromList esw M.!)
+                   Nothing
+                   (EdgeList (S.fromList $ map Just $ MMap.keys rs) (map fst esw))
     where
-      vs = S.fromList $ Nothing : map (Just . lhs) rs
       esw = zipWith (\ (f, w) i -> (f i, w)) 
-                    (targets ++ map ruleToHyperEdge rs) 
+                    (targets ++ hyperedges) 
                     [(1::Int)..]
 
-      ruleToHyperEdge (Rule ((a, as), _), w) 
-        = (Hyperedge (Just a) (V.fromList $ map Just as) (Just a, as), w)
+      hyperedges = [ (Hyperedge (Just a) (V.fromList $ map Just as) (Just a, as), weight)
+                   | a <- MMap.keys rs
+                   , (Rule ((_, as), _), weight) <- MMap.lookup a rs
+                   ]
       
       targets = [ (Hyperedge Nothing (V.singleton $ Just s) (Nothing, [s]), one)
                 | s <- ss

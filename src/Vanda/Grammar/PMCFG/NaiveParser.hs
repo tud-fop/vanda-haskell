@@ -116,7 +116,7 @@ weightedParse (WPMCFG s rs) bw trees word
       rmap = instantiableRules word rs
 
       nset = Set.fromList $ filter (not . (`elem` s)) $ Map.keys rmap
-      iow = ioWeights s $ MMap.elems rmap
+      iow = ioWeights s rmap
 
       update :: Container nt t wt
             -> Item nt t wt 
