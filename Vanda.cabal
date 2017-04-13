@@ -62,11 +62,8 @@ library
   exposed-modules:
       CodingConventions
     , Control.Error
-<<<<<<< HEAD:Vanda.cabal
     , Data.Converging
-=======
     , Control.Monad.Extra
->>>>>>> 718e201fc07f74049918c0cf4139ed901c2edb36:vanda.cabal
     , Data.Interner
     , Data.LimitedQueue
     , Data.List.Extra
@@ -134,7 +131,6 @@ library
     , Vanda.Grammar.PCFG.IO
     , Vanda.Grammar.PCFG.PCFG
     , Vanda.Grammar.PMCFG
-<<<<<<< HEAD:Vanda.cabal
     , Vanda.Grammar.PMCFG.ActiveParser
     , Vanda.Grammar.PMCFG.Chart
     , Vanda.Grammar.PMCFG.CYKParser
@@ -142,15 +138,11 @@ library
     , Vanda.Grammar.PMCFG.Main
     , Vanda.Grammar.PMCFG.NaiveParser
     , Vanda.Grammar.PMCFG.Parse
-=======
-    , Vanda.Grammar.PMCFG.Functions
-    , Vanda.Grammar.PMCFG.Parse
     , Vanda.Grammar.XFSA
     , Vanda.Grammar.XFSA.Closure
     , Vanda.Grammar.XFSA.Internal
     , Vanda.Grammar.XFSA.Language
     , Vanda.Grammar.XFSA.XFSA
->>>>>>> 718e201fc07f74049918c0cf4139ed901c2edb36:vanda.cabal
     , Vanda.Grammar.XRS.Binarize
     , Vanda.Grammar.XRS.Functions
     , Vanda.Grammar.XRS.GHKM
