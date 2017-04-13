@@ -26,8 +26,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Vanda.Grammar.PMCFG.NaiveParser
-  ( weightedParse
-  , parse
+  ( parse
   ) where
 
 import Data.Converging (Converging)
@@ -82,28 +81,14 @@ instance (Show nt, Show t) => Show (Item nt t wt) where
     = "[passive] " ++ show a ++ " → " ++ show rv 
 
 
--- | Top-level function to parse a word using a PMCFG.
-parse :: (Hashable nt, Hashable t, Eq t, Ord nt) 
-      => PMCFG nt t         -- ^ unweighted grammar
-      -> Int                -- ^ beam width
-      -> Int                -- ^ max number of parse trees
-      -> [t]                -- ^ terminal word
-      -> [Tree (Rule nt t)] -- ^ derivation tree of applied rules
-parse (PMCFG s rs)
-  = weightedParse 
-  $ WPMCFG s 
-  $ zip rs 
-  $ repeat (cost 1 :: Cost Int)
-
-
 -- | Top-level function to parse a word using a weighted PMCFG.
-weightedParse :: forall nt t wt. (Hashable nt, Hashable t, Eq t, Ord wt, Weight wt, Ord nt, Converging wt) 
+parse :: forall nt t wt. (Hashable nt, Hashable t, Eq t, Ord wt, Weight wt, Ord nt, Converging wt) 
               => WPMCFG nt wt t     -- ^ weighted grammar
               -> Int                -- ^ beam width
               -> Int                -- ^ max number of parse trees
               -> [t]                -- ^ terminal word
               -> [Tree (Rule nt t)] -- ^ derivation tree of applied rules
-weightedParse (WPMCFG s rs) bw trees word 
+parse (WPMCFG s rs) bw trees word 
   = C.parseTrees trees s (singleton $ entire word)
   $ (\ (e, _, _) -> e)
   $ C.chartify (C.empty, MMap.empty, nset) update rules bw trees

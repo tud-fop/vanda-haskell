@@ -9,6 +9,7 @@ import Data.Weight
 import Data.Maybe (mapMaybe)
 import Data.Hashable (hash)
 import Numeric.Log (Log)
+import Control.Arrow (second)
 
 testcomposition :: Function Char
 testcomposition = [ [T 'a', Var 1 1, T 'a']
@@ -33,23 +34,22 @@ testderivation2 = node testrule []
 
 exampleWPMCFG' :: WPMCFG Int (Probabilistic (Log Double)) Char
 exampleWPMCFG' = case exampleWPMCFG of
-                      (WPMCFG s rs) -> WPMCFG s $ map (\ (r, w) -> (r, probabilistic w)) rs
+                      (WPMCFG s rs) -> WPMCFG s $ map (second probabilistic) rs
 
 exampleWPMCFG'' :: (WPMCFG Int (Probabilistic (Log Double)) Int, Interner Int, Interner Char)
 exampleWPMCFG'' = integerize exampleWPMCFG'
 
 tests :: Test
-tests = TestList    [ TestCase $ assertEqual "Cannot reproduce exmaple derivation" [exampleDerivation] $ parse examplePMCFG 100 1 "aabccd"
-                    , TestCase $ assertEqual "Cannot reproduce parsed string in yield" ["aabbccdd"] $ mapMaybe yield $ parse examplePMCFG 100 1 "aabbccdd"
-                    , TestCase $ assertEqual "Cannot reproduce weighted example derivation" [exampleDerivation] $ weightedParse exampleWPMCFG' 100 1 "aabccd"
+tests = TestList    [ TestCase $ assertEqual "Cannot reproduce exmaple derivation" [exampleDerivation] $ parse exampleWPMCFG' 100 1 "aabccd"
+                    , TestCase $ assertEqual "Cannot reproduce parsed string in yield" ["aabbccdd"] $ mapMaybe yield $ parse exampleWPMCFG' 100 1 "aabbccdd"
                     , TestCase $ assertEqual "Cannot reproduce weighted example derivation (integerized)" [exampleDerivation] 
                         $ map (deintegerize (nti, ti)) 
-                        $ weightedParse ig 100 1
+                        $ parse ig 100 1
                         $ snd 
                         $ internListPreserveOrder ti "aabccd"
                     , TestCase $ assertEqual "Cannot reproduce parsed string in yield (weighted)" ["aabbccdd"] 
                                 $ mapMaybe yield 
-                                $ weightedParse exampleWPMCFG' 100 1 "aabbccdd"
+                                $ parse exampleWPMCFG' 100 1 "aabbccdd"
                     , TestCase $ assertEqual "instatntiate Fails (2)" 16 $ length $ instantiate testword testcomposition
                     , TestCase $ assertBool "Derivation Equality" $ testderivation == testderivation
                     , TestCase $ assertBool "Derivation Equality (2)" $ not $ testderivation == testderivation2

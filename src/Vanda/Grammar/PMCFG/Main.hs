@@ -33,12 +33,13 @@ import Vanda.Corpus.Negra.Text (parseNegra)
 import Vanda.Grammar.PMCFG.Functions (extractFromNegra, extractFromNegraAndBinarize)
 import Vanda.Grammar.XRS.LCFRS.Binarize (binarizeNaively, binarizeByAdjacency, binarizeHybrid)
 
-import Vanda.Grammar.PMCFG (WPMCFG (..), PMCFG (..), prettyPrintWPMCFG, integerize, deintegerize)
+import Vanda.Grammar.PMCFG (WPMCFG (..), prettyPrintWPMCFG, integerize, deintegerize)
 --import qualified Vanda.Grammar.PMCFG.Parse as UnweightedAutomaton
 import qualified Vanda.Grammar.PMCFG.CYKParser as CYK
 import qualified Vanda.Grammar.PMCFG.NaiveParser as Naive
 import qualified Vanda.Grammar.PMCFG.ActiveParser as Active
-import Data.Weight (probabilistic)
+import Data.Weight (probabilistic, cost)
+import Control.Arrow
 
 
 data Args
@@ -141,16 +142,16 @@ mainArgs (Parse algorithm grFile uw bw trees)
       let (WPMCFG inits wrs, nti, ti) = integerize wpmcfg
       _ <- evaluate wrs        
       let parse = if uw
-                  then let urs = PMCFG inits (map fst wrs) in
+                  then let urs = WPMCFG inits $ map (second $ const $ cost (1 :: Int)) wrs in
                            case algorithm of CYK -> CYK.parse urs
                                              NaiveActive -> Naive.parse urs
                                              Active -> Active.parse urs
                                              UnweightedAutomaton -> error "not implemented"
                                             --UnweightedAutomaton -> UnweightedAutomaton.parse urs
-                  else let wrs' = WPMCFG inits $ map (\ (r, w) -> (r, probabilistic w)) wrs in
-                           case algorithm of CYK -> CYK.weightedParse wrs'
-                                             NaiveActive -> Naive.weightedParse wrs'
-                                             Active -> Active.weightedParse wrs'
+                  else let wrs' = WPMCFG inits $ map (second probabilistic) wrs in
+                           case algorithm of CYK -> CYK.parse wrs'
+                                             NaiveActive -> Naive.parse wrs'
+                                             Active -> Active.parse wrs'
                                              UnweightedAutomaton -> error "not implemented"
       corpus <- TIO.getContents
       mapM_ (putStrLn . drawTree . fmap show . head . map (deintegerize (nti, ti)) . parse bw trees . snd . internListPreserveOrder ti . map T.unpack . T.words) $ T.lines corpus

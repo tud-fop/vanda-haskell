@@ -51,7 +51,6 @@
 
 module Vanda.Grammar.PMCFG.ActiveParser
     ( parse
-    , weightedParse
     ) where
 
 import Data.Converging (Converging)
@@ -111,27 +110,13 @@ type Container nt t wt = ( C.Chart nt t wt
 
 -- | Top-level function to parse a word using a PMCFG.
 -- Uses weightedParse with additive costs for each rule, s.t. the number of rule applications is minimized.
-parse :: (Hashable nt, Hashable t, Eq t, Ord nt) 
-  => PMCFG nt t 
-  -> Int
-  -> Int
-  -> [t] 
-  -> [Tree (Rule nt t)]
-parse (PMCFG s rs) 
-  = weightedParse 
-  $ WPMCFG s 
-  $ zip rs 
-  $ repeat (cost 1 :: Cost Int)
-
-
--- | Top-level function to parse a word using a weighted PMCFG.
-weightedParse :: forall nt t wt.(Hashable nt, Hashable t, Eq t, Ord wt, Weight wt, Ord nt, Converging wt) 
-              => WPMCFG nt wt t 
-              -> Int
-              -> Int
-              -> [t]
-              -> [Tree (Rule nt t)]
-weightedParse (WPMCFG s grs) bw tops w
+parse :: forall nt t wt.(Hashable nt, Hashable t, Eq t, Ord wt, Weight wt, Ord nt, Converging wt) 
+      => WPMCFG nt wt t 
+      -> Int
+      -> Int
+      -> [t]
+      -> [Tree (Rule nt t)]
+parse (WPMCFG s grs) bw tops w
   = C.parseTrees tops s (singleton $ entire w)
   $ (\ (e, _, _) -> e)
   $ C.chartify (C.empty, MMap.empty, nset) update rules bw tops

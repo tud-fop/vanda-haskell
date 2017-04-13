@@ -1,6 +1,6 @@
 -----------------------------------------------------------------------------
 -- |
--- Module      :  Data.MultiMap
+-- Module      :  Data.MultiHashMap
 -- Copyright   :  (c) Technische Universität Dresden 2017
 -- License     :  Redistribution and use in source and binary forms, with
 --                or without modification, is ONLY permitted for teaching

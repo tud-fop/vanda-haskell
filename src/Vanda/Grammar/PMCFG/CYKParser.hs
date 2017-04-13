@@ -37,8 +37,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Vanda.Grammar.PMCFG.CYKParser 
-  ( weightedParse
-  , parse
+  ( parse
   ) where
 
 
@@ -48,7 +47,6 @@ import Data.Maybe (maybeToList, catMaybes)
 import Data.Range
 import Data.Semiring
 import Data.Tree (Tree)
-import Data.Weight
 import Vanda.Grammar.PMCFG
 
 import qualified Data.MultiHashMap          as MMap
@@ -94,26 +92,13 @@ instance (Show nt) => Show (Item nt t wt) where
 -- | Top-level function to parse a word using a grammar.
 -- The grammar rules are implicitly annotated with additive weigts to encurage
 -- derivations with least rule applications.
-parse :: (Eq t, Hashable nt, Hashable t, Ord nt)
-      => PMCFG nt t                               -- ^ the grammar
-      -> Int                                      -- ^ approximation parameter 1 &
-      -> Int                                      -- ^ approximation parameter 2
-      -> [t]                                      -- ^ the word
-      -> [Tree (Rule nt t)]                       -- ^ list of derivation trees 
-parse (PMCFG s rules) = weightedParse 
-                      $ WPMCFG s 
-                      $ zip rules 
-                      $ repeat (cost 1 :: Cost Int)
-
-
--- | Top-level function to parse a word using a weighted grammar.
-weightedParse :: forall nt t wt. (Eq t, Hashable nt, Hashable t, Semiring wt, Ord wt, Ord nt, Converging wt)
+parse :: forall nt t wt. (Eq t, Hashable nt, Hashable t, Semiring wt, Ord wt, Ord nt, Converging wt)
               => WPMCFG nt wt t             -- ^ weighted grammar
               -> Int                        -- ^ beam width
               -> Int                        -- ^ maximum number of returned trees
               -> [t]                        -- ^ word
               -> [Tree (Rule nt t)]         -- ^ parse trees
-weightedParse (WPMCFG s rs) bw trees word
+parse (WPMCFG s rs) bw trees word
   = C.parseTrees trees s (singleton $ entire word)
   $ (\ (e, _, _) -> e)
   $ C.chartify (C.empty, MMap.empty, nset) update deductiveRules bw trees

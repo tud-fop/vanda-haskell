@@ -7,10 +7,11 @@ import Vanda.Grammar.PMCFG.ActiveParser
 import Data.Weight
 import Data.Maybe (mapMaybe)
 import Numeric.Log (Log)
+import Control.Arrow (second)
 
 exampleWPMCFG' :: WPMCFG Int (Probabilistic (Log Double)) Char
 exampleWPMCFG' = case exampleWPMCFG of
-                      (WPMCFG s rs) -> WPMCFG s $ map (\ (r, w) -> (r, probabilistic w)) rs
+                      (WPMCFG s rs) -> WPMCFG s $ map (second probabilistic) rs
 
 
 tests :: Test
@@ -19,16 +20,11 @@ tests = TestList  [ TestCase
                       "Cannot reproduce exmaple derivation" 
                       [exampleDerivation] 
                     $ parse 
-                        examplePMCFG 100 1 "aabccd"
+                        exampleWPMCFG' 100 1 "aabccd"
                   , TestCase 
                     $ assertEqual 
                       "Cannot reproduce parsed string in yield"
                       ["aabbccdd"] 
                     $ mapMaybe yield 
-                      $ parse examplePMCFG 100 1 "aabbccdd"
-                  , TestCase 
-                    $ assertEqual 
-                      "Cannot reproduce weighted example derivation" 
-                      [exampleDerivation] 
-                    $ weightedParse exampleWPMCFG' 100 1 "aabccd"
+                      $ parse exampleWPMCFG' 100 1 "aabbccdd"
                   ]
