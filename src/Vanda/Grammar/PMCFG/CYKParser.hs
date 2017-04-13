@@ -44,15 +44,17 @@ module Vanda.Grammar.PMCFG.CYKParser
 
 import Data.Converging (Converging)
 import Data.Hashable (Hashable(hashWithSalt))
-import Data.Maybe (maybeToList)
+import Data.Maybe (maybeToList, catMaybes)
 import Data.Range
 import Data.Semiring
 import Data.Tree (Tree)
 import Data.Weight
 import Vanda.Grammar.PMCFG
 
-import qualified Data.HashMap.Lazy  as Map
-import qualified Vanda.Grammar.PMCFG.Chart as C
+import qualified Data.MultiHashMap          as MMap
+import qualified Data.HashMap.Lazy          as Map
+import qualified Vanda.Grammar.PMCFG.Chart  as C
+import qualified Data.HashSet               as Set
 
 
 
@@ -65,7 +67,8 @@ data Item nt t wt = Active (Rule nt t) wt InstantiatedFunction wt
 -- active items that maps each rhs nonterminal of a rule to its corresponding
 -- passive item.
 type Container nt t wt = ( C.Chart nt t wt
-                         , Map.HashMap nt [Item nt t wt]
+                         , MMap.MultiMap nt (Item nt t wt)
+                         , Set.HashSet nt
                          )
 
 
@@ -112,22 +115,29 @@ weightedParse :: forall nt t wt. (Eq t, Hashable nt, Hashable t, Semiring wt, Or
               -> [Tree (Rule nt t)]         -- ^ parse trees
 weightedParse (WPMCFG s rs) bw trees word
   = C.parseTrees trees s (singleton $ entire word)
-  $ fst 
-  $ C.chartify (C.empty, Map.empty) update deductiveRules bw trees
-  where
-    ios = ioWeights s rs
-    deductiveRules = initialPrediction word (filter ((`elem` s) . lhs) rs) ios 
-                      : prediction word rs ios
-                      : [completion ios]
+  $ (\ (e, _, _) -> e)
+  $ C.chartify (C.empty, MMap.empty, nset) update deductiveRules bw trees
+    where
+      rmap = instantiableRules word rs
 
-    update :: Container nt t wt
-           -> Item nt t wt
-           -> (Container nt t wt, Bool)
-    update (passives, actives) (Passive a rho bt iw) 
-      = case C.insert passives a rho bt iw of
-             (passives', isnew) -> ((passives', actives), isnew)
-    update (passives, actives) item@(Active (Rule ((_, as), _)) _ _ _)
-      = ((passives, C.updateGroups as item actives), True)
+      nset = Set.fromList $ filter (not . (`elem` s)) $ Map.keys rmap
+      iow = ioWeights s $ MMap.elems rmap
+
+      deductiveRules = initialPrediction word (s >>= (`MMap.lookup` rmap)) iow
+                        : prediction word rmap iow
+                        : [completion iow]
+
+      update :: Container nt t wt
+            -> Item nt t wt
+            -> (Container nt t wt, Bool)
+      update (passives, actives, ns) (Passive a rho bt iw) 
+        = case C.insert passives a rho bt iw of
+              (passives', isnew) -> ((passives', actives, ns), isnew)
+      update (passives, actives, ns) item@(Active (Rule ((_, as), _)) _ _ _)
+        = (( passives
+           , foldl (flip $ uncurry MMap.insert) actives $ zip as $ repeat item
+           , foldl (flip Set.delete) ns as
+           ), True )
 
 
 -- | Prediction rule for rules of initial nonterminals
@@ -137,32 +147,40 @@ initialPrediction :: forall nt t wt. (Eq nt, Eq t, Hashable nt, Semiring wt)
                   -> Map.HashMap nt (wt, wt)
                   -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
 initialPrediction word srules ios 
-  = Left  [ (Active r w fw inside, inside)
-          | (r@(Rule ((_, as), f)), w) <- srules
-          , fw <- instantiate word f
-          , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
-          ]
+  = Left 
+  $ catMaybes [ implicitConversion (Active r w fw inside, inside)
+              | (r@(Rule ((_, as), f)), w) <- srules
+              , fw <- instantiate word f
+              , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
+              ]
 
 
 -- | Prediction rule of the cyk parser. Initializes a passive item
 -- for each rhs nonterminal of a rule that needs to be applied.
 prediction :: forall nt t wt. (Eq nt, Eq t, Hashable nt, Semiring wt) 
            => [t]
-           -> [(Rule nt t, wt)]
+           -> MMap.MultiMap nt (Rule nt t, wt)
            -> Map.HashMap nt (wt, wt)
            -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
 prediction word rs ios = Right app
   where
     app (Active (Rule ((_, as), _)) _ _ _) _
-      = [ (Active r' w' fw inside, inside <.> outside)
-        | (r'@(Rule ((a', as'), f')), w') <- rs
-        , a' `elem` as
+      = catMaybes 
+        [ implicitConversion (Active r' w' fw inside, inside <.> outside)
+        | (r'@(Rule ((a', as'), f')), w') <- concatMap (`MMap.lookup` rs) as
         , fw <- instantiate word f'
         , let inside = w' <.> foldl (<.>) one (map (fst . (ios Map.!)) as')
               outside = snd $ ios Map.! a'
         ]
     app _ _ = []
 
+
+implicitConversion :: (Item nt t wt, wt) -> Maybe (Item nt t wt, wt)
+implicitConversion (Active r@(Rule ((a, []), _)) wr fw inside, weight)
+  = mapM toRange fw
+  >>= fromList
+  >>= (\ rho -> Just (Passive a rho (C.Backtrace r wr []) inside, weight))
+implicitConversion i = Just i
 
 -- | Completion rule of the cyk parser. Applies instantiated function
 -- on a sequence of 'Rangevector's to yield a range vector.
@@ -172,15 +190,18 @@ completion :: forall nt t wt. (Eq nt, Eq t, Hashable nt, Semiring wt)
            -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
 completion ios = Right app
   where
-    app item@(Active (Rule ((_, as), _)) _ _ _) (ps, _) 
+    app item@(Active (Rule ((_, as), _)) _ _ _) (ps, _, _) 
       = [ consequence
         | pas <- mapM (C.lookupWith Passive ps) as
         , consequence <- consequences (item:pas)
         ]
-    app item@(Passive a _ _ _) (ps, acts) 
+    app item@(Passive a _ _ _) (ps, acts, _) 
       = [ consequence
-        | act@(Active (Rule ((_, as), _)) _ _ _ ) <- Map.lookupDefault [] a acts
-        , pas <- filter (elem item) $ mapM (\ nta -> if nta == a then item : C.lookupWith Passive ps nta else C.lookupWith Passive ps nta) as
+        | act@(Active (Rule ((_, as), _)) _ _ _ ) <- MMap.lookup a acts
+        , pas <- filter (elem item) 
+                  $ mapM (\ nta -> if nta == a 
+                                   then item : C.lookupWith Passive ps nta 
+                                   else C.lookupWith Passive ps nta) as
         , consequence <- consequences (act:pas)
         ]
 

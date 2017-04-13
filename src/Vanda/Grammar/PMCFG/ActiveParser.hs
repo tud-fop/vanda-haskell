@@ -63,6 +63,7 @@ import Data.Tree (Tree)
 import Data.Weight
 import Vanda.Grammar.PMCFG
 
+import qualified Data.MultiHashMap  as MMap
 import qualified Data.IntMap        as IMap
 import qualified Data.HashMap.Lazy  as Map
 import qualified Data.HashSet       as Set
@@ -103,7 +104,7 @@ instance (Show nt, Show t) => Show (Item nt t wt) where
 
 -- | Container with two charts.
 type Container nt t wt = ( C.Chart nt t wt
-                         , Map.HashMap nt [Item nt t wt]
+                         , MMap.MultiMap nt (Item nt t wt)
                          , Set.HashSet nt
                          )
 
@@ -133,17 +134,15 @@ weightedParse :: forall nt t wt.(Hashable nt, Hashable t, Eq t, Ord wt, Weight w
 weightedParse (WPMCFG s grs) bw tops w
   = C.parseTrees tops s (singleton $ entire w)
   $ (\ (e, _, _) -> e)
-  $ C.chartify (C.empty, Map.empty, nset) update rules bw tops
+  $ C.chartify (C.empty, MMap.empty, nset) update rules bw tops
     where
-      rs = filter (not . null . instantiate w . (\ (Rule (_, f), _) -> f)) grs
-      rmap = foldr (uncurry C.updateGroup) Map.empty $ (\ r -> (lhs r, r)) <$> rs
+      rmap = instantiableRules w grs
 
-      nset = Set.fromList $ filter (not . (`elem` s)) $ map lhs rs
-      iow = ioWeights s rs
+      nset = Set.fromList $ filter (not . (`elem` s)) $ Map.keys rmap
+      iow = ioWeights s $ MMap.elems rmap
       
-      rules = initialPrediction w (s >>= (\k -> Map.lookupDefault [] k rmap)) iow
+      rules = initialPrediction w (s >>= (`MMap.lookup` rmap)) iow
               : predictionRule w rmap iow
-              -- : conversionRule iow
               : [completionRule w iow]
 
       update :: Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
@@ -151,7 +150,7 @@ weightedParse (WPMCFG s grs) bw tops w
         = case C.insert p nta rho bt iw of
                (p', isnew) -> ((p', a, n), isnew)
       update (p, a, n) item@(Active (Rule ((nta, as),_)) _ _ ((Var i _:_):_) _ _)
-        = ((p, C.updateGroup (as !! i) item a, (as !! i) `Set.delete` n), True)
+        = ((p, MMap.insert (as !! i) item a, (as !! i) `Set.delete` n), True)
       update (p, a, n) _ = ((p, a, n), True)
 
 
@@ -172,7 +171,7 @@ initialPrediction word srules ios
 
 predictionRule :: forall nt t wt. (Weight wt, Eq nt, Hashable nt, Eq t) 
                => [t]
-               -> Map.HashMap nt [(Rule nt t, wt)]
+               -> MMap.MultiMap nt (Rule nt t, wt)
                -> Map.HashMap nt (wt, wt)
                -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
 predictionRule word rs ios = Right app
@@ -185,7 +184,7 @@ predictionRule word rs ios = Right app
         [ convert (Active r' w rho'' f'' IMap.empty inside, inside <.> outside)
         | let a = as !! i
         , a `Set.member` inits
-        , (r'@(Rule ((a', as'), f')), w') <- Map.lookupDefault [] a rs
+        , (r'@(Rule ((a', as'), f')), w') <- MMap.lookup a rs
         , (rho'', f'') <- completeKnownTokens word IMap.empty [Epsilon] f'
         , let inside = w' <.> foldl (<.>) one (map (fst . (ios Map.!)) as')
               outside = snd $ ios Map.! a'
@@ -256,7 +255,7 @@ completionRule word ios = Right app
         ]
     app passive@(Passive a _ _ _) (_, acts, _)
       = [ consequence
-        | active <- Map.lookupDefault [] a acts
+        | active <- MMap.lookup a acts
         , consequence <- consequences active passive
         ]
     app _ _ = []

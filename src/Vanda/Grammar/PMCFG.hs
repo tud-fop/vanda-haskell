@@ -51,6 +51,7 @@ module Vanda.Grammar.PMCFG
   , exampleRules
   , exampleCompositions
   , exampleWeights
+  , instantiableRules
   ) where
 
 import Control.Arrow (first)
@@ -75,6 +76,7 @@ import qualified Data.HashMap.Lazy  as Map
 import qualified Data.Map           as M
 import qualified Data.Vector        as V
 import qualified Data.Set           as S
+import qualified Data.MultiHashMap  as MMap
 
 errorHere :: String -> String -> a
 errorHere = Control.Error.errorHere "Vanda.Grammar.PMCFG"
@@ -126,6 +128,9 @@ lhs (Rule ((a, _), _), _) = a
 
 antecedents :: (Rule nt t, wt) -> [nt]
 antecedents (Rule ((_, as),_), _) = as
+
+composition :: (Rule nt t, wt) -> Function t
+composition (Rule (_, f), _) = f
 
 instance (Hashable nt, Hashable t) => Hashable (Rule nt t) where
   salt `hashWithSalt` (Rule tup) = salt `hashWithSalt` tup
@@ -246,7 +251,6 @@ prettyPrintInstantiatedFunction fs = show $ map go fs
     go [] = ""
     go (T r : f) = "(" ++ show r ++ ")" ++ go f
     go (Var i j : f) = "x[" ++ show i ++ ":" ++ show j ++ "]" ++ go f
-
 
 
 -- | Substitutes all terminals and nonterminals with integers and saves substitutions.
@@ -371,3 +375,10 @@ ioWeights ss rs
                                  | (ma, io) <- M.toList m
                                  , a <- maybeToList ma
                                  ]
+
+
+instantiableRules :: (Eq t, Eq nt, Hashable nt)
+                  => [t] -> [(Rule nt t, wt)] -> MMap.MultiMap nt (Rule nt t, wt)
+instantiableRules w rs = let nrs = (\ r -> (lhs r, r))
+                                <$> filter (not . null . instantiate w . composition) rs
+                         in MMap.fromList nrs

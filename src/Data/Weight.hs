@@ -31,7 +31,6 @@ module Data.Weight
 import Numeric.Log (Log(Exp), Precise)
 import Data.Semiring
 import Data.Converging
-import Prelude hiding (read)
 
 
 -- | Instances of this class implement an inverse element
