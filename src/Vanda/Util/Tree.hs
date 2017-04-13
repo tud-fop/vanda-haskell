@@ -15,7 +15,9 @@
 --
 -----------------------------------------------------------------------------
 
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
 
 module Vanda.Util.Tree
 ( -- * Two-dimensional drawing
@@ -28,6 +30,8 @@ module Vanda.Util.Tree
   toTikZ
 , -- * Extraction
   flattenRanked
+, height
+, annotateWithHeights
 , subTrees
 , yield
 , filterTree
@@ -40,10 +44,13 @@ module Vanda.Util.Tree
 , mapWithSubtrees
 , mapAccumLLeafs
 , zipLeafsWith
+, -- * newtype with Ord instance
+  OrdTree(..)
 ) where
 
 
 import Control.Arrow (second)
+import Data.Coerce (coerce)
 import Data.List (mapAccumL)
 import Data.Tree
 
@@ -166,6 +173,29 @@ flattenRanked t = go t []                       -- idea from Data.Tree.flatten
   where go (Node x ts) xs = (x, length ts) : foldr go xs ts
 
 
+-- | The length of the longest path of a tree. @'Node' _ []@ has height @1@.
+height :: Tree a -> Int
+height (Node _ xs) = succ $ maximum $ 0 : map height xs
+
+
+{-
+-- | Replace the 'Node's’ 'rootLabel's of a 'Tree' by pairs of the 'height' of
+-- the subtree at that 'Node' and the subtree itself.
+annotateWithHeights :: Tree a -> Tree (Int, Tree a)
+annotateWithHeights t@(Node _ ts)
+  = Node (succ $ maximum $ 0 : map (fst . rootLabel) ts', t) ts'
+  where ts' = map annotateWithHeights ts
+-}
+
+
+-- | Replace the 'Node's’ 'rootLabel's of a 'Tree' by pairs of the 'height' of
+-- the subtree at that 'Node' and the original 'rootLabel'.
+annotateWithHeights :: Tree a -> Tree (Int, a)
+annotateWithHeights (Node x ts)
+  = Node (succ $ maximum $ 0 : map (fst . rootLabel) ts', x) ts'
+  where ts' = map annotateWithHeights ts
+
+
 -- | List of all subtrees in pre-order.
 subTrees :: Tree a -> Forest a
 subTrees t0 = go t0 []                          -- idea from Data.Tree.flatten
@@ -241,3 +271,17 @@ zipLeafsWith f = (snd .) . go
     go [] t = ([], t)
     go (x : xs) (Node y []) = (xs, Node (f x y) [])
     go      xs  (Node y ts) = second (Node y) (mapAccumL go xs ts)
+
+
+-- newtype with Ord instance -------------------------------------------------
+
+-- | A wrapper for 'Tree' to add an 'Ord' instance.
+newtype OrdTree a = OrdTree { unOrdTree :: Tree a }
+  deriving (Applicative, Eq, Foldable, Functor, Monad, Read, Show)
+
+
+instance forall a. Ord a => Ord (OrdTree a) where
+  compare (OrdTree (Node x1 ts1)) (OrdTree (Node x2 ts2))
+    = case compare x1 x2 of
+        EQ -> compare (coerce ts1 :: [OrdTree a]) (coerce ts2 :: [OrdTree a])
+        o  -> o

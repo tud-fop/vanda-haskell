@@ -29,6 +29,11 @@ module Data.List.Extra
 , groupWithRanges
 , toRanges
 
+-- * Searching lists
+
+-- ** Searching by equality
+, replaceOnce
+
 -- * Indexing lists
 -- | These functions treat a list @xs@ as a indexed collection,
 -- with indices ranging from 0 to @'length' xs - 1@.
@@ -105,6 +110,18 @@ toRanges (x : xs) = go x x xs
                         else (lo, hi) : go y y ys
 
 
+-- | @replaceOnce s t xs@ returns all lists where exactly one occurrence of
+-- @s@ in @xs@ is replaced by @t@. Hence, if @'notElem' s xs@, then @[]@ is
+-- returned.
+--
+-- For example: @replaceOnce 1 2 [2, 1, 9, 1] = [[2, 2, 9, 1], [2, 1, 9, 2]]@
+replaceOnce :: Eq a => a -> a -> [a] -> [[a]]
+replaceOnce s t = go
+  where go [] = []
+        go (x : xs) = (if x == s then ((t : xs) :) else id)
+                    $ map (x :) (go xs)
+
+
 -- | List index (subscript) operator, starting from 0.
 -- The result is 'Nothing' if the index is out of range.
 at :: [a] -> Int -> Maybe a
@@ -114,7 +131,7 @@ at xs n  -- based on Data.List.!!
   | otherwise = foldr (\x r k -> case k of
                                    0 -> Just x
                                    _ -> r (k-1)
-                      ) (\ _ -> Nothing) xs n
+                      ) (const Nothing) xs n
 
 
 -- | Merge two sorted lists to a single sorted list.

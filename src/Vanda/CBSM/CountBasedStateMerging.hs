@@ -19,6 +19,7 @@ module Vanda.CBSM.CountBasedStateMerging
 , CRTG(..)
 , MergeTree(..)
 , forestToGrammar
+, forestToGrammar'
 , Info(..)
 , BeamEntry(..)
 , initialInfo
@@ -43,18 +44,7 @@ module Vanda.CBSM.CountBasedStateMerging
 ) where
 
 
-import qualified Control.Error
-import           Data.List.Extra (isMultiton)
-import           Data.List.Shuffle (shuffle)
-import           Data.Maybe.Extra (nothingIf)
-import           Vanda.CBSM.Dovetailing
-import           Vanda.CBSM.Merge (Merge)
-import qualified Vanda.CBSM.Merge as Merge
-import qualified Vanda.Features as F
-import qualified Vanda.Hypergraph as H
-import           Vanda.Util.Histogram (histogram)
-import           Vanda.Util.PrettyPrint (columnize)
-import           Vanda.Util.Tree as T
+import Debug.Trace
 
 import           Control.Applicative ((<*>), (<$>))
 import           Control.Arrow ((***), first, second)
@@ -63,7 +53,8 @@ import           Control.Monad.State.Lazy
 import           Control.Parallel.Strategies
 import qualified Data.Array as A
 import qualified Data.Binary as B
-import           Data.List (foldl', groupBy, sortBy, transpose)
+import           Data.Coerce (coerce)
+import           Data.List (foldl', groupBy, intercalate, sortBy, transpose)
 import           Data.List.Extra (mergeListsBy, minimaBy)
 import           Data.Function (on)
 import qualified Data.Map.Lazy as ML
@@ -80,7 +71,17 @@ import qualified Data.Vector as V
 import           Numeric.Log (Log(..))
 import           System.Random (RandomGen, split)
 
-import Debug.Trace
+import qualified Control.Error
+import           Data.List.Extra (isMultiton)
+import           Data.List.Shuffle (shuffle)
+import           Data.Maybe.Extra (nothingIf)
+import           Vanda.CBSM.Dovetailing
+import           Vanda.CBSM.Merge (Merge)
+import qualified Vanda.CBSM.Merge as Merge
+import qualified Vanda.Features as F
+import qualified Vanda.Hypergraph as H
+import           Vanda.Util.PrettyPrint (columnize)
+import           Vanda.Util.Tree as T
 
 
 errorHere :: String -> String -> a
@@ -164,19 +165,19 @@ unionRuleSets (bw1 :-> fw1) (bw2 :-> fw2)
   = (S.union bw1 bw2 :-> S.union fw1 fw2)
 -}
 
-prettyPrintCRTG :: (Ord v, Show v, Show l) => CRTG v l -> String
-prettyPrintCRTG CRTG{..}
+prettyPrintCRTG :: Ord v => (v -> String) -> (l -> String) -> CRTG v l -> String
+prettyPrintCRTG showV showL CRTG{..}
   = unlines
       [ columnize ["  "]
         $ transpose
         $ (["state", "count"] :)
-        $ map (\ (v, c) -> [show v, show c])
+        $ map (\ (v, c) -> [showV v, show c])
         $ M.assocs cntState
       , columnize ["  "]
         $ transpose
         $ (["initial", "count", "probability", "log₂ probability"] :)
         $ map (\ (v, c) -> let s = sum (M.elems cntInit) in
-            [ show v
+            [ showV v
             , show c
             , show      (fromIntegral c / fromIntegral s :: Double)
             , show $ ln (fromIntegral c / fromIntegral s :: Log Double)
@@ -193,9 +194,9 @@ prettyPrintCRTG CRTG{..}
             , "log₂ probability"
             ] : )
         $ map (\ (Rule{..}, cR) -> let cTo = cntState M.! to in
-            [ show to
-            , show label
-            , show from
+            [ showV to
+            , showL label
+            , "[" ++ intercalate ", " (map showV from) ++ "]"
             , show cR
             , show      (fromIntegral cR / fromIntegral cTo :: Double)
             , show $ ln (fromIntegral cR / fromIntegral cTo :: Log Double)
@@ -246,30 +247,6 @@ unshowTree (L x        ) = x `Node` []
 unshowTree (x :<     ts) = x `Node` map unshowTree ts
 -}
 
-newtype OrdTree a = OrdTree (Tree a) deriving Eq
-
-
-unOrdTree :: OrdTree t -> Tree t
-unOrdTree (OrdTree t) = t
-
-
-instance Ord a => Ord (OrdTree a) where
-  compare (OrdTree (Node x1 ts1)) (OrdTree (Node x2 ts2))
-    = case compare x1 x2 of
-        EQ -> compare (map OrdTree ts1) (map OrdTree ts2)
-        o -> o
-
-
-instance Show a => Show (OrdTree a) where
-  showsPrec d (OrdTree (Node x [])) = showsPrec d x
-  showsPrec _ (OrdTree (Node x ts)) = showsPrec 11 x . showsPrec 11 (map OrdTree ts)
---   show (OrdTree (Node x [])) = stripQuotes (show x)
---   show (OrdTree (Node x ts)) = stripQuotes (show x) ++ show (map OrdTree ts)
-
-instance (B.Binary a) => B.Binary (OrdTree a) where
-  put (OrdTree x) = B.put x
-  get = OrdTree <$> B.get
-
 
 {-
 stripQuotes :: String -> String
@@ -310,15 +287,26 @@ forestToGrammar
   :: Ord l
   => [Tree l]
   -> (CRTG Int l, Map Int (Tree l))
-forestToGrammar corpus
+forestToGrammar = forestToGrammar' . map (\ t -> (t, 1))
+
+
+forestToGrammar'
+  :: Ord l
+  => [(Tree l, Int)]
+  -> (CRTG Int l, Map Int (Tree l))
+forestToGrammar' corpus
   = ( CRTG
         (M.mapKeys toRule cntTrees)
         (M.mapKeysMonotonic (ints M.!) cntTrees)
-        (M.mapKeysMonotonic (ints M.!) $ histogram $ map OrdTree corpus)
+        (M.mapKeysMonotonic (ints M.!) $ M.fromListWith (+) $ coerce corpus)
     , M.map unOrdTree $ M.fromAscList $ map swap $ M.toAscList $ ints
     )
   where
-    cntTrees = histogram $ map OrdTree $ concatMap T.subTrees corpus
+    cntTrees
+      = M.fromListWith (+)
+      $ concatMap
+          (\ (t, c) -> map (\ t' -> (OrdTree t', c)) $ T.subTrees t)
+          corpus
     ints = snd $ M.mapAccum (\ i _ -> (i + 1, i)) 0 $ cntTrees
     toRule t@(OrdTree (Node x ts))
       = Rule (ints M.! t) (map ((ints M.!) . OrdTree) ts) x

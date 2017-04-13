@@ -109,10 +109,10 @@ totalProbOfTree
   -> Double                         -- ^ sum of all possible derivation scores
 totalProbOfTree (hg, inits) t
   = sum
-  $ map scoreTree
+  $ map scoreDeriv
   $ recognizeTree (hg, inits) t
   where
-    scoreTree t
-      = (*(inits M.! (H.to $ rootLabel t)))
+    scoreDeriv d
+      = (*(inits M.! (H.to $ rootLabel d)))
       $ foldl' (\ acc he -> acc * H.ident he) 1
-      $ t
+      $ d
