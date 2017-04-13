@@ -5,7 +5,6 @@ import Test.HUnit
 import Data.Interner
 import Vanda.Grammar.PMCFG
 import Vanda.Grammar.PMCFG.CYKParser
-import Vanda.Grammar.PMCFG.DeductiveSolver
 import Data.Weight
 import Data.Maybe (mapMaybe)
 import Data.Hashable (hash)
@@ -51,13 +50,10 @@ tests = TestList    [ TestCase $ assertEqual "Cannot reproduce exmaple derivatio
                     , TestCase $ assertEqual "Cannot reproduce parsed string in yield (weighted)" ["aabbccdd"] 
                                 $ mapMaybe yield 
                                 $ weightedParse exampleWPMCFG' 100 1 "aabbccdd"
-                    --, TestCase $ assertBool "instantiate Fails" $ testinstance `elem` instantiate testword testcomposition
                     , TestCase $ assertEqual "instatntiate Fails (2)" 16 $ length $ instantiate testword testcomposition
                     , TestCase $ assertBool "Derivation Equality" $ testderivation == testderivation
                     , TestCase $ assertBool "Derivation Equality (2)" $ not $ testderivation == testderivation2
                     , TestCase $ assertBool "Derivation Order" $ testderivation > testderivation2
                     , TestCase $ assertBool "Derivation hash" $ not $ hash testderivation == hash testderivation2
-                    --, TestCase $ assertBool "overlapping test" $ isNonOverlapping [Just (0,0), Just (100, 200), Nothing, Just (50, 99), Nothing]
-                    --, TestCase $ assertBool "overlapping test (2)" $ not $ isNonOverlapping [Nothing, Nothing, Just (300, 400), Just (150, 301)]
                     ]
                         where (ig, nti, ti) = exampleWPMCFG''

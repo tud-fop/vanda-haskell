@@ -23,6 +23,7 @@ module Data.Range
   , singletons
   , entire
   , safeConc
+  , isNonOverlapping
     -- * range vectos
   , singleton
   , fromList

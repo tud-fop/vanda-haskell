@@ -38,7 +38,6 @@ import Data.Semiring
 import Data.Tree (Tree)
 import Data.Weight
 import Vanda.Grammar.PMCFG
-import Vanda.Grammar.PMCFG.DeductiveSolver
 
 import qualified Vanda.Grammar.PMCFG.Chart as C
 import qualified Data.HashMap.Lazy as Map
@@ -119,7 +118,7 @@ weightedParse (WPMCFG s rs) bw trees word
         = case C.insert p nta rho bt w of 
                (p', isnew) -> ((p', a), isnew)
       update (p, a) item@(Active _ _ (nta:_) _ _ _ _)
-        = ((p, updateGroup nta item a), True)
+        = ((p, C.updateGroup nta item a), True)
       update (p, a) _ = ((p, a), True)
 
 initialPrediction :: forall nt t wt. (Hashable nt, Eq nt, Eq t, Semiring wt)

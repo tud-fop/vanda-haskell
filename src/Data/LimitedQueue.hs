@@ -45,7 +45,7 @@ instance (Show v, Show p) => Show (Queue v p) where
   show (LPQ _ known _ 0 limit) 
     = "Empty queue (0 of " ++ show limit ++ " elements)\n" 
     ++ "already visited: " ++ unlines (map show $ S.toList known)
-  show (LPQ q known least current limit) 
+  show (LPQ q known _ current limit) 
     = "Queue (" ++ show current ++ " of " ++ show limit ++ " elements)\n"
     ++ "currently contains " ++ show q ++ "\n"
     ++ "already visited: " ++ unlines (map show $ S.toList known)

@@ -12,6 +12,8 @@ module Vanda.Grammar.PMCFG.Chart
     -- * chart operations
   , lookupWith
   , insert
+  , updateGroup
+  , updateGroups
   ) where
 
 import Control.Monad (unless)
@@ -131,7 +133,7 @@ chartIteration rules update
              if isnew
                 then do let agenda'' = Q.enqList agenda'
                                      $ filter ((/= zero) . snd) 
-                                     $ chartStep item container' rules
+                                     $ chartStep item container rules
                         put (agenda'', container')
                         chartIteration rules update
                 else do put (agenda', container')
@@ -146,3 +148,25 @@ chartStep trigger container rs = [ item
                                  | f <- rs
                                  , item <- f trigger container
                                  ]
+
+
+
+-- | Adds an item to a list of items.
+updateGroup :: (Hashable b, Eq b) 
+            => b 
+            -> a
+            -> Map.HashMap b [a] 
+            -> Map.HashMap b [a]
+updateGroup b a = Map.alter addToList b
+  where
+    addToList Nothing = Just [a]
+    addToList (Just as) = Just (a:as)
+
+-- | Adds an item to many lists of items.
+updateGroups :: (Hashable b, Eq b) 
+             => [b] 
+             -> a
+             -> Map.HashMap b [a] 
+             -> Map.HashMap b [a]
+updateGroups [] _ m = m
+updateGroups (b:bs) a m = updateGroups bs a $ updateGroup b a m

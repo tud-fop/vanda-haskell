@@ -56,13 +56,12 @@ module Vanda.Grammar.PMCFG.ActiveParser
 
 import Data.Converging (Converging)
 import Data.Hashable (Hashable(hashWithSalt))
-import Data.Maybe (mapMaybe, maybeToList)
+import Data.Maybe (mapMaybe, maybeToList, catMaybes)
 import Data.Range
 import Data.Semiring
 import Data.Tree (Tree)
 import Data.Weight
 import Vanda.Grammar.PMCFG
-import Vanda.Grammar.PMCFG.DeductiveSolver
 
 import qualified Data.IntMap        as IMap
 import qualified Data.HashMap.Lazy  as Map
@@ -137,12 +136,14 @@ weightedParse (WPMCFG s grs) bw tops w
   $ C.chartify (C.empty, Map.empty, nset) update rules bw tops
     where
       rs = filter (not . null . instantiate w . (\ (Rule (_, f), _) -> f)) grs
+      rmap = foldr (uncurry C.updateGroup) Map.empty $ (\ r -> (lhs r, r)) <$> rs
+
       nset = Set.fromList $ filter (not . (`elem` s)) $ map lhs rs
       iow = ioWeights s rs
       
-      rules = initialPrediction w (filter ((`elem` s) . lhs) rs) iow
-              : predictionRule w rs iow
-              : conversionRule iow
+      rules = initialPrediction w (s >>= (\k -> Map.lookupDefault [] k rmap)) iow
+              : predictionRule w rmap iow
+              -- : conversionRule iow
               : [completionRule w iow]
 
       update :: Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
@@ -150,7 +151,7 @@ weightedParse (WPMCFG s grs) bw tops w
         = case C.insert p nta rho bt iw of
                (p', isnew) -> ((p', a, n), isnew)
       update (p, a, n) item@(Active (Rule ((nta, as),_)) _ _ ((Var i _:_):_) _ _)
-        = ((p, updateGroup (as !! i) item a, nta `Set.delete` n), True)
+        = ((p, C.updateGroup (as !! i) item a, (as !! i) `Set.delete` n), True)
       update (p, a, n) _ = ((p, a, n), True)
 
 
@@ -161,16 +162,17 @@ initialPrediction :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t)
                   -> Map.HashMap nt (wt, wt)
                   -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
 initialPrediction word srules ios 
-  = Left [ (Active r w rho' f' IMap.empty inside, inside) 
-         | (r@(Rule ((_, as), f)), w) <- srules
-         , (rho', f') <- completeKnownTokens word IMap.empty [Epsilon] f
-         , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
-         ]
+  = Left $ catMaybes 
+      [ convert (Active r w rho' f' IMap.empty inside, inside) 
+      | (r@(Rule ((_, as), f)), w) <- srules
+      , (rho', f') <- completeKnownTokens word IMap.empty [Epsilon] f
+      , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
+      ]
 
 
 predictionRule :: forall nt t wt. (Weight wt, Eq nt, Hashable nt, Eq t) 
                => [t]
-               -> [(Rule nt t, wt)]
+               -> Map.HashMap nt [(Rule nt t, wt)]
                -> Map.HashMap nt (wt, wt)
                -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
 predictionRule word rs ios = Right app
@@ -179,11 +181,11 @@ predictionRule word rs ios = Right app
         -> Container nt t wt 
         -> [(Item nt t wt, wt)]
     app (Active (Rule ((_, as), _)) w _ ((Var i _:_):_) _ _) (_, _, inits)
-      = [ (Active r' w rho'' f'' IMap.empty inside, inside <.> outside)
+      = catMaybes 
+        [ convert (Active r' w rho'' f'' IMap.empty inside, inside <.> outside)
         | let a = as !! i
         , a `Set.member` inits
-        , (r'@(Rule ((a', as'), f')), w') <- rs
-        , a' == a
+        , (r'@(Rule ((a', as'), f')), w') <- Map.lookupDefault [] a rs
         , (rho'', f'') <- completeKnownTokens word IMap.empty [Epsilon] f'
         , let inside = w' <.> foldl (<.>) one (map (fst . (ios Map.!)) as')
               outside = snd $ ios Map.! a'
@@ -191,7 +193,7 @@ predictionRule word rs ios = Right app
     app _ _ = []
 
 
-
+{-
 conversionRule :: forall nt t wt. (Semiring wt, Hashable nt, Eq nt)
                => Map.HashMap nt (wt, wt)
                -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
@@ -206,6 +208,18 @@ conversionRule ios = Right app
               outside = snd $ ios Map.! a
         ]
     app _ _ = []
+-}
+
+convert :: (Item nt t wt, wt) -> Maybe (Item nt t wt, wt)
+convert (Active r w rs [] completions inside, heuristic)
+  = case fromList $ reverse rs of
+         Nothing -> Nothing
+         Just rv -> let rvs = IMap.elems completions
+                        (Rule ((a, _), _)) = r
+                    in Just (Passive a rv (C.Backtrace r w rvs) inside, heuristic)
+convert i@(Active _ _ rs _ _ _, _)
+  | isNonOverlapping rs = Just i
+  | otherwise = Nothing
 
 completeKnownTokens :: (Eq t)
                     => [t] 
@@ -249,7 +263,8 @@ completionRule word ios = Right app
 
     consequences :: Item nt t wt -> Item nt t wt -> [(Item nt t wt, wt)]
     consequences (Active r w (range:rho) ((Var i j:fs):fss) c aiw) (Passive a rv _ piw)
-      = [ (Active r w rho' f' c' inside, inside <.> outside)
+      = catMaybes
+        [ convert (Active r w rho' f' c' inside, inside <.> outside)
         | range' <- maybeToList $ safeConc range (rv ! j)
         , let c' = IMap.insert i rv c
               inside = aiw <.> (piw </> fst (ios Map.! a))

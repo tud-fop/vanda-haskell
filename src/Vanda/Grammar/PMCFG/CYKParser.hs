@@ -50,7 +50,6 @@ import Data.Semiring
 import Data.Tree (Tree)
 import Data.Weight
 import Vanda.Grammar.PMCFG
-import Vanda.Grammar.PMCFG.DeductiveSolver
 
 import qualified Data.HashMap.Lazy  as Map
 import qualified Vanda.Grammar.PMCFG.Chart as C
@@ -110,7 +109,7 @@ weightedParse :: forall nt t wt. (Eq t, Hashable nt, Hashable t, Semiring wt, Or
               -> Int                        -- ^ beam width
               -> Int                        -- ^ maximum number of returned trees
               -> [t]                        -- ^ word
-              -> [Tree (Rule nt t)]   -- ^ parse trees and resulting weights
+              -> [Tree (Rule nt t)]         -- ^ parse trees
 weightedParse (WPMCFG s rs) bw trees word
   = C.parseTrees trees s (singleton $ entire word)
   $ fst 
@@ -128,7 +127,7 @@ weightedParse (WPMCFG s rs) bw trees word
       = case C.insert passives a rho bt iw of
              (passives', isnew) -> ((passives', actives), isnew)
     update (passives, actives) item@(Active (Rule ((_, as), _)) _ _ _)
-      = ((passives, updateGroups as item actives), True)
+      = ((passives, C.updateGroups as item actives), True)
 
 
 -- | Prediction rule for rules of initial nonterminals
@@ -181,7 +180,7 @@ completion ios = Right app
     app item@(Passive a _ _ _) (ps, acts) 
       = [ consequence
         | act@(Active (Rule ((_, as), _)) _ _ _ ) <- Map.lookupDefault [] a acts
-        , pas <- filter (elem item) $ mapM (C.lookupWith Passive ps) as
+        , pas <- filter (elem item) $ mapM (\ nta -> if nta == a then item : C.lookupWith Passive ps nta else C.lookupWith Passive ps nta) as
         , consequence <- consequences (act:pas)
         ]
 
