@@ -98,17 +98,16 @@ parse :: forall nt t wt. (Eq t, Hashable nt, Hashable t, Semiring wt, Ord wt, Or
               -> Int                        -- ^ maximum number of returned trees
               -> [t]                        -- ^ word
               -> [Tree (Rule nt t)]         -- ^ parse trees
-parse (WPMCFG s rs) bw trees word
-  = C.parseTrees trees s (singleton $ entire word)
+parse g bw trees word
+  = C.parseTrees trees s' (singleton $ entire word)
   $ (\ (e, _, _) -> e)
   $ C.chartify (C.empty, MMap.empty, nset) update deductiveRules bw trees
     where
-      rmap = instantiableRules word rs
+      (rmap, iow, s') = prepare g word
 
-      nset = Set.fromList $ filter (not . (`elem` s)) $ Map.keys rmap
-      iow = ioWeights s rs
+      nset = Set.fromList $ filter (not . (`elem` s')) $ Map.keys rmap
 
-      deductiveRules = initialPrediction word (s >>= (`MMap.lookup` rmap)) iow
+      deductiveRules = initialPrediction word (s' >>= (`MMap.lookup` rmap)) iow
                         : prediction word rmap iow
                         : [completion iow]
 

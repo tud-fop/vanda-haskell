@@ -88,20 +88,19 @@ parse :: forall nt t wt. (Hashable nt, Hashable t, Eq t, Ord wt, Weight wt, Ord 
               -> Int                -- ^ max number of parse trees
               -> [t]                -- ^ terminal word
               -> [Tree (Rule nt t)] -- ^ derivation tree of applied rules
-parse (WPMCFG s rs) bw trees word 
-  = C.parseTrees trees s (singleton $ entire word)
+parse g bw trees word 
+  = C.parseTrees trees s' (singleton $ entire word)
   $ (\ (e, _, _) -> e)
   $ C.chartify (C.empty, MMap.empty, nset) update rules bw trees
     where
-      rules = initialPrediction word (s >>= (`MMap.lookup` rmap)) iow
+      rules = initialPrediction word (s' >>= (`MMap.lookup` rmap)) iow
               : predictionRule word rmap iow
               -- : conversionRule iow
               : [completionRule iow]
       
-      rmap = instantiableRules word rs
+      (rmap, iow, s') = prepare g word
 
-      nset = Set.fromList $ filter (not . (`elem` s)) $ Map.keys rmap
-      iow = ioWeights s rs
+      nset = Set.fromList $ filter (not . (`elem` s')) $ Map.keys rmap
 
       update :: Container nt t wt
             -> Item nt t wt 

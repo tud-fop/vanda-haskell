@@ -116,17 +116,16 @@ parse :: forall nt t wt.(Hashable nt, Hashable t, Eq t, Ord wt, Weight wt, Ord n
       -> Int
       -> [t]
       -> [Tree (Rule nt t)]
-parse (WPMCFG s grs) bw tops w
-  = C.parseTrees tops s (singleton $ entire w)
+parse g bw tops w
+  = C.parseTrees tops s' (singleton $ entire w)
   $ (\ (e, _, _) -> e)
   $ C.chartify (C.empty, MMap.empty, nset) update rules bw tops
     where
-      rmap = instantiableRules w grs
+      (rmap, iow, s') = prepare g w
 
-      nset = Set.fromList $ filter (not . (`elem` s)) $ Map.keys rmap
-      iow = ioWeights s grs
+      nset = Set.fromList $ filter (not . (`elem` s')) $ Map.keys rmap
       
-      rules = initialPrediction w (s >>= (`MMap.lookup` rmap)) iow
+      rules = initialPrediction w (s' >>= (`MMap.lookup` rmap)) iow
               : predictionRule w rmap iow
               : [completionRule w iow]
 
