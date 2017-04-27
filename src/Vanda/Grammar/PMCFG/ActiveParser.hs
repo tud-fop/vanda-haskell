@@ -124,7 +124,7 @@ parse (WPMCFG s grs) bw tops w
       rmap = instantiableRules w grs
 
       nset = Set.fromList $ filter (not . (`elem` s)) $ Map.keys rmap
-      iow = ioWeights s rmap
+      iow = ioWeights s grs
       
       rules = initialPrediction w (s >>= (`MMap.lookup` rmap)) iow
               : predictionRule w rmap iow

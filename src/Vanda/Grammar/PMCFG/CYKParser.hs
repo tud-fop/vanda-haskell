@@ -106,7 +106,7 @@ parse (WPMCFG s rs) bw trees word
       rmap = instantiableRules word rs
 
       nset = Set.fromList $ filter (not . (`elem` s)) $ Map.keys rmap
-      iow = ioWeights s rmap
+      iow = ioWeights s rs
 
       deductiveRules = initialPrediction word (s >>= (`MMap.lookup` rmap)) iow
                         : prediction word rmap iow
@@ -133,10 +133,11 @@ initialPrediction :: forall nt t wt. (Eq nt, Eq t, Hashable nt, Semiring wt)
                   -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
 initialPrediction word srules ios 
   = Left 
-  $ catMaybes [ implicitConversion (Active r w fw inside, inside)
-              | (r@(Rule ((_, as), f)), w) <- srules
+  $ catMaybes [ implicitConversion (Active r w fw inside, inside <.> outside)
+              | (r@(Rule ((a, as), f)), w) <- srules
               , fw <- instantiate word f
               , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
+                    outside = snd $ ios Map.! a
               ]
 
 

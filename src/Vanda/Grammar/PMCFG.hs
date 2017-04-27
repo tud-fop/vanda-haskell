@@ -30,6 +30,7 @@ module Vanda.Grammar.PMCFG
   , integerize
   , deintegerize
   , ioWeights
+  , prepare
   -- * derivation trees
   , Derivation(Derivation)
   , node
@@ -352,25 +353,37 @@ exampleWPMCFG :: WPMCFG Int Double Char
 exampleWPMCFG = fromWeightedRules [0] $ zip exampleRules exampleWeights
 
 
+prepare :: (Converging wt, Semiring wt, Hashable nt, Ord nt, Eq t, Ord wt)
+        => WPMCFG nt wt t -> [t] -> (MMap.MultiMap nt (Rule nt t, wt), Map.HashMap nt (wt,wt), [nt])
+prepare (WPMCFG s rs) w = let frs = filter (not . null . instantiate w . composition) rs
+                              iow = ioWeights s frs
+                              heuristic (Rule ((a,as),_),w) = snd (Map.lookupDefault zero a iow) 
+                                                           <.> w 
+                                                           <.> foldl (<.>) one ((\ a' -> fst $ Map.lookupDefault zero a' iow) <$> as)
+                              rmap = MMap.fromList 
+                                   $ (\ r -> (lhs r, r))
+                                  <$> filter ((> zero) . heuristic) frs
+                              s' = filter (\ nt -> (zero <) $ fst $ Map.lookupDefault (zero, zero) nt iow) s
+                          in (rmap, iow, s')
+
 -- | Calculates inside and outside weights for a given grammar with semiring weights.
 ioWeights :: (Converging wt, Semiring wt, Hashable nt, Ord nt)
           => [nt]
-          -> MMap.MultiMap nt (Rule nt t, wt)
+          -> [(Rule nt t, wt)]
           -> Map.HashMap nt (wt, wt)
 ioWeights ss rs
   = toHashMap 
   $ insideOutside' converged 
                    (M.fromList esw M.!)
                    Nothing
-                   (EdgeList (S.fromList $ map Just $ MMap.keys rs) (map fst esw))
+                   (EdgeList (S.fromList $ map (Just . lhs) rs) (map fst esw))
     where
       esw = zipWith (\ (f, w) i -> (f i, w)) 
                     (targets ++ hyperedges) 
                     [(1::Int)..]
 
       hyperedges = [ (Hyperedge (Just a) (V.fromList $ map Just as) (Just a, as), weight)
-                   | a <- MMap.keys rs
-                   , (Rule ((_, as), _), weight) <- MMap.lookup a rs
+                   | (Rule ((a, as), _), weight) <- rs
                    ]
       
       targets = [ (Hyperedge Nothing (V.singleton $ Just s) (Nothing, [s]), one)
