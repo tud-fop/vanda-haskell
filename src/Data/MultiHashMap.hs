@@ -27,7 +27,6 @@ module Data.MultiHashMap
 ) where
 
 import           Prelude hiding (lookup)
-import           Data.List hiding (delete, insert, lookup)
 import qualified Data.List as L
 import           Control.Arrow (second)
 import           Data.Hashable (Hashable)

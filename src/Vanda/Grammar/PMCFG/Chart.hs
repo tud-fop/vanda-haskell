@@ -115,8 +115,9 @@ chartify :: (Eq it, Ord wt, Semiring wt, Hashable it)
       -> Int                      -- ^ maximum amount of chart entries per cell
       -> ct                       -- ^ final chart
 chartify container update rules beam _
-  = snd $ execState (chartIteration (rights rules) update) 
-                    (Q.fromList beam (concat $ lefts rules), container)
+  = let initialitems = concat $ filter ((< zero) . snd) <$> lefts rules
+    in snd $ execState (chartIteration (rights rules) update) 
+                       (Q.fromList beam initialitems, container)
 
 
 chartIteration :: (Eq it, Ord wt, Semiring wt, Hashable it) 
@@ -130,7 +131,7 @@ chartIteration rules update
                  (container', isnew) = update container item
              if isnew
                 then do let agenda'' = Q.enqList agenda'
-                                     $ filter ((/= zero) . snd) 
+                                     $ filter ((< zero) . snd) 
                                      $ chartStep item container rules
                         put (agenda'', container')
                         chartIteration rules update

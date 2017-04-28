@@ -39,6 +39,11 @@ import qualified Data.HashSet     as S
 import Data.Hashable (Hashable)
 import Prelude hiding(null)
 
+-- | Consists of a map for storing (priority, value) pairs,
+-- a set of already enqueued values,
+-- the currently highest priority (i.e. the worst!) in the queue,
+-- the current number of items
+-- and the maximum possible amount of items in the queue.
 data Queue v p = LPQ (M.Map p [v]) (S.HashSet v) p Int Int
 
 instance (Show v, Show p) => Show (Queue v p) where

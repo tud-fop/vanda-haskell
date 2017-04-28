@@ -149,10 +149,12 @@ prediction :: forall nt t wt. (Eq nt, Eq t, Hashable nt, Semiring wt)
            -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
 prediction word rs ios = Right app
   where
-    app (Active (Rule ((_, as), _)) _ _ _) _
+    app (Active (Rule ((_, as), _)) _ _ _) (_,_,notinitialized)
       = catMaybes 
         [ implicitConversion (Active r' w' fw inside, inside <.> outside)
-        | (r'@(Rule ((a', as'), f')), w') <- concatMap (`MMap.lookup` rs) as
+        | a' <- as
+        , a' `Set.member` notinitialized
+        , (r'@(Rule ((_, as'), f')), w') <- MMap.lookup a' rs
         , fw <- instantiate word f'
         , let inside = w' <.> foldl (<.>) one (map (fst . (ios Map.!)) as')
               outside = snd $ ios Map.! a'

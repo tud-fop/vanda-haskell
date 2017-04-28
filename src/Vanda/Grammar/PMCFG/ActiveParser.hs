@@ -176,23 +176,6 @@ predictionRule word rs ios = Right app
     app _ _ = []
 
 
-{-
-conversionRule :: forall nt t wt. (Semiring wt, Hashable nt, Eq nt)
-               => Map.HashMap nt (wt, wt)
-               -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
-conversionRule ios = Right app
-  where
-    app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
-    app (Active r w rs [] completions inside) _
-      = [ (Passive a rv (C.Backtrace r w rvs) inside, inside <.> outside)
-        | rv <- maybeToList $ fromList $ reverse rs
-        , let rvs = IMap.elems completions
-              (Rule ((a, _), _)) = r
-              outside = snd $ ios Map.! a
-        ]
-    app _ _ = []
--}
-
 convert :: (Item nt t wt, wt) -> Maybe (Item nt t wt, wt)
 convert (Active r w rs [] completions inside, heuristic)
   = case fromList $ reverse rs of

@@ -137,33 +137,17 @@ predictionRule word rs ios = Right app
     app :: Item nt t wt 
         -> Container nt t wt 
         -> [(Item nt t wt, wt)]
-    app (Active _ _ (a:_) _ _ _ _) _
+    app (Active _ _ (a:_) _ _ _ _) (_,_,notinitialized)
       = catMaybes
         [ implicitConversion (Active r' w' as' 0 [] fw inside, inside <.> outside)
-        | (r'@(Rule ((_, as'), f')), w') <- MMap.lookup a rs
+        | a `Set.member` notinitialized
+        , (r'@(Rule ((_, as'), f')), w') <- MMap.lookup a rs
         , fw <- instantiate word f'
         , let inside = w' <.> foldl (<.>) one (map (fst . (ios Map.!)) as')
               outside = snd $ ios Map.! a
         ]
     app _ _ = []
 
-{-}
--- | Constructs deductive rules using one rule of a grammar.
--- * conversion: converts an active item into a passive one, if there are no variables left
-conversionRule :: forall nt t wt. (Semiring wt, Eq nt, Hashable nt) 
-               => Map.HashMap nt (wt, wt)
-               -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
-conversionRule ios = Right app
-  where
-    app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
-    app (Active r w [] _ rss fs inside) _ 
-      = [ (Passive a rv' (C.Backtrace r w (reverse rss)) inside, inside <.> outside)
-        | rv' <- maybeToList $ mapM ((>>= toRange) . concVarRange) fs >>= fromList
-        , let (Rule ((a,_),_)) = r
-              outside = snd $ ios Map.! a
-        ]
-    app _ _ = []
--}
 
 implicitConversion :: (Item nt t wt, wt) -> Maybe (Item nt t wt, wt)
 implicitConversion (Active r@(Rule ((a, _), _)) w [] _ rss fs inside, weight)

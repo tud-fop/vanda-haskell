@@ -357,9 +357,10 @@ prepare :: (Converging wt, Semiring wt, Hashable nt, Ord nt, Eq t, Ord wt)
         => WPMCFG nt wt t -> [t] -> (MMap.MultiMap nt (Rule nt t, wt), Map.HashMap nt (wt,wt), [nt])
 prepare (WPMCFG s rs) w = let frs = filter (not . null . instantiate w . composition) rs
                               iow = ioWeights s frs
-                              heuristic (Rule ((a,as),_),w) = snd (Map.lookupDefault zero a iow) 
-                                                           <.> w 
-                                                           <.> foldl (<.>) one ((\ a' -> fst $ Map.lookupDefault zero a' iow) <$> as)
+                              heuristic (Rule ((a,as),_),weight) 
+                                = snd (Map.lookupDefault zero a iow) 
+                               <.> weight
+                               <.> foldl (<.>) one ((\ a' -> fst $ Map.lookupDefault zero a' iow) <$> as)
                               rmap = MMap.fromList 
                                    $ (\ r -> (lhs r, r))
                                   <$> filter ((> zero) . heuristic) frs
