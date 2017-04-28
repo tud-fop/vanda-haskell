@@ -33,7 +33,7 @@ import Vanda.Corpus.Negra.Text (parseNegra)
 import Vanda.Grammar.PMCFG.Functions (extractFromNegra, extractFromNegraAndBinarize)
 import Vanda.Grammar.XRS.LCFRS.Binarize (binarizeNaively, binarizeByAdjacency, binarizeHybrid)
 
-import Vanda.Grammar.PMCFG (WPMCFG (..), prettyPrintWPMCFG, integerize, deintegerize)
+import Vanda.Grammar.PMCFG (WPMCFG (..), prettyPrintWPMCFG, integerize, deintegerize, pos)
 --import qualified Vanda.Grammar.PMCFG.Parse as UnweightedAutomaton
 import qualified Vanda.Grammar.PMCFG.CYKParser as CYK
 import qualified Vanda.Grammar.PMCFG.NaiveParser as Naive
@@ -53,6 +53,7 @@ data Args
     { flagAlgorithm :: ParsingAlgorithm
     , argGrammar :: FilePath
     , unweighted :: Bool
+    , onlyPos :: Bool
     , beamwidth :: Int
     , maxAmount :: Int
     }
@@ -70,7 +71,7 @@ cmdArgs
     , modeArgs = ( [ flagArgCorpus{argRequire = True}], Nothing )
     , modeGroupFlags = toGroup [flagNoneBinarize,  flagNoneNaive, flagNoneOptimal, flagReqHybrid]
     }
-  , (modeEmpty $ Parse undefined undefined False 1000 10)
+  , (modeEmpty $ Parse undefined undefined False False 1000 10)
     { modeNames = ["parse"]
     , modeHelp = "Parses, given a (w)PMCFG, each in a sequence of sentences."
     , modeArgs = ( [ flagArgGrammar{argRequire = True} ], Nothing )
@@ -81,6 +82,7 @@ cmdArgs
                                 , flagUseWeights
                                 , flagBeamwidth
                                 , flagMax
+                                , flagPos
                                 ]
     }
   ]
@@ -89,6 +91,8 @@ cmdArgs
       = flagArg (\ a x -> Right x{argOutput = a}) "OUTPUT"
     flagArgGrammar
       = flagArg (\ a x -> Right x{argGrammar = a}) "GRAMMAR"
+    flagPos
+      = flagBool ["only-pos"] (\ b x -> x{onlyPos = b}) "print only the pos-tags for each token"
     flagBeamwidth
       = flagReq ["blimit", "bw"] (\ a x -> Right x{beamwidth = read a}) "Int" "beam width: limits the number of items held in memory"
     flagMax
@@ -136,7 +140,7 @@ mainArgs (Extract outfile True strategy)
       let pmcfg = extractFromNegraAndBinarize s $ parseNegra corpus :: WPMCFG String Double String
       BS.writeFile outfile . compress $ B.encode pmcfg
       writeFile (outfile ++ ".readable") $ prettyPrintWPMCFG pmcfg
-mainArgs (Parse algorithm grFile uw bw trees)
+mainArgs (Parse algorithm grFile uw onlyPos bw trees)
   = do
       wpmcfg <- B.decode . decompress <$> BS.readFile grFile :: IO (WPMCFG String Double String)
       let (WPMCFG inits wrs, nti, ti) = integerize wpmcfg
@@ -154,5 +158,11 @@ mainArgs (Parse algorithm grFile uw bw trees)
                                              Active -> Active.parse wrs'
                                              UnweightedAutomaton -> error "not implemented"
       corpus <- TIO.getContents
-      mapM_ (putStrLn . drawTree . fmap show . head . map (deintegerize (nti, ti)) . parse bw trees . snd . internListPreserveOrder ti . map T.unpack . T.words) $ T.lines corpus
+      
+      let show' = if onlyPos
+                     then let prefix splitchar = T.unpack . head . T.split (== splitchar) . T.pack
+                          in unlines . ((\ (a,b) -> a ++ "\t" ++ (prefix '_' b)) <$>) . pos
+                     else drawTree . fmap show
+      
+      mapM_ (putStrLn . show' . head . map (deintegerize (nti, ti)) . parse bw trees . snd . internListPreserveOrder ti . map T.unpack . T.words) $ T.lines corpus
  

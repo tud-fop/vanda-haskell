@@ -34,6 +34,7 @@ module Vanda.Grammar.PMCFG
   -- * derivation trees
   , Derivation(Derivation)
   , node
+  , pos
   -- * ranges with variables
   , Function
   , InstantiatedFunction
@@ -402,3 +403,11 @@ instantiableRules :: (Eq t, Eq nt, Hashable nt)
 instantiableRules w rs = let nrs = (\ r -> (lhs r, r))
                                 <$> filter (not . null . instantiate w . composition) rs
                          in MMap.fromList nrs
+
+
+pos :: Tree (Rule nt t) -> [(t, nt)]
+pos = foldr prependPos []
+  where
+    prependPos :: Rule nt t -> [(t, nt)] -> [(t, nt)]
+    prependPos (Rule ((a, []), [[T token]])) xs = (token, a) : xs
+    prependPos _ xs = xs
