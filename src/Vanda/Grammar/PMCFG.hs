@@ -358,13 +358,13 @@ prepare :: (Converging wt, Semiring wt, Hashable nt, Ord nt, Eq t, Ord wt)
 prepare (WPMCFG s rs) w = let frs = filter (not . null . instantiate w . composition) rs
                               iow = ioWeights s frs
                               heuristic (Rule ((a,as),_),weight) 
-                                = snd (Map.lookupDefault zero a iow) 
+                                = snd (Map.lookupDefault (zero, zero) a iow) 
                                <.> weight
-                               <.> foldl (<.>) one ((\ a' -> fst $ Map.lookupDefault zero a' iow) <$> as)
+                               <.> foldl (<.>) one ((fst . flip (Map.lookupDefault (zero, zero)) iow) <$> as)
                               rmap = MMap.fromList 
                                    $ (\ r -> (lhs r, r))
-                                  <$> filter ((> zero) . heuristic) frs
-                              s' = filter (\ nt -> (zero <) $ fst $ Map.lookupDefault (zero, zero) nt iow) s
+                                  <$> filter ((< zero) . heuristic) frs
+                              s' = filter (\ nt -> (< zero) $ fst $ Map.lookupDefault (zero, zero) nt iow) s
                           in (rmap, iow, s')
 
 -- | Calculates inside and outside weights for a given grammar with semiring weights.
