@@ -45,7 +45,7 @@ import Control.Arrow
 data Args
   = Help String
   | Extract
-    { argOutput :: FilePath
+    { argGrammar :: FilePath
     , flagBinarize :: Bool
     , flagStrategy :: BinarizationStrategy
     }
@@ -53,14 +53,17 @@ data Args
     { flagAlgorithm :: ParsingAlgorithm
     , argGrammar :: FilePath
     , unweighted :: Bool
-    , onlyPos :: Bool
+    , flagOutput :: ParsingOutput
     , beamwidth :: Int
     , maxAmount :: Int
     }
   deriving Show
 
 data BinarizationStrategy = Naive | Optimal | Hybrid Int deriving (Eq, Show)
-data ParsingAlgorithm = UnweightedAutomaton | CYK | NaiveActive | Active deriving (Eq, Show)
+
+data ParsingAlgorithm = UnweightedAutomaton | CYK | NaiveActive | Active deriving (Eq, Show, Read)
+data ParsingOutput = POS | Derivation deriving (Eq, Show, Read)
+
 
 cmdArgs :: Mode Args
 cmdArgs
@@ -68,45 +71,26 @@ cmdArgs
   [ (modeEmpty $ Extract undefined False undefined)
     { modeNames = ["extract"]
     , modeHelp = "Reads of a wPMCFG from a NeGra corpus."
-    , modeArgs = ( [ flagArgCorpus{argRequire = True}], Nothing )
+    , modeArgs = ( [ flagArgGrammar{argRequire = True}], Nothing )
     , modeGroupFlags = toGroup [flagNoneBinarize,  flagNoneNaive, flagNoneOptimal, flagReqHybrid]
     }
-  , (modeEmpty $ Parse undefined undefined False False 1000 10)
+  , (modeEmpty $ Parse Active undefined False Derivation 1000 1)
     { modeNames = ["parse"]
     , modeHelp = "Parses, given a (w)PMCFG, each in a sequence of sentences."
     , modeArgs = ( [ flagArgGrammar{argRequire = True} ], Nothing )
-    , modeGroupFlags = toGroup  [ flagUnweightedAutomaton
-                                , flagCYK
-                                , flagNaive
-                                , flagActive
+    , modeGroupFlags = toGroup  [ flagAlgorithmOption
+                                , flagDisplayOption
                                 , flagUseWeights
                                 , flagBeamwidth
                                 , flagMax
-                                , flagPos
                                 ]
     }
   ]
   where
-    flagArgCorpus
-      = flagArg (\ a x -> Right x{argOutput = a}) "OUTPUT"
+    -- grammar file as argument, needed in both cases
     flagArgGrammar
-      = flagArg (\ a x -> Right x{argGrammar = a}) "GRAMMAR"
-    flagPos
-      = flagBool ["only-pos"] (\ b x -> x{onlyPos = b}) "print only the pos-tags for each token"
-    flagBeamwidth
-      = flagReq ["blimit", "bw"] (\ a x -> Right x{beamwidth = read a}) "Int" "beam width: limits the number of items held in memory"
-    flagMax
-      = flagReq ["plimit", "ts"] (\ a x -> Right x{maxAmount = read a}) "Int" "limits the maximum amount of output parse trees"
-    flagUseWeights
-      = flagBool ["u", "unweighted"] (\ b x -> x{unweighted = b}) "use an unweighted parsing algorithm"
-    flagUnweightedAutomaton
-      = flagNone ["a", "automaton"] (\ x -> x{flagAlgorithm = UnweightedAutomaton}) "use an unweighted automaton constructed from the grammar"
-    flagCYK
-      = flagNone ["c", "cyk"] (\ x -> x{flagAlgorithm = CYK}) "use a basic cyk-like deduction system constructed from the grammar"
-    flagNaive
-      = flagNone ["naive-active"] (\ x -> x{flagAlgorithm = NaiveActive}) "use a binarized deduction system constructed from the grammar"
-    flagActive
-      = flagNone ["active"] (\ x -> x{flagAlgorithm = Active}) "use a binarized active deduction system constructed from the grammar"
+      = flagArg (\ a x -> Right x{argGrammar = a}) "GRAMMAR FILE"
+    -- extraction options
     flagNoneBinarize
       = flagNone ["b", "binarize", "binarise"] (\ x -> x{flagBinarize = True}) "binarize the extracted grammar"
     flagNoneNaive
@@ -117,6 +101,17 @@ cmdArgs
       = flagReq ["h", "hybrid"] (\ a x -> Right x{flagStrategy = Hybrid $ read a})
           "BOUND"
           "binarize rules up to rank BOUND optimally and the rest naively"
+    -- parsing options
+    flagAlgorithmOption
+      = flagReq ["algorithm", "a"] (\ a x -> Right x{flagAlgorithm = read a}) "CYK/NaiveActive/Active" "solution algorithm, default is 'Active'"
+    flagDisplayOption
+      = flagReq ["print"] (\ a x -> Right x{flagOutput = read a}) "POS/Derivation" "display solutions POS tags or full derivation (default)"
+    flagBeamwidth
+      = flagReq ["beam-width", "bw"] (\ a x -> Right x{beamwidth = read a}) "number" "beam width: limits the number of items held in memory"
+    flagMax
+      = flagReq ["results", "ts"] (\ a x -> Right x{maxAmount = read a}) "number" "limits the maximum amount of output parse trees"
+    flagUseWeights
+      = flagBool ["u", "unweighted"] (\ b x -> x{unweighted = b}) "use an unweighted parsing algorithm"
 
 
 main :: IO ()
@@ -140,7 +135,7 @@ mainArgs (Extract outfile True strategy)
       let pmcfg = extractFromNegraAndBinarize s $ parseNegra corpus :: WPMCFG String Double String
       BS.writeFile outfile . compress $ B.encode pmcfg
       writeFile (outfile ++ ".readable") $ prettyPrintWPMCFG pmcfg
-mainArgs (Parse algorithm grFile uw onlyPos bw trees)
+mainArgs (Parse algorithm grFile uw display bw trees)
   = do
       wpmcfg <- B.decode . decompress <$> BS.readFile grFile :: IO (WPMCFG String Double String)
       let (WPMCFG inits wrs, nti, ti) = integerize wpmcfg
@@ -159,10 +154,10 @@ mainArgs (Parse algorithm grFile uw onlyPos bw trees)
                                              UnweightedAutomaton -> error "not implemented"
       corpus <- TIO.getContents
       
-      let show' = if onlyPos
-                     then let prefix splitchar = T.unpack . head . T.split (== splitchar) . T.pack
-                          in unlines . ((\ (a,b) -> a ++ "\t" ++ (prefix '_' b)) <$>) . pos
-                     else drawTree . fmap show
+      let show' = case display of
+                       POS -> let prefix splitchar = T.unpack . head . T.split (== splitchar) . T.pack
+                              in unlines . ((\ (a,b) -> a ++ "\t" ++ (prefix '_' b)) <$>) . pos
+                       Derivation -> drawTree . fmap show
       
       mapM_ (putStrLn . show' . head . map (deintegerize (nti, ti)) . parse bw trees . snd . internListPreserveOrder ti . map T.unpack . T.words) $ T.lines corpus
  
