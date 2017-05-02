@@ -33,13 +33,14 @@ import Vanda.Corpus.Negra.Text (parseNegra)
 import Vanda.Grammar.PMCFG.Functions (extractFromNegra, extractFromNegraAndBinarize)
 import Vanda.Grammar.XRS.LCFRS.Binarize (binarizeNaively, binarizeByAdjacency, binarizeHybrid)
 
-import Vanda.Grammar.PMCFG (WPMCFG (..), prettyPrintWPMCFG, integerize, deintegerize, pos)
+import Vanda.Grammar.PMCFG (WPMCFG (..), prettyPrintWPMCFG, integerize, deintegerize, pos, posTab)
 --import qualified Vanda.Grammar.PMCFG.Parse as UnweightedAutomaton
 import qualified Vanda.Grammar.PMCFG.CYKParser as CYK
 import qualified Vanda.Grammar.PMCFG.NaiveParser as Naive
 import qualified Vanda.Grammar.PMCFG.ActiveParser as Active
 import Data.Weight (probabilistic, cost)
 import Control.Arrow
+import Data.Maybe (catMaybes)
 
 
 data Args
@@ -156,10 +157,9 @@ mainArgs (Parse algorithm grFile uw display bw trees)
       
       let show' = case display of
                        POS -> let prefix splitchar = T.unpack . head . T.split (== splitchar) . T.pack
-                              in \ tree -> case pos tree of
-                                                Just posTag -> unlines . ((\ (a,b) -> a ++ "\t" ++ (prefix '_' b)) <$>) $ posTag
-                                                Nothing -> error "Could not read POS tags."
-                       Derivation -> drawTree . fmap show
+                                  showtabline (h, vs) = h  ++ foldl (\ s  v -> s ++ "\t" ++ prefix '_' v) "" vs
+                              in unlines . fmap showtabline . posTab . catMaybes . fmap pos
+                       Derivation -> concatMap (drawTree . fmap show)
       
-      mapM_ (putStrLn . show' . head . map (deintegerize (nti, ti)) . parse bw trees . snd . internListPreserveOrder ti . map T.unpack . T.words) $ T.lines corpus
+      mapM_ (putStrLn . show' . map (deintegerize (nti, ti)) . parse bw trees . snd . internListPreserveOrder ti . map T.unpack . T.words) $ T.lines corpus
  

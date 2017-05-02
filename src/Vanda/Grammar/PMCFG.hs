@@ -35,6 +35,7 @@ module Vanda.Grammar.PMCFG
   , Derivation(Derivation)
   , node
   , pos
+  , posTab
   -- * ranges with variables
   , Function
   , InstantiatedFunction
@@ -414,3 +415,9 @@ pos = yield . fmap topostag
     topostag :: Rule nt t -> Rule nt (t, nt)
     topostag (Rule ((a, []), [[T token]])) = Rule ((a, []), [[T (token, a)]])
     topostag (Rule ((a, as), fss)) = Rule ((a, as), ((const undefined <$>) <$>) <$> fss)
+    
+posTab :: [[(t, nt)]] -> [(t, [nt])]
+posTab (pos:poss) = let tokens = fst <$> pos
+                        nts = (snd <$>) <$> (pos:poss)
+                        nts' = foldr (zipWith (:)) (repeat []) nts
+                    in zip tokens nts'
