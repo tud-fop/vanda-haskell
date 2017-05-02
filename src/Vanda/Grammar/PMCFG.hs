@@ -405,9 +405,12 @@ instantiableRules w rs = let nrs = (\ r -> (lhs r, r))
                          in MMap.fromList nrs
 
 
-pos :: Tree (Rule nt t) -> [(t, nt)]
-pos = foldr prependPos []
+pos :: Tree (Rule nt t) -> Maybe [(t, nt)]
+pos = yield . fmap topostag
   where
-    prependPos :: Rule nt t -> [(t, nt)] -> [(t, nt)]
-    prependPos (Rule ((a, []), [[T token]])) xs = (token, a) : xs
-    prependPos _ xs = xs
+    -- annotate a pos rule's terminal with its pos tag;
+    -- if inner rule expect only variables, so terminals in those compositions
+    -- are undefined
+    topostag :: Rule nt t -> Rule nt (t, nt)
+    topostag (Rule ((a, []), [[T token]])) = Rule ((a, []), [[T (token, a)]])
+    topostag (Rule ((a, as), fss)) = Rule ((a, as), ((const undefined <$>) <$>) <$> fss)

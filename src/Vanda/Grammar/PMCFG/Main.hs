@@ -156,7 +156,9 @@ mainArgs (Parse algorithm grFile uw display bw trees)
       
       let show' = case display of
                        POS -> let prefix splitchar = T.unpack . head . T.split (== splitchar) . T.pack
-                              in unlines . ((\ (a,b) -> a ++ "\t" ++ (prefix '_' b)) <$>) . pos
+                              in \ tree -> case pos tree of
+                                                Just posTag -> unlines . ((\ (a,b) -> a ++ "\t" ++ (prefix '_' b)) <$>) $ posTag
+                                                Nothing -> error "Could not read POS tags."
                        Derivation -> drawTree . fmap show
       
       mapM_ (putStrLn . show' . head . map (deintegerize (nti, ti)) . parse bw trees . snd . internListPreserveOrder ti . map T.unpack . T.words) $ T.lines corpus
