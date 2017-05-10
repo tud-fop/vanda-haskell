@@ -105,11 +105,14 @@ instance (NFData s, NFData t) => NFData (Rule s t) where
   rnf Rule{..} = rnf to `seq` rnf from `seq` rnf label
 
 
+type Count = Double
+
+
 -- | Count RTG
 data CRTG v l = CRTG
-  { cntRule  :: !(Map (Rule v l) Int)
-  , cntState :: !(Map v Int)
-  , cntInit  :: !(Map v Int)
+  { cntRule  :: !(Map (Rule v l) Count)
+  , cntState :: !(Map v Count)
+  , cntInit  :: !(Map v Count)
   } deriving Show
 
 instance (B.Binary v, B.Binary l) => B.Binary (CRTG v l) where
@@ -179,8 +182,8 @@ prettyPrintCRTG showV showL CRTG{..}
         $ map (\ (v, c) -> let s = sum (M.elems cntInit) in
             [ showV v
             , show c
-            , show      (fromIntegral c / fromIntegral s :: Double)
-            , show $ ln (fromIntegral c / fromIntegral s :: Log Double)
+            , show (c / s)
+            , show $ ln (Exp (log c) / Exp (log s) :: Log Double)
                       / log 2
             ])
         $ M.assocs cntInit
@@ -198,8 +201,8 @@ prettyPrintCRTG showV showL CRTG{..}
             , showL label
             , "[" ++ intercalate ", " (map showV from) ++ "]"
             , show cR
-            , show      (fromIntegral cR / fromIntegral cTo :: Double)
-            , show $ ln (fromIntegral cR / fromIntegral cTo :: Log Double)
+            , show (cR / cTo)
+            , show $ ln (Exp (log cR) / Exp (log cTo) :: Log Double)
                       / log 2
             ])
         $ M.assocs cntRule
@@ -212,9 +215,9 @@ toHypergraph
 toHypergraph CRTG{..}
   = ( H.mkHypergraph
       $ map (\ (Rule{..}, count) -> (H.mkHyperedge to from label
-                       (fromIntegral count / fromIntegral (cntState M.! to))))
+                       (count / (cntState M.! to))))
       $ M.toList cntRule
-    , M.map (((1 / (fromIntegral $ sum $ M.elems cntInit)) *) . fromIntegral)
+    , M.map (/ sum (M.elems cntInit))
             cntInit
     )
 
@@ -292,7 +295,7 @@ forestToGrammar = forestToGrammar' . map (\ t -> (t, 1))
 
 forestToGrammar'
   :: Ord l
-  => [(Tree l, Int)]
+  => [(Tree l, Count)]
   -> (CRTG Int l, Map Int (Tree l))
 forestToGrammar' corpus
   = ( CRTG
@@ -328,7 +331,7 @@ f **** g = \ (xf, xg) (yf, yg) -> (f xf yf, g xg yg)
 type MergeHistory v = Map v (MergeTree v)
 
 data MergeTree v
-  = State v Int              -- ^ state and count before any merge
+  = State v Count            -- ^ state and count before any merge
   | Merge Int [MergeTree v]  -- ^ iteration and merged states
 
 
@@ -366,7 +369,7 @@ data Info g v = Info
 
 data BeamEntry v = BeamEntry
   { beIndex           :: !Int
-  , beHeuristic       :: !Int
+  , beHeuristic       :: !Double
   , beEvaluation      :: !(Log Double)
   , beLikelihoodDelta :: !(Log Double)
   , beFactorRules     :: !(Log Double)
@@ -410,7 +413,7 @@ instance NFData v => NFData (BeamEntry v) where
   rnf BeamEntry{..} = rnf beMergeSeed `seq` rnf beMergeSaturated
 
 
-initialInfo :: g -> Map v Int -> Info g v
+initialInfo :: g -> Map v Count -> Info g v
 initialInfo gen m
   = Info
       { infoRandomGen             = gen
@@ -491,7 +494,7 @@ cbsmGo cache conf@ConfigCBSM{..} prev@(g, info@Info{..})
               then \ xs -> fst $ shuffleGroupsBy ((==) `on` fst) xs genMerge
               else id
             )
-          . mergeListsBy (comparing fst)
+          . mergeListsBy (comparing (Down . fst))
         processMergePair i h pair@(v1, v2)
           = BeamEntry
               { beIndex           = i
@@ -549,18 +552,19 @@ cbsmGo cache conf@ConfigCBSM{..} prev@(g, info@Info{..})
 
 compileMergePairs
   :: (Ord v, RandomGen g)
-  => Map v Int
+  => Map v Count
   -> Set v
   -> Bool
   -- ^ optionally randomize the order of states with the same count
   -> g
-  -> ((Int, [(Int, ((v, Int), (v, Int)))]), g)
+  -> ((Int, [(Double, ((v, Count), (v, Count)))]), g)
   -- ^ ((length of list,
   --     [(heuristic value, ((state 1, count 1), (state 2, count 2)))]),
   --    updated RandomGen state)
 compileMergePairs cntM grpS doShuffle g
-  = n `seq` ((n, sortedCartesianProductWith' ((+) `on` snd) vs (tail vs)), g')
+  = n `seq` ((n, coerce $ sortedCartesianProductWith' (add `on` snd) vs (tail vs)), g')
   where n     = let s = M.size cntM' in s * (s - 1) `div` 2
+        add x y = Down $ negate $ x + y
         cntM' = M.intersection cntM (M.fromSet (const ()) grpS)
         (vs, g')
           = ( if doShuffle
@@ -614,7 +618,7 @@ cbsmStep2 g
 cbsmStep1
   :: (Ord v, Ord l)
   => CRTG v l
-  -> [((Int, ((v, Int), (v, Int))), ([[v]], (Log Double, (Log Double, Log Double, Log Double), (Int, Int, Int))))]
+  -> [((Log Double, ((v, Count), (v, Count))), ([[v]], (Log Double, (Log Double, Log Double, Log Double), (Int, Int, Int))))]
 cbsmStep1 g
   = map (\ x@(_, ((v1, _), (v2, _))) ->
         (,) x
@@ -653,11 +657,12 @@ enrichRanking (xs, g)
         satMrg = fst . saturateMerge (forwardStar (rules g))
 
 
-mergeRanking :: CRTG v l -> ([(Int, ((v, Int), (v, Int)))], CRTG v l)
+mergeRanking :: CRTG v l -> ([(Log Double, ((v, Count), (v, Count)))], CRTG v l)
 mergeRanking g
-  = (sortedCartesianProductWith' ((+) `on` snd) vs (tail vs), g)
+  = (sortedCartesianProductWith' (add `on` snd) vs (tail vs), g)
     -- ToDo: instead of (+) maybe use states part of likelihood
   where
+    add x y = Exp (x + y)
     vs = sortBy (comparing snd) (M.toList (cntState g))
 
 
@@ -832,15 +837,14 @@ likelihoodDelta CRTG{..} = \ mrgs ->
     notSingle  _  = True
 
     -- | power with itself
-    p :: Int -> Log Double
-    p n = Exp (x * log x)  -- = Exp (log (x ** x))
-      where x = fromIntegral n
+    p :: Double -> Log Double
+    p x = Exp (x * log x)  -- = Exp (log (x ** x))
 
     productAndSum :: [(Log Double, Int)] -> (Log Double, Int)
     productAndSum = foldl' step (1, 0)
       where step (a1, a2) (b1, b2) = strictPair (a1 * b1) (a2 + b2)
 
-    productPAndSumAndSize :: [Int] -> (Log Double, Int, Int)
+    productPAndSumAndSize :: [Count] -> (Log Double, Count, Int)
     productPAndSumAndSize = foldl' step (1, 0, -1)
       where step (a1, a2, a3) b = strictTriple (a1 * p b) (a2 + b) (succ a3)
 
