@@ -65,6 +65,7 @@ data Args
     }
   | CBSM
     { flagRestrictMerge :: [FlagRestrictMerge]
+    , flagHeuristic :: FlagHeuristic
     , flagBeamWidth :: Int
     , flagDynamicBeamWidth :: Bool
     , flagShuffle :: FlagShuffle
@@ -142,6 +143,9 @@ data FlagChunkCruncher
   = FCCMinimum | FCCMaximum | FCCMinority | FCCMajority | FCCMedian
   deriving (Eq, Read, Show)
 
+data FlagHeuristic
+  = FHCountSum | FHPartialLikelihoodDelta deriving (Eq, Read, Show)
+
 data FlagShuffle = FSNone | FSStates | FSMerges deriving (Eq, Read, Show)
 
 data FlagOutputFormat
@@ -179,6 +183,7 @@ cmdArgs
     }
   , ( modeEmpty CBSM
         { flagRestrictMerge    = []
+        , flagHeuristic        = FHCountSum
         , flagBeamWidth        = 1000
         , flagDynamicBeamWidth = False
         , flagShuffle          = FSNone
@@ -198,6 +203,7 @@ cmdArgs
     , modeArgs = ([], Just (flagArgCorpora liftCmdArgsCorpora))
     , modeGroupFlags = toGroup
       $ [ flagReqRestrictMerge
+        , flagReqHeuristic
         , flagReqBeamWidth
         , flagNoneDynamicBeamWidth
         , flagReqShuffle
@@ -455,6 +461,24 @@ cmdArgs
                , ("merges", FSMerges) ]
         update y x = maybe (Left err)
                            (\ z -> Right x{flagShuffle = z})
+                   $ lookup y opts
+    flagReqHeuristic
+      = flagReq [flag] update "HEURISTIC"
+      $ unlines
+          [ "one of " ++ optsStr ++ "."
+          , "Default: cs (count sum)."
+          , "Choose the heuristic used to decide which pairs of states lie in the beam, i.e., state pairs that are considered for merging. The state pairs with the largest heuristic values are chosen."
+          , "cs (count sum): The counts of the states are added and negated, i.e., states with low counts are preferred."
+          , "pld (partial likelihood delta): A subterm of the actual likelihood delta induced by merging is used, namely log₂ x^x * y^y / (x+y)^(x+y) where x and y are the counts of the two states."
+          ]
+      where
+        flag = "heuristic"
+        err  = flag ++ " expects one of " ++ optsStr
+        optsStr = intercalate ", " (map fst opts)
+        opts = [ ("cs" , FHCountSum              )
+               , ("pld", FHPartialLikelihoodDelta) ]
+        update y x = maybe (Left err)
+                           (\ z -> Right x{flagHeuristic = z})
                    $ lookup y opts
     flagReqBeamWidth
       = flagReq ["beam-width"]

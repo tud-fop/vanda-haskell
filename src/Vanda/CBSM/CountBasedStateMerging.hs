@@ -25,6 +25,8 @@ module Vanda.CBSM.CountBasedStateMerging
 , initialInfo
 , ConfigCBSM(..)
 , cbsm
+, heuristicCountSum
+, heuristicPartialLikelihoodDelta
 , normalizeLklhdByMrgdStates
 , prettyPrintCRTG
 , toHypergraph
@@ -436,6 +438,11 @@ data ConfigCBSM g v = ConfigCBSM
   , confEvaluate         :: (Int, Int, Int) -> Log Double -> Log Double
   -- ^ evaluation function for a merge given number of merged rules, states,
   --   and initial states, and the loss of likelihood
+  , confHeuristic       :: Count -> Count -> Double
+  -- ^ the heuristic used to decide which pairs of states lie in the beam,
+  --   i.e., state pairs that are considered for merging. The state pairs with
+  --   the largest heuristic values are chosen.
+  --   /Note: The heuristic has to be monotonically decreasing in both arguments./
   , confBeamWidth        :: Int
   -- ^ beam width
   , confDynamicBeamWidth :: Bool
@@ -476,7 +483,7 @@ cbsmGo cache conf@ConfigCBSM{..} prev@(g, info@Info{..})
         (mergePairs, cands)
           = sum *** processMergePairs
           $ unzip
-          $ zipWith (\ grpS -> fst . compileMergePairs (cntState g) grpS confShuffleStates)
+          $ zipWith (\ grpS -> fst . compileMergePairs confHeuristic (cntState g) grpS confShuffleStates)
               confMergeGroups
               (evalState (sequence $ repeat $ state $ split) genState)
         processMergePairs
@@ -552,7 +559,9 @@ cbsmGo cache conf@ConfigCBSM{..} prev@(g, info@Info{..})
 
 compileMergePairs
   :: (Ord v, RandomGen g)
-  => Map v Count
+  => (Count -> Count -> Double)
+  -- ^ heuristic; /must be monotonically decreasing in both arguments/
+  -> Map v Count
   -> Set v
   -> Bool
   -- ^ optionally randomize the order of states with the same count
@@ -561,10 +570,15 @@ compileMergePairs
   -- ^ ((length of list,
   --     [(heuristic value, ((state 1, count 1), (state 2, count 2)))]),
   --    updated RandomGen state)
-compileMergePairs cntM grpS doShuffle g
-  = n `seq` ((n, coerce $ sortedCartesianProductWith' (add `on` snd) vs (tail vs)), g')
+compileMergePairs heuristic cntM grpS doShuffle g
+  = n `seq` ( ( n
+              , coerce
+                $ sortedCartesianProductWith'
+                    ((Down .) . heuristic `on` snd)
+                    vs
+                    (tail vs) )
+            , g' )
   where n     = let s = M.size cntM' in s * (s - 1) `div` 2
-        add x y = Down $ negate $ x + y
         cntM' = M.intersection cntM (M.fromSet (const ()) grpS)
         (vs, g')
           = ( if doShuffle
@@ -600,6 +614,23 @@ takeAtLeastOn project = sanitize
         then y : takeOn py ys
         else []
       where py = project y
+
+
+-- | Negated sum, i.e., @negate (x + y)@ where @x@ and @y@ are the counts of
+-- the two merged states.
+heuristicCountSum :: Count -> Count -> Double
+heuristicCountSum x y = negate (x + y)
+
+
+-- | A subterm of the actual likelihood delta induced by merging (cf.
+-- 'likelihoodDelta'), namely @log₂ x^x * y^y / (x+y)^(x+y)@ where @x@ and @y@
+-- are the counts of the two merged states.
+heuristicPartialLikelihoodDelta :: Count -> Count -> Double
+heuristicPartialLikelihoodDelta x y = ln (p x * p y / p (x + y)) / log 2
+  where
+    -- | power with itself
+    p :: Double -> Log Double
+    p x = Exp (x * log x)  -- = Exp (log (x ** x))
 
 
 normalizeLklhdByMrgdStates :: (Int, Int, Int) -> Log Double -> Log Double

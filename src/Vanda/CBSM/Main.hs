@@ -172,6 +172,7 @@ mainArgs opts@CBSM{..} = do
             , confEvaluate         = if flagNormalize
                                      then normalizeLklhdByMrgdStates
                                      else flip const
+            , confHeuristic        = heuristic flagHeuristic
             , confBeamWidth        = flagBeamWidth
             , confDynamicBeamWidth = flagDynamicBeamWidth
             , confShuffleStates    = flagShuffle == FSStates
@@ -207,6 +208,7 @@ mainArgs CBSMContinue{..} = do
             , confEvaluate         = if flagNormalize opts
                                      then normalizeLklhdByMrgdStates
                                      else flip const
+            , confHeuristic        = heuristic (flagHeuristic opts)
             , confBeamWidth        = flagBeamWidth
             , confDynamicBeamWidth = flagDynamicBeamWidth opts
             , confShuffleStates    = flagShuffle opts == FSStates
@@ -414,6 +416,11 @@ mergeGroups b flags
   . M.toList
   where
     features = map (rmFeature b) (nub flags)
+
+
+heuristic :: FlagHeuristic -> Double -> Double -> Double
+heuristic FHCountSum               = heuristicCountSum
+heuristic FHPartialLikelihoodDelta = heuristicPartialLikelihoodDelta
 
 
 createWSA
