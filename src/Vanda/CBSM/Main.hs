@@ -75,6 +75,7 @@ import qualified Vanda.Features as F
 import qualified Vanda.Hypergraph as H
 import           Vanda.Hypergraph.DotExport (fullHypergraph2dot)
 import           Vanda.Hypergraph.Recognize
+import           Vanda.Util.CommandlineInfo (commandlineInfo)
 import           Vanda.Util.Histogram
 import           Vanda.Util.IO
 import           Vanda.Util.Timestamps
@@ -117,6 +118,7 @@ mainArgs opts@CBSM{..} = do
     exitFailure
   createDirectoryIfMissing True flagDir
   writeFile (flagDir </> fileNameOptions) (show opts)
+  appendFile (flagDir </> fileNameCommandlineInfo) =<< commandlineInfo
   (g, tM) <- forestToGrammar' <$> SExp.readCorpora flagsCorpora
   encodeFile (flagDir </> fileNameIntToTreeMap) (tM :: BinaryIntToTreeMap)
   numCapabilities <- getNumCapabilities
@@ -182,6 +184,9 @@ mainArgs opts@CBSM{..} = do
 
 mainArgs CBSMContinue{..} = do
   opts <- read <$> readFile (flagDir </> fileNameOptions) :: IO Args
+  appendFile (flagDir </> fileNameCommandlineInfo)
+    .   (unlines ["", replicate 78 '─', ""] ++)
+    =<< commandlineInfo
   it   <- read <$> readFile (flagDir </> fileNameLastIteration) :: IO Int
   g    <- decodeFile (flagDir </> fileNameGrammar it) :: IO BinaryCRTG
   info <- decodeFile (flagDir </> fileNameInfo    it) :: IO BinaryInfo

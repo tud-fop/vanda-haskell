@@ -41,6 +41,7 @@ fileNameStatistics       ::        FilePath
 fileNameEvaluations      ::        FilePath
 fileNameEquivBeamIndizes ::        FilePath
 fileNameLogBeamVerbose   ::        FilePath
+fileNameCommandlineInfo  = "commandline"                        <.> "txt"
 fileNameGrammar        i = "grammar-"              ++ show0 9 i <.> "bin"
 fileNameIntToTreeMap     = "int2tree"                           <.> "bin"
 fileNameInfo           i = "info-"                 ++ show0 9 i <.> "bin"
