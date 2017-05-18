@@ -145,8 +145,8 @@ mainArgs opts@CBSM{..} = do
       \likelihood delta,\
       \log₂ evaluation of merge,\
       \evaluation of merge,\
-      \heuristic chosen,\
-      \heuristic lowest,\
+      \heuristic,\
+      \best heuristic,\
       \total saturation steps"
     hPutStrLn hEvals "iteration,beam index low,beam index high,\
       \log₂ evaluation of merge,evaluation of merge"
