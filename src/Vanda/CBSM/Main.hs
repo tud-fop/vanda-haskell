@@ -190,7 +190,8 @@ mainArgs CBSMContinue{..} = do
   it   <- read <$> readFile (flagDir </> fileNameLastIteration) :: IO Int
   g    <- decodeFile (flagDir </> fileNameGrammar it) :: IO BinaryCRTG
   info <- decodeFile (flagDir </> fileNameInfo    it) :: IO BinaryInfo
-  groups <- mergeGroups (flagBinarization opts) (flagRestrictMerge opts)
+  groups <- mergeGroups (SExp.flagBinarization $ flagsCorpora opts)
+                        (flagRestrictMerge opts)
     <$> (decodeFile (flagDir </> fileNameIntToTreeMap)
            :: IO BinaryIntToTreeMap)
   numCapabilities <- getNumCapabilities
