@@ -108,7 +108,7 @@ insert new old
       = flip $ foldl' (\ (Merge m) k -> Merge (RM.insert k representative m))
 
 
--- | Find maximum and return it and the remainding list.
+-- | Find maximum and return it and the remaining list.
 -- /Caution:/ The returned list may have another order.
 cutMaximumBy :: (a -> a -> Ordering) -> [a] -> (a, [a])
 cutMaximumBy cmp (x : xs) = go x xs
