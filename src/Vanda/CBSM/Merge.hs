@@ -12,6 +12,8 @@
 -- Portability :  portable
 -----------------------------------------------------------------------------
 
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Vanda.CBSM.Merge
 ( Merge()
 , empty
@@ -76,13 +78,14 @@ fromLists :: Ord a => [[a]] -> Merge a
 fromLists = fromSets . map S.fromList
 
 
-insert :: Ord a => Set a -> Merge a -> Merge a
+insert :: forall a . Ord a => Set a -> Merge a -> Merge a
 insert new old
   | S.size new < 2 = old
   | otherwise
     = insertList (S.toList new)
     $ insertList todo old
   where
+    eqClasses :: [(a, Set a)]
     eqClasses
       = M.toList
       $ M.intersection (backward old)
@@ -91,12 +94,16 @@ insert new old
       $ M.elems  -- there might be double entries
       $ M.intersection (forward old)
       $ M.fromSet undefined new
+
+    representative :: a; todo :: [a]
     (representative, todo)
       = if null eqClasses
         then (S.findMin new, [])
         else let ((r, _), xs)
                    = cutMaximumBy (comparing (S.size . snd)) eqClasses
              in (r, concatMap (S.toList . snd) xs)
+
+    insertList :: [a] -> Merge a -> Merge a
     insertList
       = flip $ foldl' (\ (Merge m) k -> Merge (RM.insert k representative m))
 
