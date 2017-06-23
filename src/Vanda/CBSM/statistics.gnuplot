@@ -2,8 +2,8 @@
 
 
 # assumed columns in statistics.csv file:
-# 1         2          3      4       5               6            7           8           9                10           11            12                    13                     14                15                        16
-# CPU time  iteration  rules  states  initial states  merge pairs  beam width  beam index  candidate index  rule merges  state merges  initial-state merges  log₂ likelihood delta  likelihood delta  log₂ evaluation of merge  evaluation of merge
+# 1         2          3      4       5               6            7           8           9                 10           11            12                    13                     14                15                        16                   17                18                19
+# CPU time  iteration  rules  states  initial states  merge pairs  beam width  beam index  saturation steps  rule merges  state merges  initial-state merges  log₂ likelihood delta  likelihood delta  log₂ evaluation of merge  evaluation of merge  heuristic chosen  heuristic lowest  total saturation steps
 
 
 set datafile separator ','
@@ -12,7 +12,7 @@ set key autotitle columnhead
 
 # we just want to set GPVAL_DATA_?_M??
 set terminal dumb
-plot 'statistics.csv' using 2:7 with dots
+plot 'statistics.csv' using 2:8 with dots
 iteration_min = GPVAL_DATA_X_MIN
 iteration_max = GPVAL_DATA_X_MAX
 beamindex_min = GPVAL_DATA_Y_MIN
