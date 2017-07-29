@@ -158,10 +158,12 @@ library
     , Vanda.PBSM.Types
     , Vanda.Token
     , Vanda.Util
+    , Vanda.Util.CommandlineInfo
     , Vanda.Util.Histogram
     , Vanda.Util.IO
     , Vanda.Util.Memorysavers
     , Vanda.Util.PrettyPrint
+    , Vanda.Util.ShellEscape
     , Vanda.Util.Timestamps
     , Vanda.Util.Tree
   if flag(gtk)
