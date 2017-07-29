@@ -1,6 +1,6 @@
 name:           Vanda
 version:        0.1
-cabal-version:  >= 1.8
+cabal-version:  >= 1.10
 license:        AllRightsReserved
 license-file:   LICENSE
 copyright:      (c) 2012 Vanda Team, Technische Universität Dresden
