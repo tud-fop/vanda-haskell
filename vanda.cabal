@@ -88,6 +88,7 @@ library
     , Vanda.Algorithms.MATLearner.TreeAutomaton
     , Vanda.Algorithms.MATLearner.TreesContexts
     , Vanda.CBSM.CountBasedStateMerging
+    , Vanda.CBSM.CRTG
     , Vanda.CBSM.Dovetailing
     , Vanda.CBSM.Merge
     , Vanda.CBSM.ProductOrder

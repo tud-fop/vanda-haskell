@@ -1,6 +1,7 @@
 module Vanda.CBSM.CountBasedStateMergingTests where
 import Vanda.CBSM.CountBasedStateMerging
 
+import           Vanda.CBSM.CRTG (CRTG(CRTG), Rule(Rule), bidiStar, forwardStar)
 import qualified Vanda.CBSM.Merge as Merge
 import           Vanda.Corpus.TreeTerm
 

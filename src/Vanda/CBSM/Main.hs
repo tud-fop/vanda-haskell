@@ -65,6 +65,7 @@ import           Vanda.Algorithms.EarleyMonadic
 import qualified Vanda.Algorithms.Earley.WSA as WSA
 import           Vanda.CBSM.CmdArgs
 import           Vanda.CBSM.CountBasedStateMerging
+import           Vanda.CBSM.CRTG hiding (rules)
 import           Vanda.CBSM.Merge (prettyPrintMerge)
 import           Vanda.CBSM.StatisticsRenderer
 import           Vanda.Corpus.Binarization (Nodetype(..))
