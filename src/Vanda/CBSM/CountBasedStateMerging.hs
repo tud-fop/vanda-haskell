@@ -90,10 +90,14 @@ errorHere :: String -> String -> a
 errorHere = Control.Error.errorHere "Vanda.CBSM.CountBasedStateMerging"
 
 
+-- | 'CRTG' rules. The field names are inspired by 'H.Hyperedge'.
 data Rule s t = Rule
   { to    :: !s
+  -- ^ left-hand side
   , from  :: ![s]
+  -- ^ right-hand side
   , label :: !t
+  -- ^ terminal symbol
   } deriving (Eq, Ord)
 
 instance (Show s, Show t) => Show (Rule s t) where
@@ -110,11 +114,15 @@ instance (NFData s, NFData t) => NFData (Rule s t) where
 type Count = Double
 
 
--- | Count RTG
+-- | Count RTG – A regular tree grammar with associated counts, e.g., w.r.t.
+-- a corpus.
 data CRTG v l = CRTG
   { cntRule  :: !(Map (Rule v l) Count)
+  -- ^ counts of the rules
   , cntState :: !(Map v Count)
+  -- ^ counts of the states
   , cntInit  :: !(Map v Count)
+  -- ^ counts of the initial states
   } deriving Show
 
 instance (B.Binary v, B.Binary l) => B.Binary (CRTG v l) where
@@ -129,6 +137,8 @@ rules :: CRTG v l -> [Rule v l]
 rules = M.keys . cntRule
 
 
+-- | A type for fast lookup of 'Rule's with a specific state in 'from' and a
+-- specific 'label'.
 type ForwardStar v l = Map v (Map l [Rule v l])
 
 
@@ -141,7 +151,8 @@ forwardStar
       $ (S.toList . S.fromList) vs
 
 
--- | bidirectional star: finding rules with state
+-- | Bidirectional Star: A type for fast lookup of 'Rule's that use a specific
+-- state (i.e., the state is equal to 'to' or contained in 'from').
 type BidiStar v l = Map v [Rule v l]
 
 
@@ -211,6 +222,9 @@ prettyPrintCRTG showV showL CRTG{..}
       ]
 
 
+-- | Convert a 'CRTG' into a 'H.Hypergraph' and a 'M.Map' of initial weights.
+-- The 'H.ident's of the 'H.Hyperedge's are abused to store a weight. The
+-- weights are probabilities, namely the normalized counts of the 'CRTG'.
 toHypergraph
   :: (H.Hypergraph h, Ord v) => CRTG v l -> (h v l Double, Map v Double)
   -- not the most general type: Double is specific
@@ -224,6 +238,8 @@ toHypergraph CRTG{..}
     )
 
 
+-- | List the derivations of a 'CRTG' together with their probabilities in
+-- descending order w.r.t. the probabilities.
 bests :: (Ord v, Eq l) => CRTG v l -> [(Double, H.Derivation v l Double)]
 bests g
   = mergeListsBy (comparing (Down . fst))
@@ -236,6 +252,7 @@ bests g
     feature = F.Feature (\ _ i xs -> i * product xs) V.singleton
 
 
+-- | Helper to prevent ambiguous type of a 'H.Hypergraph'.
 asBackwardStar :: H.BackwardStar v l i -> H.BackwardStar v l i
 asBackwardStar = id
 
@@ -288,6 +305,7 @@ instance Read a => Read (OrdTree a) where
     where unpack (OrdTree t) = t
 -}
 
+-- | Same as 'forestToGrammar'' assuming 'Count' @1@ for every 'Tree'.
 forestToGrammar
   :: Ord l
   => [Tree l]
@@ -295,6 +313,9 @@ forestToGrammar
 forestToGrammar = forestToGrammar' . map (\ t -> (t, 1))
 
 
+-- | Create canonical 'CRTG' from a 'Tree' corpus, i.e., a 'CRTG' that
+-- generates exactly the corpus. The states of the 'CRTG' correspond to the
+-- subtrees in the corpus; this correspondence is returned in a 'Map'.
 forestToGrammar'
   :: Ord l
   => [(Tree l, Count)]
@@ -329,9 +350,12 @@ f **** g = \ (xf, xg) (yf, yg) -> (f xf yf, g xg yg)
 -- cbsmStep :: CRTG v l -> CRTG v l
 
 
-
+-- | Type to keep track of the merges done by 'cbsm'. A state is mapped to
+-- a 'MergeTree' representing how the state resulted from merging.
 type MergeHistory v = Map v (MergeTree v)
 
+-- | Type to keep track of the merges done by 'cbsm' leading to a specific
+-- state. A 'MergeTree' corresponds to a state of a 'CRTG'.
 data MergeTree v
   = State v Count            -- ^ state and count before any merge
   | Merge Int [MergeTree v]  -- ^ iteration and merged states
@@ -357,32 +381,61 @@ instance Functor MergeTree where
   fmap f (Merge i xs) = Merge i (fmap (fmap f) xs)
 
 
+-- | Information record holding various information about an iteration of
+-- 'cbsm'.
 data Info g v = Info
   { infoRandomGen             :: !g
+  -- ^ state of the prng after an iteration
   , infoIteration             :: !Int
+  -- ^ number of iteration
   , infoMergePairs            :: !Int
+  -- ^ total number of possible merges
   , infoBeamWidth             :: !Int
+  -- ^ number of actually explored merges
   , infoBeamIndex             :: !Int
+  -- ^ index of chosen merge within the beam
   , infoBeam                  :: ![BeamEntry v]
+  -- ^ detailed information about explored merges. This list is called the
+  -- /beam/. It is sorted in descending order w.r.t. 'beHeuristic'.
   , infoEquivalentBeamIndizes :: ![Int]
+  -- ^ indices of merges that were evaluated as good as the chosen merge
   , infoMergeTreeMap          :: !(MergeHistory v)
+  -- ^ the merges that led to the current states
   }
 
 
+-- | Information record holding various information about a merge candidate
+-- explored by 'cbsm'.
 data BeamEntry v = BeamEntry
   { beIndex           :: !Int
+  -- ^ index of the merge within the beam (cf. 'infoBeam'). The lowest index
+  -- is @1@.
   , beHeuristic       :: !Double
+  -- ^ the heuristic value for this merge (cf. 'confHeuristic')
   , beEvaluation      :: !(Log Double)
+  -- ^ the evaluation of this merge (cf. 'confEvaluate')
   , beLikelihoodDelta :: !(Log Double)
+  -- ^ the change in likelihood induced by this merge (cf. 'likelihoodDelta').
+  -- We have:
+  -- @'beLikelihoodDelta' = 'beFactorRules' * 'beFactorStates' * 'beFactorInitials'@
   , beFactorRules     :: !(Log Double)
+  -- ^ the factor in 'beLikelihoodDelta' contributed by merged rules
   , beFactorStates    :: !(Log Double)
+  -- ^ the factor in 'beLikelihoodDelta' contributed by merged states
   , beFactorInitials  :: !(Log Double)
+  -- ^ the factor in 'beLikelihoodDelta' contributed by merged initial states
   , beMergedRules     :: !Int
+  -- ^ number of rules merged by this merge
   , beMergedStates    :: !Int
+  -- ^ number of states merged by this merge
   , beMergedInitials  :: !Int
+  -- ^ number of initial states merged by this merge
   , beMergeSeed       :: !(v, v)
+  -- ^ the states that led to this merge via 'saturateMerge'
   , beSaturationSteps :: !Int
+  -- ^ number of iterations of 'saturateMerge' for this merge
   , beMergeSaturated  :: !(Merge v)
+  -- ^ the actual merge (result of 'saturateMerge')
   }
 
 
@@ -415,6 +468,7 @@ instance NFData v => NFData (BeamEntry v) where
   rnf BeamEntry{..} = rnf beMergeSeed `seq` rnf beMergeSaturated
 
 
+-- | Create 'Info' for the zeroth iteration of 'cbsm'.
 initialInfo :: g -> Map v Count -> Info g v
 initialInfo gen m
   = Info
@@ -444,19 +498,22 @@ data ConfigCBSM g v = ConfigCBSM
   --   the largest heuristic values are chosen.
   --   /Note: The heuristic has to be monotonically decreasing in both arguments./
   , confBeamWidth        :: Int
-  -- ^ beam width
+  -- ^ (minimal) beam width. Number of merges that are (at least) explored by
+  -- 'cbsm' per iteration.
   , confDynamicBeamWidth :: Bool
   -- ^ actual beam width is at least 'confBeamWidth', but if
   --   @'confDynamicBeamWidth' == 'True'@, then the actual beam width is
   --   extended to capture all candidates that have a heuristic value that is
-  --   as good as for candidates within 'confBeamWidth'
+  --   as good as for the worst candidate within 'confBeamWidth'
   , confShuffleStates    :: Bool
   -- ^ optionally randomize the order of states with the same count
   , confShuffleMerges    :: Bool
   -- ^ optionally randomize the order of merges with the same heuristic value
+  -- (subsumes 'confShuffleStates')
   }
 
 
+-- | The Count-Based State Merging algorithm.
 cbsm
   :: (Ord v, Ord l, RandomGen g)
   => ConfigCBSM g v
@@ -617,14 +674,14 @@ takeAtLeastOn project = sanitize
 
 
 -- | Negated sum, i.e., @negate (x + y)@ where @x@ and @y@ are the counts of
--- the two merged states.
+-- the two merged states (cf. 'beMergeSeed').
 heuristicCountSum :: Count -> Count -> Double
 heuristicCountSum x y = negate (x + y)
 
 
 -- | A subterm of the actual likelihood delta induced by merging (cf.
 -- 'likelihoodDelta'), namely @log₂ x^x * y^y / (x+y)^(x+y)@ where @x@ and @y@
--- are the counts of the two merged states.
+-- are the counts of the two merged states (cf. 'beMergeSeed').
 heuristicPartialLikelihoodDelta :: Count -> Count -> Double
 heuristicPartialLikelihoodDelta x y = ln (p x * p y / p (x + y)) / log 2
   where
@@ -698,6 +755,8 @@ mergeRanking g
 
 
 
+-- | Determine the smallest merge that preserves bottom-up determminism and
+-- subsumes the given merge.
 saturateMerge
   :: forall s t
   .  (Ord s, Ord t)
