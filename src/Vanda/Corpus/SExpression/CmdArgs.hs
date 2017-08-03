@@ -141,7 +141,7 @@ modeFlagsCorpora f
     ]
 
 
-readCorpora :: CmdArgsCorpora -> IO [(Tree String, Int)]
+readCorpora :: (Num c, Read c) => CmdArgsCorpora -> IO [(Tree String, c)]
 readCorpora CmdArgsCorpora{..} = do
   allowedLeafs <- readAllowedLeafs flagFilterByLeafs
   preprocessCorpus
@@ -216,10 +216,11 @@ readSExpressions argCorpora
 
 
 toCorpus
-  :: Bool                  -- ^ cf. 'flagNoneWeightedCorpus'
+  :: (Num c, Read c)
+  => Bool                  -- ^ cf. 'flagNoneWeightedCorpus'
   -> Bool                  -- ^ cf. 'flagNoneAsForests'
   -> [SExpression]         -- ^ the 'SExpression's to be converted
-  -> [(Tree String, Int)]  -- ^ Trees with associated counts
+  -> [(Tree String, c)]  -- ^ Trees with associated counts
 toCorpus flagWeightedCorpus flagAsForests
    = (if flagAsForests      then concatMap (floatFst . first SExp.toForest)
                             else map (first SExp.toTree))
@@ -240,8 +241,8 @@ preprocessCorpus
   -> Maybe [String]    -- ^ cf. 'flagReqFilterByLeafs' and 'readAllowedLeafs'
   -> Int               -- ^ cf. 'flagReqFilterByLength'
   -> FlagBinarization  -- ^ cf. 'flagReqBinarization'
-  -> [(Tree String, Int)]
-  -> [(Tree String, Int)]
+  -> [(Tree String, c)]
+  -> [(Tree String, c)]
 preprocessCorpus
      flagPennFilter
      flagDefoliate

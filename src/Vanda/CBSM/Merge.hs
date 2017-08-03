@@ -1,7 +1,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Vanda.CBSM.Merge
--- Copyright   :  (c) Technische Universität Dresden 2014
+-- Copyright   :  (c) Technische Universität Dresden 2014–2017
 -- License     :  Redistribution and use in source and binary forms, with
 --                or without modification, is ONLY permitted for teaching
 --                purposes at Technische Universität Dresden AND IN
@@ -11,6 +11,8 @@
 -- Stability   :  unknown
 -- Portability :  portable
 -----------------------------------------------------------------------------
+
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Vanda.CBSM.Merge
 ( Merge()
@@ -76,13 +78,14 @@ fromLists :: Ord a => [[a]] -> Merge a
 fromLists = fromSets . map S.fromList
 
 
-insert :: Ord a => Set a -> Merge a -> Merge a
+insert :: forall a . Ord a => Set a -> Merge a -> Merge a
 insert new old
   | S.size new < 2 = old
   | otherwise
     = insertList (S.toList new)
     $ insertList todo old
   where
+    eqClasses :: [(a, Set a)]
     eqClasses
       = M.toList
       $ M.intersection (backward old)
@@ -91,17 +94,21 @@ insert new old
       $ M.elems  -- there might be double entries
       $ M.intersection (forward old)
       $ M.fromSet undefined new
+
+    representative :: a; todo :: [a]
     (representative, todo)
       = if null eqClasses
         then (S.findMin new, [])
         else let ((r, _), xs)
                    = cutMaximumBy (comparing (S.size . snd)) eqClasses
              in (r, concatMap (S.toList . snd) xs)
+
+    insertList :: [a] -> Merge a -> Merge a
     insertList
       = flip $ foldl' (\ (Merge m) k -> Merge (RM.insert k representative m))
 
 
--- | Find maximum and return it and the remainding list.
+-- | Find maximum and return it and the remaining list.
 -- /Caution:/ The returned list may have another order.
 cutMaximumBy :: (a -> a -> Ordering) -> [a] -> (a, [a])
 cutMaximumBy cmp (x : xs) = go x xs

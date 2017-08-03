@@ -3,7 +3,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Vanda.CBSM.CountBasedStateMerging
--- Copyright   :  (c) Technische Universität Dresden 2014
+-- Copyright   :  (c) Technische Universität Dresden 2014–2017
 -- License     :  Redistribution and use in source and binary forms, with
 --                or without modification, is ONLY permitted for teaching
 --                purposes at Technische Universität Dresden AND IN
@@ -15,28 +15,20 @@
 -----------------------------------------------------------------------------
 
 module Vanda.CBSM.CountBasedStateMerging
-( Rule(..)
-, CRTG(..)
-, MergeTree(..)
-, forestToGrammar
-, forestToGrammar'
+( MergeTree(..)
 , Info(..)
 , BeamEntry(..)
 , initialInfo
 , ConfigCBSM(..)
 , cbsm
+, heuristicCountSum
+, heuristicPartialLikelihoodDelta
 , normalizeLklhdByMrgdStates
-, prettyPrintCRTG
-, toHypergraph
-, asBackwardStar
-, bests
 , cbsmStep2
 , refineRanking
 , mergeRanking
 , enrichRanking
 , ruleEquivalenceClasses
-, forwardStar
-, bidiStar
 , likelihoodDelta
 , saturateMerge
 , sortedCartesianProductWith
@@ -54,7 +46,7 @@ import           Control.Parallel.Strategies
 import qualified Data.Array as A
 import qualified Data.Binary as B
 import           Data.Coerce (coerce)
-import           Data.List (foldl', groupBy, intercalate, sortBy, transpose)
+import           Data.List (foldl', groupBy, sortBy)
 import           Data.List.Extra (mergeListsBy, minimaBy)
 import           Data.Function (on)
 import qualified Data.Map.Lazy as ML
@@ -65,9 +57,6 @@ import           Data.Ord (comparing, Down(..))
 import qualified Data.Set as S
 import           Data.Set (Set)
 import qualified Data.IntSet as IS
-import           Data.Tree
-import           Data.Tuple (swap)
-import qualified Data.Vector as V
 import           Numeric.Log (Log(..))
 import           System.Random (RandomGen, split)
 
@@ -75,241 +64,14 @@ import qualified Control.Error
 import           Data.List.Extra (isMultiton)
 import           Data.List.Shuffle (shuffle)
 import           Data.Maybe.Extra (nothingIf)
+import           Vanda.CBSM.CRTG
 import           Vanda.CBSM.Dovetailing
 import           Vanda.CBSM.Merge (Merge)
 import qualified Vanda.CBSM.Merge as Merge
-import qualified Vanda.Features as F
-import qualified Vanda.Hypergraph as H
-import           Vanda.Util.PrettyPrint (columnize)
-import           Vanda.Util.Tree as T
 
 
 errorHere :: String -> String -> a
 errorHere = Control.Error.errorHere "Vanda.CBSM.CountBasedStateMerging"
-
-
-data Rule s t = Rule
-  { to    :: !s
-  , from  :: ![s]
-  , label :: !t
-  } deriving (Eq, Ord)
-
-instance (Show s, Show t) => Show (Rule s t) where
-  show Rule{..} = "Rule " ++ show to ++ " " ++ show from ++ " " ++ show label
-
-instance (B.Binary v, B.Binary l) => B.Binary (Rule v l) where
-  put (Rule x y z) = B.put x >> B.put y >> B.put z
-  get = Rule <$> B.get <*> B.get <*> B.get
-
-instance (NFData s, NFData t) => NFData (Rule s t) where
-  rnf Rule{..} = rnf to `seq` rnf from `seq` rnf label
-
-
--- | Count RTG
-data CRTG v l = CRTG
-  { cntRule  :: !(Map (Rule v l) Int)
-  , cntState :: !(Map v Int)
-  , cntInit  :: !(Map v Int)
-  } deriving Show
-
-instance (B.Binary v, B.Binary l) => B.Binary (CRTG v l) where
-  put (CRTG x y z) = B.put x >> B.put y >> B.put z
-  get = CRTG <$> B.get <*> B.get <*> B.get
-
-instance (NFData l, NFData v) => NFData (CRTG v l) where
-  rnf CRTG{..} = rnf cntState `seq` rnf cntInit `seq` rnf cntRule
-
-
-rules :: CRTG v l -> [Rule v l]
-rules = M.keys . cntRule
-
-
-type ForwardStar v l = Map v (Map l [Rule v l])
-
-
-forwardStar :: (Ord v, Ord l) => [Rule v l] -> ForwardStar v l
-forwardStar
-  = fmap (M.fromListWith (++)) . M.fromListWith (++) . concatMap step
-  where
-    step r@(Rule _ vs l)
-      = map (\ v -> (v, [(l, [r])]))
-      $ (S.toList . S.fromList) vs
-
-
--- | bidirectional star: finding rules with state
-type BidiStar v l = Map v [Rule v l]
-
-
-bidiStar :: Ord v => [Rule v l] -> BidiStar v l
-bidiStar = M.fromListWith (++) . concatMap step
-  where
-    step r@(Rule v vs _)
-      = map (\ v' -> (v', [r]))
-      $ (S.toList . S.fromList) (v : vs)
-
-
-{-
-fromList :: (Ord s, Ord t) => [Rule s t] -> RTG s t
-fromList = unions . concatMap step
-  where
-    step r@(Rule v vs l _) = singletonBW v l r : map (\ v' -> singletonFW v' l r) vs
-    singletonBW v l r = M.singleton v $ M.singleton l (S.singleton r :-> S.empty)
-    singletonFW v l r = M.singleton v $ M.singleton l (S.empty :-> S.singleton r)
-    union = M.unionWith (M.unionWith unionRuleSets)
-    unions = foldl' union M.empty
--}
-{-
-unionRuleSets
-  :: (Ord l, Ord v) => RuleSets v l -> RuleSets v l -> RuleSets v l
-unionRuleSets (bw1 :-> fw1) (bw2 :-> fw2)
-  = (S.union bw1 bw2 :-> S.union fw1 fw2)
--}
-
-prettyPrintCRTG :: Ord v => (v -> String) -> (l -> String) -> CRTG v l -> String
-prettyPrintCRTG showV showL CRTG{..}
-  = unlines
-      [ columnize ["  "]
-        $ transpose
-        $ (["state", "count"] :)
-        $ map (\ (v, c) -> [showV v, show c])
-        $ M.assocs cntState
-      , columnize ["  "]
-        $ transpose
-        $ (["initial", "count", "probability", "log₂ probability"] :)
-        $ map (\ (v, c) -> let s = sum (M.elems cntInit) in
-            [ showV v
-            , show c
-            , show      (fromIntegral c / fromIntegral s :: Double)
-            , show $ ln (fromIntegral c / fromIntegral s :: Log Double)
-                      / log 2
-            ])
-        $ M.assocs cntInit
-      , columnize [" -> ", " ", "  #  ", "  ", "  "]
-        $ transpose
-        $ ( [ "state"
-            , "terminal"
-            , "states"
-            , "count"
-            , "probability"
-            , "log₂ probability"
-            ] : )
-        $ map (\ (Rule{..}, cR) -> let cTo = cntState M.! to in
-            [ showV to
-            , showL label
-            , "[" ++ intercalate ", " (map showV from) ++ "]"
-            , show cR
-            , show      (fromIntegral cR / fromIntegral cTo :: Double)
-            , show $ ln (fromIntegral cR / fromIntegral cTo :: Log Double)
-                      / log 2
-            ])
-        $ M.assocs cntRule
-      ]
-
-
-toHypergraph
-  :: (H.Hypergraph h, Ord v) => CRTG v l -> (h v l Double, Map v Double)
-  -- not the most general type: Double is specific
-toHypergraph CRTG{..}
-  = ( H.mkHypergraph
-      $ map (\ (Rule{..}, count) -> (H.mkHyperedge to from label
-                       (fromIntegral count / fromIntegral (cntState M.! to))))
-      $ M.toList cntRule
-    , M.map (((1 / (fromIntegral $ sum $ M.elems cntInit)) *) . fromIntegral)
-            cntInit
-    )
-
-
-bests :: (Ord v, Eq l) => CRTG v l -> [(Double, H.Derivation v l Double)]
-bests g
-  = mergeListsBy (comparing (Down . fst))
-  $ M.elems
-  $ M.intersectionWith (\ w' -> map (\ (F.Candidate w d _) -> (w' * w, d))) ini
---   $ M.map (map (\ (F.Candidate w d _) -> (w, d)))
-  $ H.bests (asBackwardStar hg) feature (V.singleton 1)
-  where
-    (hg, ini) = toHypergraph g
-    feature = F.Feature (\ _ i xs -> i * product xs) V.singleton
-
-
-asBackwardStar :: H.BackwardStar v l i -> H.BackwardStar v l i
-asBackwardStar = id
-
-
-{-
-data ShowTree a
-  = a :< [ShowTree a]
-  | L a
-  deriving (Eq, Ord, Show)
-
-showTree   (x `Node` []) = L x
-showTree   (x `Node` ts) = x :<     map showTree   ts
-unshowTree (L x        ) = x `Node` []
-unshowTree (x :<     ts) = x `Node` map unshowTree ts
--}
-
-
-{-
-stripQuotes :: String -> String
-stripQuotes cs@[_]                           = cs
-stripQuotes cs@('"' : cs') | last cs' == '"' = init cs'
-stripQuotes cs                               = cs
-
-
-data Term a = Lit a
-            | a :++ a
-            | Term a :+ Term a
-            | Term a :* Term a deriving (Read, Show)
-infixl 6 :+
-infixl 7 :*
-infixl 5 :++
-
-x1, x2 :: Term Int
-x1 = Lit 1 :+ Lit 2 :* Lit 3
-x2 = Lit 4 :* Lit 5 :+ Lit 6
-x3 = OrdTree $ Node x1 [Node x2 [], Node x1 [Node x2 []]]
-x4 = OrdTree $ Node x1 []
-x5 = x4 :++ x4
-
-
-instance Read a => Read (OrdTree a) where
-  readsPrec d = readParen False $ \ cs0 ->
-      [ (OrdTree (Node x (map unpack ts)), cs2)
-      | (x , cs1) <- readsPrec d cs0
-      , (ts, cs2) <- case lex cs1 of
-                      ("(", _) : _ -> readsPrec 11 cs1
-                      ("[", _) : _ -> readsPrec 11 cs1
-                      _ ->  [([], cs1)]
-      ]
-    where unpack (OrdTree t) = t
--}
-
-forestToGrammar
-  :: Ord l
-  => [Tree l]
-  -> (CRTG Int l, Map Int (Tree l))
-forestToGrammar = forestToGrammar' . map (\ t -> (t, 1))
-
-
-forestToGrammar'
-  :: Ord l
-  => [(Tree l, Int)]
-  -> (CRTG Int l, Map Int (Tree l))
-forestToGrammar' corpus
-  = ( CRTG
-        (M.mapKeys toRule cntTrees)
-        (M.mapKeysMonotonic (ints M.!) cntTrees)
-        (M.mapKeysMonotonic (ints M.!) $ M.fromListWith (+) $ coerce corpus)
-    , M.map unOrdTree $ M.fromAscList $ map swap $ M.toAscList $ ints
-    )
-  where
-    cntTrees
-      = M.fromListWith (+)
-      $ concatMap
-          (\ (t, c) -> map (\ t' -> (OrdTree t', c)) $ T.subTrees t)
-          corpus
-    ints = snd $ M.mapAccum (\ i _ -> (i + 1, i)) 0 $ cntTrees
-    toRule t@(OrdTree (Node x ts))
-      = Rule (ints M.! t) (map ((ints M.!) . OrdTree) ts) x
 
 
 (****) :: (a -> b -> c) -> (d -> e -> f) -> (a, d) -> (b, e) -> (c, f)
@@ -324,11 +86,14 @@ f **** g = \ (xf, xg) (yf, yg) -> (f xf yf, g xg yg)
 -- cbsmStep :: CRTG v l -> CRTG v l
 
 
-
+-- | Type to keep track of the merges done by 'cbsm'. A state is mapped to
+-- a 'MergeTree' representing how the state resulted from merging.
 type MergeHistory v = Map v (MergeTree v)
 
+-- | Type to keep track of the merges done by 'cbsm' leading to a specific
+-- state. A 'MergeTree' corresponds to a state of a 'CRTG'.
 data MergeTree v
-  = State v Int              -- ^ state and count before any merge
+  = State v Count            -- ^ state and count before any merge
   | Merge Int [MergeTree v]  -- ^ iteration and merged states
 
 
@@ -352,32 +117,61 @@ instance Functor MergeTree where
   fmap f (Merge i xs) = Merge i (fmap (fmap f) xs)
 
 
+-- | Information record holding various information about an iteration of
+-- 'cbsm'.
 data Info g v = Info
   { infoRandomGen             :: !g
+  -- ^ state of the prng after an iteration
   , infoIteration             :: !Int
+  -- ^ number of iteration
   , infoMergePairs            :: !Int
+  -- ^ total number of possible merges
   , infoBeamWidth             :: !Int
+  -- ^ number of actually explored merges
   , infoBeamIndex             :: !Int
+  -- ^ index of chosen merge within the beam
   , infoBeam                  :: ![BeamEntry v]
+  -- ^ detailed information about explored merges. This list is called the
+  -- /beam/. It is sorted in descending order w.r.t. 'beHeuristic'.
   , infoEquivalentBeamIndizes :: ![Int]
+  -- ^ indices of merges that were evaluated as good as the chosen merge
   , infoMergeTreeMap          :: !(MergeHistory v)
+  -- ^ the merges that led to the current states
   }
 
 
+-- | Information record holding various information about a merge candidate
+-- explored by 'cbsm'.
 data BeamEntry v = BeamEntry
   { beIndex           :: !Int
-  , beHeuristic       :: !Int
+  -- ^ index of the merge within the beam (cf. 'infoBeam'). The lowest index
+  -- is @1@.
+  , beHeuristic       :: !Double
+  -- ^ the heuristic value for this merge (cf. 'confHeuristic')
   , beEvaluation      :: !(Log Double)
+  -- ^ the evaluation of this merge (cf. 'confEvaluate')
   , beLikelihoodDelta :: !(Log Double)
+  -- ^ the change in likelihood induced by this merge (cf. 'likelihoodDelta').
+  -- We have:
+  -- @'beLikelihoodDelta' = 'beFactorRules' * 'beFactorStates' * 'beFactorInitials'@
   , beFactorRules     :: !(Log Double)
+  -- ^ the factor in 'beLikelihoodDelta' contributed by merged rules
   , beFactorStates    :: !(Log Double)
+  -- ^ the factor in 'beLikelihoodDelta' contributed by merged states
   , beFactorInitials  :: !(Log Double)
+  -- ^ the factor in 'beLikelihoodDelta' contributed by merged initial states
   , beMergedRules     :: !Int
+  -- ^ number of rules merged by this merge
   , beMergedStates    :: !Int
+  -- ^ number of states merged by this merge
   , beMergedInitials  :: !Int
+  -- ^ number of initial states merged by this merge
   , beMergeSeed       :: !(v, v)
+  -- ^ the states that led to this merge via 'saturateMerge'
   , beSaturationSteps :: !Int
+  -- ^ number of iterations of 'saturateMerge' for this merge
   , beMergeSaturated  :: !(Merge v)
+  -- ^ the actual merge (result of 'saturateMerge')
   }
 
 
@@ -410,7 +204,8 @@ instance NFData v => NFData (BeamEntry v) where
   rnf BeamEntry{..} = rnf beMergeSeed `seq` rnf beMergeSaturated
 
 
-initialInfo :: g -> Map v Int -> Info g v
+-- | Create 'Info' for the zeroth iteration of 'cbsm'.
+initialInfo :: g -> Map v Count -> Info g v
 initialInfo gen m
   = Info
       { infoRandomGen             = gen
@@ -433,20 +228,28 @@ data ConfigCBSM g v = ConfigCBSM
   , confEvaluate         :: (Int, Int, Int) -> Log Double -> Log Double
   -- ^ evaluation function for a merge given number of merged rules, states,
   --   and initial states, and the loss of likelihood
+  , confHeuristic       :: Count -> Count -> Double
+  -- ^ the heuristic used to decide which pairs of states lie in the beam,
+  --   i.e., state pairs that are considered for merging. The state pairs with
+  --   the largest heuristic values are chosen.
+  --   /Note: The heuristic has to be monotonically decreasing in both arguments./
   , confBeamWidth        :: Int
-  -- ^ beam width
+  -- ^ (minimal) beam width. Number of merges that are (at least) explored by
+  -- 'cbsm' per iteration.
   , confDynamicBeamWidth :: Bool
   -- ^ actual beam width is at least 'confBeamWidth', but if
   --   @'confDynamicBeamWidth' == 'True'@, then the actual beam width is
   --   extended to capture all candidates that have a heuristic value that is
-  --   as good as for candidates within 'confBeamWidth'
+  --   as good as for the worst candidate within 'confBeamWidth'
   , confShuffleStates    :: Bool
   -- ^ optionally randomize the order of states with the same count
   , confShuffleMerges    :: Bool
   -- ^ optionally randomize the order of merges with the same heuristic value
+  -- (subsumes 'confShuffleStates')
   }
 
 
+-- | The Count-Based State Merging algorithm.
 cbsm
   :: (Ord v, Ord l, RandomGen g)
   => ConfigCBSM g v
@@ -473,7 +276,7 @@ cbsmGo cache conf@ConfigCBSM{..} prev@(g, info@Info{..})
         (mergePairs, cands)
           = sum *** processMergePairs
           $ unzip
-          $ zipWith (\ grpS -> fst . compileMergePairs (cntState g) grpS confShuffleStates)
+          $ zipWith (\ grpS -> fst . compileMergePairs confHeuristic (cntState g) grpS confShuffleStates)
               confMergeGroups
               (evalState (sequence $ repeat $ state $ split) genState)
         processMergePairs
@@ -491,7 +294,7 @@ cbsmGo cache conf@ConfigCBSM{..} prev@(g, info@Info{..})
               then \ xs -> fst $ shuffleGroupsBy ((==) `on` fst) xs genMerge
               else id
             )
-          . mergeListsBy (comparing fst)
+          . mergeListsBy (comparing (Down . fst))
         processMergePair i h pair@(v1, v2)
           = BeamEntry
               { beIndex           = i
@@ -549,17 +352,25 @@ cbsmGo cache conf@ConfigCBSM{..} prev@(g, info@Info{..})
 
 compileMergePairs
   :: (Ord v, RandomGen g)
-  => Map v Int
+  => (Count -> Count -> Double)
+  -- ^ heuristic; /must be monotonically decreasing in both arguments/
+  -> Map v Count
   -> Set v
   -> Bool
   -- ^ optionally randomize the order of states with the same count
   -> g
-  -> ((Int, [(Int, ((v, Int), (v, Int)))]), g)
+  -> ((Int, [(Double, ((v, Count), (v, Count)))]), g)
   -- ^ ((length of list,
   --     [(heuristic value, ((state 1, count 1), (state 2, count 2)))]),
   --    updated RandomGen state)
-compileMergePairs cntM grpS doShuffle g
-  = n `seq` ((n, sortedCartesianProductWith' ((+) `on` snd) vs (tail vs)), g')
+compileMergePairs heuristic cntM grpS doShuffle g
+  = n `seq` ( ( n
+              , coerce
+                $ sortedCartesianProductWith'
+                    ((Down .) . heuristic `on` snd)
+                    vs
+                    (tail vs) )
+            , g' )
   where n     = let s = M.size cntM' in s * (s - 1) `div` 2
         cntM' = M.intersection cntM (M.fromSet (const ()) grpS)
         (vs, g')
@@ -598,6 +409,23 @@ takeAtLeastOn project = sanitize
       where py = project y
 
 
+-- | Negated sum, i.e., @negate (x + y)@ where @x@ and @y@ are the counts of
+-- the two merged states (cf. 'beMergeSeed').
+heuristicCountSum :: Count -> Count -> Double
+heuristicCountSum x y = negate (x + y)
+
+
+-- | A subterm of the actual likelihood delta induced by merging (cf.
+-- 'likelihoodDelta'), namely @log₂ x^x * y^y / (x+y)^(x+y)@ where @x@ and @y@
+-- are the counts of the two merged states (cf. 'beMergeSeed').
+heuristicPartialLikelihoodDelta :: Count -> Count -> Double
+heuristicPartialLikelihoodDelta x y = ln (p x * p y / p (x + y)) / log 2
+  where
+    -- | power with itself
+    p :: Double -> Log Double
+    p x = Exp (x * log x)  -- = Exp (log (x ** x))
+
+
 normalizeLklhdByMrgdStates :: (Int, Int, Int) -> Log Double -> Log Double
 normalizeLklhdByMrgdStates (_, mrgS, _) (Exp l)
   = Exp (l / fromIntegral mrgS)  -- = Exp l ** recip (fromIntegral mrgS)
@@ -614,7 +442,7 @@ cbsmStep2 g
 cbsmStep1
   :: (Ord v, Ord l)
   => CRTG v l
-  -> [((Int, ((v, Int), (v, Int))), ([[v]], (Log Double, (Log Double, Log Double, Log Double), (Int, Int, Int))))]
+  -> [((Log Double, ((v, Count), (v, Count))), ([[v]], (Log Double, (Log Double, Log Double, Log Double), (Int, Int, Int))))]
 cbsmStep1 g
   = map (\ x@(_, ((v1, _), (v2, _))) ->
         (,) x
@@ -653,15 +481,18 @@ enrichRanking (xs, g)
         satMrg = fst . saturateMerge (forwardStar (rules g))
 
 
-mergeRanking :: CRTG v l -> ([(Int, ((v, Int), (v, Int)))], CRTG v l)
+mergeRanking :: CRTG v l -> ([(Log Double, ((v, Count), (v, Count)))], CRTG v l)
 mergeRanking g
-  = (sortedCartesianProductWith' ((+) `on` snd) vs (tail vs), g)
+  = (sortedCartesianProductWith' (add `on` snd) vs (tail vs), g)
     -- ToDo: instead of (+) maybe use states part of likelihood
   where
+    add x y = Exp (x + y)
     vs = sortBy (comparing snd) (M.toList (cntState g))
 
 
 
+-- | Determine the smallest merge that preserves bottom-up determminism and
+-- subsumes the given merge.
 saturateMerge
   :: forall s t
   .  (Ord s, Ord t)
@@ -832,15 +663,14 @@ likelihoodDelta CRTG{..} = \ mrgs ->
     notSingle  _  = True
 
     -- | power with itself
-    p :: Int -> Log Double
-    p n = Exp (x * log x)  -- = Exp (log (x ** x))
-      where x = fromIntegral n
+    p :: Double -> Log Double
+    p x = Exp (x * log x)  -- = Exp (log (x ** x))
 
     productAndSum :: [(Log Double, Int)] -> (Log Double, Int)
     productAndSum = foldl' step (1, 0)
       where step (a1, a2) (b1, b2) = strictPair (a1 * b1) (a2 + b2)
 
-    productPAndSumAndSize :: [Int] -> (Log Double, Int, Int)
+    productPAndSumAndSize :: [Count] -> (Log Double, Count, Int)
     productPAndSumAndSize = foldl' step (1, 0, -1)
       where step (a1, a2, a3) b = strictTriple (a1 * p b) (a2 + b) (succ a3)
 

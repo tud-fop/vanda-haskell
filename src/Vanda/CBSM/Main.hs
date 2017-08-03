@@ -1,7 +1,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Vanda.CBSM.Main
--- Copyright   :  (c) Technische Universität Dresden 2014–2016
+-- Copyright   :  (c) Technische Universität Dresden 2014–2017
 -- License     :  Redistribution and use in source and binary forms, with
 --                or without modification, is ONLY permitted for teaching
 --                purposes at Technische Universität Dresden AND IN
@@ -65,6 +65,7 @@ import           Vanda.Algorithms.EarleyMonadic
 import qualified Vanda.Algorithms.Earley.WSA as WSA
 import           Vanda.CBSM.CmdArgs
 import           Vanda.CBSM.CountBasedStateMerging
+import           Vanda.CBSM.CRTG hiding (rules)
 import           Vanda.CBSM.Merge (prettyPrintMerge)
 import           Vanda.CBSM.StatisticsRenderer
 import           Vanda.Corpus.Binarization (Nodetype(..))
@@ -75,6 +76,7 @@ import qualified Vanda.Features as F
 import qualified Vanda.Hypergraph as H
 import           Vanda.Hypergraph.DotExport (fullHypergraph2dot)
 import           Vanda.Hypergraph.Recognize
+import           Vanda.Util.CommandlineInfo (commandlineInfo)
 import           Vanda.Util.Histogram
 import           Vanda.Util.IO
 import           Vanda.Util.Timestamps
@@ -117,6 +119,7 @@ mainArgs opts@CBSM{..} = do
     exitFailure
   createDirectoryIfMissing True flagDir
   writeFile (flagDir </> fileNameOptions) (show opts)
+  appendFile (flagDir </> fileNameCommandlineInfo) =<< commandlineInfo
   (g, tM) <- forestToGrammar' <$> SExp.readCorpora flagsCorpora
   encodeFile (flagDir </> fileNameIntToTreeMap) (tM :: BinaryIntToTreeMap)
   numCapabilities <- getNumCapabilities
@@ -143,8 +146,8 @@ mainArgs opts@CBSM{..} = do
       \likelihood delta,\
       \log₂ evaluation of merge,\
       \evaluation of merge,\
-      \heuristic chosen,\
-      \heuristic lowest,\
+      \heuristic,\
+      \best heuristic,\
       \total saturation steps"
     hPutStrLn hEvals "iteration,beam index low,beam index high,\
       \log₂ evaluation of merge,evaluation of merge"
@@ -172,6 +175,7 @@ mainArgs opts@CBSM{..} = do
             , confEvaluate         = if flagNormalize
                                      then normalizeLklhdByMrgdStates
                                      else flip const
+            , confHeuristic        = heuristic flagHeuristic
             , confBeamWidth        = flagBeamWidth
             , confDynamicBeamWidth = flagDynamicBeamWidth
             , confShuffleStates    = flagShuffle == FSStates
@@ -181,10 +185,14 @@ mainArgs opts@CBSM{..} = do
 
 mainArgs CBSMContinue{..} = do
   opts <- read <$> readFile (flagDir </> fileNameOptions) :: IO Args
+  appendFile (flagDir </> fileNameCommandlineInfo)
+    .   (unlines ["", replicate 78 '─', ""] ++)
+    =<< commandlineInfo
   it   <- read <$> readFile (flagDir </> fileNameLastIteration) :: IO Int
   g    <- decodeFile (flagDir </> fileNameGrammar it) :: IO BinaryCRTG
   info <- decodeFile (flagDir </> fileNameInfo    it) :: IO BinaryInfo
-  groups <- mergeGroups (flagBinarization opts) (flagRestrictMerge opts)
+  groups <- mergeGroups (SExp.flagBinarization $ flagsCorpora opts)
+                        (flagRestrictMerge opts)
     <$> (decodeFile (flagDir </> fileNameIntToTreeMap)
            :: IO BinaryIntToTreeMap)
   numCapabilities <- getNumCapabilities
@@ -207,6 +215,7 @@ mainArgs CBSMContinue{..} = do
             , confEvaluate         = if flagNormalize opts
                                      then normalizeLklhdByMrgdStates
                                      else flip const
+            , confHeuristic        = heuristic (flagHeuristic opts)
             , confBeamWidth        = flagBeamWidth
             , confDynamicBeamWidth = flagDynamicBeamWidth opts
             , confShuffleStates    = flagShuffle opts == FSStates
@@ -414,6 +423,11 @@ mergeGroups b flags
   . M.toList
   where
     features = map (rmFeature b) (nub flags)
+
+
+heuristic :: FlagHeuristic -> Double -> Double -> Double
+heuristic FHCountSum               = heuristicCountSum
+heuristic FHPartialLikelihoodDelta = heuristicPartialLikelihoodDelta
 
 
 createWSA

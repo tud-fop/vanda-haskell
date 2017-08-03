@@ -95,6 +95,7 @@ library
     , Vanda.Algorithms.MATLearner.TreeAutomaton
     , Vanda.Algorithms.MATLearner.TreesContexts
     , Vanda.CBSM.CountBasedStateMerging
+    , Vanda.CBSM.CRTG
     , Vanda.CBSM.Dovetailing
     , Vanda.CBSM.Merge
     , Vanda.CBSM.ProductOrder
@@ -169,10 +170,12 @@ library
     , Vanda.PBSM.Types
     , Vanda.Token
     , Vanda.Util
+    , Vanda.Util.CommandlineInfo
     , Vanda.Util.Histogram
     , Vanda.Util.IO
     , Vanda.Util.Memorysavers
     , Vanda.Util.PrettyPrint
+    , Vanda.Util.ShellEscape
     , Vanda.Util.Timestamps
     , Vanda.Util.Tree
   if flag(gtk)
