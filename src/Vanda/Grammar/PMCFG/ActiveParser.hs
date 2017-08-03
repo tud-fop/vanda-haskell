@@ -51,6 +51,7 @@
 
 module Vanda.Grammar.PMCFG.ActiveParser
     ( parse
+    , parse'
     ) where
 
 import Data.Converging (Converging)
@@ -116,13 +117,19 @@ parse :: forall nt t wt.(Hashable nt, Hashable t, Eq t, Ord wt, Weight wt, Ord n
       -> Int
       -> [t]
       -> [Tree (Rule nt t)]
-parse g bw tops w
+parse g bw tops w = parse' (prepare g w) bw tops w
+
+parse' :: forall nt t wt.(Hashable nt, Hashable t, Eq t, Ord wt, Weight wt, Ord nt, Converging wt) 
+       => (MMap.MultiMap nt (Rule nt t, wt), Map.HashMap nt (wt,wt), [nt])
+       -> Int
+       -> Int
+       -> [t]
+       -> [Tree (Rule nt t)]
+parse' (rmap, iow, s') bw tops w
   = C.parseTrees tops s' (singleton $ entire w)
   $ (\ (e, _, _) -> e)
   $ C.chartify (C.empty, MMap.empty, nset) update rules bw tops
     where
-      (rmap, iow, s') = prepare g w
-
       nset = Set.fromList $ filter (not . (`elem` s')) $ Map.keys rmap
       
       rules = initialPrediction w (s' >>= (`MMap.lookup` rmap)) iow

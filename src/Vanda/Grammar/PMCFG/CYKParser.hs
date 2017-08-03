@@ -38,6 +38,7 @@
 
 module Vanda.Grammar.PMCFG.CYKParser 
   ( parse
+  , parse'
   ) where
 
 
@@ -99,12 +100,19 @@ parse :: forall nt t wt. (Eq t, Hashable nt, Hashable t, Semiring wt, Ord wt, Or
               -> [t]                        -- ^ word
               -> [Tree (Rule nt t)]         -- ^ parse trees
 parse g bw trees word
+  = parse' (prepare g word) bw trees word
+
+parse' :: forall nt t wt. (Eq t, Hashable nt, Hashable t, Semiring wt, Ord wt, Ord nt, Converging wt)
+              => (MMap.MultiMap nt (Rule nt t, wt), Map.HashMap nt (wt,wt), [nt])
+              -> Int                        -- ^ beam width
+              -> Int                        -- ^ maximum number of returned trees
+              -> [t]                        -- ^ word
+              -> [Tree (Rule nt t)]         -- ^ parse trees
+parse' (rmap, iow, s') bw trees word
   = C.parseTrees trees s' (singleton $ entire word)
   $ (\ (e, _, _) -> e)
   $ C.chartify (C.empty, MMap.empty, nset) update deductiveRules bw trees
     where
-      (rmap, iow, s') = prepare g word
-
       nset = Set.fromList $ filter (not . (`elem` s')) $ Map.keys rmap
 
       deductiveRules = initialPrediction word (s' >>= (`MMap.lookup` rmap)) iow

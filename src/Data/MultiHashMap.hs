@@ -30,8 +30,8 @@ import           Prelude hiding (lookup)
 import qualified Data.List as L
 import           Control.Arrow (second)
 import           Data.Hashable (Hashable)
-import qualified Data.HashMap.Lazy as M
-import           Data.HashMap.Lazy (HashMap)
+import qualified Data.HashMap.Strict as M
+import           Data.HashMap.Strict (HashMap)
 
 
 type MultiMap k v = HashMap k [v]

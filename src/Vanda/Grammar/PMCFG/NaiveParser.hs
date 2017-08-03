@@ -27,6 +27,7 @@
 
 module Vanda.Grammar.PMCFG.NaiveParser
   ( parse
+  , parse'
   ) where
 
 import Data.Converging (Converging)
@@ -45,7 +46,7 @@ import qualified Data.HashSet      as Set
 
 -- | Passive and active items.
 data Item nt t wt 
-  = Active (Rule nt t) wt [nt] Int [Rangevector] InstantiatedFunction wt
+  = Active (Rule nt t) wt [nt] [Rangevector] InstantiatedFunction wt
   | Passive nt Rangevector (C.Backtrace nt t wt) wt
 
 
@@ -57,7 +58,7 @@ type Container nt t wt = ( C.Chart nt t wt
 
 
 instance (Eq nt, Eq t) => Eq (Item nt t wt) where
-  (Active r _ _ _ rhos fs _) == (Active r' _ _ _ rhos' fs' _) = r    == r' 
+  (Active r _ _ rhos fs _) == (Active r' _ _ rhos' fs' _) = r    == r' 
                                                              && rhos == rhos' 
                                                              && fs   == fs'
   (Passive a rv _ _) == (Passive a' rv' _ _) = a  == a'
@@ -66,14 +67,14 @@ instance (Eq nt, Eq t) => Eq (Item nt t wt) where
 
 
 instance (Hashable nt, Hashable t) => Hashable (Item nt t wt) where
-    salt `hashWithSalt` (Active r _ _ _ rhos _ _)
+    salt `hashWithSalt` (Active r _ _ rhos _ _)
       = salt `hashWithSalt` r `hashWithSalt` rhos
     salt `hashWithSalt` (Passive a rho _ _)
       = salt `hashWithSalt` a `hashWithSalt` rho
 
 
 instance (Show nt, Show t) => Show (Item nt t wt) where
-  show (Active r _ as _ _ fs _) 
+  show (Active r _ as _ fs _) 
     = "[active] " ++ show r ++ "\n"
     ++ "nonterminals left: " ++ show as ++ "\n"
     ++ "current status: " ++ prettyPrintInstantiatedFunction fs
@@ -88,7 +89,16 @@ parse :: forall nt t wt. (Hashable nt, Hashable t, Eq t, Ord wt, Weight wt, Ord 
               -> Int                -- ^ max number of parse trees
               -> [t]                -- ^ terminal word
               -> [Tree (Rule nt t)] -- ^ derivation tree of applied rules
-parse g bw trees word 
+parse g bw trees word
+  = parse' (prepare g word) bw trees word
+
+parse' :: forall nt t wt. (Hashable nt, Hashable t, Eq t, Ord wt, Weight wt, Ord nt, Converging wt)
+              => (MMap.MultiMap nt (Rule nt t, wt), Map.HashMap nt (wt,wt), [nt])
+              -> Int                        -- ^ beam width
+              -> Int                        -- ^ maximum number of returned trees
+              -> [t]                        -- ^ word
+              -> [Tree (Rule nt t)]
+parse' (rmap, iow, s') bw trees word 
   = C.parseTrees trees s' (singleton $ entire word)
   $ (\ (e, _, _) -> e)
   $ C.chartify (C.empty, MMap.empty, nset) update rules bw trees
@@ -98,17 +108,15 @@ parse g bw trees word
               -- : conversionRule iow
               : [completionRule iow]
       
-      (rmap, iow, s') = prepare g word
-
       nset = Set.fromList $ filter (not . (`elem` s')) $ Map.keys rmap
 
       update :: Container nt t wt
             -> Item nt t wt 
             -> (Container nt t wt, Bool)
-      update (p, a, ns) (Passive nta rho bt w) 
-        = case C.insert p nta rho bt w of 
+      update (p, a, ns) (Passive nta rho bt word) 
+        = case C.insert p nta rho bt word of 
                (p', isnew) -> ((p', a, ns), isnew)
-      update (p, a, ns) item@(Active _ _ (nta:_) _ _ _ _)
+      update (p, a, ns) item@(Active _ _ (nta:_) _ _ _)
         = ((p, MMap.insert nta item a, Set.delete nta ns), True)
       update c _ = (c, True)
 
@@ -119,7 +127,7 @@ initialPrediction :: forall nt t wt. (Hashable nt, Eq nt, Eq t, Semiring wt)
                   -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
 initialPrediction word srules ios
   = Left 
-  $ catMaybes [ implicitConversion (Active r w as 0 [] fw inside, inside)
+  $ catMaybes [ implicitConversion (Active r w as [] fw inside, inside)
               | (r@(Rule ((_, as), f)), w) <- srules
               , fw <- instantiate word f
               , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
@@ -137,9 +145,9 @@ predictionRule word rs ios = Right app
     app :: Item nt t wt 
         -> Container nt t wt 
         -> [(Item nt t wt, wt)]
-    app (Active _ _ (a:_) _ _ _ _) (_,_,notinitialized)
+    app (Active _ _ (a:_) _ _ _) (_,_,notinitialized)
       = catMaybes
-        [ implicitConversion (Active r' w' as' 0 [] fw inside, inside <.> outside)
+        [ implicitConversion (Active r' w' as' [] fw inside, inside <.> outside)
         | a `Set.member` notinitialized
         , (r'@(Rule ((_, as'), f')), w') <- MMap.lookup a rs
         , fw <- instantiate word f'
@@ -150,7 +158,7 @@ predictionRule word rs ios = Right app
 
 
 implicitConversion :: (Item nt t wt, wt) -> Maybe (Item nt t wt, wt)
-implicitConversion (Active r@(Rule ((a, _), _)) w [] _ rss fs inside, weight)
+implicitConversion (Active r@(Rule ((a, _), _)) w [] rss fs inside, weight)
   = mapM toRange fs 
     >>= fromList 
     >>= (\ rv -> return (Passive a rv (C.Backtrace r w (reverse rss)) inside, weight))
@@ -166,22 +174,22 @@ completionRule :: forall nt wt t. (Hashable nt, Eq nt, Weight wt)
 completionRule ios = Right app
   where
     app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
-    app i@(Active _ _ (next:_) _ _ _ _) (pas, _, _)
+    app i@(Active _ _ (next:_) _ _ _) (pas, _, _)
       = [ consequence
         | passive <- C.lookupWith Passive pas next
         , consequence <- consequences i passive
         ]
-    app (Active _ _ [] _ _ _ _) _ = []
+    app (Active _ _ [] _ _ _) _ = []
     app i@(Passive next _ _ _) (_, act, _)
       = [ consequence
         | active <- MMap.lookup next act
         , consequence <- consequences active i
         ]
 
-    consequences (Active r w (a:as) offset rss fs ain) (Passive _ rv _ pin) 
+    consequences (Active r w (a:as) rss fs ain) (Passive _ rv _ pin) 
       = catMaybes
-        [ implicitConversion (Active r w as (offset+1) (rv:rss) fs' inside, inside <.> outside)
-        | fs' <- maybeToList $ mapM concVarRange $ insert offset rv fs
+        [ implicitConversion (Active r w as (rv:rss) fs' inside, inside <.> outside)
+        | fs' <- maybeToList $ mapM concVarRange $ insert rv fs
         , let inside = ain <.> (pin </> fst (ios Map.! a))
               (Rule ((s,_),_)) = r 
               outside = snd $ ios Map.! s
@@ -190,12 +198,11 @@ completionRule ios = Right app
 
 
 
--- | substitutes variables with index 'off' with a ranges of a vector
-insert :: Int -> Rangevector -> InstantiatedFunction -> InstantiatedFunction
-insert off rv = map (map (substitute off rv))
+-- | Substitutes all variables with first index 0 with a corresponding range.
+insert :: Rangevector -> InstantiatedFunction -> InstantiatedFunction
+insert rv = map (map (substitute rv))
     where
-        substitute :: Int -> Rangevector -> VarT Range -> VarT Range
-        substitute i rv' (Var i' j)
-            | i' == i =  T $ rv' ! j
-            | otherwise = Var i' j
-        substitute _ _ r = r
+        substitute :: Rangevector -> VarT Range -> VarT Range
+        substitute rv' (Var 0 j) = T $ rv' ! j
+        substitute _   (Var i j) = Var (i-1) j
+        substitute _ r = r

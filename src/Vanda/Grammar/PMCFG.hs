@@ -74,12 +74,12 @@ import Vanda.Hypergraph (Hyperedge(Hyperedge), EdgeList(EdgeList))
 import Vanda.Algorithms.InsideOutsideWeights (insideOutside')
 
 import qualified Control.Error
-import qualified Data.Binary as B
-import qualified Data.HashMap.Lazy  as Map
-import qualified Data.Map           as M
-import qualified Data.Vector        as V
-import qualified Data.Set           as S
-import qualified Data.MultiHashMap  as MMap
+import qualified Data.Binary          as B
+import qualified Data.HashMap.Strict  as Map
+import qualified Data.Map             as M
+import qualified Data.Vector          as V
+import qualified Data.Set             as S
+import qualified Data.MultiHashMap    as MMap
 
 errorHere :: String -> String -> a
 errorHere = Control.Error.errorHere "Vanda.Grammar.PMCFG"
@@ -367,7 +367,7 @@ prepare (WPMCFG s rs) w = let frs = filter (not . null . instantiate w . composi
                                    $ (\ r -> (lhs r, r))
                                   <$> filter ((< zero) . heuristic) frs
                               s' = filter (\ nt -> (< zero) $ fst $ Map.lookupDefault (zero, zero) nt iow) s
-                          in (rmap, iow, s')
+                          in (((,,) $! rmap) $! iow) $! s'
 
 -- | Calculates inside and outside weights for a given grammar with semiring weights.
 ioWeights :: (Converging wt, Semiring wt, Hashable nt, Ord nt)
