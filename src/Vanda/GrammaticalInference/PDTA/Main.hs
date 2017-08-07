@@ -50,7 +50,14 @@ mainArgs (Help cs) = putStr cs
 mainArgs Infer{..} = do
   corpus <- map (second fromIntegral) <$> SExp.readCorpora flagsCorpora
   debugDissectCorpus corpus
-  let (ssub, δ, f) = infer argAlpha corpus
+  let corpussize = sum $ map snd corpus
+      alpha = case argAlpha of
+                FAConst c         -> c
+                FARecipCorpussize -> recip corpussize
+      (ssub, δ, f) = infer alpha corpus
+  putStrLn "=== general information ========================================="
+  putStrLn $ "corpus size : " ++ show corpussize
+  putStrLn $ "α           : " ++ show alpha
   putStrLn "=== ssub ========================================================"
   print ssub
   putStrLn "=== δ ==========================================================="

@@ -1,7 +1,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Vanda.GrammaticalInference.PDTA.CmdArgs
--- Copyright   :  (c) Technische Universität Dresden 2016
+-- Copyright   :  (c) Technische Universität Dresden 2016-2017
 -- License     :  Redistribution and use in source and binary forms, with
 --                or without modification, is ONLY permitted for teaching
 --                purposes at Technische Universität Dresden AND IN
@@ -18,6 +18,7 @@
 module Vanda.GrammaticalInference.PDTA.CmdArgs where
 
 
+import           Data.List (intercalate)
 import           System.Console.CmdArgs.Explicit
 
 import           System.Console.CmdArgs.Explicit.Misc
@@ -28,8 +29,14 @@ data Args
   = Help String
   | Infer
     { flagsCorpora :: CmdArgsCorpora
-    , argAlpha     :: Double
+    , argAlpha     :: FlagAlpha
     }
+  deriving (Read, Show)
+
+
+data FlagAlpha
+  = FAConst Double
+  | FARecipCorpussize
   deriving (Read, Show)
 
 
@@ -44,8 +51,9 @@ cmdArgs
         , argAlpha     = undefined
         } )
     { modeNames = ["infer"]
-    , modeHelp =
-        ""
+    , modeHelp
+        =  flagHelpAlpha ++ " is expected to be one of " ++ optsStrAlpha
+        ++ ", or a floating point value."
     , modeArgs = ([flagArgAlpha], Just (flagArgCorpora lift))
     , modeGroupFlags = toGroup (modeFlagsCorpora lift)
     }
@@ -61,4 +69,14 @@ cmdArgs
   }
   where
     lift f = \ x -> x{flagsCorpora = f (flagsCorpora x)}
-    flagArgAlpha = flagArg (readUpdate $ \ a x -> x{argAlpha = a}) "α"
+    flagArgAlpha
+      = flip flagArg flagHelpAlpha
+      $ \ a x -> case lookup a optsAlpha of
+          Just y  -> Right x{argAlpha = y}
+          Nothing -> case readEither a of
+            Right y -> Right x{argAlpha = FAConst y}
+            Left  t -> Left $ flagHelpAlpha ++ " is expected to be one of "
+                           ++ optsStrAlpha ++ ", or a value of type " ++ t
+    flagHelpAlpha = "α"
+    optsStrAlpha = intercalate ", " (map fst optsAlpha)
+    optsAlpha = [("recip-corpussize", FARecipCorpussize)]
