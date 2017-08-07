@@ -34,6 +34,7 @@ module Vanda.GrammaticalInference.PDTA.Inference
 -- * Auxiliary Functions
 , dissectCorpus
 , train
+, parseEither
 ) where
 
 
@@ -162,6 +163,17 @@ parse transitions = go
     go (Node x ts) = Node (x, let key = (x, map (snd . rootLabel) ts') in fromMaybe (errorHere "parse" ("unknown transition: " ++ show key)) $ M.lookup key transitions)
                           ts'
          where ts' = map go ts
+
+
+parseEither :: (Show σ, Show q, Ord σ, Ord q) => Map (σ, [q]) q -> Tree σ -> Either (σ, [q]) (Tree (σ, q))
+parseEither transitions = go
+  where
+    go (Node x ts) = do
+      ts' <- traverse go ts
+      let key = (x, map (snd . rootLabel) ts')
+      case M.lookup key transitions of
+        Just q  -> return $ Node (x, q) ts'
+        Nothing -> Left   $ key
 
 
 infer
