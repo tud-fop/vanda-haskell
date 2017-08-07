@@ -23,6 +23,8 @@ module Vanda.GrammaticalInference.PDTA.Main
 
 
 import           Control.Arrow (second)
+import           Data.Either (isRight)
+import           Data.Foldable (for_)
 import qualified Data.IntMap.Lazy as IM
 import qualified Data.IntSet as IS
 import           Data.List (intercalate, sort, transpose)
@@ -68,6 +70,17 @@ mainArgs Infer{..} = do
     $ sort $ map swap $ M.toList δ
   putStrLn "=== f ==========================================================="
   print f
+  putStrLn "=== unrecognizable corpus trees ================================="
+  for_ corpus $ \ (t, _) ->
+    case parseEither δ t of
+      Left  x -> print x
+      Right _ -> return ()
+  let recCount = length $ filter isRight $ map (parseEither δ . fst) corpus
+      corpuslength = length corpus
+  putStrLn $ show recCount ++ " / " ++ show corpuslength ++ " ("
+    ++ show (round (100 * fromIntegral recCount / fromIntegral corpuslength))
+    ++ "%) recognizable"
+
   let (rootW, transW) = train δ corpus
   putStrLn "=== root weights ================================================"
   putStr $ unlines $ map show $ M.toList rootW
