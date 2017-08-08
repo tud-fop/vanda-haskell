@@ -52,8 +52,7 @@ cmdArgs
         } )
     { modeNames = ["infer"]
     , modeHelp
-        =  flagHelpAlpha ++ " is expected to be one of " ++ optsStrAlpha
-        ++ ", or a floating point value."
+        = flagHelpAlpha ++ " is expected to be one of " ++ optsStrAlpha ++ "."
     , modeArgs = ([flagArgAlpha], Just (flagArgCorpora lift))
     , modeGroupFlags = toGroup (modeFlagsCorpora lift)
     }
@@ -74,9 +73,10 @@ cmdArgs
       $ \ a x -> case lookup a optsAlpha of
           Just y  -> Right x{argAlpha = y}
           Nothing -> case readEither a of
-            Right y -> Right x{argAlpha = FAConst y}
-            Left  t -> Left $ flagHelpAlpha ++ " is expected to be one of "
-                           ++ optsStrAlpha ++ ", or a value of type " ++ t
+            Right y | 0 <= y && y <= 2 -> Right x{argAlpha = FAConst y}
+            _ -> Left $ flagHelpAlpha ++ " is expected to be one of "
+                     ++ optsStrAlpha
     flagHelpAlpha = "α"
     optsStrAlpha = intercalate ", " (map fst optsAlpha)
+                ++ ", or a floating point value between 0 and 2 inclusive"
     optsAlpha = [("recip-corpussize", FARecipCorpussize)]
