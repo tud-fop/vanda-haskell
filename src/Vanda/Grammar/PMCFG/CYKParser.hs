@@ -58,7 +58,7 @@ import qualified Data.HashSet               as Set
 
 
 -- | Active and passive items for cyk parser.
-data Item nt t wt = Active (Rule nt t) wt InstantiatedFunction wt
+data Item nt t wt = Active (Rule nt t) wt InstantiatedFunction
                   | Passive nt Rangevector (C.Backtrace nt t wt) wt
 
 
@@ -73,18 +73,18 @@ type Container nt t wt = ( C.Chart nt t wt
 
 -- | Eq ignores weights, since they can be derived from the rule.
 instance (Eq nt, Eq t) => Eq (Item nt t wt) where
-  (Active r _ fw _) == (Active r' _ fw' _) = r == r' && fw == fw' 
+  (Active r _ fw) == (Active r' _ fw') = r == r' && fw == fw' 
   (Passive a rv bt _) == (Passive a' rv' bt' _) = a == a' && rv == rv' && bt' == bt
   _ == _ = False
 
 
 instance (Hashable nt, Hashable t) => Hashable (Item nt t wt) where
-    salt `hashWithSalt` (Active r _ _ _) = salt `hashWithSalt` r
+    salt `hashWithSalt` (Active r _ _) = salt `hashWithSalt` r
     salt `hashWithSalt` (Passive a rho _ _) = salt `hashWithSalt` a `hashWithSalt` rho
 
 
 instance (Show nt) => Show (Item nt t wt) where
-    show (Active (Rule ((a,as),_)) _ f _)
+    show (Active (Rule ((a,as),_)) _ f)
       = "[active] " ++ show a ++ " → " ++ prettyPrintInstantiatedFunction f ++ show as
     show (Passive a rv _ _)
       = "[passive] " ++ show a ++ " → " ++ show rv 
@@ -125,7 +125,7 @@ parse' (rmap, iow, s') bw trees word
       update (passives, actives, ns) (Passive a rho bt iw) 
         = case C.insert passives a rho bt iw of
               (passives', isnew) -> ((passives', actives, ns), isnew)
-      update (passives, actives, ns) item@(Active (Rule ((_, as), _)) _ _ _)
+      update (passives, actives, ns) item@(Active (Rule ((_, as), _)) _ _)
         = (( passives
            , foldl (flip $ uncurry MMap.insert) actives $ zip as $ repeat item
            , foldl (flip Set.delete) ns as
@@ -140,7 +140,7 @@ initialPrediction :: forall nt t wt. (Eq nt, Eq t, Hashable nt, Semiring wt)
                   -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
 initialPrediction word srules ios 
   = Left 
-  $ catMaybes [ implicitConversion (Active r w fw inside, inside <.> outside)
+  $ catMaybes [ implicitConversion (Active r w fw, inside <.> outside)
               | (r@(Rule ((a, as), f)), w) <- srules
               , fw <- instantiate word f
               , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
@@ -157,9 +157,9 @@ prediction :: forall nt t wt. (Eq nt, Eq t, Hashable nt, Semiring wt)
            -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
 prediction word rs ios = Right app
   where
-    app (Active (Rule ((_, as), _)) _ _ _) (_,_,notinitialized)
+    app (Active (Rule ((_, as), _)) _ _) (_,_,notinitialized)
       = catMaybes 
-        [ implicitConversion (Active r' w' fw inside, inside <.> outside)
+        [ implicitConversion (Active r' w' fw, inside <.> outside)
         | a' <- as
         , a' `Set.member` notinitialized
         , (r'@(Rule ((_, as'), f')), w') <- MMap.lookup a' rs
@@ -171,10 +171,10 @@ prediction word rs ios = Right app
 
 
 implicitConversion :: (Item nt t wt, wt) -> Maybe (Item nt t wt, wt)
-implicitConversion (Active r@(Rule ((a, []), _)) wr fw inside, weight)
+implicitConversion (Active r@(Rule ((a, []), _)) wr fw, weight)
   = mapM toRange fw
   >>= fromList
-  >>= (\ rho -> Just (Passive a rho (C.Backtrace r wr []) inside, weight))
+  >>= (\ rho -> Just (Passive a rho (C.Backtrace r wr []) wr, weight))
 implicitConversion i = Just i
 
 -- | Completion rule of the cyk parser. Applies instantiated function
@@ -185,14 +185,14 @@ completion :: forall nt t wt. (Eq nt, Eq t, Hashable nt, Semiring wt)
            -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
 completion ios = Right app
   where
-    app item@(Active (Rule ((_, as), _)) _ _ _) (ps, _, _) 
+    app item@(Active (Rule ((_, as), _)) _ _) (ps, _, _) 
       = [ consequence
         | pas <- mapM (C.lookupWith Passive ps) as
         , consequence <- consequences (item:pas)
         ]
     app item@(Passive a _ _ _) (ps, acts, _) 
       = [ consequence
-        | act@(Active (Rule ((_, as), _)) _ _ _ ) <- MMap.lookup a acts
+        | act@(Active (Rule ((_, as), _)) _ _) <- MMap.lookup a acts
         , pas <- filter (elem item) 
                   $ mapM (\ nta -> if nta == a 
                                    then item : C.lookupWith Passive ps nta 
@@ -200,7 +200,7 @@ completion ios = Right app
         , consequence <- consequences (act:pas)
         ]
 
-    consequences (Active r@(Rule ((a, _), _)) w fw _: pas) 
+    consequences (Active r@(Rule ((a, _), _)) w fw: pas) 
       = [ (Passive a rv (C.Backtrace r w rvs) inside, inside <.> outside)
         | rv <- maybeToList $ insert rvs fw
         , let inside = w <.> foldl (<.>) one ws
