@@ -16,7 +16,7 @@ module Vanda.Grammar.PMCFG.Functions
   ) where
 
 import           Control.Arrow                           (first)
-import           Data.Array                              ((!))
+import           Data.Array                              ((!), listArray, bounds, indices)
 import           Data.Maybe                              (fromJust)
 import           Data.NTT                                (NTT (..))
 import           Vanda.Corpus.Negra                      (Negra)
@@ -32,9 +32,9 @@ fromPLCFRS g@(is, rs, (mnt, mt))
   $ map (first convertRule) rs
     where
       convertRule ((nt, nts), vartss)
-        = Rule ((mnt ! nt, map (mnt !) nts), map (map $ convertComposition (fromJust $ fanouts nts)) vartss)
-      fanouts
-        = mapM $ getNonterminalFanout g :: [NTIdent] -> Maybe [Int]
+        = Rule ((mnt ! nt, map (mnt !) nts), map (map $ convertComposition (map (fanouts !) nts)) vartss)
+      fanouts 
+        = listArray (bounds mnt) [ fromJust (getNonterminalFanout g n) | n <- indices mnt ]
       convertComposition _ (T t)
         = M.T (mt ! t)
       convertComposition f (NT j)

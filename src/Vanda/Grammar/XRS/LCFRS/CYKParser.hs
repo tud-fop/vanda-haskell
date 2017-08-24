@@ -36,7 +36,7 @@
 
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Vanda.Grammar.PMCFG.CYKParser 
+module Vanda.Grammar.XRS.LCFRS.CYKParser 
   ( parse
   , parse'
   ) where
@@ -50,10 +50,10 @@ import Data.Semiring
 import Data.Tree (Tree)
 import Vanda.Grammar.PMCFG
 
-import qualified Data.MultiHashMap          as MMap
-import qualified Data.HashMap.Lazy          as Map
-import qualified Vanda.Grammar.PMCFG.Chart  as C
-import qualified Data.HashSet               as Set
+import qualified Data.MultiHashMap              as MMap
+import qualified Data.HashMap.Lazy              as Map
+import qualified Vanda.Grammar.XRS.LCFRS.Chart  as C
+import qualified Data.HashSet                   as Set
 
 
 

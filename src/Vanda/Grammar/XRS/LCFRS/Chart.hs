@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Vanda.Grammar.PMCFG.Chart
+module Vanda.Grammar.XRS.LCFRS.Chart
   ( -- * top-level functions to solve deduction systems
     chartify
   , parseTrees

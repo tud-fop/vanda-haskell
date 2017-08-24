@@ -49,7 +49,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 
-module Vanda.Grammar.PMCFG.ActiveParser
+module Vanda.Grammar.XRS.LCFRS.ActiveParser
     ( parse
     , parse'
     ) where
@@ -63,11 +63,11 @@ import Data.Tree (Tree)
 import Data.Weight
 import Vanda.Grammar.PMCFG
 
-import qualified Data.MultiHashMap  as MMap
-import qualified Data.IntMap        as IMap
-import qualified Data.HashMap.Lazy  as Map
-import qualified Data.HashSet       as Set
-import qualified Vanda.Grammar.PMCFG.Chart as C
+import qualified Data.MultiHashMap             as MMap
+import qualified Data.IntMap                   as IMap
+import qualified Data.HashMap.Lazy             as Map
+import qualified Data.HashSet                  as Set
+import qualified Vanda.Grammar.XRS.LCFRS.Chart as C
 
 
 data Item nt t wt = Passive nt Rangevector (C.Backtrace nt t wt) wt

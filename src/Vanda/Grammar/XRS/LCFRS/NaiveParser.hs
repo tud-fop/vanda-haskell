@@ -25,7 +25,7 @@
 
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Vanda.Grammar.PMCFG.NaiveParser
+module Vanda.Grammar.XRS.LCFRS.NaiveParser
   ( parse
   , parse'
   ) where
@@ -39,10 +39,10 @@ import Data.Tree (Tree)
 import Data.Weight
 import Vanda.Grammar.PMCFG
 
-import qualified Vanda.Grammar.PMCFG.Chart as C
-import qualified Data.HashMap.Lazy as Map
-import qualified Data.MultiHashMap as MMap
-import qualified Data.HashSet      as Set
+import qualified Vanda.Grammar.XRS.LCFRS.Chart as C
+import qualified Data.HashMap.Lazy             as Map
+import qualified Data.MultiHashMap             as MMap
+import qualified Data.HashSet                  as Set
 
 -- | Passive and active items.
 data Item nt t wt 

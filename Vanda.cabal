@@ -133,11 +133,7 @@ library
     , Vanda.Grammar.PCFG.IO
     , Vanda.Grammar.PCFG.PCFG
     , Vanda.Grammar.PMCFG
-    , Vanda.Grammar.PMCFG.ActiveParser
-    , Vanda.Grammar.PMCFG.Chart
-    , Vanda.Grammar.PMCFG.CYKParser
     , Vanda.Grammar.PMCFG.Functions
-    , Vanda.Grammar.PMCFG.NaiveParser
     , Vanda.Grammar.PMCFG.Parse
     , Vanda.Grammar.XFSA
     , Vanda.Grammar.XFSA.Closure
@@ -149,9 +145,13 @@ library
     , Vanda.Grammar.XRS.GHKM
     , Vanda.Grammar.XRS.IRTG
     , Vanda.Grammar.XRS.LCFRS
+    , Vanda.Grammar.XRS.LCFRS.ActiveParser
     , Vanda.Grammar.XRS.LCFRS.Binarize
+    , Vanda.Grammar.XRS.LCFRS.Chart
+    , Vanda.Grammar.XRS.LCFRS.CYKParser
     , Vanda.Grammar.XRS.LCFRS.Evaluation
     , Vanda.Grammar.XRS.LCFRS.Extraction
+    , Vanda.Grammar.XRS.LCFRS.NaiveParser
     , Vanda.Grammar.XRS.Text
     , Vanda.GrammaticalInference.PDTA.Inference
     , Vanda.Hypergraph
@@ -185,18 +185,11 @@ library
     , Vanda.Algorithms.MATLearner.Strings
     , Vanda.Algorithms.MATLearner.Teacher
   other-modules:
-  --, Vanda.Algorithms.Earley.Earley
-  --, Vanda.Algorithms.Earley.Earley_String_String
-  --, Vanda.Algorithms.Earley.Earley_WSA
-  --, Vanda.Algorithms.EarleyCFG
-  --, Vanda.Algorithms.EarleyMonadic0
       Vanda.Algorithms.IntersectWithNGrams.Main
     , Vanda.CBSM.CmdArgs
     , Vanda.CBSM.Main
     , Vanda.CFTG.Foobar
     , Vanda.Dyck.Main
-  --, Vanda.Functions
-  --, Vanda.Grammar.NGrams.KenLM
     , Vanda.Grammar.NGrams.Main
     , Vanda.Grammar.PCFG.Main
     , Vanda.Grammar.PMCFG.Main
