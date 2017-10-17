@@ -1,9 +1,9 @@
-module Vanda.Grammar.PMCFG.NaiveParserTest
+module Vanda.Grammar.LCFRS.NaiveParserTest
     (tests) where
 
 import Test.HUnit
 import Vanda.Grammar.PMCFG
-import Vanda.Grammar.PMCFG.NaiveParser
+import Vanda.Grammar.XRS.LCFRS.NaiveParser
 import Data.Weight
 import Data.Maybe (mapMaybe)
 import Numeric.Log (Log)

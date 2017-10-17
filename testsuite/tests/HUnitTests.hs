@@ -14,9 +14,9 @@ import qualified Vanda.CBSM.CountBasedStateMergingTests
 import qualified Vanda.CBSM.DovetailingTests
 import qualified Vanda.CBSM.ProductOrderTests
 import qualified Vanda.Corpus.BinarizationTests
-import qualified Vanda.Grammar.PMCFG.CYKParserTest
-import qualified Vanda.Grammar.PMCFG.NaiveParserTest
-import qualified Vanda.Grammar.PMCFG.ActiveParserTest
+import qualified Vanda.Grammar.LCFRS.CYKParserTest
+import qualified Vanda.Grammar.LCFRS.NaiveParserTest
+import qualified Vanda.Grammar.LCFRS.ActiveParserTest
 
 main :: IO ()
 main = do
@@ -46,10 +46,10 @@ tests = TestList
     ~: Vanda.CBSM.ProductOrderTests.tests
   ,   "Vanda.Corpus.Binarization"
     ~: Vanda.Corpus.BinarizationTests.tests
-  ,   "Vanda.Grammar.PMCFG.CYKParser"
-    ~: Vanda.Grammar.PMCFG.CYKParserTest.tests
-  ,   "Vanda.Grammar.PMCFG.NaiveParser"
-    ~: Vanda.Grammar.PMCFG.NaiveParserTest.tests
-  ,   "Vanda.Grammar.PMCFG.ActiveParser"
-    ~: Vanda.Grammar.PMCFG.ActiveParserTest.tests
+  ,   "Vanda.Grammar.LCFRS.CYKParser"
+    ~: Vanda.Grammar.LCFRS.CYKParserTest.tests
+  ,   "Vanda.Grammar.LCFRS.NaiveParser"
+    ~: Vanda.Grammar.LCFRS.NaiveParserTest.tests
+  ,   "Vanda.Grammar.LCFRS.ActiveParser"
+    ~: Vanda.Grammar.LCFRS.ActiveParserTest.tests
   ]

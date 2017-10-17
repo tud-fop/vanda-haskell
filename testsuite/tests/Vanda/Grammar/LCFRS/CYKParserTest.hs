@@ -1,10 +1,10 @@
-module Vanda.Grammar.PMCFG.CYKParserTest
+module Vanda.Grammar.LCFRS.CYKParserTest
     (tests) where
 
 import Test.HUnit
 import Data.Interner
 import Vanda.Grammar.PMCFG
-import Vanda.Grammar.PMCFG.CYKParser
+import Vanda.Grammar.XRS.LCFRS.CYKParser
 import Data.Weight
 import Data.Maybe (mapMaybe)
 import Data.Hashable (hash)
