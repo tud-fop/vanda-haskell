@@ -29,6 +29,7 @@ import qualified Data.IntMap.Lazy as IM
 import qualified Data.IntSet as IS
 import           Data.List (intercalate, sort, transpose)
 import qualified Data.Map.Lazy as M
+import qualified Data.Set as S
 import           Data.Tree
 import           Data.Tuple (swap)
 import qualified Data.Vector as V
@@ -39,6 +40,7 @@ import qualified Vanda.Corpus.SExpression.CmdArgs as SExp
 import           Vanda.GrammaticalInference.PDTA.CmdArgs
 import           Vanda.GrammaticalInference.PDTA.Inference
 import           Vanda.Util.PrettyPrint (columnize)
+import           Vanda.Util.Tree (OrdTree(..), subTrees)
 
 
 main :: IO ()
@@ -53,16 +55,21 @@ mainArgs Infer{..} = do
   corpus <- map (second fromIntegral) <$> SExp.readCorpora flagsCorpora
   debugDissectCorpus corpus
   let corpussize = sum $ map snd corpus
+      corpussubtrees = S.size $ S.fromList
+                     $ map OrdTree $ concatMap (subTrees . fst) corpus
       alpha = case argAlpha of
                 FAConst c         -> c
                 FARecipCorpussize -> recip corpussize
       (ssub, δ, f) = infer alpha corpus
   putStrLn "=== general information ========================================="
-  putStrLn $ "corpus size : " ++ show corpussize
-  putStrLn $ "α           : " ++ show alpha
+  putStrLn $ "corpus size                  : " ++ show corpussize
+  putStrLn $ "number of different subtrees : " ++ show corpussubtrees
+  putStrLn $ "α                            : " ++ show alpha
   putStrLn "=== ssub ========================================================"
+  putStrLn $ "number of elements: " ++ show (IS.size ssub)
   print ssub
   putStrLn "=== δ ==========================================================="
+  putStrLn $ "number of elements: " ++ show (M.size δ)
   putStr
     $ columnize [" <- ", " "]
     $ transpose
