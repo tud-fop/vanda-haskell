@@ -22,7 +22,6 @@ import qualified Data.Array as A
 import qualified Data.Vector as V
 import qualified Data.Map as M
 import Control.Monad.State.Lazy
-import Vanda.Grammar.XRS.Binary ()
 import Data.NTT
 
 main :: IO ()
