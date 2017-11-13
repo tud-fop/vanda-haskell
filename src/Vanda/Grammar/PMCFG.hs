@@ -65,12 +65,12 @@ import Data.Converging (Converging(converged))
 import Data.Hashable
 import Data.Interner (Interner, internList, intern, emptyInterner, internListPreserveOrder, internerToArray)
 import Data.List (intercalate)
-import Data.Maybe (listToMaybe, mapMaybe, maybeToList)
+import Data.Maybe (listToMaybe, mapMaybe)
 import Data.Range (Range(Epsilon), safeConc, singletons)
 import Data.Semiring
 import Data.Tree
 import GHC.Generics (Generic)
-import Vanda.Hypergraph (Hyperedge(Hyperedge), EdgeList(EdgeList))
+import Vanda.Hypergraph (EdgeList(EdgeList), ident, mkHyperedge)
 import Vanda.Algorithms.InsideOutsideWeights (insideOutside')
 
 import qualified Control.Error
@@ -378,28 +378,27 @@ ioWeights :: (Converging wt, Semiring wt, Hashable nt, Ord nt)
           -> [(Rule nt t, wt)]
           -> Map.HashMap nt (wt, wt)
 ioWeights ss rs
-  = toHashMap 
-  $ insideOutside' converged 
-                   (M.fromList esw M.!)
+  = toHashMap
+  $ insideOutside' converged
+                   ((V.!) wV . ident)
                    Nothing
-                   (EdgeList (S.fromList $ map (Just . lhs) rs) (map fst esw))
-    where
-      esw = zipWith (\ (f, w) i -> (f i, w)) 
-                    (targets ++ hyperedges) 
-                    [(1::Int)..]
+                   (EdgeList (S.fromList (map (Just . lhs) rs)) es)
+  where
+    (es, wV)
+      = first (V.toList . V.imap (flip ($)))
+      $ V.unzip
+      $ V.fromList
+        (
+          [ (mkHyperedge Nothing [Just s] (Nothing, [s]), one)
+          | s <- ss
+          ]
+        ++
+          [ (mkHyperedge (Just a) (map Just as) (Just a, as), weight)
+          | (Rule ((a, as), _), weight) <- rs
+          ]
+        )
 
-      hyperedges = [ (Hyperedge (Just a) (V.fromList $ map Just as) (Just a, as), weight)
-                   | (Rule ((a, as), _), weight) <- rs
-                   ]
-      
-      targets = [ (Hyperedge Nothing (V.singleton $ Just s) (Nothing, [s]), one)
-                | s <- ss
-                ]
-      
-      toHashMap m = Map.fromList [ (a, io)
-                                 | (ma, io) <- M.toList m
-                                 , a <- maybeToList ma
-                                 ]
+    toHashMap m = Map.fromList [(a, io) | (Just a, io) <- M.toList m]
 
 
 instantiableRules :: (Eq t, Eq nt, Hashable nt)
