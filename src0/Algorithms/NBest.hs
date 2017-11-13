@@ -11,6 +11,8 @@
 -- of Programming.
 -- ---------------------------------------------------------------------------
 
+{-# LANGUAGE FlexibleContexts #-}
+
 module Algorithms.NBest
 ( best, worst
 , best', worst'
