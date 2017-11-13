@@ -80,7 +80,11 @@ parseLines c s
             (Sentence (read num) (read editorId) date (read originId) comment sd :)
             (parseLines c s')
       _ ->
-        errorS s "Expected #FORMAT, #BOT or #BOS"
+        errorS s "Expected one of: (optionally followed by %% ⟨comment⟩)\n\
+                 \\t#FORMAT ⟨num⟩\n\
+                 \\t#BOT WORDTAG\n\
+                 \\t#BOT …\n\
+                 \\t#BOS ⟨num⟩ ⟨editor id⟩ ⟨date⟩ ⟨origin id⟩"
   where
     alter f ~(Negra ws ss) = Negra ws (f ss)
 
