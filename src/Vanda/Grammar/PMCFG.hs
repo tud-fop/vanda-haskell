@@ -310,10 +310,13 @@ prettyPrintRule (Rule ((a, bs), f))
 prettyPrintWeightedRule :: (Show nt, Show w, Show t) => (Rule nt t, w) -> String
 prettyPrintWeightedRule (r, w) = prettyPrintRule r ++ "\t# " ++ show w
 
+prettyPrintList :: (t -> String) -> [t] -> String
+prettyPrintList f l = '[' : intercalate ", " (map f l) ++ "]"
+
 prettyPrintComposition :: Show t => [[VarT t]] -> String
-prettyPrintComposition = show . map (unwords . map g)
-  where g (Var i j) = "x[" ++ show i ++ ":" ++ show j ++ "]"
-        g (T t)     = show t
+prettyPrintComposition = prettyPrintList (prettyPrintList g)
+  where g (Var i j) = "Var " ++ show i ++ " " ++ show j
+        g (T t)     = "T " ++ show t
 
 prettyPrintWPMCFG :: (Show nt, Show w, Show t) => WPMCFG nt w t -> String
 prettyPrintWPMCFG (WPMCFG is rs)
