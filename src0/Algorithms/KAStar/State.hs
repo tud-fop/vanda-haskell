@@ -49,7 +49,9 @@ import Algorithms.KAStar.Data
 -- | Monad stack for state and configuration of the KA* algorithm
 newtype KAStar p v l w i a = KAStar {
       runK :: ReaderT (KAConfig v l w i) (State (KAState p v l w i)) a
-    } deriving ( Monad
+    } deriving ( Applicative
+               , Functor
+               , Monad
                , MonadReader (KAConfig v l w i)
                , MonadState (KAState p v l w i)
                )
