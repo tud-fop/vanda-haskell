@@ -423,3 +423,4 @@ posTab (pos:poss) = let tokens = fst <$> pos
                         nts = (snd <$>) <$> (pos:poss)
                         nts' = foldr (zipWith (:)) (repeat []) nts
                     in zip tokens nts'
+posTab [] = []
