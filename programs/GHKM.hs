@@ -6,17 +6,15 @@ import Prelude hiding ( span )
 
 import Codec.Compression.GZip ( compress )
 
-import Control.Arrow ( (&&&), second )
-import Control.DeepSeq ( NFData(..), ($!!) )
-import Control.Seq
-import Control.Monad.State.Strict ( State, evalState, runState, get, put )
+import Control.Arrow ( (&&&) )
+import Control.DeepSeq ( NFData(..) )
+import Control.Monad.State.Strict ( State, evalState, get, put )
 
 import qualified Data.Binary as B
 import qualified Data.ByteString.Lazy as B
-import qualified Data.IntMap as IM
-import Data.List ( foldl', sortBy, unzip4 )
 import qualified Data.Map as M
 import qualified Data.Set as S
+import qualified Data.Text as TS
 import qualified Data.Text.Lazy as TIO
 import qualified Data.Text.Lazy.IO as TIO
 import qualified Data.Tree as T
@@ -84,7 +82,7 @@ alignParser mapper
 
 parseAlign
   :: (NFData l, Show l)
-  => (u -> TIO.Text -> (u, l)) -> u -> TIO.Text -> (u, [Alignment l])
+  => (u -> TS.Text -> (u, l)) -> u -> TIO.Text -> (u, [Alignment l])
 parseAlign mapper ustate contents
   = go ustate $ zip [(0 :: Int)..] (TIO.lines contents)
   where
@@ -95,7 +93,7 @@ parseAlign mapper ustate contents
                           in (u'', x':xs')
         Left x -> error (show x)
     p = do
-      x' <- alignParser (\ u -> mapper u . TIO.pack) -- (p_tag f)
+      x' <- alignParser (\ u -> mapper u . TS.pack) -- (p_tag f)
       u' <- getState
       return (u', makeItSo x')
     {-
@@ -145,7 +143,7 @@ printRule (Rule e)
 
 printTreeTA :: TokenArray -> T.Tree (Either Int Token) -> String
 printTreeTA ta (T.Node (Right l) ts)
-  = "(" ++ TIO.unpack (getString ta l) ++ (if null ts then "" else " ")
+  = "(" ++ TS.unpack (getString ta l) ++ (if null ts then "" else " ")
     ++ unwords (map (printTreeTA ta) ts) ++ ")"
 printTreeTA _ (T.Node (Left l) _)
   = "x" ++ show l
@@ -154,11 +152,11 @@ printStringTA :: TokenArray -> [Either Int Token] -> String
 printStringTA ta = unwords . map p
   where
     p (Left i) = "x" ++ show i
-    p (Right l) = TIO.unpack $ getString ta l
+    p (Right l) = TS.unpack $ getString ta l
 
 printRuleTA :: TokenArray -> Rule Token Token -> String
 printRuleTA ta (Rule e)
-  = TIO.unpack (getString ta (to e))
+  = TS.unpack (getString ta (to e))
     ++ " -> <" ++ printTreeTA ta (fst (Hypergraph.label e)) ++ ", "
     ++ printStringTA ta (snd (Hypergraph.label e)) ++ ", "
     ++ (show (map (getString ta) (from e)))
