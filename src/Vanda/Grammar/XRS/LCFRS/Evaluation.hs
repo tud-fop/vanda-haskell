@@ -15,7 +15,7 @@ module Vanda.Grammar.XRS.LCFRS.Evaluation
 , getDerivProbability
 ) where
 
-import           Control.Monad.State.Lazy hiding (mapM)
+import           Control.Monad (join)
 import qualified Data.Array as A
 import qualified Data.Vector as V
 

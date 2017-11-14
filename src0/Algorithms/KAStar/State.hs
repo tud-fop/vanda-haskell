@@ -9,7 +9,7 @@
 -- of Programming.
 -- ---------------------------------------------------------------------------
 
-{-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Algorithms.KAStar.State
   (
@@ -29,8 +29,10 @@ module Algorithms.KAStar.State
   , numDeriv
   ) where
 
-import Control.Monad.State
-import Control.Monad.Reader
+import Control.Monad (liftM, liftM2)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Reader (ReaderT, ask, runReaderT)
+import Control.Monad.Trans.State (State, get, put, runState)
 import qualified Data.Map as M
 import qualified Data.Heap as H
 import qualified Data.Sequence as S
@@ -47,14 +49,8 @@ import Algorithms.KAStar.Data
 ------------------------------------------------------------------------------
 
 -- | Monad stack for state and configuration of the KA* algorithm
-newtype KAStar p v l w i a = KAStar {
-      runK :: ReaderT (KAConfig v l w i) (State (KAState p v l w i)) a
-    } deriving ( Applicative
-               , Functor
-               , Monad
-               , MonadReader (KAConfig v l w i)
-               , MonadState (KAState p v l w i)
-               )
+type KAStar p v l w i a
+       = ReaderT (KAConfig v l w i) (State (KAState p v l w i)) a
 
 
 -- | Holds configuration for KA*
@@ -100,7 +96,7 @@ runKAStar :: KAStar p v l w i a
 runKAStar kst a k gr g h ins others =
     let cfg   = KAConfig k gr g h ins others
         st    = KAState (C M.empty M.empty) a 0 0
-    in runState (runReaderT (runK kst) cfg) st
+    in runState (runReaderT kst cfg) st
 
 
 -- | Returns number of derivations searched for
@@ -139,37 +135,37 @@ inEdgesMap = cfgInEdges `liftM` ask
 
 -- | Returns momentary chart
 chart :: KAStar p v l w i (Chart v l w i)
-chart = stChart `liftM` get
+chart = lift $ stChart `liftM` get
 
 -- | Returns the agenda
 agenda :: KAStar p v l w i (Agenda p v l w i)
-agenda = stAgenda `liftM` get
+agenda = lift $ stAgenda `liftM` get
 
 
 -- | Set the chart
 putChart :: Chart v l w i -> KAStar p v l w i ()
-putChart c = do
+putChart c = lift $ do
   st <- get
   put st{stChart = c}
 
 
 -- | Set the agenda
 putAgenda :: Agenda p v l w i -> KAStar p v l w i ()
-putAgenda a = do
+putAgenda a = lift $ do
   st <- get
   put st{stAgenda = a}
 
 
 -- | Increment number of inserted assignments
 incItemsInserted :: KAStar p v l w i ()
-incItemsInserted = do
+incItemsInserted = lift $ do
   st <- get
   put st{stItemsInserted = stItemsInserted st + 1}
 
 
 -- | Increment number of generated assignments by @n@
 incItemsGenerated :: Int -> KAStar p v l w i ()
-incItemsGenerated n = do
+incItemsGenerated n = lift $ do
   st <- get
   put st{stItemsGenerated = stItemsGenerated st + n}
 

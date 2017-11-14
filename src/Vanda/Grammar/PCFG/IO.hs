@@ -57,7 +57,7 @@ import qualified Data.Vector as V
 import qualified Data.Map as M
 import qualified Data.Array as A
 import Data.Binary
-import Control.Monad.State
+import Control.Monad.Trans.State.Lazy (State, runState)
 import System.Directory
 import qualified Vanda.Util.Memorysavers as I
 

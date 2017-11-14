@@ -39,7 +39,6 @@ library
     , JuicyPixels
     , log-domain
     , MissingH
-    , mtl
     , parallel >= 3.2
     , parsec >= 3.1.2
     , pretty
@@ -233,7 +232,6 @@ executable Vanda
     , JuicyPixels
     , log-domain >= 0.10.2
     , MissingH
-    , mtl
     , parallel >= 3.2
     , parsec >= 3.1.2
     , pretty
@@ -245,6 +243,7 @@ executable Vanda
     , text
     , time
     , timeit
+    , transformers
     , unix
     , unordered-containers
     , vector

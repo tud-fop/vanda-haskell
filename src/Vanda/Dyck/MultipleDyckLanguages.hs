@@ -13,7 +13,7 @@ module Vanda.Dyck.MultipleDyckLanguages
   ) where
 
 import Control.Arrow ((***))
-import Control.Monad.State ((>=>), (<=<))
+import Control.Monad ((>=>), (<=<))
 import Data.List.Split (splitOneOf)
 import Data.Map ((!), fromList)
 import qualified Data.Set as S (Set, delete, fromList, member, null, empty)

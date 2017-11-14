@@ -15,7 +15,9 @@ module Vanda.Algorithms.MATLearner.MATLearner where
 
 import Prelude hiding (lookup)
 import Data.Tree
-import Control.Monad.State
+import Control.Monad (when)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.State.Lazy (StateT, evalStateT, get, put)
 import Vanda.Hypergraph.Basic
 import qualified Data.Set as S
 import qualified Data.Vector as V

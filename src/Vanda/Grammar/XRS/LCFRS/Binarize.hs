@@ -20,7 +20,7 @@ module Vanda.Grammar.XRS.LCFRS.Binarize
 
 import qualified Control.Error
 import           Control.Exception.Base (assert)
-import           Control.Monad.State.Strict
+import           Control.Monad.Trans.State.Strict (State, get, put, runState)
 import qualified Data.Array as A
 import           Data.List (intercalate, intersperse, elemIndex)
 import qualified Data.Map.Strict as M

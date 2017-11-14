@@ -35,7 +35,8 @@ import qualified Data.Queue as Q
 import Control.Applicative ((<$>), (<*>))
 import Control.Arrow (first)
 import Control.DeepSeq (NFData (), rnf)
-import Control.Monad.State
+import Control.Monad (unless)
+import Control.Monad.Trans.State.Lazy (State, evalState, get, modify, state)
 import Control.Seq
 import qualified Data.Binary as B
 import Data.Function (on)

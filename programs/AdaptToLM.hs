@@ -21,7 +21,7 @@ import Vanda.Util.Memorysavers
 import qualified Data.Array as A
 import qualified Data.Vector as V
 import qualified Data.Map as M
-import Control.Monad.State.Lazy
+import Control.Monad.Trans.State.Lazy (runState)
 import Data.NTT
 
 main :: IO ()

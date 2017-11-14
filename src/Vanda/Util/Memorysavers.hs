@@ -46,7 +46,7 @@ module Vanda.Util.Memorysavers
 
 import Prelude hiding (mapM)
 
-import Control.Monad.State.Lazy hiding (mapM)
+import Control.Monad.Trans.State.Lazy (State, evalState, get, put, runState)
 import Control.Parallel.Strategies
 import qualified Data.Array as A
 import qualified Data.Map.Lazy as M

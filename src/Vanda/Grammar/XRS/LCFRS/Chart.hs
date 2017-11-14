@@ -15,7 +15,7 @@ module Vanda.Grammar.XRS.LCFRS.Chart
   ) where
 
 import Control.Monad (unless)
-import Control.Monad.State (State, execState, get, put)
+import Control.Monad.Trans.State.Lazy (State, execState, get, put)
 import Data.Either (rights, lefts)
 import Data.Hashable (Hashable)
 import Data.List (foldl', sortOn)

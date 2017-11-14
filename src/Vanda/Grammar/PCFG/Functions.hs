@@ -15,7 +15,7 @@ This module contains functions to work with PCFGs.
 module Vanda.Grammar.PCFG.Functions (extractPCFG, train, intersect, bestDerivations) where
 
 import Control.DeepSeq
-import Control.Monad.State
+import Control.Monad.Trans.State.Lazy (State, get, put, runState)
 import qualified Data.Map as M
 import Data.Maybe
 import qualified Data.Set as S

@@ -41,7 +41,8 @@ import Debug.Trace
 import           Control.Applicative ((<*>), (<$>))
 import           Control.Arrow ((***), first, second)
 import           Control.DeepSeq (NFData(rnf))
-import           Control.Monad.State.Lazy
+import           Control.Monad.Trans.State.Lazy
+                   (StateT, evalState, modify, runState, state)
 import           Control.Parallel.Strategies
 import qualified Data.Array as A
 import qualified Data.Binary as B

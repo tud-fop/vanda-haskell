@@ -8,7 +8,7 @@ import Codec.Compression.GZip ( compress )
 
 import Control.Arrow ( (&&&) )
 import Control.DeepSeq ( NFData(..) )
-import Control.Monad.State.Strict ( State, evalState, get, put )
+import Control.Monad.Trans.State.Strict ( State, evalState, get, put )
 
 import qualified Data.Binary as B
 import qualified Data.ByteString.Lazy as B

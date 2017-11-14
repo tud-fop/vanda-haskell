@@ -36,7 +36,8 @@ module Vanda.Corpus.SExpression
 ) where
 
 
-import Control.Monad.State.Lazy
+import Control.Monad (void)
+import Control.Monad.Trans.State.Lazy (State, get, gets, put, runState)
 import Data.Char
 import Data.Tree
 import System.IO.Unsafe (unsafeInterleaveIO)

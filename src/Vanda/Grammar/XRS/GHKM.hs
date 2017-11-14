@@ -8,7 +8,7 @@ import Prelude hiding ( span )
 
 import Control.Arrow ( second )
 import Control.Seq
-import Control.Monad.State.Strict ( State, evalState, runState, get, put )
+import Control.Monad.Trans.State.Strict (State, evalState, get, put, runState)
 
 import Data.Function ( on )
 import qualified Data.IntMap as IM

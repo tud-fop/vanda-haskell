@@ -59,7 +59,7 @@ module Vanda.Grammar.PMCFG
 
 import Control.Arrow (first)
 import Control.DeepSeq (NFData)
-import Control.Monad.State.Lazy
+import Control.Monad.Trans.State.Lazy (State, get, put, runState)
 import Data.Array (Array, (!))
 import Data.Converging (Converging(converged))
 import Data.Hashable
