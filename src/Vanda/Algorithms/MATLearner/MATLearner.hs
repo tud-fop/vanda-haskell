@@ -21,7 +21,7 @@ import qualified Data.Set as S
 import qualified Data.Vector as V
 import Vanda.Algorithms.MATLearner.TreeAutomaton hiding (errorHere)
 import Vanda.Algorithms.MATLearner.Strings hiding (errorHere)
-import Data.Map hiding (foldr,foldl,map,filter,findIndex)
+import Data.Map.Lazy (Map, (!), empty, insert, lookup, member, notMember)
 import Data.List (elemIndex,find)
 import Data.Maybe
 import Vanda.Algorithms.MATLearner.TreesContexts
