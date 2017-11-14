@@ -97,7 +97,7 @@ mainArgs (Extract outfile False _)
       corpus <- TIO.getContents
       let pmcfg = extractFromNegra $ parseNegra corpus :: WPMCFG String Double String
       BS.writeFile outfile . compress $ B.encode pmcfg
-      writeFile (outfile ++ ".readable") $ prettyPrintWPMCFG pmcfg
+      writeFile (outfile ++ ".readable") $ prettyPrintWPMCFG prettyShowString prettyShowString pmcfg
 mainArgs (Extract outfile True strategy)
   = do
       corpus <- TIO.getContents
@@ -106,7 +106,7 @@ mainArgs (Extract outfile True strategy)
                                Hybrid b -> binarizeHybrid b
       let pmcfg = extractFromNegraAndBinarize s $ parseNegra corpus :: WPMCFG String Double String
       BS.writeFile outfile . compress $ B.encode pmcfg
-      writeFile (outfile ++ ".readable") $ prettyPrintWPMCFG pmcfg
+      writeFile (outfile ++ ".readable") $ prettyPrintWPMCFG prettyShowString prettyShowString pmcfg
 mainArgs (Parse _ grFile)
   = do
       WPMCFG inits wrs <- B.decode . decompress
@@ -115,3 +115,9 @@ mainArgs (Parse _ grFile)
       _ <- evaluate pmcfg
       corpus <- TIO.getContents
       mapM_ (putStrLn . drawTree . fmap show . head . parse pmcfg . map T.unpack . T.words) $ T.lines corpus
+
+prettyShowString :: String -> String
+prettyShowString s = '\"' : concatMap g s ++ "\"" where
+  g '\"' = "\\\""
+  g '\\' = "\\\\"
+  g c    = [c]

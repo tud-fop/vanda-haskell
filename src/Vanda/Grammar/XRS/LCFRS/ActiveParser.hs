@@ -99,7 +99,7 @@ instance (Show nt, Show t) => Show (Item nt t wt) where
     = "[Passive] " ++ show a ++ " → " ++ show rv
   show (Active r _ rv f _ _)
     = "[Active] " ++ show r ++ "\n" 
-    ++ "current status: " ++ show (reverse rv) ++ " • " ++ prettyPrintComposition f
+    ++ "current status: " ++ show (reverse rv) ++ " • " ++ prettyPrintComposition show f
 
 
 -- | Container with two charts.

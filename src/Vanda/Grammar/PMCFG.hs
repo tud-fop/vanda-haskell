@@ -303,25 +303,25 @@ evaluate (Node f ts) = do
   mapM (fmap concat . mapM lookUp) f
 
 
-prettyPrintRule :: (Show nt, Show t) => Rule nt t -> String
-prettyPrintRule (Rule ((a, bs), f))
-  = show a ++ " → " ++ prettyPrintComposition f ++ " (" ++ intercalate ", " (map show bs) ++ ")"
+prettyPrintRule :: (nt -> String) -> (t -> String) -> Rule nt t -> String
+prettyPrintRule ntPrint tPrint (Rule ((a, bs), f))
+  = ntPrint a ++ " → " ++ prettyPrintComposition tPrint f ++ " (" ++ intercalate ", " (map ntPrint bs) ++ ")"
 
-prettyPrintWeightedRule :: (Show nt, Show w, Show t) => (Rule nt t, w) -> String
-prettyPrintWeightedRule (r, w) = prettyPrintRule r ++ "\t# " ++ show w
+prettyPrintWeightedRule :: Show w => (nt -> String) -> (t -> String) -> (Rule nt t, w) -> String
+prettyPrintWeightedRule ntPrint tPrint (r, w) = prettyPrintRule ntPrint tPrint r ++ "\t# " ++ show w
 
 prettyPrintList :: (t -> String) -> [t] -> String
 prettyPrintList f l = '[' : intercalate ", " (map f l) ++ "]"
 
-prettyPrintComposition :: Show t => [[VarT t]] -> String
-prettyPrintComposition = prettyPrintList (prettyPrintList g)
+prettyPrintComposition :: (t -> String) -> [[VarT t]] -> String
+prettyPrintComposition tPrint = prettyPrintList (prettyPrintList g)
   where g (Var i j) = "Var " ++ show i ++ " " ++ show j
-        g (T t)     = "T " ++ show t
+        g (T t)     = "T " ++ tPrint t
 
-prettyPrintWPMCFG :: (Show nt, Show w, Show t) => WPMCFG nt w t -> String
-prettyPrintWPMCFG (WPMCFG is rs)
-  = "initial: " ++ show is ++ "\n\n"
-    ++ unlines (map prettyPrintWeightedRule rs)
+prettyPrintWPMCFG :: Show w => (nt -> String) -> (t -> String) -> WPMCFG nt w t -> String
+prettyPrintWPMCFG ntPrint tPrint (WPMCFG is rs)
+  = "initial: " ++ prettyPrintList ntPrint is ++ "\n\n"
+    ++ unlines (map (prettyPrintWeightedRule ntPrint tPrint) rs)
 
 exampleCompositions :: [[[VarT Char]]]
 exampleCompositions = [ [[Var 0 0, Var 1 0, Var 0 1, Var 1 1]]
