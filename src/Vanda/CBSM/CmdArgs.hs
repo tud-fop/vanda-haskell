@@ -150,7 +150,7 @@ data FlagHeuristic
 data FlagShuffle = FSNone | FSStates | FSMerges deriving (Eq, Read, Show)
 
 data FlagOutputFormat
-  = FOFPretty | FOFPenn | FOFYield deriving (Eq, Read, Show)
+  = FOFBranches | FOFPenn | FOFPretty | FOFYield deriving (Eq, Read, Show)
 
 data FlagRestrictMerge
   = FRMBinLeaf | FRMBinMeta | FRMLeafs | FRMTerminals | FRMUnary
@@ -390,7 +390,11 @@ cmdArgs
         flag = "output-format"
         err  = flag ++ " expects one of " ++ optsStr
         optsStr = intercalate ", " (map fst opts)
-        opts = [("pretty", FOFPretty), ("penn", FOFPenn), ("yield", FOFYield)]
+        opts = [ ("branches", FOFBranches)
+               , ("penn"    , FOFPenn    )
+               , ("pretty"  , FOFPretty  )
+               , ("yield"   , FOFYield   )
+               ]
         update y x = maybe (Left err) (\ z -> Right x{flagOutputFormat = z})
                    $ lookup y opts
     flagReqRestrictMerge

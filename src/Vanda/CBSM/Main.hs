@@ -483,10 +483,17 @@ drawTreeFormatted
   -> String
   -> Tree String
   -> String
+drawTreeFormatted _ FOFBranches cs t
+  = unlines
+  $ map ((cs ++ ": ") ++)
+  $ branches t
+  where
+    branches (Node cs ts) = unwords (cs : "→" : map rootLabel ts)
+                          : concatMap branches ts
+drawTreeFormatted _ FOFPenn   _  t = treeToPenn id t
 drawTreeFormatted b FOFPretty cs t = cs ++ newline
                                   ++ unwords (yieldByFlag b t) ++ newline
                                   ++ drawTreeColored b t
-drawTreeFormatted _ FOFPenn   _  t = treeToPenn id t
 drawTreeFormatted b FOFYield  _  t = unwords (yieldByFlag b t)
 
 
