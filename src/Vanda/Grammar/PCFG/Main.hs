@@ -4,10 +4,7 @@
 Module:      Vanda.Grammar.PCFG.PCFG
 Description: program structure of the /PCFG/ part of Vanda
 Copyright:   (c) Technische Universität Dresden 2015
-License:     Redistribution and use in source and binary forms, with
-             or without modification, is ONLY permitted for teaching
-             purposes at Technische Universität Dresden AND IN
-             COORDINATION with the Chair of Foundations of Programming.
+License:     BSD-style
 Maintainer:  markus.napierkowski@mailbox.tu-dresden.de
 Stability:   unknown
 

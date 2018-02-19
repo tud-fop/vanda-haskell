@@ -4,10 +4,7 @@
 -- |
 -- Module      :  Vanda.Grammar.NGrams
 -- Copyright   :  (c) Technische Universität Dresden 2013
--- License     :  Redistribution and use in source and binary forms, with
---                or without modification, is ONLY permitted for teaching
---                purposes at Technische Universität Dresden AND IN
---                COORDINATION with the Chair of Foundations of Programming.
+-- License     :  BSD-style
 --
 -- Maintainer  :  Tobias.Denkinger@mailbox.tu-dresden.de
 -- Stability   :  unknown

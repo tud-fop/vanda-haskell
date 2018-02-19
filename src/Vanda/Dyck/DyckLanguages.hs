@@ -2,6 +2,7 @@
 Module:      Vanda.Dyck.DyckLanguages
 Description: functions to work with /Dyck languages/ languages
 Copyright:   Ⓒ Tobias Denkinger, 2015
+License:     BSD-style
 Maintainer:  Tobias.Denkinger@tu-dresden.de
 Stability:   experimental
 

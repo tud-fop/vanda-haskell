@@ -2,6 +2,7 @@
 Module:      Vanda.Grammar.AutomataStorage.SparseTreeStackStorage
 Description: storage type for /sparse tree stacks/
 Copyright:   Ⓒ Toni Dietze and Tobias Denkinger, 2016
+License:     BSD-style
 Maintainer:  Tobias.Denkinger@tu-dresden.de
 Stability:   experimental
 

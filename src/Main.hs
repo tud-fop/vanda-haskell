@@ -2,11 +2,8 @@
 -- |
 -- Module      :  Vanda.Main
 -- Description :  unified Vanda command line tool
--- Copyright   :  (c) Technische Universität Dresden 2015-2016
--- License     :  Redistribution and use in source and binary forms, with
---                or without modification, is ONLY permitted for teaching
---                purposes at Technische Universität Dresden AND IN
---                COORDINATION with the Chair of Foundations of Programming.
+-- Copyright   :  (c) Technische Universität Dresden 2015
+-- License     :  BSD-style
 --
 -- Maintainer  :  Toni.Dietze@tu-dresden.de
 -- Stability   :  unknown

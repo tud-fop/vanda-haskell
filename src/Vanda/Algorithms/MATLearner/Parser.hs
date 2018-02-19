@@ -2,13 +2,11 @@
 Module:      Vanda.Algorithms.MATLearner.Parser
 Description: Parsing functions for the MAT Learner
 Copyright:   (c) Technische Universität Dresden 2015
-License:     Redistribution and use in source and binary forms, with
-             or without modification, is ONLY permitted for teaching
-             purposes at Technische Universität Dresden AND IN
-             COORDINATION with the Chair of Foundations of Programming.
-Maintainer:  markus.napierkowski@mailbox.tu-dresden.de
+License:     BSD-style
+Maintainer:  Markus Napierkowski <markus.napierkowski@mailbox.tu-dresden.de>
 Stability:   unknown
 -}
+
 module Vanda.Algorithms.MATLearner.Parser (parseFile, parseAutomaton, parseTree, parseStringToTree) where
 
 import Vanda.Algorithms.MATLearner.TreeAutomaton hiding (getStates)

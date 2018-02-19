@@ -1,20 +1,13 @@
--- (c) 2010 Matthias Büchse <Matthias.Buechse@mailbox.tu-dresden.de>
---
--- Technische Universität Dresden / Faculty of Computer Science / Institute
--- of Theoretical Computer Science / Chair of Foundations of Programming
---
--- Redistribution and use in source and binary forms, with or without
--- modification, is ONLY permitted for teaching purposes at Technische
--- Universität Dresden AND IN COORDINATION with the Chair of Foundations
--- of Programming.
--- ---------------------------------------------------------------------------
+-------------------------------------------------------------------------------
+-- |
+-- Copyright    :  (c) Matthias Büchse 2010
+-- Maintainer   :  Matthias Büchse <Matthias.Buechse@mailbox.tu-dresden.de>
+-- License      :  BSD-style
+-- Stability    :  unbekannt
+-- Portability  :  portable
+-------------------------------------------------------------------------------
 
 {-# LANGUAGE BangPatterns #-}
-
--- |
--- Maintainer  :  Matthias Büchse
--- Stability   :  unbekannt
--- Portability :  portable
 
 -- Left : nonterminals
 -- Right: terminals

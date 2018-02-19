@@ -4,6 +4,7 @@
 Module:      Vanda.Grammar.NGrams.Main
 Description: functions to work n-gram models
 Copyright:   Ⓒ Tobias Denkinger, 2015
+License:     BSD-style
 Maintainer:  Tobias.Denkinger@tu-dresden.de
 Stability:   experimental
 

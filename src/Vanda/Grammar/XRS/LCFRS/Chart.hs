@@ -1,5 +1,14 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
+-----------------------------------------------------------------------------
+-- |
+-- Copyright   :  (c) Technische Universität Dresden 2018
+-- License     :  BSD-style
+--
+-- Stability   :  unknown
+-- Portability :  portable
+-----------------------------------------------------------------------------
+
 module Vanda.Grammar.XRS.LCFRS.Chart
   ( -- * top-level functions to solve deduction systems
     chartify

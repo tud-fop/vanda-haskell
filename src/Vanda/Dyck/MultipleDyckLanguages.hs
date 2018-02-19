@@ -2,6 +2,7 @@
 Module:      Vanda.Dyck.MultipleDyckLanguages
 Description: functions to work with /congruence multiple Dyck languages/
 Copyright:   Ⓒ Tobias Denkinger, 2015
+License:     BSD-style
 Maintainer:  Tobias.Denkinger@tu-dresden.de
 Stability:   experimental
 

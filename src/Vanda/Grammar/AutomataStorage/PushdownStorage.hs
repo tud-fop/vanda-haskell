@@ -2,6 +2,7 @@
 Module:      Vanda.Grammar.AutomataStorage.PushdownStorage
 Description: storage type for /pushdowns/
 Copyright:   Ⓒ Tobias Denkinger, 2015
+License:     BSD-style
 Maintainer:  Tobias.Denkinger@tu-dresden.de
 Stability:   experimental
 

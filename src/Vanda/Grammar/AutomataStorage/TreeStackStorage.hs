@@ -2,6 +2,7 @@
 Module:      Vanda.Grammar.AutomataStorage.TreeStackStorage
 Description: storage type for /tree stacks/
 Copyright:   Ⓒ Toni Dietze and Tobias Denkinger, 2015
+License:     BSD-style
 Maintainer:  Tobias.Denkinger@tu-dresden.de
 Stability:   experimental
 

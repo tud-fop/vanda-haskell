@@ -1,18 +1,14 @@
--- (c) 2011 Toni Dietze <Toni.Dietze@tu-dresden.de>
+-----------------------------------------------------------------------------
+-- |
+-- Copyright   :  (c) Toni Dietze 2011
+-- License     :  BSD-style
 --
--- Technische Universität Dresden / Faculty of Computer Science / Institute
--- of Theoretical Computer Science / Chair of Foundations of Programming
---
--- Redistribution and use in source and binary forms, with or without
--- modification, is ONLY permitted for teaching purposes at Technische
--- Universität Dresden AND IN COORDINATION with the Chair of Foundations
--- of Programming.
--- ---------------------------------------------------------------------------
+-- Stability   :  unknown
+-- Portability :  portable
+-----------------------------------------------------------------------------
 
 -- |
 -- Maintainer  :  Toni.Dietze@tu-dresden.de
--- Stability   :  unknown
--- Portability :  portable
 --
 -- Data structures and functions for weighted tree automata.
 module Data.WTA

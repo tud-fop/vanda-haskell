@@ -1,15 +1,14 @@
+{-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
+
 {-|
 Module:      Vanda.Algorithms.MATLearner.Parser
 Description: Different kinds of teachers for the MAT Learner
 Copyright:   (c) Technische Universität Dresden 2015
-License:     Redistribution and use in source and binary forms, with
-             or without modification, is ONLY permitted for teaching
-             purposes at Technische Universität Dresden AND IN
-             COORDINATION with the Chair of Foundations of Programming.
-Maintainer:  markus.napierkowski@mailbox.tu-dresden.de
+License:     BSD-style
+Maintainer:  Markus Napierkowski <markus.napierkowski@mailbox.tu-dresden.de>
 Stability:   unknown
 -}
-{-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
+
 module Vanda.Algorithms.MATLearner.Teacher where
 
 import Vanda.Algorithms.MATLearner.TreeAutomaton hiding (errorHere)

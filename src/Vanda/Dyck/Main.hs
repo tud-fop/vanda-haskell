@@ -4,6 +4,7 @@
 Module:      Vanda.Dyck.Main
 Description: membership in /Dyck languages/ and /congruence multiple Dyck languages/
 Copyright:   Ⓒ Tobias Denkinger, 2015
+License:     BSD-style
 Maintainer:  Tobias.Denkinger@tu-dresden.de
 Stability:   experimental
 

@@ -1,15 +1,12 @@
--- (c) 2010 Daniel Geisler
--- (c) 2010 Matthias Büchse <Matthias.Buechse@tu-dresden.de>
--- (c) 2011 Toni Dietze <Toni.Dietze@tu-dresden.de>
+-----------------------------------------------------------------------------
+-- |
+-- Copyright   :  (c) Daniel Geisler, Matthias Büchse 2010
+--                (c) Toni Dietze 2011
+-- License     :  BSD-style
 --
--- Technische Universität Dresden / Faculty of Computer Science / Institute
--- of Theoretical Computer Science / Chair of Foundations of Programming
---
--- Redistribution and use in source and binary forms, with or without
--- modification, is ONLY permitted for teaching purposes at Technische
--- Universität Dresden AND IN COORDINATION with the Chair of Foundations
--- of Programming.
--- ---------------------------------------------------------------------------
+-- Stability   :  unknown
+-- Portability :  portable
+-----------------------------------------------------------------------------
 
 {-# LANGUAGE FlexibleContexts #-}
 

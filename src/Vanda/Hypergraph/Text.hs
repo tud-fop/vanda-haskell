@@ -1,13 +1,11 @@
--- (c) 2012 Linda Leuschner <Leuschner.Linda@mailbox.tu-dresden.de>
+-----------------------------------------------------------------------------
+-- |
+-- Copyright   :  (c) Linda Leuschner 2012
+-- License     :  BSD-style
 --
--- Technische Universität Dresden / Faculty of Computer Science / Institute
--- of Theoretical Computer Science / Chair of Foundations of Programming
---
--- Redistribution and use in source and binary forms, with or without
--- modification, is ONLY permitted for teaching purposes at Technische
--- Universität Dresden AND IN COORDINATION with the Chair of Foundations
--- of Programming.
--- ---------------------------------------------------------------------------
+-- Stability   :  unknown
+-- Portability :  portable
+-----------------------------------------------------------------------------
 
 module Vanda.Hypergraph.Text ( parseHypergraph ) where
 

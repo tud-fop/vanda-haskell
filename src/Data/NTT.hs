@@ -1,5 +1,14 @@
 {-# LANGUAGE FlexibleInstances #-}
 
+-----------------------------------------------------------------------------
+-- |
+-- Copyright   :  (c) Technische Universität Dresden 2018
+-- License     :  BSD-style
+--
+-- Stability   :  unknown
+-- Portability :  portable
+-----------------------------------------------------------------------------
+
 module Data.NTT (NTT (..), Var (..), tt, nt, var) where
 
 import qualified Data.Vector as V

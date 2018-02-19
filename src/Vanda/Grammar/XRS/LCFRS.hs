@@ -1,13 +1,11 @@
--- (c) 2015 Sebastian Mielke <sebastian.mielke@tu-dresden.de>
+-----------------------------------------------------------------------------
+-- |
+-- Copyright   :  (c) Sebastian Mielke 2015
+-- License     :  BSD-style
 --
--- Technische Universität Dresden / Faculty of Computer Science / Institute
--- of Theoretical Computer Science / Chair of Foundations of Programming
---
--- Redistribution and use in source and binary forms, with or without
--- modification, is ONLY permitted for teaching purposes at Technische
--- Universität Dresden AND IN COORDINATION with the Chair of Foundations
--- of Programming.
--- ---------------------------------------------------------------------------
+-- Stability   :  unknown
+-- Portability :  portable
+-----------------------------------------------------------------------------
 
 module Vanda.Grammar.XRS.LCFRS
   ( Rule

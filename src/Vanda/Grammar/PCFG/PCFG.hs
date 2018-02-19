@@ -2,14 +2,11 @@
 Module:      Vanda.Grammar.PCFG.PCFG
 Description: data structures of /PCFG/
 Copyright:   (c) Technische Universität Dresden 2015
-License:     Redistribution and use in source and binary forms, with
-             or without modification, is ONLY permitted for teaching
-             purposes at Technische Universität Dresden AND IN
-             COORDINATION with the Chair of Foundations of Programming.
+License:     BSD-style
 Maintainer:  markus.napierkowski@mailbox.tu-dresden.de
 Stability:   unknown
 
-This module contains data structures used for PCFGs and a 
+This module contains data structures used for PCFGs and a
 few simple functions.
 -}
 

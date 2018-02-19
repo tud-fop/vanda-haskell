@@ -1,5 +1,14 @@
 {-# OPTIONS_GHC -fno-warn-incomplete-record-updates #-}
 
+-----------------------------------------------------------------------------
+-- |
+-- Copyright   :  (c) Technische Universität Dresden 2018
+-- License     :  BSD-style
+--
+-- Stability   :  unknown
+-- Portability :  portable
+-----------------------------------------------------------------------------
+
 module Vanda.Algorithms.MATLearner.Main
 ( main
 , mainArgs

@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # Copyright (c) 2010, Toni Dietze
+# License: BSD-style
 
 set -e -u -C
 #set -u -C

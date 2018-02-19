@@ -1,4 +1,14 @@
 {-# LANGUAGE RecordWildCards #-}
+
+-----------------------------------------------------------------------------
+-- |
+-- Copyright   :  (c) Technische Universität Dresden 2018
+-- License     :  BSD-style
+--
+-- Stability   :  unknown
+-- Portability :  portable
+-----------------------------------------------------------------------------
+
 module Vanda.Hypergraph.Tree where
 
 import qualified Data.Binary as B

@@ -1,3 +1,12 @@
+-----------------------------------------------------------------------------
+-- |
+-- Copyright   :  (c) Technische Universität Dresden 2018
+-- License     :  BSD-style
+--
+-- Stability   :  unknown
+-- Portability :  portable
+-----------------------------------------------------------------------------
+
 -- | Makes Negra data types instances of 'NFData' for strict evaluation.
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}

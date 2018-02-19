@@ -1,18 +1,12 @@
--- (c) 2010 Toni Dietze <Toni.Dietze@tu-dresden.de>
---
--- Technische Universität Dresden / Faculty of Computer Science / Institute
--- of Theoretical Computer Science / Chair of Foundations of Programming
---
--- Redistribution and use in source and binary forms, with or without
--- modification, is ONLY permitted for teaching purposes at Technische
--- Universität Dresden AND IN COORDINATION with the Chair of Foundations
--- of Programming.
--- ---------------------------------------------------------------------------
-
+-----------------------------------------------------------------------------
 -- |
--- Maintainer  :  Toni Dietze
+-- Copyright   :  (c) Toni Dietze 2010
+-- License     :  BSD-style
+--
+-- Maintainer  :  Toni Dietze <toni.dietze@tu-dresden.de>
 -- Stability   :  unknown
 -- Portability :  portable
+-----------------------------------------------------------------------------
 
 {-- snippet types --}
 module Vanda.Algorithms.Earley.WSA

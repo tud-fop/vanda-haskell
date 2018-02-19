@@ -1,21 +1,13 @@
--- (c) 2012 Matthias Büchse <Matthias.Buechse@mailbox.tu-dresden.de>
---
--- Technische Universität Dresden / Faculty of Computer Science / Institute
--- of Theoretical Computer Science / Chair of Foundations of Programming
---
--- Redistribution and use in source and binary forms, with or without
--- modification, is ONLY permitted for teaching purposes at Technische
--- Universität Dresden AND IN COORDINATION with the Chair of Foundations
--- of Programming.
--- ---------------------------------------------------------------------------
-
+-------------------------------------------------------------------------------
 -- |
--- Maintainer  :  Matthias Büchse
+-- Copyright   :  (c) Matthias Büchse 2012
+-- Maintainer  :  Matthias Büchse <matthias.buechse@tu-dresden.de>
 -- Stability   :  unbekannt
 -- Portability :  portable
-
+--
 -- Left : nonterminals
 -- Right: terminals
+-------------------------------------------------------------------------------
 
 {-# LANGUAGE ScopedTypeVariables #-}
 

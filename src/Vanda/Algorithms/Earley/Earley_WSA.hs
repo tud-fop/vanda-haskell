@@ -1,30 +1,24 @@
--- (c) 2010 Linda Leuschner <Leuschner.Linda@mailbox.tu-dresden.de>
---
--- Technische Universität Dresden / Faculty of Computer Science / Institute
--- of Theoretical Computer Science / Chair of Foundations of Programming
---
--- Redistribution and use in source and binary forms, with or without
--- modification, is ONLY permitted for teaching purposes at Technische
--- Universität Dresden AND IN COORDINATION with the Chair of Foundations
--- of Programming.
--- ---------------------------------------------------------------------------
-
+-----------------------------------------------------------------------------
 -- |
--- Maintainer  :  Linda Leuschner
--- Stability   :  unbekannt
+-- Copyright   :  (c) Linda Leuschner 2010
+-- License     :  BSD-style
+--
+-- Maintainer  :  Linda Leuschner <linda.leuschner@tu-dresden.de>
+-- Stability   :  unknown
 -- Portability :  portable
 --
--- This module computes 'Hypergraph' out of a 'Hypergraph' and a 'WSA'. 
+-- This module computes 'Hypergraph' out of a 'Hypergraph' and a 'WSA'.
 -- The resulting 'Hypergraph' will only recognize the given word.
 -- This implementation uses the Early and the Bar-Hille algorithm.
-
+--
 -- The input 'Hypergraph' represents a synchronous contet-free grammar.
--- Variables in a production should start with 0. 
--- The list of nonterminals belonging to the variables is ordered by the index 
+-- Variables in a production should start with 0.
+-- The list of nonterminals belonging to the variables is ordered by the index
 -- of the variables.
-
+--
 -- Left : nonterminals
 -- Right: terminals
+-----------------------------------------------------------------------------
 
 -- TODO: Resulting pscfg accepts the empty word
 

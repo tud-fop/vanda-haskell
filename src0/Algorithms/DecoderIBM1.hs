@@ -1,5 +1,14 @@
 {-# LANGUAGE Rank2Types, ScopedTypeVariables #-}
 
+-----------------------------------------------------------------------------
+-- |
+-- Copyright   :  (c) Technische Universität Dresden 2018
+-- License     :  BSD-style
+--
+-- Stability   :  unknown
+-- Portability :  portable
+-----------------------------------------------------------------------------
+
 module Algorithms.DecoderIBM1 where
 
 
