@@ -16,24 +16,25 @@ The installation provides the command line tool `Vanda` and a Haskell library.
   `cabal exec -- Vanda brackets mdyck '[(,{' ']),}' '{([])[()]}'`.
 * Each subcommand has its own `help` subcommand that provides further information, e.g., `cabal exec -- Vanda brackets help`.
 * Running `Vanda` without arguments shows you the following list of available top-level subcommands:
-  ```
-  vanda [COMMAND] ...
-    Vanda
 
-  Commands:
-    brackets   algorithms for Dyck and multiple Dyck languages
-    cbsm       Count-Based State Merging
-    lcfrs      algorithms for probabilistic LCFRS
-    pmcfg      algorithms for weighted parallel multiple context-free grammars
-    ngrams     algorithms for n-gram models
-    pdta       grammatical inference of probabilistic deterministic tree
-               automata (experimental!)
-    xrsngrams  algorithms for combining n-gram models and translation models
-    pcfg       algorithms for extracting and training PCFGs
+    ```
+    vanda [COMMAND] ...
+      Vanda
 
-  Every mode provides a sub-mode help, which displays only help concerning this
-  mode. Every help mode has an optional argument which defines the help format.
-  ```
+    Commands:
+      brackets   algorithms for Dyck and multiple Dyck languages
+      cbsm       Count-Based State Merging
+      lcfrs      algorithms for probabilistic LCFRS
+      pmcfg      algorithms for weighted parallel multiple context-free grammars
+      ngrams     algorithms for n-gram models
+      pdta       grammatical inference of probabilistic deterministic tree
+                 automata (experimental!)
+      xrsngrams  algorithms for combining n-gram models and translation models
+      pcfg       algorithms for extracting and training PCFGs
+
+    Every mode provides a sub-mode help, which displays only help concerning this
+    mode. Every help mode has an optional argument which defines the help format.
+    ```
 
 ## The Vanda Haskell library
 Currently, the library just exposes nearly every module there is in the project.
