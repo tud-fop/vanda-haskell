@@ -14,16 +14,18 @@ Vanda-Haskell is a toolkit that contains various proof-of-concept implementation
   ```
   vanda [COMMAND] ...
     Vanda
-  
+
   Commands:
     brackets   algorithms for Dyck and multiple Dyck languages
     cbsm       Count-Based State Merging
     lcfrs      algorithms for probabilistic LCFRS
     pmcfg      algorithms for weighted parallel multiple context-free grammars
     ngrams     algorithms for n-gram models
+    pdta       grammatical inference of probabilistic deterministic tree
+               automata (experimental!)
     xrsngrams  algorithms for combining n-gram models and translation models
     pcfg       algorithms for extracting and training PCFGs
-  
+
   Every mode provides a sub-mode help, which displays only help concerning this
   mode. Every help mode has an optional argument which defines the help format.
   
