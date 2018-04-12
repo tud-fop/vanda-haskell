@@ -20,7 +20,7 @@ import           Data.NTT                                (NTT (..))
 import           Vanda.Corpus.Negra                      (Negra)
 import           Vanda.Grammar.PMCFG                     (WPMCFG, fromWeightedRules, Rule (..))
 import qualified Vanda.Grammar.PMCFG                as M (VarT (..))
-import           Vanda.Grammar.XRS.LCFRS                 (PLCFRS, getNonterminalFanout, NTIdent)
+import           Vanda.Grammar.XRS.LCFRS                 (PLCFRS, getNonterminalFanout)
 import           Vanda.Grammar.XRS.LCFRS.Binarize        (Binarizer, binarizeUsing)
 import           Vanda.Grammar.XRS.LCFRS.Extraction      (extractPLCFRSFromNegra)
 
@@ -31,7 +31,7 @@ fromPLCFRS g@(is, rs, (mnt, mt))
     where
       convertRule ((nt, nts), vartss)
         = Rule ((mnt ! nt, map (mnt !) nts), map (map $ convertComposition (map (fanouts !) nts)) vartss)
-      fanouts 
+      fanouts
         = listArray (bounds mnt) [ fromJust (getNonterminalFanout g n) | n <- indices mnt ]
       convertComposition _ (T t)
         = M.T (mt ! t)
@@ -43,11 +43,12 @@ fromPLCFRS g@(is, rs, (mnt, mt))
         | j < ix    = (i, j)
         | otherwise = calculateIndices ixs (i+1) (j-ix)
 
-extractFromNegra :: Negra -> WPMCFG String Double String
-extractFromNegra = fromPLCFRS . extractPLCFRSFromNegra
+extractFromNegra :: Bool -> Negra -> WPMCFG String Double String
+extractFromNegra removeLeaves = fromPLCFRS . extractPLCFRSFromNegra removeLeaves
 
 extractFromNegraAndBinarize
-  :: Binarizer
+  :: Bool
+  -> Binarizer
   -> Negra
   -> WPMCFG String Double String
-extractFromNegraAndBinarize strategy = fromPLCFRS . binarizeUsing strategy . extractPLCFRSFromNegra
+extractFromNegraAndBinarize removeLeaves strategy = fromPLCFRS . binarizeUsing strategy . extractPLCFRSFromNegra removeLeaves

@@ -19,6 +19,7 @@ module Vanda.Corpus.Negra
   , negraToForest
   , negraToCrossedTree
   , negraTreeToTree
+  , removeLeaves
   , Span
   ) where
 
@@ -169,6 +170,16 @@ pointerTreeToCrossedTree = f 0
             _ -> error "Parser.Negra.pointerTreeToCrossedTree"
     g pt (Left num) = f num pt
     g _ (Right (leaf, pos)) = T.Node (Just leaf, [(pos, pos)]) []
+
+
+removeLeaves
+  :: T.Tree (Maybe SentenceData, [Span])
+  -> T.Tree (Maybe SentenceData, [Span])
+removeLeaves
+  = fmap (\(x, y) -> (fmap g x, y))
+  where
+    g x@SentenceWord{} = x{ sdWord = sdPostag x }
+    g x = x
 
 
 -- | Calculate the correct 'Span' lists of inner nodes by propagating the

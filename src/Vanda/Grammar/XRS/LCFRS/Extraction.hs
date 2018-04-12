@@ -141,11 +141,12 @@ giveFanOut i (Just sd)
     in Just sd{sdPostag = oldTag ++ "_" ++ show i}
 giveFanOut _ v = v -- epsilon super-root
 
-extractPLCFRSFromNegra :: Negra -> PLCFRS
-extractPLCFRSFromNegra negra
+extractPLCFRSFromNegra :: Bool -> Negra -> PLCFRS
+extractPLCFRSFromNegra removeTerminals negra
   = let (intifiedTrees, (m_nt, m_t))
           = dualIntifyNegra
           $ map ( establishSpanBasedOrderAndAnnotateFanOut
+                . (if removeTerminals then removeLeaves else id)
                 . negraToCrossedTree
                 . sData
                 )
