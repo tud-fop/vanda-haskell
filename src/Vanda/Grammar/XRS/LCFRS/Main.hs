@@ -148,7 +148,7 @@ mainArgs (Help cs) = putStr cs
 mainArgs (Extract outfile)
   = do
       corpus <- TIO.getContents
-      let plcfrs = extractPLCFRSFromNegra $ parseNegra corpus
+      let plcfrs = extractPLCFRSFromNegra False $ parseNegra corpus
       BS.writeFile outfile . compress $ B.encode plcfrs
       writeFile (outfile ++ ".readable") $ showPLCFRS plcfrs
 --       hPutStrLn stderr $ "Extracted PLCFRS:" ++ niceStatictics plcfrs

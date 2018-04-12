@@ -36,6 +36,7 @@ data Args
   = Help String
   | Extract
     { argOutput :: FilePath
+    , flagPreterminals :: Bool
     , flagBinarize :: Bool
     , flagStrategy :: BinarizationStrategy
     }
@@ -52,11 +53,11 @@ data ParsingAlgorithm = UnweightedAutomaton deriving (Eq, Show)
 cmdArgs :: Mode Args
 cmdArgs
   = modes "pmcfg" (Help $ defaultHelp cmdArgs) "algorithms for weighted parallel multiple context-free grammars"
-  [ (modeEmpty $ Extract undefined False undefined)
+  [ (modeEmpty $ Extract undefined False False undefined)
     { modeNames = ["extract"]
     , modeHelp = "Reads of a wPMCFG from a NeGra corpus."
     , modeArgs = ( [ flagArgCorpus{argRequire = True}], Nothing )
-    , modeGroupFlags = toGroup [flagNoneBinarize,  flagNoneNaive, flagNoneOptimal, flagReqHybrid]
+    , modeGroupFlags = toGroup [flagNoneBinarize,  flagNoneNaive, flagNoneOptimal, flagReqHybrid, flagNonePreterminals]
     }
   , (modeEmpty $ Parse undefined undefined)
     { modeNames = ["parse"]
@@ -74,6 +75,8 @@ cmdArgs
       = flagNone ["a", "automaton"] (\ x -> x{flagAlgorithm = UnweightedAutomaton}) "use an unweighted automaton constructed from the grammar"
     flagNoneBinarize
       = flagNone ["b", "binarize", "binarise"] (\ x -> x{flagBinarize = True}) "binarize the extracted grammar"
+    flagNonePreterminals
+      = flagNone ["p", "only-preterminals"] (\ x -> x{flagPreterminals = True}) "drop terminal symbols and use the preterminals instead"
     flagNoneNaive
       = flagNone ["n", "naive"] (\ x -> x{flagStrategy = Naive}) "use naive binarization"
     flagNoneOptimal
@@ -90,19 +93,19 @@ main = processArgs (populateHelpMode Help cmdArgs) >>= mainArgs
 
 mainArgs :: Args -> IO ()
 mainArgs (Help cs) = putStr cs
-mainArgs (Extract outfile False _)
+mainArgs (Extract outfile usePreterminals False _)
   = do
       corpus <- TIO.getContents
-      let pmcfg = extractFromNegra $ parseNegra corpus :: WPMCFG String Double String
+      let pmcfg = extractFromNegra usePreterminals $ parseNegra corpus :: WPMCFG String Double String
       BS.writeFile outfile . compress $ B.encode pmcfg
       writeFile (outfile ++ ".readable") $ prettyPrintWPMCFG prettyShowString prettyShowString pmcfg
-mainArgs (Extract outfile True strategy)
+mainArgs (Extract outfile usePreterminals True strategy)
   = do
       corpus <- TIO.getContents
       let s = case strategy of Naive -> binarizeNaively
                                Optimal -> binarizeByAdjacency
                                Hybrid b -> binarizeHybrid b
-      let pmcfg = extractFromNegraAndBinarize s $ parseNegra corpus :: WPMCFG String Double String
+      let pmcfg = extractFromNegraAndBinarize usePreterminals s $ parseNegra corpus :: WPMCFG String Double String
       BS.writeFile outfile . compress $ B.encode pmcfg
       writeFile (outfile ++ ".readable") $ prettyPrintWPMCFG prettyShowString prettyShowString pmcfg
 mainArgs (Parse _ grFile)
