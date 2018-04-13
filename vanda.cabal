@@ -1,14 +1,14 @@
-name:           Vanda
+name:           vanda
 version:        0.1
 cabal-version:  >= 1.10
-license:        AllRightsReserved
+license:        BSD3
 license-file:   LICENSE
 copyright:      (c) 2012 Vanda Team, Technische Universität Dresden
 author:         Vanda Team
-maintainer:     Toni.Dietze@tu-dresden.de
+maintainer:     Tobias.Denkinger@tu-dresden.de
 stability:      alpha
 homepage:       http://www.inf.tu-dresden.de/index.php?node_id=1567
-bug-Reports:    mailto:Toni.Dietze@tu-dresden.de
+bug-Reports:    mailto:Tobias.Denkinger@tu-dresden.de
 -- package-url:    http://www.cabal_source_package.com
 synopsis:       Haskell Machine Translation Toolkit
 -- description:    längere Beschreibung
@@ -196,7 +196,7 @@ library
   GHC-Options:      -Wall -fwarn-incomplete-record-updates
   ghc-prof-options: -Wall -fwarn-incomplete-record-updates
 
-executable Vanda
+executable vanda
   build-depends:
       array
     , base
@@ -229,7 +229,7 @@ executable Vanda
     , transformers
     , unix
     , unordered-containers
-    , Vanda
+    , vanda
     , vector
     , zlib
   if flag(gtk)
@@ -248,6 +248,9 @@ executable Vanda
     , VandaCLI.PDTA.CmdArgs
     , VandaCLI.PMCFG
     , VandaCLI.XRSNGrams
+  if flag(gtk)
+    other-modules:
+      VandaCLI.MATLearner
   default-language: Haskell2010
   hs-source-dirs: executable
   main-is: Main.hs
@@ -263,7 +266,7 @@ Test-Suite HUnitTests
     , HUnit
     , log-domain
     , random
-    , Vanda
+    , vanda
     , vector
   other-modules:
       Control.ErrorTests
