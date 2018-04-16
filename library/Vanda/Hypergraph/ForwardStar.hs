@@ -5,14 +5,11 @@
 --
 -- Stability   :  unknown
 -- Portability :  portable
------------------------------------------------------------------------------
-
--- |
 -- Maintainer  :  Matthias Buechse
--- Stability   :  unknown
--- Portability :  portable
 --
 -- This module makes 'ForwardStar' a 'Hypergraph' instance.
+-----------------------------------------------------------------------------
+
 
 module Vanda.Hypergraph.ForwardStar
   ( module Vanda.Hypergraph.Basic

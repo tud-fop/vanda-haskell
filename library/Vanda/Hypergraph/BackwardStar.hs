@@ -5,6 +5,10 @@
 --
 -- Stability   :  unknown
 -- Portability :  portable
+-- Maintainer  :  Matthias Buechse
+--
+-- This module makes 'BackwardStar' a 'Hypergraph' instance, and it exports
+-- some algorithm implementations that are specific to 'BackwardStar'.
 -----------------------------------------------------------------------------
 
 {-# LANGUAGE EmptyDataDecls #-}
@@ -12,14 +16,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
-
--- |
--- Maintainer  :  Matthias Buechse
--- Stability   :  unknown
--- Portability :  portable
---
--- This module makes 'BackwardStar' a 'Hypergraph' instance, and it exports
--- some algorithm implementations that are specific to 'BackwardStar'.
 module Vanda.Hypergraph.BackwardStar
   ( module Vanda.Hypergraph.Basic
   , bests
