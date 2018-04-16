@@ -2,13 +2,15 @@
 -- |
 -- Copyright    :  (c) 2011 Toni Dietze <Toni.Dietze@tu-dresden.de>
 -- License      :  BSD-style
--------------------------------------------------------------------------------
-
--- | Computation of inside and outside weights for 'Hypergraph's.
+--
+-- Computation of inside and outside weights for 'Hypergraph's.
 --
 -- The weights are computed by a fixpoint approximation.
 -- Alternative approaches for future implementations could be Newton's method
 -- or hill climbing.
+-------------------------------------------------------------------------------
+
+
 module Vanda.Algorithms.InsideOutsideWeights (
 -- * Inside and outside weights
   insideOutside, insideOutside'

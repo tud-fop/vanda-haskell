@@ -5,9 +5,9 @@
 --
 -- Stability   :  unknown
 -- Portability :  portable
+--
+-- Makes Negra data types instances of 'NFData' for strict evaluation.
 -----------------------------------------------------------------------------
-
--- | Makes Negra data types instances of 'NFData' for strict evaluation.
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 

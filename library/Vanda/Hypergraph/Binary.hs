@@ -5,12 +5,8 @@
 --
 -- Stability   :  unknown
 -- Portability :  portable
------------------------------------------------------------------------------
-
--- |
 -- Maintainer  :  Matthias Buechse
--- Stability   :  unknown
--- Portability :  portable
+-----------------------------------------------------------------------------
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 

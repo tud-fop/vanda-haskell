@@ -5,6 +5,7 @@
 --
 -- Stability   :  unknown
 -- Portability :  portable
+-- Maintainer  :  Matthias Buechse
 -----------------------------------------------------------------------------
 
 {-# LANGUAGE BangPatterns #-}
@@ -12,11 +13,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
-
--- |
--- Maintainer  :  Matthias Buechse
--- Stability   :  unknown
--- Portability :  portable
 
 module Vanda.Hypergraph.IntHypergraph
   ( Hyperedge (..)

@@ -5,17 +5,14 @@
 --
 -- Stability   :  unknown
 -- Portability :  portable
+-- Maintainer  :  Matthias Buechse
+--
+-- This module defines the Hypergraph class and the algebraic data types
+-- for the several hypergraph representations.
 -----------------------------------------------------------------------------
 
 {-# LANGUAGE BangPatterns #-}
 
--- |
--- Maintainer  :  Matthias Buechse
--- Stability   :  unknown
--- Portability :  portable
---
--- This module defines the Hypergraph class and the algebraic data types
--- for the several hypergraph representations.
 module Vanda.Hypergraph.Basic
   ( Hyperedge (..)
   , deref

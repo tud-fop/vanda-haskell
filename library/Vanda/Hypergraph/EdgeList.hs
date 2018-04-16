@@ -5,6 +5,9 @@
 --
 -- Stability   :  unknown
 -- Portability :  portable
+-- Maintainer  :  Matthias Buechse
+--
+-- Implementation of the 'EdgeList' representation.
 -----------------------------------------------------------------------------
 
 {-# LANGUAGE BangPatterns #-}
@@ -14,12 +17,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
--- |
--- Maintainer  :  Matthias Buechse
--- Stability   :  unknown
--- Portability :  portable
---
--- Implementation of the 'EdgeList' representation.
 
 module Vanda.Hypergraph.EdgeList
   ( module Vanda.Hypergraph.Basic

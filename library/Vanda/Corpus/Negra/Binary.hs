@@ -5,10 +5,10 @@
 --
 -- Stability   :  unknown
 -- Portability :  portable
------------------------------------------------------------------------------
-
--- | Makes Negra data types instances of 'B.Binary' for rapid
+--
+-- Makes Negra data types instances of 'B.Binary' for rapid
 -- (de)serialization.
+-----------------------------------------------------------------------------
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
