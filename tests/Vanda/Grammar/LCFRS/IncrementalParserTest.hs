@@ -12,8 +12,16 @@ module Vanda.Grammar.LCFRS.IncrementalParserTest
 
 import Test.HUnit
 import Vanda.Grammar.XRS.LCFRS.IncrementalParser
+import Vanda.Grammar.PMCFG 
+
+first :: (x,y,z) -> x
+first (x,_,_) = x
 
 tests :: Test
 tests = TestList    [ TestCase
-                        $ assertEqual "ErrorMessage" "File Connected" parse
-                      , TestCase $ assertEqual "Wrong Pretty Printed Grammar" "Test" exampleGrammar ]
+                        $ assertEqual "ErrorMessage" "File Connected" testParse
+                      , TestCase $ assertEqual "Wrong Pretty Printed Grammar" "Test" exampleGrammar ,
+                     TestCase $ assertEqual "PMCFG.prepare doesn't do what it should do" exampleMap $ first prepareTest]
+
+--                        TestCase $ assertEquals "Active Item not in Chart after ",
+--                       TestCase $ assertEqual "Chart Update doesn't work" 

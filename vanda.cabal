@@ -289,3 +289,5 @@ Test-Suite HUnitTests
   GHC-Options: -main-is HUnitTests
   main-is: HUnitTests.hs
   type: exitcode-stdio-1.0
+
+
