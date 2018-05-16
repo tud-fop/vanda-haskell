@@ -8,16 +8,14 @@ module Vanda.Grammar.XRS.LCFRS.IncrementalParser
   ) where
 
 import Data.Hashable (Hashable(hashWithSalt))
-import Data.Range
-import Vanda.Grammar.PMCFG
 import Data.Converging (Converging)
-import Data.Hashable (Hashable(hashWithSalt))
-import Data.Maybe (mapMaybe, maybeToList, catMaybes)
+import Data.Maybe (mapMaybe, fromJust)
 import Data.Range
 import Data.Semiring
 import Data.Tree (Tree)
 import Data.Weight
 import Vanda.Grammar.PMCFG
+import Debug.Trace(trace)
 
 import qualified Data.HashMap.Lazy             as Map
 
@@ -130,9 +128,12 @@ completeKnownTokens _ _ _ _ = []
 
 
 update :: (Eq nt, Hashable nt) => Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
+update (p, a, n) (Active rule@(Rule ((nt, _),_)) wt ranges ([]:_) _ _)
+    = case C.insert p nt (fromJust $ fromList ranges) (C.Backtrace rule wt ([fromJust $ fromList ranges])) wt of
+        (p', isnew) -> trace "works1" ((p', a, n), isnew)
 update (p, a, n) item@(Active (Rule ((_, as),_)) _ _ ((Var i _:_):_) _ _)
-    = ((p, MMap.insert (as !! i) item a, (as !! i) `Set.delete` n), True)
-update (p, a, n) _ = ((p, a, n), True)
+    = trace "works2" ((p, MMap.insert (as !! i) item a, (as !! i) `Set.delete` n), True)
+update (p, a, n) _ = trace "works3"((p, a, n), True)
 -- TODO Schau, dass init Pred das macht, was es soll
 
 
@@ -192,3 +193,5 @@ completeKnownTokens _ _ _ _ = []
 
 -- TODO convert active Item noch überall rein, sobald ich weiß, dass mein aktive Item richtig ist und ich daraus passive Item ableiten kann
 --
+
+
