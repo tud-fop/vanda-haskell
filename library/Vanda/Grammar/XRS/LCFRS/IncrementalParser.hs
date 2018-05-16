@@ -2,7 +2,7 @@
 
 module Vanda.Grammar.XRS.LCFRS.IncrementalParser
   ( testParse,
---    parse,
+    parse,
     exampleGrammar,
     Container
   ) where
@@ -10,6 +10,16 @@ module Vanda.Grammar.XRS.LCFRS.IncrementalParser
 import Data.Hashable (Hashable(hashWithSalt))
 import Data.Range
 import Vanda.Grammar.PMCFG
+import Data.Converging (Converging)
+import Data.Hashable (Hashable(hashWithSalt))
+import Data.Maybe (mapMaybe, maybeToList, catMaybes)
+import Data.Range
+import Data.Semiring
+import Data.Tree (Tree)
+import Data.Weight
+import Vanda.Grammar.PMCFG
+
+import qualified Data.HashMap.Lazy             as Map
 
 import qualified Data.MultiHashMap             as MMap
 import qualified Data.IntMap                   as IMap
@@ -53,14 +63,14 @@ type Container nt t wt = ( C.Chart nt t wt -- Passive Items
                          , MMap.MultiMap nt (Item nt t wt) --Map NT onto List of Active Items, that need NT in the next Step
                          , Set.HashSet nt -- All NTs, which are not init. right now
                          )
-update :: Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
+{- update :: Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
 update (p, a, n) item@(Active (Rule ((_, as),_)) _ _ ((Var i _:_):_) _ _)
  = ((p, MMap.insert (as !! i) item a, (as !! i) `Set.delete` n), True)
-update (p, a, n) _ = ((p, a, n), True)
+update (p, a, n) _ = ((p, a, n), True) TODO Hier rein, wann ein actives Item in Chart kommt-} 
 
 
 -- From active Parser
-{-parse :: forall nt t wt.(Hashable nt, Hashable t, Eq t, Ord wt, Weight wt, Ord nt, Converging wt) 
+parse :: forall nt t wt.(Hashable nt, Hashable t, Eq t, Ord wt, Weight wt, Ord nt, Converging wt) 
       => WPMCFG nt wt t -- Grammar
       -> Int -- Beam Width
       -> Int -- Max. Amount of Parse Trees
@@ -82,10 +92,31 @@ parse' (rmap, iow, s') bw tops w
     where
       nset = Set.fromList $ filter (not . (`elem` s')) $ Map.keys rmap
       
-      rules = initialPrediction w (s' >>= (`MMap.lookup` rmap)) iow
--}
+      rules = [initialPrediction w (s' >>= (`MMap.lookup` rmap)) iow]
 
-convert :: (Item nt t wt, wt) -> Maybe (Item nt t wt, wt)
+-- | Prediction rule for rules of initial nonterminals.
+initialPrediction :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t) 
+                  => [t]
+                  -> [(Rule nt t, wt)]
+                  -> Map.HashMap nt (wt, wt)
+                  -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
+initialPrediction word srules ios 
+  = Left 
+      [ (Active r w rho' f' IMap.empty inside, inside) 
+      | (r@(Rule ((_, as), f)), w) <- srules
+      , (rho', f') <- completeKnownTokens word IMap.empty [Epsilon] f
+      , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
+      ]
+completeKnownTokens= undefined
+
+update :: (Eq nt, Hashable nt) => Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
+update (p, a, n) item@(Active (Rule ((_, as),_)) _ _ ((Var i _:_):_) _ _)
+    = ((p, MMap.insert (as !! i) item a, (as !! i) `Set.delete` n), True)
+update (p, a, n) _ = ((p, a, n), True)
+-- TODO Schau, dass init Pred das macht, was es soll
+
+
+{-convert :: (Item nt t wt, wt) -> Maybe (Item nt t wt, wt)
 convert (Active r w rs [] completions inside, heuristic)
   = case fromList $ reverse rs of
          Nothing -> Nothing
@@ -136,6 +167,7 @@ completeKnownTokens w m (r:rs) ((Var i j:fs):fss)
          Nothing -> [(r:rs, (Var i j:fs):fss)]
 completeKnownTokens _ _ _ _ = []
 
+-}
 
 
 -- TODO convert active Item noch überall rein, sobald ich weiß, dass mein aktive Item richtig ist und ich daraus passive Item ableiten kann
