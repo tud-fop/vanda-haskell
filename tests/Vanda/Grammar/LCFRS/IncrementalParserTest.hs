@@ -13,6 +13,18 @@ module Vanda.Grammar.LCFRS.IncrementalParserTest
 import Test.HUnit
 import Vanda.Grammar.XRS.LCFRS.IncrementalParser
 import Vanda.Grammar.PMCFG 
+import Data.Range
+import Data.Maybe (mapMaybe)
+import Numeric.Log (Log)
+import qualified Data.IntMap                   as IMap
+import Data.Weight
+import Data.Maybe (mapMaybe)
+import Numeric.Log (Log)
+import Control.Arrow (second)
+
+exampleWPMCFG' :: WPMCFG Int (Probabilistic (Log Double)) Char
+exampleWPMCFG' = case exampleWPMCFG of
+                      (WPMCFG s rs) -> WPMCFG s $ map (second probabilistic) rs
 
 first :: (x,y,z) -> x
 first (x,_,_) = x
@@ -20,7 +32,9 @@ first (x,_,_) = x
 tests :: Test
 tests = TestList    [ TestCase
                         $ assertEqual "ErrorMessage" "File Connected" testParse
---                      , TestCase $ not assertEqual "Wrong Pretty Printed Grammar" "Test" exampleGrammar 
+--                        , TestCase $ assertEqual "Can't find item after init. Pred" Active (Rule ((2, []), [[], []])) 1 [Epsilon] ([[]]) IMap.empty 1 $ parse exampleWPMCFG 1000 100 "")
+                        , TestCase $ assertEqual "Can't find item after init. Pred" [""] $ mapMaybe yield $ parse exampleWPMCFG' 100 1 ""
+--                      , TestCase $ not assertEqual "Wrong Pretty Printed Grammar" "Test" exampleGrammar
                      ]
 
 --                        TestCase $ assertEquals "Active Item not in Chart after ",
