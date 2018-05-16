@@ -107,7 +107,27 @@ initialPrediction word srules ios
       , (rho', f') <- completeKnownTokens word IMap.empty [Epsilon] f
       , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
       ]
-completeKnownTokens= undefined
+
+completeKnownTokens :: (Eq t)
+                    => [t] 
+                    -> IMap.IntMap Rangevector 
+                    -> [Range] 
+                    -> Function t 
+                    -> [([Range], Function t)]
+completeKnownTokens _ _ rs [[]] = [(rs, [])]
+completeKnownTokens w m rs ([]:fs) = completeKnownTokens w m (Epsilon:rs) fs
+completeKnownTokens w m (r:rs) ((T t:fs):fss) 
+  = [ (r':rs, fs:fss)
+    | r' <- mapMaybe (safeConc r) $ singletons t w
+    ] >>= uncurry (completeKnownTokens w m)
+completeKnownTokens w m (r:rs) ((Var i j:fs):fss) 
+  = case i `IMap.lookup` m of
+         Just rv -> case safeConc r (rv ! j) of
+                         Just r' -> completeKnownTokens w m (r':rs) (fs:fss)
+                         Nothing -> []
+         Nothing -> [(r:rs, (Var i j:fs):fss)]
+completeKnownTokens _ _ _ _ = []
+
 
 update :: (Eq nt, Hashable nt) => Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
 update (p, a, n) item@(Active (Rule ((_, as),_)) _ _ ((Var i _:_):_) _ _)
