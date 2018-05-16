@@ -83,7 +83,7 @@ parse' :: forall nt t wt.(Show nt, Show t, Show wt, Hashable nt, Hashable t, Eq 
        -> [t] -- Word
        -> [Tree (Rule nt t)]
 parse' (rmap, iow, s') bw tops w
-  = C.parseTrees tops s' 
+  = C.parseTrees tops (trace ("s':" ++ show s') s')
     (singleton $ entire w) -- Goal Item
   $ (\ (e, _, _) -> e) -- parse Trees just needs passive Items from Container
   $ C.chartify (C.empty, MMap.empty, nset) update rules bw tops
