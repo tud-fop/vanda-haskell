@@ -83,9 +83,10 @@ parse' :: forall nt t wt.(Show nt, Show t, Show wt, Hashable nt, Hashable t, Eq 
        -> [t] -- Word
        -> [Tree (Rule nt t)]
 parse' (rmap, iow, s') bw tops w
-  = C.parseTrees tops (trace ("s':" ++ show s') s')
+  = C.parseTrees tops (trace ("\ns':" ++ show s') s')
     (singleton $ entire w) -- Goal Item
   $ (\ (e, _, _) -> e) -- parse Trees just needs passive Items from Container
+  $ (\chart -> (trace ("\nchart" ++ ( show chart)) chart))
   $ C.chartify (C.empty, MMap.empty, nset) update rules bw tops
     where
       nset = Set.fromList $ filter (not . (`elem` s')) $ Map.keys rmap
@@ -101,7 +102,7 @@ initialPrediction :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t)
 initialPrediction word srules ios 
   = Left 
       [ (Active r w rho' f' IMap.empty inside, inside) 
-      | (r@(Rule ((_, as), f)), w) <- (trace "I'm here" srules)
+      | (r@(Rule ((_, as), f)), w) <- (trace "\nI'm here" srules)
       , (rho', f') <- completeKnownTokens word IMap.empty [Epsilon] f
       , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
       ]
@@ -130,10 +131,10 @@ completeKnownTokens _ _ _ _ = []
 update :: (Show nt, Show t, Show wt, Eq nt, Hashable nt) => Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
 update (p, a, n) (Active rule@(Rule ((nt, _),_)) wt ranges ([]:_) _ _)
     = case C.insert p nt (fromJust $ fromList ranges) (C.Backtrace rule wt ([fromJust $ fromList ranges])) wt of
-        (p', isnew) -> trace "works1" ((p', a, n), isnew)
+        (p', isnew) -> trace "\nworks1" ((p', a, n), isnew)
 update (p, a, n) item@(Active (Rule ((_, as),_)) _ _ ((Var i _:_):_) _ _)
-    = trace ("works2" ++ (show item)) ((p, MMap.insert (as !! i) item a, (as !! i) `Set.delete` n), True)
-update (p, a, n) _ = trace "works3"((p, a, n), True)
+    = trace ("\nworks2" ++ (show item)) ((p, MMap.insert (as !! i) item a, (as !! i) `Set.delete` n), True)
+update (p, a, n) _ = trace "\nworks3"((p, a, n), True)
 -- TODO Schau, dass init Pred das macht, was es soll
 
 
