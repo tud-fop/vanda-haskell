@@ -90,7 +90,7 @@ parse' :: forall nt t wt.(Show nt, Show t, Show wt, Hashable nt, Hashable t, Eq 
 parse' (rmap, iow, s') bw tops w
   = C.parseTrees tops (trace ("\ns':" ++ show s') s')
     (singleton $ entire w) -- Goal Item TODO Falsches GOal item?
-  $ (\ (e, _, _) -> e) -- parse Trees just needs passive Items from Container
+  $ (\ (e, _, _) -> (trace ("\nChart:" ++ (show e))  e)) -- parse Trees just needs passive Items from Container
   $ (\chart -> (trace ("\nchart" ++ ( show chart)) chart))
   $ C.chartify (C.empty, MMap.empty, nset) update rules bw tops
     where
@@ -100,18 +100,22 @@ parse' (rmap, iow, s') bw tops w
 
 -- | Prediction rule for rules of initial nonterminals.
 -- Predicted alles, bei dem Terminale am Anfang stehen
-initialPrediction :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t) 
+initialPrediction :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t, Show nt, Show t, Show wt) 
                   => [t]
                   -> [(Rule nt t, wt)]
                   -> Map.HashMap nt (wt, wt)
                   -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
 initialPrediction word srules ios 
   = Left 
-      [ (Active r w IMap.empty ri left right fs IMap.empty inside, inside) 
-      | (r@(Rule ((_, as), fs)), w) <- (trace "\nI'm here" srules) -- TODO, was ist, wenn Rule nicht f:fs ist, sondern nur 1 ELement ist. Geht das überhaupt?
-      , (left, right,ri) <- completeKnownTokensWithRI word fs -- Jede Funktion einmal komplete known Tokens übegeben -> 1 Item für jedes Ri
+      (trace' [ (Active r w IMap.empty ri left right [] IMap.empty inside, inside)  --TODO Darf fs theoretisch nicht durch [] ersetzen, aber da es sowieso bald wegkommt, ist das egal
+      | (r@(Rule ((_, as), fs)), w) <- (trace ("\nI'm here" ++ (show srules)) srules) -- TODO, was ist, wenn Rule nicht f:fs ist, sondern nur 1 ELement ist. Geht das überhaupt?
+      , (left, right,ri) <- trace' (completeKnownTokensWithRI word fs) "completed" -- Jede Funktion einmal komplete known Tokens übegeben -> 1 Item für jedes Ri
       , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
-      ]
+      ] "initPred" )
+
+trace' :: (Show s) => s -> String -> s
+trace' s prefix= trace ("\n" ++ prefix ++": "++ (show s) ++ "\n") s
+
 -- 
 completeKnownTokensWithRI  :: (Eq t)
                     => [t] 
@@ -151,7 +155,7 @@ completeKnownTokens w m left (Var i j:rights)
          Nothing -> ([left], (Var i j):rights)
 --completeKnownTokens _ _ _ fs = ([], fs) -- Kann nichts machen
 
--- TODO  Verstehen
+-- TODO  nitVerstehen
 {-completeKnownTokens :: (Eq t)
                     => [t] 
                     -> IMap.IntMap Rangevector 
@@ -175,10 +179,9 @@ completeKnownTokens _ _ _ _ = [] -}
 
 -- True beudetet "Ist schon da gewesen"
 update :: (Show nt, Show t, Show wt, Eq nt, Hashable nt) => Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
-update (p, a, n) (Active rule@(Rule ((nt, _), _)) iw _ _ left [] _ completions inside) = case IMap.null completions of -- Sind alle Ris berechnet? -> Item fertig, also in p Chart aufnehmen
-                True -> case C.insert p nt {-rv aus rhos berechnen-} (singleton left) (C.Backtrace rule iw []) inside of -- TODO Backtrace + Rangevector neu
-                    (p', isnew) -> ((p', a, n), isnew) -- TODO Auch in aktives Board mit aufnehmen? Oder nicht mehr nötig?
-                False -> ((p, a, n), True)  --Doch noch nicht lehr TODO Ist das wirklich richtig? Sollte ich evnt. noch nächste Regeln anschauen?
+update (p, a, n) (Active rule@(Rule ((nt, _), _)) iw _ _ left [] [] _ inside) = -- Sind alle Ris berechnet? -> Item fertig, also in p Chart aufnehmen
+                case C.insert p nt {-rv aus rhos berechnen-} (singleton left) (C.Backtrace rule iw []) inside of -- TODO Backtrace + Rangevector neu
+                    (p', isnew) -> trace ("\np':" ++ show p') ((p', a, n), isnew) -- TODO Auch in aktives Board mit aufnehmen? Oder nicht mehr nötig?
 update (p, a, n) item@(Active (Rule ((_, as), _)) _ _ _ _ (Var i j: _) _ _ _) = ((p, MMap.insert ((as !! i), j) item a, (as !! i) `Set.delete` n), True) -- Schmeiß aus neuen Items raus, packe in aktive Items
 update (p, a, n) _ = ((p,a,n), True) -- Nicht neu
 --    = case C.insert p nt (fromJust $ fromList [r]) (C.Backtrace rule wt ([fromJust $ fromList [r])) wt of --2x fromList r falsch, aber erstmal egal
