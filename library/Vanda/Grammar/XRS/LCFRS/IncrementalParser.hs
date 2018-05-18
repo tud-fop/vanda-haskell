@@ -63,7 +63,7 @@ instance (Show nt, Show t) => Show (Item nt t wt) where
 
 -- From active Parser
 type Container nt t wt = ( C.Chart nt t wt -- Passive Items
-                         , MMap.MultiMap nt (Item nt t wt) --Map NT onto List of Active Items, that need NT in the next Step
+                         , MMap.MultiMap (nt, Int) (Item nt t wt) --Map Variablen onto List of Active Items, that need NT in the next Step
                          , Set.HashSet nt -- All NTs, which are not init. right now
                          )
 {- update :: Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
@@ -179,7 +179,7 @@ update (p, a, n) (Active rule@(Rule ((nt, _), _)) iw _ _ left [] _ completions i
                 True -> case C.insert p nt {-rv aus rhos berechnen-} (singleton left) (C.Backtrace rule iw []) inside of -- TODO Backtrace + Rangevector neu
                     (p', isnew) -> ((p', a, n), isnew) -- TODO Auch in aktives Board mit aufnehmen? Oder nicht mehr nötig?
                 False -> ((p, a, n), True)  --Doch noch nicht lehr TODO Ist das wirklich richtig? Sollte ich evnt. noch nächste Regeln anschauen?
-update (p, a, n) item@(Active (Rule ((_, as), _)) _ _ _ _ (Var i _: _) _ _ _) = ((p, MMap.insert (as !! i) item a, (as !! i) `Set.delete` n), True) -- Schmeiß aus neuen Items raus, packe in aktive Items
+update (p, a, n) item@(Active (Rule ((_, as), _)) _ _ _ _ (Var i j: _) _ _ _) = ((p, MMap.insert ((as !! i), j) item a, (as !! i) `Set.delete` n), True) -- Schmeiß aus neuen Items raus, packe in aktive Items
 update (p, a, n) _ = ((p,a,n), True) -- Nicht neu
 --    = case C.insert p nt (fromJust $ fromList [r]) (C.Backtrace rule wt ([fromJust $ fromList [r])) wt of --2x fromList r falsch, aber erstmal egal
 --        (p', isnew) -> trace "\nworks1" ((p', a, n), isnew)
