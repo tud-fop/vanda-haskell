@@ -26,6 +26,15 @@ exampleWPMCFG' :: WPMCFG Int (Probabilistic (Log Double)) Char
 exampleWPMCFG' = case exampleWPMCFG of
                       (WPMCFG s rs) -> WPMCFG s $ map (second probabilistic) rs
 
+exampleRules' :: [Rule Int Char]
+exampleRules' = [ Rule ((0, []), [[T 'a']])]
+
+exampleWPMCFG'' :: WPMCFG Int Double Char
+exampleWPMCFG'' = fromWeightedRules [0] $ zip exampleRules' [1]
+
+exampleWPMCFG''' :: WPMCFG Int (Probabilistic (Log Double)) Char
+exampleWPMCFG''' = case exampleWPMCFG'' of
+                      (WPMCFG s rs) -> WPMCFG s $ map (second probabilistic) rs
 first :: (x,y,z) -> x
 first (x,_,_) = x
 
@@ -33,7 +42,7 @@ tests :: Test
 tests = TestList    [ TestCase
                         $ assertEqual "ErrorMessage" "File Connected" testParse
 --                        , TestCase $ assertEqual "Can't find item after init. Pred" Active (Rule ((2, []), [[], []])) 1 [Epsilon] ([[]]) IMap.empty 1 $ parse exampleWPMCFG 1000 100 "")
-                        , TestCase $ assertEqual "Can't find item after init. Pred" [""] $ mapMaybe yield $ parse exampleWPMCFG' 100 1 ""
+                        , TestCase $ assertEqual "Can't find item after init. Pred" ["a"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "a"
 --                      , TestCase $ not assertEqual "Wrong Pretty Printed Grammar" "Test" exampleGrammar
                      ]
 

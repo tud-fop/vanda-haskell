@@ -9,9 +9,10 @@ module Vanda.Grammar.XRS.LCFRS.IncrementalParser
 
 import Data.Hashable (Hashable(hashWithSalt))
 import Data.Converging (Converging)
-import Data.Maybe (mapMaybe, fromJust)
+import Data.Maybe (mapMaybe)
 import Data.Range
 import Data.Semiring
+import Control.Monad(join)
 import Data.Tree (Tree)
 import Data.Weight
 import Vanda.Grammar.PMCFG
@@ -56,9 +57,9 @@ instance (Hashable nt, Hashable t) => Hashable (Item nt t wt) where
 
 
 instance (Show nt, Show t) => Show (Item nt t wt) where
-  show (Active r _ rhos ri left right fs _ _)
+  show (Active r _ _ ri left right _ _ _)
     = "[Active] " ++ show r ++ "\n" 
-    ++ "current status: " ++ show (left) ++ " • " ++ prettyPrintComposition show [right] -- TODO Ausführlicher
+    ++ "current status: Ri:" ++ show(ri)++  ", " ++ show (left) ++ " • " ++ prettyPrintComposition show [right] -- TODO Ausführlicher
 
 -- From active Parser
 type Container nt t wt = ( C.Chart nt t wt -- Passive Items
@@ -88,7 +89,7 @@ parse' :: forall nt t wt.(Show nt, Show t, Show wt, Hashable nt, Hashable t, Eq 
        -> [Tree (Rule nt t)]
 parse' (rmap, iow, s') bw tops w
   = C.parseTrees tops (trace ("\ns':" ++ show s') s')
-    (singleton $ entire w) -- Goal Item
+    (singleton $ entire w) -- Goal Item TODO Falsches GOal item?
   $ (\ (e, _, _) -> e) -- parse Trees just needs passive Items from Container
   $ (\chart -> (trace ("\nchart" ++ ( show chart)) chart))
   $ C.chartify (C.empty, MMap.empty, nset) update rules bw tops
@@ -115,11 +116,11 @@ initialPrediction word srules ios
 completeKnownTokensWithRI  :: (Eq t)
                     => [t] 
                     -> Function t -- alle Funktionen
-                    -> [(Range, [VarT t], Int)] -- Zusätzliches Int, da ich Ri mit übergebe
-completeKnownTokensWithRI word [] = []
+                    -> [(Range, [VarT t], Int)] -- Zusätzliches Int, da ich Ri mit übergebe, Erste Liste für Ranges, innere für singletons mehrere Ausgaben
+completeKnownTokensWithRI _ [] = []
 completeKnownTokensWithRI word (f:fs) = case (completeKnownTokens word IMap.empty Epsilon f) of
-  Nothing -> completeKnownTokensWithRI word fs
-  (Just (left, right)) -> (left, right, ri) : (completeKnownTokensWithRI word fs)
+  ([], _) -> completeKnownTokensWithRI word fs
+  (lefts, right) -> [(left, right, ri)| left <- lefts] ++ (completeKnownTokensWithRI word fs) -- TODO ++ weg
   where ri = length (f:fs) -- Deshalb erstes Ri = R2, nicht R0
  -- Betrachte immer nur die erste Range, 
 completeKnownTokens :: (Eq t)
@@ -129,19 +130,26 @@ completeKnownTokens :: (Eq t)
                     -> Range -- aktuelle Left,
                     -> [VarT t]-- aktuelle Right
 --                    -> Function t -- Weitere Fkten., aktuelle right steht ganz vorne dran Brauch ich nicht
-                    -> Maybe (Range, [VarT t]) -- Danach bekoannte, mit allen Funktionen außer Epsilon.  -- Maybe, da, falls saveConc failed, ich das gar nicht mehr nutze, da irgendetwas falsch predicted
-completeKnownTokens _ _ left [] = Just (left, [])
+                    -> ([Range], [VarT t]) -- Danach bekoannte, mit allen Funktionen außer Epsilon.  -- Maybe, da, falls saveConc failed, ich das gar nicht mehr nutze, da irgendetwas falsch predicted
+-- Original aus akt. Parser geht auch über mehrere Funktionen, aber das wird wahrscheinlich zu umständlich, da ich da wieder Unteritems erzeugen würde, je nachdem, welches Ri ich als nächstes besuchen würde
+completeKnownTokens _ _ left [] = ([left], [])
 completeKnownTokens w m left (T t:rights)
-  = mapMaybe (\ left' -> completeKnownTokens w m left' rights) $ mapMaybe (safeConc left) $ singletons t w -- TODO Weiter Hier kommen schon mehere raus
+ -- = mapMaybe (\ left' -> completeKnownTokens w m left' rights) $ mapMaybe (safeConc left) $ singletons t w -- TODO Weiter Hier kommen schon mehere raus
+  = (\ts -> (join $ map fst ts, snd $ head ts)) $ map (\left'' ->  completeKnownTokens w m left'' rights) 
+    [ left'
+    | left' <- mapMaybe (safeConc left) $ singletons t w
+    ]
+    -- TODO fs am Endealle gleich? oder mach ich da etwas falsch?
+    
 completeKnownTokens w m left (Var i j:rights)
   = case i `IMap.lookup` m of
-         Just xi -> case j `IMap.lookup` m of
+         Just xi -> case j `IMap.lookup` xi of
             Just r -> case safeConc left r of -- Range ist vorhanden
                          Just left' -> completeKnownTokens w m left' rights
-                         Nothing -> Nothing
-            Nothing -> Just (left, (Var i j):rights)
-         Nothing -> Just (left, (Var i j):rights)
-completeKnownTokens _ _ _ _ = Nothing
+                         Nothing -> ([], rights)
+            Nothing -> ([left], (Var i j):rights)
+         Nothing -> ([left], (Var i j):rights)
+--completeKnownTokens _ _ _ fs = ([], fs) -- Kann nichts machen
 
 -- TODO  Verstehen
 {-completeKnownTokens :: (Eq t)
@@ -165,12 +173,13 @@ completeKnownTokens w m ((ii,r):rs) ((Var i j:fs):fss)
 completeKnownTokens _ _ _ _ = [] -}
 
 
+-- True beudetet "Ist schon da gewesen"
 update :: (Show nt, Show t, Show wt, Eq nt, Hashable nt) => Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
-update (p, a, n) item@(Active rule@(Rule ((nt, _), _)) wt rhos ri left [] fs completions inside) = case empty fs of -- Sind alle Ris berechnet? -> Item fertig, also in p Chart aufnehmen
-                True -> case C.insert p nt {-rv aus rhos berechnen-} undefined undefined inside of
+update (p, a, n) (Active rule@(Rule ((nt, _), _)) iw _ _ left [] _ completions inside) = case IMap.null completions of -- Sind alle Ris berechnet? -> Item fertig, also in p Chart aufnehmen
+                True -> case C.insert p nt {-rv aus rhos berechnen-} (singleton left) (C.Backtrace rule iw []) inside of -- TODO Backtrace + Rangevector neu
                     (p', isnew) -> ((p', a, n), isnew) -- TODO Auch in aktives Board mit aufnehmen? Oder nicht mehr nötig?
                 False -> ((p, a, n), True)  --Doch noch nicht lehr TODO Ist das wirklich richtig? Sollte ich evnt. noch nächste Regeln anschauen?
-update (p, a, n) item@(Active rule@(Rule ((_, as), _)) wt rhos ri left (Var i _: rights) fs completions inside) = ((p, MMap.insert (as !! i) item a, (as !! i) `Set.delete` n), True) -- Schmeiß aus neuen Items raus, packe in aktive Items
+update (p, a, n) item@(Active (Rule ((_, as), _)) _ _ _ _ (Var i _: _) _ _ _) = ((p, MMap.insert (as !! i) item a, (as !! i) `Set.delete` n), True) -- Schmeiß aus neuen Items raus, packe in aktive Items
 update (p, a, n) _ = ((p,a,n), True) -- Nicht neu
 --    = case C.insert p nt (fromJust $ fromList [r]) (C.Backtrace rule wt ([fromJust $ fromList [r])) wt of --2x fromList r falsch, aber erstmal egal
 --        (p', isnew) -> trace "\nworks1" ((p', a, n), isnew)
