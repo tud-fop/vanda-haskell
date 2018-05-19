@@ -29,8 +29,9 @@ exampleWPMCFG' = case exampleWPMCFG of
 exampleRules' :: [Rule Int Char]
 exampleRules' = [ Rule ((0, []), [[T 'a']]),
                     Rule ((0, []), [[T 'a', T 'b']]),
-                  Rule ((0, [1]), [[Var 0 0]]),
                   Rule ((0, [1,2]), [[Var 0 0, Var 1 0]]),
+                  Rule ((0, [1]), [[Var 0 0]]),
+                  Rule ((0, [1,3]), [[Var 0 0, Var 1 1]]),
  --                 Rule ((0, [0]), [[Var 0 0, Var 0 0]]),
                   Rule ((1, []), [[T 'A']]),
                   Rule ((2, [3]), [[Var 0 1]]),
@@ -49,14 +50,14 @@ first :: (x,y,z) -> x
 first (x,_,_) = x
 
 tests :: Test
-tests = TestList    [ TestCase
-                        $ assertEqual "ErrorMessage" "File Connected" testParse
+tests = TestList    [ 
+--                        TestCase  $ assertEqual "ErrorMessage" "File Connected" testParse
 --                        , TestCase $ assertEqual "Can't find item after init. Pred" Active (Rule ((2, []), [[], []])) 1 [Epsilon] ([[]]) IMap.empty 1 $ parse exampleWPMCFG 1000 100 "")
-                        , TestCase $ assertEqual "Can't find item after init. Pred" ["a"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "a"
-                        , TestCase $ assertEqual "Can't find item after init. Pred" ["ab"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "ab"
-                        , TestCase $ assertEqual "Can't find item after init + Combine" ["A"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "A"
-                        , TestCase $ assertEqual "Can't find item after init + Combine" ["A"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "A"
-                        , TestCase $ assertEqual "Longer Parsing dosen't work" ["AC"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "AC"
+ --                       , TestCase $ assertEqual "Can't find item after init. Pred" ["a"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "a"
+  --                      , TestCase $ assertEqual "Can't find item after init. Pred" ["ab"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "ab"
+   --                     , TestCase $ assertEqual "Can't find item after init + Combine" ["A"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "A"
+    --                    , TestCase $ assertEqual "Can't find item after init + Combine" ["A"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "A"
+                        TestCase $ assertEqual "Longer Parsing dosen't work" ["aabccd"] $ mapMaybe yield $ parse exampleWPMCFG' 100 1 "aabccd"
 --                        , TestCase $ assertEqual "Can't find item after init + Combine" ["aa"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "aa"
 --                      , TestCase $ not assertEqual "Wrong Pretty Printed Grammar" "Test" exampleGrammar
                      ]
