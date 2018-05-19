@@ -92,14 +92,14 @@ parse' :: forall nt t wt.(Show nt, Show t, Show wt, Hashable nt, Hashable t, Eq 
 parse' (rmap, iow, s') bw tops w
   = trace' "Trees" (C.parseTrees tops (trace' "Start Rules" s')
     (singleton $ entire w) -- Goal Item TODO Falsches GOal item?
-  $ (\ (e, _, _, _, _) -> (trace' "Passive Items" e)) -- parse Trees just needs passive Items from Container
+  $ (\ (e, _, _, _, _) -> (trace' "Passive Items End" e)) -- parse Trees just needs passive Items from Container
    $ (\container@(_,_,_,_,all) -> (trace ("\nAll Items End: " ++ ( show all) ++ "\n") container))
   $ C.chartify (C.empty, MMap.empty, nset, MMap.empty, []) update rules bw tops)
     where
       nset = Set.fromList $ filter (not . (`elem` s')) $ Map.keys rmap
       
       rules = (initialPrediction w (s' >>= (`MMap.lookup` rmap)) iow)
-            : predictionRule w (trace' "All Rules" (map snd $ MMap.toList rmap)) iow -- Mache aus Rule Map eine Liste aller Rules
+            : predictionRule w (trace' "All Rules" (map snd $ MMap.toList (trace' "Map with all Rules" rmap))) iow -- Mache aus Rule Map eine Liste aller Rules
             : [combineRule w iow]
 
 -- | Prediction rule for rules of initial nonterminals.
@@ -113,7 +113,7 @@ initialPrediction word srules ios
   = Left 
       (trace' "initPred" [ (Active r w IMap.empty ri left right [] IMap.empty inside, inside)  --TODO Darf fs theoretisch nicht durch [] ersetzen, aber da es sowieso bald wegkommt, ist das egal
       | (r@(Rule ((_, as), fs)), w) <- (trace' "Rules" srules) -- TODO, was ist, wenn Rule nicht f:fs ist, sondern nur 1 ELement ist. Geht das überhaupt?
-      , (left, right,ri) <- completeKnownTokensWithRI word fs -- Jede Funktion einmal komplete known Tokens übegeben -> 1 Item für jedes Ri
+      , (left, right,ri) <- completeKnownTokensWithRI word fs 0 -- Jede Funktion einmal komplete known Tokens übegeben -> 1 Item für jedes Ri
       , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
       ] )
 
@@ -129,7 +129,7 @@ predictionRule word rules ios
   = Left 
       (trace' "Pred" [ (Active r w IMap.empty ri left right [] IMap.empty inside, inside)  --TODO Darf fs theoretisch nicht durch [] ersetzen, aber da es sowieso bald wegkommt, ist das egal
       | (r@(Rule ((_, as), fs)), w) <- (trace' "Rules" rules) -- TODO, was ist, wenn Rule nicht f:fs ist, sondern nur 1 ELement ist. Geht das überhaupt?
-      , (left, right,ri) <- completeKnownTokensWithRI word fs -- Jede Funktion einmal komplete known Tokens übegeben -> 1 Item für jedes Ri
+      , (left, right,ri) <- completeKnownTokensWithRI word fs 0 -- Jede Funktion einmal komplete known Tokens übegeben -> 1 Item für jedes Ri
       , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
       ] )
 
@@ -140,13 +140,15 @@ trace' prefix s = trace ("\n" ++ prefix ++": "++ (show s) ++ "\n") s
 completeKnownTokensWithRI  :: (Eq t)
                     => [t] 
                     -> Function t -- alle Funktionen
+                    -> Int -- Current Rx, x number
                     -> [(Range, [VarT t], Int)] -- Zusätzliches Int, da ich Ri mit übergebe, Erste Liste für Ranges, innere für singletons mehrere Ausgaben
-completeKnownTokensWithRI _ [] = []
-completeKnownTokensWithRI word (f:fs) = case (completeKnownTokens word IMap.empty Epsilon f) of
-  ([], _) -> completeKnownTokensWithRI word fs
-  (lefts, right) -> [(left, right, ri)| left <- lefts] ++ (completeKnownTokensWithRI word fs) -- TODO ++ weg
-  where ri = length (fs) -- Deshalb erstes Ri = R0, wichtig für zuordnung in Consequences, da Var 0 0 auch bei 0 beginnt
+completeKnownTokensWithRI _ [] rx = []
+completeKnownTokensWithRI word (f:fs) rx = case (completeKnownTokens word IMap.empty Epsilon f) of
+  ([], _) -> completeKnownTokensWithRI word fs (rx + 1)
+  (lefts, right) -> [(left, right, rx)| left <- lefts] ++ (completeKnownTokensWithRI word fs (rx+1)) -- TODO ++ weg
+--  where ri = length (fs) -- Deshalb erstes Ri = R0, wichtig für zuordnung in Consequences, da Vars0 0 auch bei 0 beginnt
  -- Betrachte immer nur die erste Range, 
+ -- TODO Ris falschrum -> R0 hätte bei 3stelliger Funktion R2
 completeKnownTokens :: (Eq t)
                     => [t] 
                     -> IMap.IntMap (IMap.IntMap Range) -- Variablen, deren Ranges ich kenne
@@ -196,17 +198,19 @@ combineRule word ios = Right app
         consequences :: Item nt t wt -- trigger Item
                         -> Item nt t wt -- chart Item
                         -> [(Item nt t wt, wt)] --resulting Items TODO Warum Liste und nicht nur ein Item? Damit ich [] zurückgeben kann?
-        consequences searcher@(Active rule wt rho ri left ((Var i j):rights) fs completed inside) (Active (Rule ((a, _), _)) _ _ ri' left' [] _ _ _)
-            = trace' ("Consequences - First Item searches Var" ++ "\nSearch Item:" ++ (show searcher)) [(Active rule wt rho ri left' rights fs (completed') inside, inside)
-            | i == ri' -- Betrachte ich richtiges Ri? 
+        consequences searcher@(Active rule@(Rule ((_, as), _)) wt rho ri left ((Var i j):rights) fs completed inside) finished@(Active (Rule ((a, _), _)) _ _ ri' left' [] _ _ _)
+            = trace' ("Consequences - First Item searches Var" ++ "\nSearch Item:" ++ (show searcher) ++ "\nFinish Item:"  ++ (show finished)) [(Active rule wt rho ri left'' rights fs (completed') inside, inside)
+            | j == ri' -- Betrachte ich richtiges Ri? 
+            , a == (as!!i) -- Betrache ich richtiges NT?
              -- TODO Schau, dass Compatibel. Macht das evnt. completeKnownTokens?
             , left'' <- maybeToList $ safeConc left left'
             , let completed' = doubleInsert completed i j left' -- TODO Hier Double Insert
                 ] --TODO Fix Weights
 
-        consequences  (Active (Rule ((a, _), _)) _ _ ri' left' [] _ _ _) (Active rule wt rho ri left ((Var i j):rights) fs completed inside)
-            = trace' "Consequences - Secound Item searches Var"[(Active rule wt rho ri left' rights fs (completed') inside, inside)
-            | i == ri' -- Betrachte ich richtiges Ri? 
+        consequences  finish@(Active (Rule ((a, _), _)) _ _ ri' left' [] _ _ _) searcher@(Active rule@(Rule ((_, as), _)) wt rho ri left ((Var i j):rights) fs completed inside)
+            = trace' ("Consequences - Secound Item searches Var\n Search Item:" ++ (show searcher) ++ "\n Finish Item: " ++(show finish)) [(Active rule wt rho ri left'' rights fs (completed') inside, inside)
+            | j == ri' -- Betrachte ich richtiges Ri? 
+            , a == (as!!i)
              -- TODO Schau, dass Compatibel. Macht das evnt. completeKnownTokens?
             , left'' <- maybeToList $ safeConc left left'
             , let completed' = doubleInsert completed i j left' -- TODO Hier Double Insert
@@ -254,7 +258,7 @@ update :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt, Hashable nt) => Contain
 -- TODO Trotzdem noch Items in ActiveMap aufnehmen, da ich nur diese Nutz
 -- TODO Nimm Item nur auf, wenn es lhs hat, welches ein Start nt ist. Oder wird das schon in C.insert geschaut. Oder brauch ich das überhaupt nicht, da ich ja in chartify nur nach den Items suche, die mit einem NT aus s' beginnen?
 update (p, a, n, k, all) item@(Active rule@(Rule ((nt, _), _)) iw _ _ left [] [] completions inside) = -- Sind alle Ris berechnet? -> Item fertig, also in p Chart aufnehmen
-                case C.insert p nt {-rv aus rhos berechnen-} (singleton left) backtrace inside of -- TODO Backtrace + Rangevector neu, TODO Überprüfe beim Einfügen der Variablen in doppel IMap, ob sich das alles verträgt, wahrscheinlich in completeKnownTokens zu erledigen
+                case trace' ("Insert Passiv\n Range while Passiv" ++ (show left) ++ "\nAddedRangevector" ++ (show backtrace)) (C.insert p nt {-rv aus rhos berechnen-} (singleton $ trace' "Range while Insert" left) backtrace inside )of -- TODO Backtrace + Rangevector neu, TODO Überprüfe beim Einfügen der Variablen in doppel IMap, ob sich das alles verträgt, wahrscheinlich in completeKnownTokens zu erledigen
                     (p', isnew) -> trace ("\np':" ++ show p' ++ "\n" ++ "addIfNew:" ++ (show (addIfNew item all)) ++ "\nisnew" ++ (show isnew) ++"backtrace2:" ++(show backtrace)) ((p', a, n, k, trace' ("Update - All Items With New Passive"++(show isnew)) (addIfNew item all)), isnew) -- TODO Auch in aktives Board mit aufnehmen? Oder nicht mehr nötig?
     where 
         backtrace = C.Backtrace rule iw (trace' "Backtrace" rvs)  -- Rangevectors von jedem NT  - Ist das so richtig?
