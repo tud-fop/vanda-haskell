@@ -90,19 +90,20 @@ parse' :: forall nt t wt.(Show nt, Show t, Show wt, Hashable nt, Hashable t, Eq 
        -> [t] -- Word
        -> [Tree (Rule nt t)]
 parse' (rmap, iow, s') bw tops w
-  = C.parseTrees tops (trace ("\ns':" ++ show s') s')
+  = trace' "Trees" (C.parseTrees tops (trace ("\ns':" ++ show s') s')
     (singleton $ entire w) -- Goal Item TODO Falsches GOal item?
   $ (\ (e, _, _, _, _) -> (trace' "Passive Items" e)) -- parse Trees just needs passive Items from Container
-   $ (\container@(_,_,_,_,all) -> (trace ("\nAll Items: " ++ ( show all) ++ "\n") container))
-  $ C.chartify (C.empty, MMap.empty, nset, MMap.empty, []) update rules bw tops
+   $ (\container@(_,_,_,_,all) -> (trace ("\nAll Items End: " ++ ( show all) ++ "\n") container))
+  $ C.chartify (C.empty, MMap.empty, nset, MMap.empty, []) update rules bw tops)
     where
       nset = Set.fromList $ filter (not . (`elem` s')) $ Map.keys rmap
       
       rules = (initialPrediction w (s' >>= (`MMap.lookup` rmap)) iow)
+            : predictionRule w (trace' "All Rules" (map snd $ MMap.toList rmap)) iow -- Mache aus Rule Map eine Liste aller Rules
             : [combineRule w iow]
 
 -- | Prediction rule for rules of initial nonterminals.
--- Predicted alles, bei dem Terminale am Anfang stehen
+-- Predicted alles, bei dem Terminale am Anfang stehen und Startsymbol auf lhs hat
 initialPrediction :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t, Show nt, Show t, Show wt) 
                   => [t]
                   -> [(Rule nt t, wt)]
@@ -112,6 +113,22 @@ initialPrediction word srules ios
   = Left 
       (trace' "initPred" [ (Active r w IMap.empty ri left right [] IMap.empty inside, inside)  --TODO Darf fs theoretisch nicht durch [] ersetzen, aber da es sowieso bald wegkommt, ist das egal
       | (r@(Rule ((_, as), fs)), w) <- (trace' "Rules" srules) -- TODO, was ist, wenn Rule nicht f:fs ist, sondern nur 1 ELement ist. Geht das überhaupt?
+      , (left, right,ri) <- completeKnownTokensWithRI word fs -- Jede Funktion einmal komplete known Tokens übegeben -> 1 Item für jedes Ri
+      , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
+      ] )
+
+-- | Prediction rule for rules of initial nonterminals.
+-- Predicted alles, bei dem Terminale am Anfang stehen 
+-- TODO Mit initPred zusammenwerfen?
+predictionRule :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t, Show nt, Show t, Show wt) 
+                  => [t]
+                  -> [(Rule nt t, wt)]
+                  -> Map.HashMap nt (wt, wt)
+                  -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
+predictionRule word rules ios 
+  = Left 
+      (trace' "Pred" [ (Active r w IMap.empty ri left right [] IMap.empty inside, inside)  --TODO Darf fs theoretisch nicht durch [] ersetzen, aber da es sowieso bald wegkommt, ist das egal
+      | (r@(Rule ((_, as), fs)), w) <- (trace' "Rules" rules) -- TODO, was ist, wenn Rule nicht f:fs ist, sondern nur 1 ELement ist. Geht das überhaupt?
       , (left, right,ri) <- completeKnownTokensWithRI word fs -- Jede Funktion einmal komplete known Tokens übegeben -> 1 Item für jedes Ri
       , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
       ] )
@@ -128,7 +145,7 @@ completeKnownTokensWithRI _ [] = []
 completeKnownTokensWithRI word (f:fs) = case (completeKnownTokens word IMap.empty Epsilon f) of
   ([], _) -> completeKnownTokensWithRI word fs
   (lefts, right) -> [(left, right, ri)| left <- lefts] ++ (completeKnownTokensWithRI word fs) -- TODO ++ weg
-  where ri = length (f:fs) -- Deshalb erstes Ri = R2, nicht R0
+  where ri = length (fs) -- Deshalb erstes Ri = R0, wichtig für zuordnung in Consequences, da Var 0 0 auch bei 0 beginnt
  -- Betrachte immer nur die erste Range, 
 completeKnownTokens :: (Eq t)
                     => [t] 
@@ -157,6 +174,7 @@ completeKnownTokens w m left (Var i j:rights)
             Nothing -> ([left], (Var i j):rights)
          Nothing -> ([left], (Var i j):rights)
 
+
 combineRule :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq t, Weight wt)
         => [t] -- Word
         -> Map.HashMap nt (wt, wt) -- weights
@@ -164,32 +182,46 @@ combineRule :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq
 combineRule word ios = Right app
     where
         app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
-        app trigger@(Active _ _ _ _ _ ((Var _ _):_) _ _ _) (p, _, _, _, all)
-         = [consequence
+    --    app trigger@(Active _ _ _ _ _ ((Var _ _):_) _ _ _) (p, _, _, _, all)
+        app trigger (_, _, _, _, all)
+         = trace' "Combine" [consequence
 --           | hasFinishedVar <- MMap.lookup ((as !! i), j) k --Find all Items, that have Ai_j finished TODO Andersrum auch betrachten? TODO Für Optimierung später interessant
-           | chartItem <- all
+           | chartItem <- trace' "all in Combine" all
            , consequence <- consequences trigger chartItem
          ] 
-        app _ _ = []
+        app trigger _ = trace ("Combine - Not Matched " ++ show trigger) []
     
         -- In akt. Parser wird danach gleich auch wieder scan gemacht
+        -- TODO Muss in beide Richtungen betrachten. Zur Zeit werden zwar beide richtungen betrachtet, aber nicht gleichzeitig. Nur eine von beiden
         consequences :: Item nt t wt -- trigger Item
                         -> Item nt t wt -- chart Item
                         -> [(Item nt t wt, wt)] --resulting Items TODO Warum Liste und nicht nur ein Item? Damit ich [] zurückgeben kann?
-        consequences (Active rule wt rho ri left ((Var i j):rights) fs completed inside) (Active (Rule ((a, _), _)) _ _ ri' left' [] _ _ _)
-            = [(Active rule wt rho ri left' rights fs (completed') inside, inside)
+        consequences searcher@(Active rule wt rho ri left ((Var i j):rights) fs completed inside) (Active (Rule ((a, _), _)) _ _ ri' left' [] _ _ _)
+            = trace' ("Consequences - First Item searches Var" ++ "\nSearch Item:" ++ (show searcher)) [(Active rule wt rho ri left' rights fs (completed') inside, inside)
             | i == ri' -- Betrachte ich richtiges Ri? 
              -- TODO Schau, dass Compatibel. Macht das evnt. completeKnownTokens?
             , left'' <- maybeToList $ safeConc left left'
             , let completed' = doubleInsert completed i j left' -- TODO Hier Double Insert
                 ] --TODO Fix Weights
 
+        consequences  (Active (Rule ((a, _), _)) _ _ ri' left' [] _ _ _) (Active rule wt rho ri left ((Var i j):rights) fs completed inside)
+            = trace' "Consequences - Secound Item searches Var"[(Active rule wt rho ri left' rights fs (completed') inside, inside)
+            | i == ri' -- Betrachte ich richtiges Ri? 
+             -- TODO Schau, dass Compatibel. Macht das evnt. completeKnownTokens?
+            , left'' <- maybeToList $ safeConc left left'
+            , let completed' = doubleInsert completed i j left' -- TODO Hier Double Insert
+                ] --TODO Fix Weights
+        consequences _ _ = trace' "Consequences - Not Matched"[]
+
 -- make it easiert to insert inside the inner IMap for completed Variable ranges
+-- doubleInsert :: IMap.IntMap (IMap.IntMap Range) -> Int -> Int -> Range -> IMap.IntMap (IMap.IntMap Range)
+-- doubleInsert map i j r = IMap.insert i mapWithRange map
+--    where mapWithRange = case IMap.lookup j map of
+--            Just map' -> IMap.insert j r map' -- Füge neuen Wert ein
+--            Nothing -> IMap.empty
+
 doubleInsert :: IMap.IntMap (IMap.IntMap Range) -> Int -> Int -> Range -> IMap.IntMap (IMap.IntMap Range)
-doubleInsert map i j r = IMap.insert i mapWithRange map
-    where mapWithRange = case IMap.lookup j map of
-            Just map' -> IMap.insert j r map' -- Füge neuen Wert ein
-            Nothing -> IMap.empty
+doubleInsert map i j r = IMap.insertWith IMap.union i (IMap.singleton j r) map
    
 
 --completeKnownTokens _ _ _ fs = ([], fs) -- Kann nichts machen
@@ -217,13 +249,15 @@ completeKnownTokens _ _ _ _ = [] -}
 
 
 -- True beudetet "Ist schon da gewesen"
+-- TODO Problem: Wird erst noch kompletten 1x durchlauf der Regeln ausgeführt -> 
 update :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt, Hashable nt) => Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
 -- TODO Trotzdem noch Items in ActiveMap aufnehmen, da ich nur diese Nutz
+-- TODO Nimm Item nur auf, wenn es lhs hat, welches ein Start nt ist. Oder wird das schon in C.insert geschaut. Oder brauch ich das überhaupt nicht, da ich ja in chartify nur nach den Items suche, die mit einem NT aus s' beginnen?
 update (p, a, n, k, all) item@(Active rule@(Rule ((nt, _), _)) iw _ _ left [] [] _ inside) = -- Sind alle Ris berechnet? -> Item fertig, also in p Chart aufnehmen
                 case C.insert p nt {-rv aus rhos berechnen-} (singleton left) (C.Backtrace rule iw []) inside of -- TODO Backtrace + Rangevector neu
-                    (p', isnew) -> trace ("\np':" ++ show p') ((p', a, n, k, addIfNew item all), isnew) -- TODO Auch in aktives Board mit aufnehmen? Oder nicht mehr nötig?
+                    (p', isnew) -> trace ("\np':" ++ show p' ++ "\n" ++ "addIfNew:" ++ (show (addIfNew item all)) ++ "\nisnew" ++ (show isnew)) ((p', a, n, k, trace' ("Update - All Items With New Passive"++(show isnew)) (addIfNew item all)), isnew) -- TODO Auch in aktives Board mit aufnehmen? Oder nicht mehr nötig?
 --update (p, a, n, k) item@(Active (Rule ((_, as), _)) _ _ _ _ (Var i j: _) _ _ _) = ((p, MMap.insert ((as !! i), j) item a, (as !! i) `Set.delete` n, k), True) -- Schmeiß aus neuen Items raus, packe in aktive Items
-update (p, a, n, k, all) item = ((p,a,n, k, addIfNew item all), item `elem` all) -- Nicht neu
+update (p, a, n, k, all) item = ((p,a,n, k, trace' ("Update - All Items Without New Passive" ++ (show $ not $ item `elem` all)) (addIfNew item all)), not $ item `elem` all) -- Nicht neu
 
 -- Wenn Item noch nicht in Chart Liste, dann rein, sonst nicht
 addIfNew :: (Eq nt, Eq t, Eq wt) => Item nt t wt -> [Item nt t wt] -> [Item nt t wt]
@@ -261,7 +295,7 @@ predicitionRule word rs ios = Right app
             -> Container nt t wt
             -> [(Item nt t wt, wt)] -- New Items from using Trigger with Container by using prediction Rule
         app (Active (Rule ((_, as), _)) w _ ((Var i _:_):_) _ _) (_, _, inits) --Var i -> Betrachte i-te Eingangsvektor Xi
-        = catMaybes [ (Active r' w rho'' f'' IMap.empty inside, inside <.> outside) 
+        = [ (Active r' w rho'' f'' IMap.empty inside, inside <.> outside) 
         | let a = as !! i -- Nimm den i-ten Einfangsvektor Xi
         , (r'@(Rule ((a', as'), f')), w') <- MMap.lookup a rs -- Baue für jede Regel, die  Xi -> ... ist, neues Item auf
         , (rho'', f'') <- com
