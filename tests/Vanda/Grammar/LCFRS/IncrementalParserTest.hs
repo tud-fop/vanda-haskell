@@ -35,7 +35,7 @@ exampleRules' = [ Rule ((0, []), [[T 'a']]),
                 ]
 
 exampleWPMCFG'' :: WPMCFG Int Double Char
-exampleWPMCFG'' = fromWeightedRules [0] $ zip exampleRules' [1,1,1]
+exampleWPMCFG'' = fromWeightedRules [0] $ zip exampleRules' (cycle [1])
 
 exampleWPMCFG''' :: WPMCFG Int (Probabilistic (Log Double)) Char
 exampleWPMCFG''' = case exampleWPMCFG'' of
