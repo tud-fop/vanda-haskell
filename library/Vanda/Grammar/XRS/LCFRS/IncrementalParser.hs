@@ -9,7 +9,7 @@ module Vanda.Grammar.XRS.LCFRS.IncrementalParser
 
 import Data.Hashable (Hashable(hashWithSalt))
 import Data.Converging (Converging)
-import Data.Maybe (mapMaybe, maybeToList)
+import Data.Maybe (mapMaybe, maybeToList, fromJust)
 import Data.Range
 import Data.Semiring
 import Control.Monad(join)
@@ -90,7 +90,7 @@ parse' :: forall nt t wt.(Show nt, Show t, Show wt, Hashable nt, Hashable t, Eq 
        -> [t] -- Word
        -> [Tree (Rule nt t)]
 parse' (rmap, iow, s') bw tops w
-  = trace' "Trees" (C.parseTrees tops (trace ("\ns':" ++ show s') s')
+  = trace' "Trees" (C.parseTrees tops (trace' "Start Rules" s')
     (singleton $ entire w) -- Goal Item TODO Falsches GOal item?
   $ (\ (e, _, _, _, _) -> (trace' "Passive Items" e)) -- parse Trees just needs passive Items from Container
    $ (\container@(_,_,_,_,all) -> (trace ("\nAll Items End: " ++ ( show all) ++ "\n") container))
@@ -253,9 +253,15 @@ completeKnownTokens _ _ _ _ = [] -}
 update :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt, Hashable nt) => Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
 -- TODO Trotzdem noch Items in ActiveMap aufnehmen, da ich nur diese Nutz
 -- TODO Nimm Item nur auf, wenn es lhs hat, welches ein Start nt ist. Oder wird das schon in C.insert geschaut. Oder brauch ich das überhaupt nicht, da ich ja in chartify nur nach den Items suche, die mit einem NT aus s' beginnen?
-update (p, a, n, k, all) item@(Active rule@(Rule ((nt, _), _)) iw _ _ left [] [] _ inside) = -- Sind alle Ris berechnet? -> Item fertig, also in p Chart aufnehmen
-                case C.insert p nt {-rv aus rhos berechnen-} (singleton left) (C.Backtrace rule iw []) inside of -- TODO Backtrace + Rangevector neu
-                    (p', isnew) -> trace ("\np':" ++ show p' ++ "\n" ++ "addIfNew:" ++ (show (addIfNew item all)) ++ "\nisnew" ++ (show isnew)) ((p', a, n, k, trace' ("Update - All Items With New Passive"++(show isnew)) (addIfNew item all)), isnew) -- TODO Auch in aktives Board mit aufnehmen? Oder nicht mehr nötig?
+update (p, a, n, k, all) item@(Active rule@(Rule ((nt, _), _)) iw _ _ left [] [] completions inside) = -- Sind alle Ris berechnet? -> Item fertig, also in p Chart aufnehmen
+                case C.insert p nt {-rv aus rhos berechnen-} (singleton left) backtrace inside of -- TODO Backtrace + Rangevector neu, TODO Überprüfe beim Einfügen der Variablen in doppel IMap, ob sich das alles verträgt, wahrscheinlich in completeKnownTokens zu erledigen
+                    (p', isnew) -> trace ("\np':" ++ show p' ++ "\n" ++ "addIfNew:" ++ (show (addIfNew item all)) ++ "\nisnew" ++ (show isnew) ++"backtrace2:" ++(show backtrace)) ((p', a, n, k, trace' ("Update - All Items With New Passive"++(show isnew)) (addIfNew item all)), isnew) -- TODO Auch in aktives Board mit aufnehmen? Oder nicht mehr nötig?
+    where 
+        backtrace = C.Backtrace rule iw (trace' "Backtrace" rvs)  -- Rangevectors von jedem NT  - Ist das so richtig?
+        rvs = [rv
+              | rangesOfOneNT <- trace' "Backtrace Completions" (IMap.elems completions)
+              , let rv = fromJust $ fromList $ IMap.elems rangesOfOneNT
+              ]
 --update (p, a, n, k) item@(Active (Rule ((_, as), _)) _ _ _ _ (Var i j: _) _ _ _) = ((p, MMap.insert ((as !! i), j) item a, (as !! i) `Set.delete` n, k), True) -- Schmeiß aus neuen Items raus, packe in aktive Items
 update (p, a, n, k, all) item = ((p,a,n, k, trace' ("Update - All Items Without New Passive" ++ (show $ not $ item `elem` all)) (addIfNew item all)), not $ item `elem` all) -- Nicht neu
 
