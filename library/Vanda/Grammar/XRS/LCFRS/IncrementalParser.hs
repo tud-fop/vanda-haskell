@@ -357,15 +357,15 @@ findPassiveForAllRules :: (Eq nt, Eq t ,Eq wt, Show nt, Show t, Show wt)
     -> [Rule nt t] -- All Rules
     -> [Item nt t wt] -- All new passive Items that have Range R0...Rn
 findPassiveForAllRules _ [] = []
-findPassiveForAllRules items (rule:rules) = (findPassiveForOneRule (filter (\(Active ruleItem _ _ _ _ right _ _ _) -> rule == ruleItem && right == []) items) (rule)) ++ (findPassiveForAllRules items rules)-- Nur die Items, die auch die aktuelle Rule beinhalten und fertig sind
+findPassiveForAllRules items (rule:rules) = trace' "findPassiveForAllRules" ((findPassiveForOneRule (filter (\(Active ruleItem _ _ _ _ right _ _ _) -> rule == ruleItem && right == []) items) (rule)) ++ (findPassiveForAllRules items rules))-- Nur die Items, die auch die aktuelle Rule beinhalten und fertig sind
 --TODO ++ weg
 findPassiveForOneRule :: (Eq nt, Eq t, Eq wt, Show nt, Show t, Show wt)
     => [Item nt t wt] -- All Items with that Rule
     -> Rule nt t -- Current Rule
     -> [Item nt t wt] -- Found new complete passive Items
-findPassiveForOneRule items rule =  [fullConcatItem
+findPassiveForOneRule items rule =  trace' "findPassiveForOne Rule" [fullConcatItem
             | r0Item <- MMap.lookup 0 itemMap -- Liste aller r0-Items
-            , fullConcatItem <- (filter (\item@(Active (Rule ((_, _), f)) _ completed _ _ _ _ _ _) -> ((length f) ==  ((IMap.size completed) +1))) ( glueTogether r0Item 1 itemMap)) -- Has Item as many finished Rx as Function has Komponentes? If so, it is full, +1, because left is still in Item itself
+            , fullConcatItem <- {-TODO Rein(filter (\item@(Active (Rule ((_, _), f)) _ completed _ _ _ _ _ _) -> ((length f) ==  ((IMap.size completed) +1)))-} ( glueTogether' r0Item 1 itemMap) -- Has Item as many finished Rx as Function has Komponentes? If so, it is full, +1, because left is still in Item itself
             ]
     where itemMap = MMap.fromList ( map (\(item@(Active _ _ _ ri _ _ _ _ _)) -> (ri, item)) items) --Map of form Ri->All Items that are finished for Ri
 
@@ -374,12 +374,24 @@ glueTogether :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt)
         -> Int -- Ri to view next
         -> MMap.MultiMap Int (Item nt t wt) -- All Items of Rule
         -> [Item nt t wt]
-glueTogether (Active rule wt lastRis ri left _ fs currCompletions inside) ri' itemMap
-    = join $ map (\item -> glueTogether item (ri'+1) itemMap ) $ --Mach das weiter, bis itemMap an Stelle ri irgendwann mal leer
-        trace' "glueTogether" [(Active rule wt newRis ri' left' [] fs newCompletions inside)
+glueTogether curr@(Active rule wt lastRis ri left _ fs currCompletions inside) ri' itemMap
+    = trace' ("GlueRi:" ++ (show ri')) (join $ map (\item -> glueTogether item (ri'+1) itemMap ) $ --Mach das weiter, bis itemMap an Stelle ri irgendwann mal leer
+        trace' ("glueTogether" ++ "current State" ++ (show (curr)))  [(Active rule wt newRis ri' left' [] fs newCompletions inside)
         | (Active _ _ _ _ left' _ _ completions' _) <- MMap.lookup ri' itemMap-- Get all Items that have ri completed TODO FIx here weights and compatibility check
         , let newRis = IMap.insert ri left lastRis
         , let newCompletions = IMap.unionWith (IMap.union) currCompletions completions' -- Füge Tabellen der eingesetzten Komponenten zusammen
-        ]
+        ])
 
 
+glueTogether' :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt)
+        => Item nt t wt -- Current Item to complete
+        -> Int -- Ri to view next
+        -> MMap.MultiMap Int (Item nt t wt) -- All Items of Rule
+        -> [Item nt t wt] -- Can contain Unfinished Items, which where MMap is empty at some point. They will be filtered out in function above
+glueTogether' curr@(Active rule wt lastRis ri left _ fs currCompletions inside) ri' itemMap
+    = trace' ("Glue'Ri:" ++ (show ri')) (join $ foldr (\new acc-> (new: (glueTogether' new (ri'+1) itemMap)) : acc) [] -- TODO Das gleuTogether' new (r.... gibt hier immer [] zurück. Fix das, neue Items kommen nur durch :new
+        (trace' ("glue'Together" ++ "current State" ++ (show (curr)))  [(Active rule wt newRis ri' left' [] fs newCompletions inside)
+        | (Active _ _ _ _ left' _ _ completions' _) <- MMap.lookup ri' itemMap-- Get all Items that have ri completed TODO FIx here weights and compatibility check
+        , let newRis = IMap.insert ri left lastRis
+        , let newCompletions = IMap.unionWith (IMap.union) currCompletions completions' -- Füge Tabellen der eingesetzten Komponenten zusammen
+        ]))
