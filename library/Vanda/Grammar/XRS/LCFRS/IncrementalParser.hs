@@ -258,16 +258,29 @@ update :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt, Hashable nt) => Contain
 -- TODO Trotzdem noch Items in ActiveMap aufnehmen, da ich nur diese Nutz
 -- TODO Nimm Item nur auf, wenn es lhs hat, welches ein Start nt ist. Oder wird das schon in C.insert geschaut. Oder brauch ich das überhaupt nicht, da ich ja in chartify nur nach den Items suche, die mit einem NT aus s' beginnen?
 update (p, a, n, k, all) item@(Active rule@(Rule ((nt, _), _)) iw _ _ left [] [] completions inside) = -- Sind alle Ris berechnet? -> Item fertig, also in p Chart aufnehmen
-                case trace' ("Insert Passiv\n Range while Passiv" ++ (show left) ++ "\nAddedRangevector" ++ (show backtrace)) (C.insert p nt {-rv aus rhos berechnen-} (singleton $ trace' "Range while Insert" left) backtrace inside )of -- TODO Backtrace + Rangevector neu, TODO Überprüfe beim Einfügen der Variablen in doppel IMap, ob sich das alles verträgt, wahrscheinlich in completeKnownTokens zu erledigen
-                    (p', isnew) -> trace ("\np':" ++ show p' ++ "\n" ++ "addIfNew:" ++ (show (addIfNew item all)) ++ "\nisnew" ++ (show isnew) ++"backtrace2:" ++(show backtrace)) ((p', a, n, k, trace' ("Update - All Items With New Passive"++(show isnew)) (addIfNew item all)), isnew) -- TODO Auch in aktives Board mit aufnehmen? Oder nicht mehr nötig?
-    where 
-        backtrace = C.Backtrace rule iw (trace' "Backtrace" rvs)  -- Rangevectors von jedem NT  - Ist das so richtig?
-        rvs = [rv
+--                case trace' ("Insert Passiv\n Range while Passiv" ++ (show left) ++ "\nAddedRangevector" ++ (show backtrace)) (C.insert p nt {-rv aus rhos berechnen-} (singleton $ trace' "Range while Insert" left) backtrace inside )of -- TODO Backtrace + Rangevector neu, TODO Überprüfe beim Einfügen der Variablen in doppel IMap, ob sich das alles verträgt, wahrscheinlich in completeKnownTokens zu erledigen
+                case foldr (\(Active rule'@(Rule ((nt', _), _)) iw' lastRis _ left _ _ completions' inside') chart -> fst $ C.insert chart nt' (getRange lastRis left) (getBacktrace rule' iw' completions') inside') (fst $ C.insert p nt (singleton left) backtrace inside) [1,2,3] of
+                    p' -> trace ("\np':" ++ show p' ++ "\n" ++ "addIfNew:" ++ (show (addIfNew item all)) ++ "\nisnew" ++ (show (item `elem` all)) ++"backtrace2:" ++(show backtrace)) ((p', a, n, k, trace' ("Update - All Items With New Passive"++(show (item `elem` all))) (addIfNew item all)), item `elem` all) -- TODO Auch in aktives Board mit aufnehmen? Oder nicht mehr nötig?
+ --                   (p', isnew) -> trace ("\np':" ++ show p' ++ "\n" ++ "addIfNew:" ++ (show (addIfNew item all)) ++ "\nisnew" ++ (show isnew) ++"backtrace2:" ++(show backtrace)) ((p', a, n, k, trace' ("Update - All Items With New Passive"++(show isnew)) (addIfNew item all)), item `elem` all) -- TODO Auch in aktives Board mit aufnehmen? Oder nicht mehr nötig?
+--update (p, a, n, k) item@(Active (Rule ((_, as), _)) _ _ _ _ (Var i j: _) _ _ _) = ((p, MMap.insert ((as !! i), j) item a, (as !! i) `Set.delete` n, k), True) -- Schmeiß aus neuen Items raus, packe in aktive Items
+update (p, a, n, k, all) item = ((p,a,n, k, trace' ("Update - All Items Without New Passive" ++ (show $ not $ item `elem` all)) (addIfNew item all)), not $ item `elem` all) -- Nicht neu
+
+getRange ::
+    IMap.IntMap Range -- All Ranges until current Range
+    -> Range -- Curreft Left Range
+    -> Rangevector
+getRange lastRis left = fromJust $ fromList $ ((map snd $ IMap.toList lastRis) ++ [left])
+
+getBacktrace :: 
+    Rule nt t
+    -> wt
+    -> IMap.IntMap (IMap.IntMap Range) -- Completions
+    -> [Rangevector]
+getBacktrace rule iw completions= C.Backtrace rule iw (trace' "Backtrace" rvs)  -- Rangevectors von jedem NT  - Ist das so richtig?
+    where rvs = [rv
               | rangesOfOneNT <- trace' "Backtrace Completions" (IMap.elems completions)
               , let rv = fromJust $ fromList $ IMap.elems rangesOfOneNT
               ]
---update (p, a, n, k) item@(Active (Rule ((_, as), _)) _ _ _ _ (Var i j: _) _ _ _) = ((p, MMap.insert ((as !! i), j) item a, (as !! i) `Set.delete` n, k), True) -- Schmeiß aus neuen Items raus, packe in aktive Items
-update (p, a, n, k, all) item = ((p,a,n, k, trace' ("Update - All Items Without New Passive" ++ (show $ not $ item `elem` all)) (addIfNew item all)), not $ item `elem` all) -- Nicht neu
 
 -- Wenn Item noch nicht in Chart Liste, dann rein, sonst nicht
 addIfNew :: (Eq nt, Eq t, Eq wt) => Item nt t wt -> [Item nt t wt] -> [Item nt t wt]
@@ -337,5 +350,35 @@ completeKnownTokens _ _ _ _ = []
 
 -- TODO convert active Item noch überall rein, sobald ich weiß, dass mein aktive Item richtig ist und ich daraus passive Item ableiten kann
 --
+
+findPassiveForAllRules :: (Eq nt, Eq t ,Eq wt)
+    => [Item nt t wt] --All Items
+    -> [Rule nt t] -- All Rules
+    -> [Item nt t wt] -- All new passive Items that have Range R0...Rn
+findPassiveForAllRules _ [] = []
+findPassiveForAllRules items (rule:rules) = join $ (findPassiveForOneRule (filter (\(Active ruleItem _ _ _ _ right _ _ _) -> rule == ruleItem && right == [])) -- Nur die Items, die auch die aktuelle Rule beinhalten und fertig sind
+        (rule)) : (findPassiveForAllRules items rules)
+
+findPassiveForOneRule :: (Eq nt, Eq t, Eq wt)
+    => [Item nt t wt] -- All Items with that Rule
+    -> Rule nt t -- Current Rule
+    -> [Item nt t wt] -- Found new complete passive Items
+findPassiveForOneRule items rule =  [fullConcatItem
+            | r0Item <- MMap.lookup 0 itemMap -- Liste aller r0-Items
+            , fullConcatItem <- (filter (\item@(Active (Rule (_, _), f) _ completed _ _ _ _ _ _) -> ((length f) ==  ((size completed) +1))) ) $ join $ glueTogether r0Item 1 itemMap -- Has Item as many finished Rx as Function has Komponentes? If so, it is full, +1, because left is still in Item itself
+            ]
+    where itemMap = MMap.fromList ( map (\(item@(Active _ _ _ ri _ _ _ _ _)) -> (ri, item)) items) --Map of form Ri->All Items that are finished for Ri
+
+glueTogether :: (Eq nt, Eq t, Eq wt)
+        => Item nt t wt -- Current Item to complete
+        -> Int -- Ri to view next
+        -> MMap.MultiMap Int (Item nt t wt) -- All Items of Rule
+glueTogether (Active rule wt lastRis ri left _ _ currCompletions inside) ri' itemMap
+    = map (\item -> glueTogether item (ri'+1) itemMap ) $ --Mach das weiter, bis itemMap an Stelle ri irgendwann mal leer
+        [(Active rule wt newRis ri' left' [] newCompletions inside)
+        | (Active _ _ _ _ left' _ _ completions' _) <- MMap.lookup ri' itemMap-- Get all Items that have ri completed TODO FIx here weights and compatibility check
+        , let newRis = IMap.insert ri left lastRis
+        , let newCompletions = IMap.unionWith (IMap.union) currCompletions completions' -- Füge Tabellen der eingesetzten Komponenten zusammen
+        ]
 
 
