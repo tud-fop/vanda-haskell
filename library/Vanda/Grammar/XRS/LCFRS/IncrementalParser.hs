@@ -352,14 +352,14 @@ completeKnownTokens _ _ _ _ = []
 -- TODO convert active Item noch überall rein, sobald ich weiß, dass mein aktive Item richtig ist und ich daraus passive Item ableiten kann
 --
 
-findPassiveForAllRules :: (Eq nt, Eq t ,Eq wt)
+findPassiveForAllRules :: (Eq nt, Eq t ,Eq wt, Show nt, Show t, Show wt)
     => [Item nt t wt] --All Items
     -> [Rule nt t] -- All Rules
     -> [Item nt t wt] -- All new passive Items that have Range R0...Rn
 findPassiveForAllRules _ [] = []
 findPassiveForAllRules items (rule:rules) = (findPassiveForOneRule (filter (\(Active ruleItem _ _ _ _ right _ _ _) -> rule == ruleItem && right == []) items) (rule)) ++ (findPassiveForAllRules items rules)-- Nur die Items, die auch die aktuelle Rule beinhalten und fertig sind
 --TODO ++ weg
-findPassiveForOneRule :: (Eq nt, Eq t, Eq wt)
+findPassiveForOneRule :: (Eq nt, Eq t, Eq wt, Show nt, Show t, Show wt)
     => [Item nt t wt] -- All Items with that Rule
     -> Rule nt t -- Current Rule
     -> [Item nt t wt] -- Found new complete passive Items
@@ -369,14 +369,14 @@ findPassiveForOneRule items rule =  [fullConcatItem
             ]
     where itemMap = MMap.fromList ( map (\(item@(Active _ _ _ ri _ _ _ _ _)) -> (ri, item)) items) --Map of form Ri->All Items that are finished for Ri
 
-glueTogether :: (Eq nt, Eq t, Eq wt)
+glueTogether :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt)
         => Item nt t wt -- Current Item to complete
         -> Int -- Ri to view next
         -> MMap.MultiMap Int (Item nt t wt) -- All Items of Rule
         -> [Item nt t wt]
 glueTogether (Active rule wt lastRis ri left _ fs currCompletions inside) ri' itemMap
     = join $ map (\item -> glueTogether item (ri'+1) itemMap ) $ --Mach das weiter, bis itemMap an Stelle ri irgendwann mal leer
-        [(Active rule wt newRis ri' left' [] fs newCompletions inside)
+        trace' "glueTogether" [(Active rule wt newRis ri' left' [] fs newCompletions inside)
         | (Active _ _ _ _ left' _ _ completions' _) <- MMap.lookup ri' itemMap-- Get all Items that have ri completed TODO FIx here weights and compatibility check
         , let newRis = IMap.insert ri left lastRis
         , let newCompletions = IMap.unionWith (IMap.union) currCompletions completions' -- Füge Tabellen der eingesetzten Komponenten zusammen
