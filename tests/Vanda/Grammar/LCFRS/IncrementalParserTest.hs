@@ -33,10 +33,17 @@ exampleRules' = [ Rule ((0, []), [[T 'a']]),
                   Rule ((0, [1]), [[Var 0 0]]),
                   Rule ((0, [1]), [[T 'D', Var 0 0, T 'E' ]]),
                   Rule ((0, [1,3]), [[Var 0 0, Var 1 0, Var 1 1]]),
+                  Rule ((0, [4]), [[T 'x', Var 0 0, T 'y']]),
  --                 Rule ((0, [0]), [[Var 0 0, Var 0 0]]),
                   Rule ((1, []), [[T 'A']]),
                   Rule ((2, [3]), [[Var 0 1]]),
-                  Rule ((3, []), [[T 'B'], [T 'C']])
+                  Rule ((3, []), [[T 'B'], [T 'C']]),
+                  Rule ((4, [5, 6]), [[T 'q', Var 0 0, Var 0 1, T 'z', Var 1 0]]),
+                  Rule ((4, [5]), [[T 'q', Var 0 0, Var 0 1, T 'z']]),
+                  Rule ((4, []), [[T 'r']]),
+                  Rule ((5, []), [[],[]]),
+                  Rule ((5, [4]), [[],[Var 0 0]]),
+                  Rule ((6, []), [[T 't']])
                 ]
 
 exampleWPMCFG'' :: WPMCFG Int Double Char
@@ -58,6 +65,8 @@ tests = TestList    [
                         TestCase $ assertEqual "Can't find item after init + Combine" ["ABC"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "ABC"
                         , TestCase $ assertEqual "Scan doesn't work" ["DAE"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "DAE"
                         ,TestCase $ assertEqual "Longer Parsing dosen't work" ["aabccd"] $ mapMaybe yield $ parse exampleWPMCFG' 100 1 "aabccd"
+                        ,TestCase $ assertEqual "Longer Parsing dosen't work" ["xqzy"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "xqzy"
+                        ,TestCase $ assertEqual "Longer Parsing dosen't work" ["xqqrztzty"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "xqqrztzty"
 --                        , TestCase $ assertEqual "Can't find item after init + Combine" ["aa"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "aa"
 --                      , TestCase $ not assertEqual "Wrong Pretty Printed Grammar" "Test" exampleGrammar
                      ]
