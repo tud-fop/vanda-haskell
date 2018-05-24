@@ -31,6 +31,7 @@ exampleRules' = [ Rule ((0, []), [[T 'a']]),
                     Rule ((0, []), [[T 'a', T 'b']]),
                   Rule ((0, [1,2]), [[Var 0 0, Var 1 0]]),
                   Rule ((0, [1]), [[Var 0 0]]),
+                  Rule ((0, [1]), [[T 'D', Var 0 0, T 'E' ]]),
                   Rule ((0, [1,3]), [[Var 0 0, Var 1 0, Var 1 1]]),
  --                 Rule ((0, [0]), [[Var 0 0, Var 0 0]]),
                   Rule ((1, []), [[T 'A']]),
@@ -55,6 +56,7 @@ tests = TestList    [
   --                      , TestCase $ assertEqual "Can't find item after init. Pred" ["ab"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "ab"
    --                     , TestCase $ assertEqual "Can't find item after init + Combine" ["A"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "A"
                         TestCase $ assertEqual "Can't find item after init + Combine" ["ABC"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "ABC"
+                        , TestCase $ assertEqual "Scan doesn't work" ["DAE"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "DA"
                         ,TestCase $ assertEqual "Longer Parsing dosen't work" ["aabccd"] $ mapMaybe yield $ parse exampleWPMCFG' 100 1 "aabccd"
 --                        , TestCase $ assertEqual "Can't find item after init + Combine" ["aa"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "aa"
 --                      , TestCase $ not assertEqual "Wrong Pretty Printed Grammar" "Test" exampleGrammar
