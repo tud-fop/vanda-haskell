@@ -101,6 +101,7 @@ parse' (rmap, iow, s') bw tops w
       
       rules = (initialPrediction w (s' >>= (`MMap.lookup` rmap)) iow)
             : predictionRule w (trace' "All Rules" (map snd $ MMap.toList (trace' "Map with all Rules" rmap))) iow -- Mache aus Rule Map eine Liste aller Rules
+            : scanRule w iow -- Mache aus Rule Map eine Liste aller Rules
             : [combineRule w iow]
 
 -- | Prediction rule for rules of initial nonterminals.
@@ -133,6 +134,29 @@ predictionRule word rules ios
       , (left, right,ri) <- completeKnownTokensWithRI word fs 0 -- Jede Funktion einmal komplete known Tokens übegeben -> 1 Item für jedes Ri
       , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
       ] )
+
+scanRule :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq t, Weight wt)
+        => [t] -- Word
+        -> Map.HashMap nt (wt, wt) -- weights
+        -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
+scanRule word iow = Right app
+    where
+        app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
+        app (Active r wt rhos ri left right fs completions inside) _ 
+            = [((Active r wt rhos ri left' right' fs completions inside), inside)
+            |(lefts', right')  <- [completeKnownTokens word completions left right] -- Klammer ist hier nur, damit ich das so mit <- schreiben kann
+            , left' <- lefts'
+                ]
+    --    app trigger@(Active _ _ _ _ _ ((Var _ _):_) _ _ _) (p, _, _, _, all)
+    --            app trigger (_, _, _, _, all, _)
+    --                     = trace' "Combine" [consequence
+    --                     --           | hasFinishedVar <- MMap.lookup ((as !! i), j) k --Find all Items, that have Ai_j finished TODO Andersrum auch betrachten? TODO Für Optimierung später interessant
+    --                                | chartItem <- trace' "all in Combine" all
+    --                                           , consequence <- consequences trigger chartItem
+    --                                                    ] 
+    --                                                            app trigger _ = trace ("Combine - Not Matched " ++ show trigger) []
+    --
+
 
 trace' :: (Show s) => String -> s -> s
 trace' prefix s = trace ("\n" ++ prefix ++": "++ (show s) ++ "\n") s
