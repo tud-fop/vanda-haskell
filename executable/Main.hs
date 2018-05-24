@@ -54,6 +54,7 @@ data Args
   | PDTA VandaCLI.PDTA.Args
   | PMCFG VandaCLI.PMCFG.Args
   | XRSNGrams VandaCLI.XRSNGrams.Args
+  | NeGra VandaCLI.NeGra.Args
 #ifdef VERSION_gtk
   | MATLearner VandaCLI.MATLearner.Args
 #endif
@@ -71,6 +72,7 @@ cmdArgs
   , remap2 PDTA (\ (PDTA x) -> x) VandaCLI.PDTA.cmdArgs
   , remap2 PMCFG (\ (PMCFG x) -> x) VandaCLI.PMCFG.cmdArgs
   , remap2 XRSNGrams (\ (XRSNGrams x) -> x) VandaCLI.XRSNGrams.cmdArgs
+  , remap2 NeGra (\ (NeGra x) -> x) VandaCLI.NeGra.cmdArgs
 #ifdef VERSION_gtk
   , remap2 MATLearner (\ (MATLearner x) -> x) VandaCLI.MATLearner.cmdArgs
 #endif
@@ -91,6 +93,7 @@ mainArgs (PCFGs     x ) = VandaCLI.PCFG.mainArgs x
 mainArgs (PDTA      x ) = VandaCLI.PDTA.mainArgs x
 mainArgs (PMCFG     x ) = VandaCLI.PMCFG.mainArgs x
 mainArgs (XRSNGrams x ) = VandaCLI.XRSNGrams.mainArgs x
+mainArgs (NeGra     x ) = VandaCLI.NeGra.mainArgs x
 #ifdef VERSION_gtk
 mainArgs (MATLearner x) = VandaCLI.MATLearner.mainArgs x
 #endif
