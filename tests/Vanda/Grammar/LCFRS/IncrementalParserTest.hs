@@ -69,6 +69,17 @@ tests = TestList    [
                         ,TestCase $ assertEqual "Longer Parsing dosen't work" ["xqqrztzty"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "xqqrztzty"
 --                        , TestCase $ assertEqual "Can't find item after init + Combine" ["aa"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "aa"
 --                      , TestCase $ not assertEqual "Wrong Pretty Printed Grammar" "Test" exampleGrammar
+                    ,TestCase $ assertEqual
+                      "Cannot reproduce exmaple derivation" 
+                      [exampleDerivation] 
+                    $ parse 
+                        exampleWPMCFG' 100 1 "aabccd"
+                  , TestCase 
+                    $ assertEqual 
+                      "Cannot reproduce parsed string in yield"
+                      ["aabbccdd"] 
+                    $ mapMaybe yield 
+                      $ parse exampleWPMCFG' 100 1 "aabbccdd"
                      ]
 
 --                        TestCase $ assertEquals "Active Item not in Chart after ",
