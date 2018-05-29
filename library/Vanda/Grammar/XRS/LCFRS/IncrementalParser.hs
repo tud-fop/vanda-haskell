@@ -7,6 +7,7 @@ module Vanda.Grammar.XRS.LCFRS.IncrementalParser
     Container
   ) where
 
+
 import Data.Hashable (Hashable(hashWithSalt))
 import Data.Converging (Converging)
 import Data.Maybe (mapMaybe, maybeToList, fromJust)
@@ -39,6 +40,7 @@ prettyShowString s = '\"' : concatMap g (show s) ++ "\"" where
 
 data Item nt t wt = Active (Rule nt t) wt (IMap.IntMap Range) Int Range [VarT t] (Function t) (IMap.IntMap (IMap.IntMap Range)) wt deriving (Show)
 -- erste IMap sind fertige Ranges, Int ist Ri, Range ist jetzige Range, die schon fertig ist, [VarT t] ist das, was bei Ri gerade noch nicht fertig ist, zweite IMap ist quasi x_i,j , wobei äußere IMAp i darstellt, innere das j
+-- Passive Item nach Thomas nicht def, einfach in Container reinwerfenk
 
 instance (Eq nt, Eq t) => Eq (Item nt t wt) where
   (Active r _ rhos ri left right fs completions _) == (Active r' _ rhos' ri' left' right' fs' completions' _) 
