@@ -55,10 +55,15 @@ probabilistic x
   | otherwise = error "probabilistic value out of range"
 
 
+-- | Instance of multiplicative semigroup
+instance (Num a, Ord a) => Semigroup (Probabilistic a) where
+  (Probabilistic x) <> (Probabilistic y) = Probabilistic $ max x y
+
+
 -- | Instance of multiplicative monoid.
 instance (Num a, Ord a) => Monoid (Probabilistic a) where
   mempty = Probabilistic 0
-  (Probabilistic x) `mappend` (Probabilistic y) = Probabilistic $ max x y
+  mappend = (<>)
 
 
 -- | Probabilistic group
@@ -89,12 +94,17 @@ cost x
   | otherwise = error "cost value out of range"
 
 
+-- | Instance minimum semigroup.
+instance (Num a, Ord a) => Semigroup (Cost a) where
+  (Cost x) <> (Cost y) = Cost $ min x y
+  Infinity <> x = x
+  x <> Infinity = x
+
+
 -- | Instance minimum monoid.
 instance (Num a, Ord a) => Monoid (Cost a) where
   mempty = Infinity
-  (Cost x) `mappend` (Cost y) = Cost $ min x y
-  Infinity `mappend` x = x
-  x `mappend` Infinity = x
+  mappend = (<>)
 
 
 -- | Tropical semiring.
@@ -115,15 +125,20 @@ newtype Inside a = Inside a deriving (Show, Eq, Ord)
 unpack :: Inside a -> a
 unpack (Inside a) = a
 
+
+instance (Num a) => Semigroup (Inside a) where
+  (Inside x) <> (Inside y) = Inside $ x + y
+
+
 instance (Num a) => Monoid (Inside a) where
   mempty = Inside 0
-  (Inside x) `mappend` (Inside y) = Inside $ x + y
+  mappend = (<>)
 
 instance (Num a) => Semiring (Inside a) where
   one = Inside 1
   (Inside x) <.> (Inside y) = Inside $ x * y
-  
-  
+
+
 instance (Converging a) =>  Converging (Inside a) where
   (Inside x) `converged` (Inside y) = x `converged` y
 
