@@ -18,7 +18,7 @@ module Vanda.Hypergraph.DotExport
 , render  -- reexport from Text.PrettyPrint
 ) where
 
-
+import Prelude hiding ((<>))
 import Vanda.Hypergraph
 import qualified Data.Map as M
 import qualified Data.Set as S
