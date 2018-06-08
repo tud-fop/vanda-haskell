@@ -21,6 +21,8 @@ module VandaCLI.NeGra
 import           System.Console.CmdArgs.Explicit
 import           System.Console.CmdArgs.Explicit.Misc
 
+
+
 data Args
   = Help String
   | Filter
@@ -35,14 +37,19 @@ data Args
     , by_allowed_inner_nodes    :: FilePath
     , by_disallowed_inner_nodes :: FilePath
     }
+  | Transform
+    { delete_subtree_with_words :: FilePath
+    , replace_words_by_pos_tag  :: Bool
+    , renumber_sentences        :: Integer
+    }
     deriving Show
 
 cmdArgs :: Mode Args
 cmdArgs
   = modes "negra" (Help $ defaultHelp cmdArgs) "tools for the NeGra export format"
   [ (modeEmpty $ Filter (Intervals "0-") (Intervals "0-") (Intervals "0-") (Intervals "0-") "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null")
-  { modeNames = ["filter"]
-  , modeHelp = "filters a corpus according to specified predicates"
+    { modeNames = ["filter"]
+    , modeHelp = "filters a corpus according to specified predicates"
     -- , modeArgs = Nothing
     , modeGroupFlags = toGroup [ flagArgByLength
                                , flagArgByGapDegree
@@ -54,6 +61,14 @@ cmdArgs
                                , flagArgByDisallowedPosTags
                                , flagArgByAllowedInnerNodes
                                , flagArgByDisallowedInnerNodes
+                               ]
+                               }
+  , (modeEmpty $ Transform "/dev/null" False 0)
+    { modeNames = ["transform"]
+    , modeHelp = "transforms a corpus according to the specified rules"
+    , modeGroupFlags = toGroup [ flagArgDelSubTreeWWords
+                               , flagArgRepWordsByPosTag
+                               , flagArgReNumSentence
                                ]
                                }
                                ]
@@ -98,6 +113,18 @@ cmdArgs
       = flagReq ["by-disallowed-inner-nodes"]
                 (\ a x -> Right x{by_disallowed_inner_nodes = a})
                 "FILE" ""
+    flagArgDelSubTreeWWords
+      = flagReq ["d", "delete-subtree-with-words"]
+                (\ a x -> Right x{delete_subtree_with_words = a})
+                "FILE" ""
+    flagArgRepWordsByPosTag
+      = flagBool ["r", "replace-words-by-pos-tag"]
+                (\ b x -> x{replace_words_by_pos_tag = b})
+                ""
+    flagArgReNumSentence
+      = flagReq ["n", "renumber-sentences"]
+                (\ a x -> Right x{renumber_sentences = toInteger $ read a})
+                "STARTINDEX" ""
 
 main :: IO ()
 main = processArgs (populateHelpMode Help cmdArgs) >>= mainArgs
@@ -106,5 +133,7 @@ mainArgs :: Args -> IO ()
 mainArgs (Help cs) = putStr cs
 mainArgs (Filter length_interval gap_degree_inteval sen_numebr_interval height_inteval alw_ws_file dis_ws_file alw_pos_file dis_pos_file alw_inn_file dis_inn_file)
   = do putStrLn "We're filtering"
+mainArgs (Transform delSubTWs_file isReplacWsbyPosTags startindex)
+  = do putStrLn "We're transforming"
 
 data Intervals = Intervals String deriving (Eq, Show)
