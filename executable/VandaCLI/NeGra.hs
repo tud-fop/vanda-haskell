@@ -18,31 +18,32 @@ module VandaCLI.NeGra
 ) where
 
 
-import System.Console.CmdArgs.Explicit
-import System.Console.CmdArgs.Explicit.Misc
+import           System.Console.CmdArgs.Explicit
+import           System.Console.CmdArgs.Explicit.Misc
 
 data Args
   = Help String
   | Filter
-    { by_length :: Intervals
-    , by_gap_degree :: Intervals
-    , by_sentence_number :: Intervals
-    , by_height :: Intervals
-    , by_allowed_words :: FilePath
-    , by_disallowed_words :: FilePath
-    , by_allowed_pos_tags :: FilePath
-    , by_disallowed_pos_tags :: FilePath
-    , by_allowed_inner_nodes :: FilePath
+    { by_length                 :: Intervals
+    , by_gap_degree             :: Intervals
+    , by_sentence_number        :: Intervals
+    , by_height                 :: Intervals
+    , by_allowed_words          :: FilePath
+    , by_disallowed_words       :: FilePath
+    , by_allowed_pos_tags       :: FilePath
+    , by_disallowed_pos_tags    :: FilePath
+    , by_allowed_inner_nodes    :: FilePath
     , by_disallowed_inner_nodes :: FilePath
     }
-  deriving Show
+    deriving Show
 
 cmdArgs :: Mode Args
 cmdArgs
-  = modes "brackets" (Help $ defaultHelp cmdArgs) "tools for the NeGra export format"
-  [ (modeEmpty $ Interval undefined)
-    { modeNames = ["filter"]
-    , modeHelp = "filters a corpus according to specified predicates"
+  = modes "negra" (Help $ defaultHelp cmdArgs) "tools for the NeGra export format"
+  [ (modeEmpty $ Filter (Intervals "0-") (Intervals "0-") (Intervals "0-") (Intervals "0-") "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null")
+  { modeNames = ["filter"]
+  , modeHelp = "filters a corpus according to specified predicates"
+    -- , modeArgs = Nothing
     , modeGroupFlags = toGroup [ flagArgByLength
                                , flagArgByGapDegree
                                , flagArgBySentenceNumber
@@ -54,56 +55,56 @@ cmdArgs
                                , flagArgByAllowedInnerNodes
                                , flagArgByDisallowedInnerNodes
                                ]
-    }
-  ]
+                               }
+                               ]
   where
     flagArgByLength
       = flagReq ["l", "by-length"]
-                (\ a x -> Right x{by_length = a})
-                "INTERVALS"
+                (\ a x -> Right x{by_length = Intervals a})
+                "INTERVALS" ""
     flagArgByGapDegree
       = flagReq ["g", "by-gap-degree"]
-                (\ a x -> Right x{by_gap_degree = a})
-                "INTERVALS"
+                (\ a x -> Right x{by_gap_degree = Intervals a})
+                "INTERVALS" ""
     flagArgBySentenceNumber
       = flagReq ["n", "by-sentence-number"]
-                (\ a x -> Right x{by_sentence_number = a})
-                "INTERVALS"
+                (\ a x -> Right x{by_sentence_number = Intervals a})
+                "INTERVALS" ""
     flagArgByHeight
       = flagReq ["h", "by-height"]
-                (\ a x -> Right x{by_height = a})
-                "INTERVALS"
+                (\ a x -> Right x{by_height = Intervals a})
+                "INTERVALS" ""
     flagArgByAllowedWords
       = flagReq ["w", "by-allowed-words"]
                 (\ a x -> Right x{by_allowed_words = a})
-                "FILE"
+                "FILE" ""
     flagArgByDisallowedWords
       = flagReq ["by-disallowed-words"]
                 (\ a x -> Right x{by_disallowed_words = a})
-                "FILE"
+                "FILE" ""
     flagArgByAllowedPosTags
       = flagReq ["p", "by-allowed-pos-tags"]
                 (\ a x -> Right x{by_allowed_pos_tags = a})
-                "FILE"
+                "FILE" ""
     flagArgByDisallowedPosTags
       = flagReq ["by-disallowed-pos-tags"]
                 (\ a x -> Right x{by_disallowed_pos_tags = a})
-                "FILE"
+                "FILE"""
     flagArgByAllowedInnerNodes
       = flagReq ["i", "by-allowed-inner-nodes"]
                 (\ a x -> Right x{by_allowed_inner_nodes = a})
-                "FILE"
+                "FILE" ""
     flagArgByDisallowedInnerNodes
       = flagReq ["by-disallowed-inner-nodes"]
                 (\ a x -> Right x{by_disallowed_inner_nodes = a})
-                "FILE"
+                "FILE" ""
 
 main :: IO ()
 main = processArgs (populateHelpMode Help cmdArgs) >>= mainArgs
 
 mainArgs :: Args -> IO ()
 mainArgs (Help cs) = putStr cs
-mainArgs (Filter)
+mainArgs (Filter length_interval gap_degree_inteval sen_numebr_interval height_inteval alw_ws_file dis_ws_file alw_pos_file dis_pos_file alw_inn_file dis_inn_file)
   = do putStrLn "We're filtering"
 
-data Intervals = Intervals Integer Integer
+data Intervals = Intervals String deriving (Eq, Show)

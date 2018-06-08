@@ -28,14 +28,15 @@ module Main
 
 
 import           System.Console.CmdArgs.Explicit.Misc
-import qualified VandaCLI.CBSM
 import qualified VandaCLI.Brackets
+import qualified VandaCLI.CBSM
 import qualified VandaCLI.LCFRS
-import qualified VandaCLI.PMCFG
+import qualified VandaCLI.NeGra
 import qualified VandaCLI.NGrams
-import qualified VandaCLI.PDTA
-import qualified VandaCLI.XRSNGrams
 import qualified VandaCLI.PCFG
+import qualified VandaCLI.PDTA
+import qualified VandaCLI.PMCFG
+import qualified VandaCLI.XRSNGrams
 
 #ifdef VERSION_gtk
 import qualified VandaCLI.MATLearner
