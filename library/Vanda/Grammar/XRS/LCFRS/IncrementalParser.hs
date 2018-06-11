@@ -42,6 +42,8 @@ prettyShowString :: (Show w) => w -> String
 prettyShowString s = '\"' : concatMap g (show s) ++ "\"" where
   g c    = [c]
 
+type ConvertItem nt t wt = ((Rule nt t), [Range], IMap.IntMap (IMap.IntMap Range)) -- Not using Rangevecors, because I can't concat them
+
 data Item nt t wt = Active (Rule nt t) wt (IMap.IntMap Range) Int Range [VarT t] (IMap.IntMap (IMap.IntMap Range)) wt deriving (Show)
 -- erste IMap sind fertige Ranges, Int ist Ri, Range ist jetzige Range, die schon fertig ist, [VarT t] ist das, was bei Ri gerade noch nicht fertig ist, zweite IMap ist quasi x_i,j , wobei äußere IMAp i darstellt, innere das j
 -- Passive Item nach Thomas nicht def, einfach in Container reinwerfenk
@@ -107,7 +109,8 @@ parse' (rmap, iow, s') bw tops w
       rules = (initialPrediction w (s' >>= (`MMap.lookup` rmap)) iow)
             : predictionRule w (trace' "All Rules" (map snd $ MMap.toList (trace' "Map with all Rules" rmap))) iow -- Mache aus Rule Map eine Liste aller Rules
             : scanRule w iow -- Mache aus Rule Map eine Liste aller Rules
-            : [combineRule w iow]
+            : combineRule w iow
+            : [vervoll w iow]
 
 -- | Prediction rule for rules of initial nonterminals.
 -- Predicted alles, bei dem Terminale am Anfang stehen und Startsymbol auf lhs hat
@@ -206,6 +209,19 @@ completeKnownTokens w m left (Var i j:rights)
             Nothing -> ([left], (Var i j):rights)
          Nothing -> ([left], (Var i j):rights)
 
+
+
+vervoll :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq t, Eq wt, Weight wt)
+        => [t] -- Word
+        -> Map.HashMap nt (wt, wt) -- weights
+        -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
+vervoll word ios = Right app
+    where
+        app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
+        app trigger@(Active _ _ _ _ _ _ _ ios) (_, _, _, _, allI, allR)
+            = trace' "Vervoll" [(found, ios) -- TODO Fix weight
+                |found <- (findPassiveForAllRules (trigger:allI) allR)
+                ]
 
 combineRule :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq t, Weight wt)
         => [t] -- Word
