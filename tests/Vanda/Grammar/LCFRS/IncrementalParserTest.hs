@@ -71,7 +71,7 @@ tests = TestList    [
                         ,TestCase $ assertEqual "Longer Parsing dosen't work" ["aabccd"] $ mapMaybe yield $ parse exampleWPMCFG' 100 1 "aabccd"
                         ,TestCase $ assertEqual "Longer Parsing dosen't work" ["xqzy"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "xqzy"
                         ,TestCase $ assertEqual "Longer Parsing dosen't work" ["xqqrztzty"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "xqqrztzty"
---                        ,TestCase $ assertEqual "Compatibility doesn't work mn" [] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "mn"
+                        ,TestCase $ assertEqual "Compatibility doesn't work mn" [] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "mn"
                         ,TestCase $ assertEqual "DOesnt work" ["mm"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "mm"
 --                        , TestCase $ assertEqual "Can't find item after init + Combine" ["aa"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "aa"
 --                      , TestCase $ not assertEqual "Wrong Pretty Printed Grammar" "Test" exampleGrammar
