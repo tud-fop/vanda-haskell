@@ -14,7 +14,7 @@ module Vanda.Grammar.XRS.LCFRS.IncrementalParser
 
 import Data.Hashable (Hashable(hashWithSalt))
 import Data.Converging (Converging)
-import Data.Maybe (mapMaybe, maybeToList, fromJust)
+import Data.Maybe (mapMaybe, maybeToList,catMaybes, isNothing)
 import Data.Range
 import Data.Semiring
 import Data.Tree (Tree)
@@ -161,21 +161,11 @@ scanRule word iow = Right app
             , left' <- lefts'
                 ]
         app _ _ = []
-    --    app trigger@(Active _ _ _ _ _ ((Var _ _):_) _ _ _) (p, _, _, _, all)
-    --            app trigger (_, _, _, _, all, _)
-    --                     = trace' "Combine" [consequence
-    --                     --           | hasFinishedVar <- MMap.lookup ((as !! i), j) k --Find all Items, that have Ai_j finished TODO Andersrum auch betrachten? TODO Für Optimierung später interessant
-    --                                | chartItem <- trace' "all in Combine" all
-    --                                           , consequence <- consequences trigger chartItem
-    --                                                    ] 
-    --                                                            app trigger _ = trace ("Combine - Not Matched " ++ show trigger) []
-    --
 
 
 trace' :: (Show s) => String -> s -> s
 trace' prefix s = trace ("\n" ++ prefix ++": "++ (show s) ++ "\n") s
 
--- 
 completeKnownTokensWithRI  :: (Eq t)
                     => [t] 
                     -> Function t -- alle Funktionen
@@ -312,8 +302,9 @@ update :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt, Hashable nt, Semiring w
 -- TODO Nimm Item nur auf, wenn es lhs hat, welches ein Start nt ist. Oder wird das schon in C.insert geschaut. Oder brauch ich das überhaupt nicht, da ich ja in chartify nur nach den Items suche, die mit einem NT aus s' beginnen?
 update (p, a, n, k, all, allRules) item@(Passive r cr ntr wt) =
     case convert (trace' "Update - Pass Item" item) of
-        (nt, crv, bt, ios) -> case C.insert p nt crv bt ios of
+        Just (nt, crv, bt, ios) -> case C.insert p nt crv bt ios of
             (p', isnew) -> ((p', a, n, k, all, allRules), isnew)
+        Nothing -> ((p, a, n, k, all, allRules), False)
 
 --update (p, a, n, k, all, allRules) item@(Active rule@(Rule ((nt, _), _)) iw _ _ left [] completions inside) = -- Sind alle Ris berechnet? -> Item fertig, also in p Chart aufnehmen
 --                case trace' ("Insert Passiv\n Range while Passiv" ++ (show left) ++ "\nAddedRangevector" ++ (show backtrace)) (C.insert p nt {-rv aus rhos berechnen-} (singleton $ trace' "Range while Insert" left) backtrace inside )of -- TODO Backtrace + Rangevector neu, TODO Überprüfe beim Einfügen der Variablen in doppel IMap, ob sich das alles verträgt, wahrscheinlich in completeKnownTokens zu erledigen
@@ -325,30 +316,37 @@ update (p, a, n, k, all, allRules) item = ((p,a,n, k, trace' ("Update - All Item
 
 convert :: (Hashable nt, Eq nt, Semiring wt, Eq t, Show nt, Show t, Show wt)
             => Item nt t wt --Passive Item
-            -> (nt, Rangevector, C.Backtrace nt t wt, wt)
+            -> Maybe (nt, Rangevector, C.Backtrace nt t wt, wt)
 convert (Passive rule@(Rule ((nt, _), _)) cr nts wt)
-    = (nt, getRange' cr, getBacktrace rule wt nts, wt)
+    = case getRangevector cr of
+        Just crv -> case getBacktrace rule wt nts of
+            Just bt -> Just (nt, crv, bt, wt)
+            Nothing -> Nothing
+        Nothing -> Nothing
 
-getRange ::
+getRangevector ::
     IMap.IntMap Range -- All Ranges until current Range
-    -> Range -- Curreft Left Range
-    -> Rangevector
-getRange lastRis left = fromJust $ fromList $ ((map snd $ IMap.toList lastRis) ++ [left])
-getRange' ::
-    IMap.IntMap Range -- All Ranges until current Range
-    -> Rangevector
-getRange' cr = fromJust $ fromList $ map snd $ IMap.toList cr
+    -> Maybe Rangevector
+getRangevector cr = fromList $ map snd $ IMap.toList cr
 
 getBacktrace :: 
     Rule nt t
     -> wt
     -> IMap.IntMap (IMap.IntMap Range) -- Completions
-    -> C.Backtrace nt t wt
-getBacktrace rule iw completions= C.Backtrace rule iw (trace' "Backtrace" rvs)  -- Rangevectors von jedem NT  - Ist das so richtig?
+    -> Maybe (C.Backtrace nt t wt)
+getBacktrace rule iw completions = 
+    case containsANothing rvs of
+        Just rvs' -> Just $ C.Backtrace rule iw (trace' "Backtrace" rvs')  -- Rangevectors von jedem NT  - Ist das so richtig?
+        Nothing -> Nothing
     where rvs = [rv
-              | rangesOfOneNT <- trace' "Backtrace Completions" (IMap.elems completions)
-              , let rv = fromJust $ fromList $ IMap.elems rangesOfOneNT
-              ]
+                | rangesOfOneNT <- trace' "Backtrace Completions" (IMap.elems completions)
+                , let rv = fromList $ IMap.elems rangesOfOneNT
+                ]
+
+containsANothing :: [Maybe Rangevector] -> Maybe [Rangevector]
+containsANothing xs = case null $ filter isNothing xs of 
+    True -> Just $ catMaybes xs--Every RV was succefully calculated
+    False -> Nothing
 
 -- Wenn Item noch nicht in Chart Liste, dann rein, sonst nicht
 addIfNew :: (Eq nt, Eq t, Eq wt) => Item nt t wt -> [Item nt t wt] -> [Item nt t wt]
