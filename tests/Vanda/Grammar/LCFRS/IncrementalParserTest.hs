@@ -32,6 +32,7 @@ exampleRules' = [ Rule ((0, []), [[T 'a']]),
                   Rule ((0, [1,2]), [[Var 0 0, Var 1 0]]),
                   Rule ((0, [1]), [[Var 0 0]]),
                   Rule ((0, [7]), [[Var 0 0, Var 0 1]]),
+                  Rule ((0, [8]), [[Var 0 0, Var 0 1]]),
                   Rule ((0, [1]), [[T 'D', Var 0 0, T 'E' ]]),
                   Rule ((0, [1,3]), [[Var 0 0, Var 1 0, Var 1 1]]),
                   Rule ((0, [4]), [[T 'x', Var 0 0, T 'y']]),
@@ -47,7 +48,10 @@ exampleRules' = [ Rule ((0, []), [[T 'a']]),
                   Rule ((6, []), [[T 't']]),
 
                   Rule ((7, []), [[T 'm'], [T 'm']]),
-                  Rule ((7, []), [[T 'n'], [T 'n']])
+                  Rule ((7, []), [[T 'n'], [T 'n']]),
+                  Rule ((8, [9]), [[Var 0 0], [Var 0 1]]),
+                  Rule ((9, []), [[T 'g'], [T 'g']]),
+                  Rule ((9, []), [[T 'h'], [T 'h']])
                 ]
 
 exampleWPMCFG'' :: WPMCFG Int Double Char
@@ -71,7 +75,8 @@ tests = TestList    [
                         ,TestCase $ assertEqual "Longer Parsing dosen't work" ["aabccd"] $ mapMaybe yield $ parse exampleWPMCFG' 100 1 "aabccd"
                         ,TestCase $ assertEqual "Longer Parsing dosen't work" ["xqzy"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "xqzy"
                         ,TestCase $ assertEqual "Longer Parsing dosen't work" ["xqqrztzty"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "xqqrztzty"
-                        ,TestCase $ assertEqual "Compatibility doesn't work mn" [] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "mn"
+                        ,TestCase $ assertEqual "Compatibility Combine doesn't work mn" [] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "mn"
+                        ,TestCase $ assertEqual "Compatibility Complete doesn't work gh" ["gh"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "gh"
                         ,TestCase $ assertEqual "DOesnt work" ["mm"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "mm"
 --                        , TestCase $ assertEqual "Can't find item after init + Combine" ["aa"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "aa"
 --                      , TestCase $ not assertEqual "Wrong Pretty Printed Grammar" "Test" exampleGrammar

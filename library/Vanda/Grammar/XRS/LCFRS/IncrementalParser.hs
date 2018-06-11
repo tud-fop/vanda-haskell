@@ -41,8 +41,9 @@ prettyShowString :: (Show w) => w -> String
 prettyShowString s = '\"' : concatMap g (show s) ++ "\"" where
   g c    = [c]
 
-data Item nt t wt = Active (IMap.IntMap (Rule nt t)) (Rule nt t) wt (IMap.IntMap Range) Int Range [VarT t] (IMap.IntMap (IMap.IntMap Range)) wt  | Passive (Rule nt t) (IMap.IntMap Range) (IMap.IntMap (IMap.IntMap Range)) wt deriving (Show)
+data Item nt t wt = Active (IMap.IntMap (Rule nt t)) (Rule nt t) wt (IMap.IntMap Range) Int Range [VarT t] (IMap.IntMap (IMap.IntMap Range)) wt  | Passive (IMap.IntMap (Rule nt t)) (Rule nt t) (IMap.IntMap Range) (IMap.IntMap (IMap.IntMap Range)) wt deriving (Show)
 -- Erste IMap sind Kompa Rules
+-- Erste IMap Pass für Komp
 -- erste IMap sind fertige Ranges, Int ist Ri, Range ist jetzige Range, die schon fertig ist, [VarT t] ist das, was bei Ri gerade noch nicht fertig ist, zweite IMap ist quasi x_i,j , wobei äußere IMAp i darstellt, innere das j
 --
 -- Passive Item nach Thomas nicht def, einfach in Container reinwerfenk
@@ -58,8 +59,9 @@ instance (Eq nt, Eq t) => Eq (Item nt t wt) where
     && left        == left'
     && right       == right'
     && completions == completions'
-  (Passive r rhos nts _) == (Passive r' rhos' nts' _)
-    =  r           == r' 
+  (Passive phi r rhos nts _) == (Passive phi' r' rhos' nts' _)
+    =  phi         == phi'
+    && r           == r' 
     && rhos        == rhos' 
     && nts          == nts'
 
@@ -67,7 +69,7 @@ instance (Eq nt, Eq t) => Eq (Item nt t wt) where
 instance (Hashable nt, Hashable t) => Hashable (Item nt t wt) where
   salt `hashWithSalt` (Active _ r _ _ _ left _ _ _) 
     = salt `hashWithSalt` r `hashWithSalt` left
-  salt `hashWithSalt` (Passive r rhos nts _) 
+  salt `hashWithSalt` (Passive _ r rhos nts _) 
     = salt `hashWithSalt` r
 
 
@@ -313,7 +315,7 @@ completeKnownTokens _ _ _ _ = [] -}
 update :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt, Hashable nt, Semiring wt) => Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
 -- TODO Trotzdem noch Items in ActiveMap aufnehmen, da ich nur diese Nutz
 -- TODO Nimm Item nur auf, wenn es lhs hat, welches ein Start nt ist. Oder wird das schon in C.insert geschaut. Oder brauch ich das überhaupt nicht, da ich ja in chartify nur nach den Items suche, die mit einem NT aus s' beginnen?
-update (p, a, n, k, all, allRules) item@(Passive r cr ntr wt) =
+update (p, a, n, k, all, allRules) item@(Passive _ r cr ntr wt) =
     case convert (trace' "Update - Pass Item" item) of
         Just (nt, crv, bt, ios) -> case C.insert p nt crv bt ios of
             (p', isnew) -> ((p', a, n, k, all, allRules), isnew)
@@ -330,7 +332,7 @@ update (p, a, n, k, all, allRules) item = ((p,a,n, k, trace' ("Update - All Item
 convert :: (Hashable nt, Eq nt, Semiring wt, Eq t, Show nt, Show t, Show wt)
             => Item nt t wt --Passive Item
             -> Maybe (nt, Rangevector, C.Backtrace nt t wt, wt)
-convert (Passive rule@(Rule ((nt, _), _)) cr nts wt)
+convert (Passive _ rule@(Rule ((nt, _), _)) cr nts wt)
     = case getRangevector cr of
         Just crv -> case getBacktrace rule wt nts of
             Just bt -> Just (nt, crv, bt, wt)
@@ -442,8 +444,8 @@ findPassiveForOneRule' :: (Eq nt, Eq t, Eq wt, Show nt, Show t, Show wt)
     -> Rule nt t -- Current Rule
     -> [Item nt t wt] -- Found new complete passive Items
 findPassiveForOneRule' items rule =  trace' ("findPassiveForOne' Rule" ++ show rule ++ show items) [fullConcatItem
-            | r0Item@(Active _ r _ _ _ left _ gamma ios) <- MMap.lookup 0 itemMap -- Liste aller r0-Items TODO schau, dass dieses auch komplett durchlaufen ist
-            , fullConcatItem <- {-TODO Rein(filter (\item@(Active (Rule ((_, _), f)) _ completed _ _ _ _ _ _) -> ((length f) ==  ((IMap.size completed) +1)))-} ( glueTogether'' (Passive r (IMap.singleton 0 left) gamma ios) 1 itemMap) -- Has Item as many finished Rx as Function has Komponentes? If so, it is full, +1, because left is still in Item itself -- Das Passive vor : ist wichtig für 1-komponentige Funktionen, die sonst nicht als Passives Item aufgenommenw erden. TODO Fix
+            | r0Item@(Active phi r _ _ _ left _ gamma ios) <- MMap.lookup 0 itemMap -- Liste aller r0-Items TODO schau, dass dieses auch komplett durchlaufen ist
+            , fullConcatItem <- {-TODO Rein(filter (\item@(Active (Rule ((_, _), f)) _ completed _ _ _ _ _ _) -> ((length f) ==  ((IMap.size completed) +1)))-} ( glueTogether'' (Passive phi r (IMap.singleton 0 left) gamma ios) 1 itemMap) -- Has Item as many finished Rx as Function has Komponentes? If so, it is full, +1, because left is still in Item itself -- Das Passive vor : ist wichtig für 1-komponentige Funktionen, die sonst nicht als Passives Item aufgenommenw erden. TODO Fix
             ]
     where itemMap = MMap.fromList ( map (\(item@(Active _ _ _ _ ri _ _ _ _)) -> (ri, item)) items) --Map of form Ri->All Items that are finished for Ri
 
@@ -452,11 +454,18 @@ glueTogether'' :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt)
         -> Int -- Ri to view next
         -> MMap.MultiMap Int (Item nt t wt) -- All Items of Rule
         -> [Item nt t wt] -- Can contain Unfinished Items, which where MMap is empty at some point. They will be filtered out in function above
-glueTogether'' curr@(Passive r cr gamma ios) ri itemMap =
+glueTogether'' curr@(Passive phi r cr gamma ios) ri itemMap =
     case MMap.lookup ri itemMap of -- Get all Items that have ri completed TODO FIx here weights and compatibility check
         [] -> [curr]
-        riItems -> [(Passive r cr' gamma'' ios)
-            | (Active _ _ _ _ _ left _ gamma' _) <- riItems
+        riItems -> [(Passive phi'' r cr' gamma'' ios)
+            | (Active phi' _ _ _ _ left _ gamma' _) <- riItems
+            , isCompatible phi (IMap.toList phi')
             , let cr' = IMap.insert ri left cr -- Add component range for ri TODO Add Compatibility Check
             , let gamma'' = IMap.unionWith (IMap.union) gamma gamma' -- Füge Tabellen der eingesetzten Komponenten zusammen
+            , let phi'' = IMap.union phi phi' -- Dont care if something gets lost, lost rules are always the same
              ] >>= (\pass -> glueTogether'' pass (ri+1) itemMap)
+    where   isCompatible phi [] = True
+            isCompatible phi ((i, r'):xs) = 
+                case phi IMap.!? i of -- Was NT also in other component used
+                    Just r'' -> if r'' == r' then isCompatible phi xs else False
+                    Nothing -> isCompatible phi xs
