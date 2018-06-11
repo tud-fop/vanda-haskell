@@ -44,9 +44,11 @@ prettyShowString s = '\"' : concatMap g (show s) ++ "\"" where
 
 type ConvertItem nt t wt = ((Rule nt t), [Range], IMap.IntMap (IMap.IntMap Range)) -- Not using Rangevecors, because I can't concat them
 
-data Item nt t wt = Active (Rule nt t) wt (IMap.IntMap Range) Int Range [VarT t] (IMap.IntMap (IMap.IntMap Range)) wt deriving (Show)
+data Item nt t wt = Active (Rule nt t) wt (IMap.IntMap Range) Int Range [VarT t] (IMap.IntMap (IMap.IntMap Range)) wt  | Passive (Rule nt t) (IMap.IntMap Range) (IMap.IntMap (IMap.IntMap Range)) wt deriving (Show)
 -- erste IMap sind fertige Ranges, Int ist Ri, Range ist jetzige Range, die schon fertig ist, [VarT t] ist das, was bei Ri gerade noch nicht fertig ist, zweite IMap ist quasi x_i,j , wobei äußere IMAp i darstellt, innere das j
 -- Passive Item nach Thomas nicht def, einfach in Container reinwerfenk
+-- 2. Elem Passive: Ranges aller Komp -> Werden später noch zu RV,
+-- 3. Elem Passive: Ranges aller NT -> Werden später noch zu RVs
 
 instance (Eq nt, Eq t) => Eq (Item nt t wt) where
   (Active r _ rhos ri left right completions _) == (Active r' _ rhos' ri' left' right' completions' _) 
@@ -56,11 +58,17 @@ instance (Eq nt, Eq t) => Eq (Item nt t wt) where
     && left        == left'
     && right       == right'
     && completions == completions'
+  (Passive r rhos nts _) == (Passive r' rhos' nts' _)
+    =  r           == r' 
+    && rhos        == rhos' 
+    && nts          == nts'
 
 
 instance (Hashable nt, Hashable t) => Hashable (Item nt t wt) where
   salt `hashWithSalt` (Active r _ _ _ left _ _ _) 
     = salt `hashWithSalt` r `hashWithSalt` left
+  salt `hashWithSalt` (Passive r rhos nts _) 
+    = salt `hashWithSalt` r
 
 
 {-instance (Show nt, Show t) => Show (Item nt t wt) where
@@ -300,9 +308,14 @@ completeKnownTokens _ _ _ _ = [] -}
 
 -- True beudetet "Ist schon da gewesen"
 -- TODO Problem: Wird erst noch kompletten 1x durchlauf der Regeln ausgeführt -> 
-update :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt, Hashable nt) => Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
+update :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt, Hashable nt, Semiring wt) => Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
 -- TODO Trotzdem noch Items in ActiveMap aufnehmen, da ich nur diese Nutz
 -- TODO Nimm Item nur auf, wenn es lhs hat, welches ein Start nt ist. Oder wird das schon in C.insert geschaut. Oder brauch ich das überhaupt nicht, da ich ja in chartify nur nach den Items suche, die mit einem NT aus s' beginnen?
+update (p, a, n, k, all, allRules) item@(Passive r cr ntr wt) =
+    case convert item of
+        (nt, crv, bt, ios) -> case C.insert p nt crv bt ios of
+            (p', isnew) -> ((p', a, n, k, all, allRules), isnew)
+
 update (p, a, n, k, all, allRules) item@(Active rule@(Rule ((nt, _), _)) iw _ _ left [] completions inside) = -- Sind alle Ris berechnet? -> Item fertig, also in p Chart aufnehmen
 --                case trace' ("Insert Passiv\n Range while Passiv" ++ (show left) ++ "\nAddedRangevector" ++ (show backtrace)) (C.insert p nt {-rv aus rhos berechnen-} (singleton $ trace' "Range while Insert" left) backtrace inside )of -- TODO Backtrace + Rangevector neu, TODO Überprüfe beim Einfügen der Variablen in doppel IMap, ob sich das alles verträgt, wahrscheinlich in completeKnownTokens zu erledigen
                 case foldr (\(Active rule'@(Rule ((nt', _), _)) iw' lastRis _ left _  completions' inside') chart -> fst $ C.insert chart nt' (getRange lastRis left) (getBacktrace rule' iw' completions') inside') (fst $ C.insert p nt (singleton left) (getBacktrace rule iw completions) inside) (findPassiveForAllRules all allRules)  of
@@ -311,11 +324,21 @@ update (p, a, n, k, all, allRules) item@(Active rule@(Rule ((nt, _), _)) iw _ _ 
 --update (p, a, n, k) item@(Active (Rule ((_, as), _)) _ _ _ _ (Var i j: _) _ _ _) = ((p, MMap.insert ((as !! i), j) item a, (as !! i) `Set.delete` n, k), True) -- Schmeiß aus neuen Items raus, packe in aktive Items
 update (p, a, n, k, all, allRules) item = ((p,a,n, k, trace' ("Update - All Items Without New Passive" ++ (show $ not $ item `elem` all)) (addIfNew item all), allRules), not $ item `elem` all) -- Nicht neu
 
+convert :: (Hashable nt, Eq nt, Semiring wt, Eq t, Show nt, Show t, Show wt)
+            => Item nt t wt --Passive Item
+            -> (nt, Rangevector, C.Backtrace nt t wt, wt)
+convert (Passive rule@(Rule ((nt, _), _)) cr nts wt)
+    = (nt, getRange' cr, getBacktrace rule wt nts, wt)
+
 getRange ::
     IMap.IntMap Range -- All Ranges until current Range
     -> Range -- Curreft Left Range
     -> Rangevector
 getRange lastRis left = fromJust $ fromList $ ((map snd $ IMap.toList lastRis) ++ [left])
+getRange' ::
+    IMap.IntMap Range -- All Ranges until current Range
+    -> Rangevector
+getRange' cr = fromJust $ fromList $ map snd $ IMap.toList cr
 
 getBacktrace :: 
     Rule nt t
