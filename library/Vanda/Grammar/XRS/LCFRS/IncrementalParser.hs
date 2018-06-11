@@ -7,6 +7,10 @@ module Vanda.Grammar.XRS.LCFRS.IncrementalParser
     Container
   ) where
 
+-- Clean up: Convert Item für GlueStuff, Active Item aufraümen, Glue Stuff eiegene Completion Regel
+-- Prepare: 1. Regelsortieren (S -> [Rules, die mit S starten], A ->...),  2. NT -> (inputw, outputw), Alle Start-NT mit inputw >0
+-- Default werte: Weight - 1, Beam Width - 10000, max number of ret. Trees -1 (!= Fanout)
+-- 
 
 import Data.Hashable (Hashable(hashWithSalt))
 import Data.Converging (Converging)
