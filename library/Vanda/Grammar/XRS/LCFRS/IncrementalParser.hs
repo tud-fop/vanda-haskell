@@ -433,7 +433,7 @@ findPassiveForOneRule' :: (Eq nt, Eq t, Eq wt, Show nt, Show t, Show wt)
     -> [Item nt t wt] -- Found new complete passive Items
 findPassiveForOneRule' items rule =  trace' ("findPassiveForOne' Rule" ++ show rule ++ show items) [fullConcatItem
             | r0Item@(Active r _ _ _ left _ gamma ios) <- MMap.lookup 0 itemMap -- Liste aller r0-Items TODO schau, dass dieses auch komplett durchlaufen ist
-            , fullConcatItem <- {-TODO Rein(filter (\item@(Active (Rule ((_, _), f)) _ completed _ _ _ _ _ _) -> ((length f) ==  ((IMap.size completed) +1)))-} (Passive r (IMap.singleton 0 left) gamma ios) : ( glueTogether'' (Passive r (IMap.singleton 0 left) gamma ios) 1 itemMap) -- Has Item as many finished Rx as Function has Komponentes? If so, it is full, +1, because left is still in Item itself -- Das Passive vor : ist wichtig für 1-komponentige Funktionen, die sonst nicht als Passives Item aufgenommenw erden. TODO Fix
+            , fullConcatItem <- {-TODO Rein(filter (\item@(Active (Rule ((_, _), f)) _ completed _ _ _ _ _ _) -> ((length f) ==  ((IMap.size completed) +1)))-} ( glueTogether'' (Passive r (IMap.singleton 0 left) gamma ios) 1 itemMap) -- Has Item as many finished Rx as Function has Komponentes? If so, it is full, +1, because left is still in Item itself -- Das Passive vor : ist wichtig für 1-komponentige Funktionen, die sonst nicht als Passives Item aufgenommenw erden. TODO Fix
             ]
     where itemMap = MMap.fromList ( map (\(item@(Active _ _ _ ri _ _ _ _)) -> (ri, item)) items) --Map of form Ri->All Items that are finished for Ri
 
@@ -442,10 +442,19 @@ glueTogether'' :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt)
         -> Int -- Ri to view next
         -> MMap.MultiMap Int (Item nt t wt) -- All Items of Rule
         -> [Item nt t wt] -- Can contain Unfinished Items, which where MMap is empty at some point. They will be filtered out in function above
-glueTogether'' curr@(Passive r cr gamma ios) ri itemMap
-    = join $ foldr (\new acc-> (new: (glueTogether'' new (ri+1) itemMap)) : acc) [] -- TODO Fix Das!
-        [(Passive r cr' gamma'' ios)
-        | (Active _ _ _ _ left _ gamma' _) <- MMap.lookup ri itemMap-- Get all Items that have ri completed TODO FIx here weights and compatibility check
-        , let cr' = IMap.insert ri left cr -- Add component range for ri TODO Add Compatibility Check
-        , let gamma'' = IMap.unionWith (IMap.union) gamma gamma' -- Füge Tabellen der eingesetzten Komponenten zusammen
-        ]
+glueTogether'' curr@(Passive r cr gamma ios) ri itemMap =
+    case MMap.lookup ri itemMap of -- Get all Items that have ri completed TODO FIx here weights and compatibility check
+        [] -> [curr]
+        riItems -> join $ map (\pass -> glueTogether'' pass (ri+1) itemMap) [(Passive r cr' gamma'' ios)
+            | (Active _ _ _ _ left _ gamma' _) <- riItems
+            , let cr' = IMap.insert ri left cr -- Add component range for ri TODO Add Compatibility Check
+            , let gamma'' = IMap.unionWith (IMap.union) gamma gamma' -- Füge Tabellen der eingesetzten Komponenten zusammen
+             ]
+--glueTogether'' curr@(Passive r cr gamma ios) ri itemMap
+--    = join $ foldr (\new acc-> (new: (glueTogether'' new (ri+1) itemMap)) : acc) [] -- TODO Fix Das!
+--    = 
+--        [(Passive r cr' gamma'' ios)
+--        | (Active _ _ _ _ left _ gamma' _) <- MMap.lookup ri itemMap-- Get all Items that have ri completed TODO FIx here weights and compatibility check
+--        , let cr' = IMap.insert ri left cr -- Add component range for ri TODO Add Compatibility Check
+--        , let gamma'' = IMap.unionWith (IMap.union) gamma gamma' -- Füge Tabellen der eingesetzten Komponenten zusammen
+--        ]
