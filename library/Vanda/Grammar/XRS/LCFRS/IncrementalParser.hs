@@ -445,16 +445,8 @@ glueTogether'' :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt)
 glueTogether'' curr@(Passive r cr gamma ios) ri itemMap =
     case MMap.lookup ri itemMap of -- Get all Items that have ri completed TODO FIx here weights and compatibility check
         [] -> [curr]
-        riItems -> join $ map (\pass -> glueTogether'' pass (ri+1) itemMap) [(Passive r cr' gamma'' ios)
+        riItems -> [(Passive r cr' gamma'' ios)
             | (Active _ _ _ _ left _ gamma' _) <- riItems
             , let cr' = IMap.insert ri left cr -- Add component range for ri TODO Add Compatibility Check
             , let gamma'' = IMap.unionWith (IMap.union) gamma gamma' -- Füge Tabellen der eingesetzten Komponenten zusammen
-             ]
---glueTogether'' curr@(Passive r cr gamma ios) ri itemMap
---    = join $ foldr (\new acc-> (new: (glueTogether'' new (ri+1) itemMap)) : acc) [] -- TODO Fix Das!
---    = 
---        [(Passive r cr' gamma'' ios)
---        | (Active _ _ _ _ left _ gamma' _) <- MMap.lookup ri itemMap-- Get all Items that have ri completed TODO FIx here weights and compatibility check
---        , let cr' = IMap.insert ri left cr -- Add component range for ri TODO Add Compatibility Check
---        , let gamma'' = IMap.unionWith (IMap.union) gamma gamma' -- Füge Tabellen der eingesetzten Komponenten zusammen
---        ]
+             ] >>= (\pass -> glueTogether'' pass (ri+1) itemMap)
