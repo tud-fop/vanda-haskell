@@ -42,8 +42,6 @@ prettyShowString :: (Show w) => w -> String
 prettyShowString s = '\"' : concatMap g (show s) ++ "\"" where
   g c    = [c]
 
-type ConvertItem nt t wt = ((Rule nt t), [Range], IMap.IntMap (IMap.IntMap Range)) -- Not using Rangevecors, because I can't concat them
-
 data Item nt t wt = Active (Rule nt t) wt (IMap.IntMap Range) Int Range [VarT t] (IMap.IntMap (IMap.IntMap Range)) wt  | Passive (Rule nt t) (IMap.IntMap Range) (IMap.IntMap (IMap.IntMap Range)) wt deriving (Show)
 -- erste IMap sind fertige Ranges, Int ist Ri, Range ist jetzige Range, die schon fertig ist, [VarT t] ist das, was bei Ri gerade noch nicht fertig ist, zweite IMap ist quasi x_i,j , wobei äußere IMAp i darstellt, innere das j
 -- Passive Item nach Thomas nicht def, einfach in Container reinwerfenk
@@ -419,6 +417,36 @@ completeKnownTokens _ _ _ _ = []
 
 -- TODO convert active Item noch überall rein, sobald ich weiß, dass mein aktive Item richtig ist und ich daraus passive Item ableiten kann
 --
+
+findPassiveForAllRules' :: (Eq nt, Eq t ,Eq wt, Show nt, Show t, Show wt)
+    => [Item nt t wt] --All Items
+    -> [Rule nt t] -- All Rules
+    -> [Item nt t wt] -- All new passive Items that have Range R0...Rn
+findPassiveForAllRules' _ [] = []
+findPassiveForAllRules' items (rule:rules) = trace' "findPassiveForAllRules" ((findPassiveForOneRule (filter (\(Active ruleItem _ _ _ _ right _ _) -> rule == ruleItem && right == []) items) (rule)) ++ (findPassiveForAllRules items rules))-- Nur die Items, die auch die aktuelle Rule beinhalten und fertig sind
+--TODO ++ weg
+findPassiveForOneRule' :: (Eq nt, Eq t, Eq wt, Show nt, Show t, Show wt)
+    => [Item nt t wt] -- All Items with that Rule
+    -> Rule nt t -- Current Rule
+    -> [Item nt t wt] -- Found new complete passive Items
+findPassiveForOneRule' items rule =  trace' "findPassiveForOne Rule" [fullConcatItem
+            | r0Item@(Active r _ _ _ left _ gamma ios) <- MMap.lookup 0 itemMap -- Liste aller r0-Items TODO schau, dass dieses auch komplett durchlaufen ist
+            , fullConcatItem <- {-TODO Rein(filter (\item@(Active (Rule ((_, _), f)) _ completed _ _ _ _ _ _) -> ((length f) ==  ((IMap.size completed) +1)))-} ( glueTogether'' (Passive r (IMap.singleton 0 left) gamma ios) 1 itemMap) -- Has Item as many finished Rx as Function has Komponentes? If so, it is full, +1, because left is still in Item itself
+            ]
+    where itemMap = MMap.fromList ( map (\(item@(Active _ _ _ ri _ _ _ _)) -> (ri, item)) items) --Map of form Ri->All Items that are finished for Ri
+
+glueTogether'' :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt)
+        => Item nt t wt -- Current Item to complete, Passive
+        -> Int -- Ri to view next
+        -> MMap.MultiMap Int (Item nt t wt) -- All Items of Rule
+        -> [Item nt t wt] -- Can contain Unfinished Items, which where MMap is empty at some point. They will be filtered out in function above
+glueTogether'' curr@(Passive r cr gamma ios) ri itemMap
+    = join $ foldr (\new acc-> (new: (glueTogether'' new (ri+1) itemMap)) : acc) []
+        [(Passive r cr' gamma'' ios)
+        | (Active _ _ _ _ left _ gamma' _) <- MMap.lookup ri itemMap-- Get all Items that have ri completed TODO FIx here weights and compatibility check
+        , let cr' = IMap.insert ri left cr -- Add component range for ri TODO Add Compatibility Check
+        , let gamma'' = IMap.unionWith (IMap.union) gamma gamma'' -- Füge Tabellen der eingesetzten Komponenten zusammen
+        ]
 
 findPassiveForAllRules :: (Eq nt, Eq t ,Eq wt, Show nt, Show t, Show wt)
     => [Item nt t wt] --All Items
