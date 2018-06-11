@@ -17,7 +17,6 @@ import Data.Converging (Converging)
 import Data.Maybe (mapMaybe, maybeToList, fromJust)
 import Data.Range
 import Data.Semiring
-import Control.Monad(join)
 import Data.Tree (Tree)
 import Data.Weight
 import Vanda.Grammar.PMCFG
@@ -201,7 +200,7 @@ completeKnownTokens :: (Eq t)
 completeKnownTokens _ _ left [] = ([left], [])
 completeKnownTokens w m left (T t:rights)
  -- = mapMaybe (\ left' -> completeKnownTokens w m left' rights) $ mapMaybe (safeConc left) $ singletons t w -- TODO Weiter Hier kommen schon mehere raus
-  = (\ts -> (join $ map fst ts, snd $ head ts)) $ map (\left'' ->  completeKnownTokens w m left'' rights) 
+  = (\ts -> (ts >>= fst, snd $ head ts)) $ map (\left'' ->  completeKnownTokens w m left'' rights) 
     [ left'
     | left' <- mapMaybe (safeConc left) $ singletons t w
     ]
