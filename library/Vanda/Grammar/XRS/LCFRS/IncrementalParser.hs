@@ -398,19 +398,6 @@ findPassiveForOneRule items rule =  trace' "findPassiveForOne Rule" [fullConcatI
             ]
     where itemMap = MMap.fromList ( map (\(item@(Active _ _ _ ri _ _ _ _)) -> (ri, item)) items) --Map of form Ri->All Items that are finished for Ri
 
-glueTogether :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt)
-        => Item nt t wt -- Current Item to complete
-        -> Int -- Ri to view next
-        -> MMap.MultiMap Int (Item nt t wt) -- All Items of Rule
-        -> [Item nt t wt]
-glueTogether curr@(Active rule wt lastRis ri left _ currCompletions inside) ri' itemMap
-    = trace' ("GlueRi:" ++ (show ri')) (join $ map (\item -> glueTogether item (ri'+1) itemMap ) $ --Mach das weiter, bis itemMap an Stelle ri irgendwann mal leer
-        trace' ("glueTogether" ++ "current State" ++ (show (curr)))  [(Active rule wt newRis ri' left' [] newCompletions inside)
-        | (Active _ _ _ _ left' _ completions' _) <- MMap.lookup ri' itemMap-- Get all Items that have ri completed TODO FIx here weights and compatibility check
-        , let newRis = IMap.insert ri left lastRis
-        , let newCompletions = IMap.unionWith (IMap.union) currCompletions completions' -- Füge Tabellen der eingesetzten Komponenten zusammen
-        ])
-
 
 glueTogether' :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt)
         => Item nt t wt -- Current Item to complete
