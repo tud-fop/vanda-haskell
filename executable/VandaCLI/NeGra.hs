@@ -42,6 +42,12 @@ data Args
     , replace_words_by_pos_tag  :: Bool
     , renumber_sentences        :: Integer
     }
+  | Statistics
+    { stat_intervals            :: Intervals
+    , stat_length               :: Bool
+    , stat_gap_deg              :: Bool
+    , stat_height               :: Bool
+    }
     deriving Show
 
 cmdArgs :: Mode Args
@@ -63,12 +69,21 @@ cmdArgs
                                , flagArgByDisallowedInnerNodes
                                ]
                                }
-  , (modeEmpty $ Transform "/dev/null" False 0)
+  , ( modeEmpty $ Transform "/dev/null" False 0)
     { modeNames = ["transform"]
     , modeHelp = "transforms a corpus according to the specified rules"
     , modeGroupFlags = toGroup [ flagArgDelSubTreeWWords
                                , flagArgRepWordsByPosTag
                                , flagArgReNumSentence
+                               ]
+                               }
+  , ( modeEmpty $ Statistics (Intervals "0-") False False False)
+    { modeHelp = "outputs corpus statistics"
+    , modeNames = ["statistics"]
+    , modeArgs = ([ flagArgStatIntervals{argRequire = False}], Nothing)
+    , modeGroupFlags = toGroup [ flagArgStatLength
+                               , flagArgStatGapDeg
+                               , flagArgStatHeight
                                ]
                                }
                                ]
@@ -119,13 +134,29 @@ cmdArgs
                 "FILE" ""
     flagArgRepWordsByPosTag
       = flagBool ["r", "replace-words-by-pos-tag"]
-                (\ b x -> x{replace_words_by_pos_tag = b})
-                ""
+                 (\ b x -> x{replace_words_by_pos_tag = b})
+                 ""
     flagArgReNumSentence
       = flagReq ["n", "renumber-sentences"]
                 (\ a x -> Right x{renumber_sentences = toInteger $ read a})
                 "STARTINDEX" ""
+    flagArgStatLength
+      = flagBool ["l", "length"]
+                 (\ b x -> x{stat_length = b})
+                 ""
+    flagArgStatGapDeg
+      = flagBool ["g", "gap-degree"]
+                 (\ b x -> x{stat_gap_deg = b})
+                 ""             
+    flagArgStatHeight
+      = flagBool ["h", "height"]
+                 (\ b x -> x{stat_height = b})
+                 ""
+    flagArgStatIntervals
+      = flagArg (\ a x -> Right x{stat_intervals = Intervals a})
+                "[INTERVALS]"
 
+ 
 main :: IO ()
 main = processArgs (populateHelpMode Help cmdArgs) >>= mainArgs
 
@@ -135,5 +166,7 @@ mainArgs (Filter length_interval gap_degree_inteval sen_numebr_interval height_i
   = do putStrLn "We're filtering"
 mainArgs (Transform delSubTWs_file isReplacWsbyPosTags startindex)
   = do putStrLn "We're transforming"
+mainArgs (Statistics interv lenght gap_deg height)
+  = do putStrLn "Some Statistics"
 
 data Intervals = Intervals String deriving (Eq, Show)
