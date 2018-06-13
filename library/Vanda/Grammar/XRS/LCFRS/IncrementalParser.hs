@@ -145,10 +145,11 @@ predictionRule :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t, Show n
                   -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
 predictionRule word rules ios 
   = Left 
-      (trace' "Pred" [ (Active IMap.empty r w ri left right IMap.empty inside, inside)  --TODO Darf fs theoretisch nicht durch [] ersetzen, aber da es sowieso bald wegkommt, ist das egal
-      | (r@(Rule ((_, as), fs)), w) <- (trace' "Rules" rules) -- TODO, was ist, wenn Rule nicht f:fs ist, sondern nur 1 ELement ist. Geht das überhaupt?
+      (trace' "Pred" [ (Active IMap.empty r w ri left right IMap.empty inside, inside <.> outside)  --TODO Darf fs theoretisch nicht durch [] ersetzen, aber da es sowieso bald wegkommt, ist das egal
+      | (r@(Rule ((a, as), fs)), w) <- (trace' "Rules" rules) -- TODO, was ist, wenn Rule nicht f:fs ist, sondern nur 1 ELement ist. Geht das überhaupt?
       , (left, right,ri) <- completeKnownTokensWithRI word fs 0 -- Jede Funktion einmal komplete known Tokens übegeben -> 1 Item für jedes Ri
       , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
+            outside = snd $ ios Map.! a
       ] )
 
 scanRule :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq t, Weight wt)
@@ -158,10 +159,11 @@ scanRule :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq t,
 scanRule word iow = Right app
     where
         app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
-        app (Active phi r wt ri left right completions inside) _ 
+        app (Active phi r@(Rule ((a, _), _)) wt ri left right completions inside) _ 
             = [((Active phi r wt ri left' right' completions inside), inside)
             |(lefts', right')  <- [completeKnownTokens word completions left right] -- Klammer ist hier nur, damit ich das so mit <- schreiben kann
             , left' <- lefts'
+            , let outside = snd $ iow Map.! a -- Doesn't Change from Prediction
                 ]
         app _ _ = []
 
@@ -244,7 +246,7 @@ combineRule word ios = Right app
         consequences :: Item nt t wt -- trigger Item
                         -> Item nt t wt -- chart Item
                         -> [(Item nt t wt, wt)] --resulting Items TODO Warum Liste und nicht nur ein Item? Damit ich [] zurückgeben kann?
-        consequences searcher@(Active phi rule@(Rule ((_, as), _)) wt ri left ((Var i j):rights) completed inside) finished@(Active _ r@(Rule ((a, _), _)) _ ri' left' [] _ _)
+        consequences searcher@(Active phi rule@(Rule ((_, as), _)) wt ri left ((Var i j):rights) completed iws) finished@(Active _ r@(Rule ((a, _), _)) _ ri' left' [] _ iwf)
             = trace' ("Consequences - First Item searches Var" ++ "\nSearch Item:" ++ (show searcher) ++ "\nFinish Item:"  ++ (show finished)) [(Active phi' rule wt ri left'' rights (completed') inside, inside)
             | j == ri' -- Betrachte ich richtiges Ri? 
             , a == (as!!i) -- Betrache ich richtiges NT?
@@ -252,24 +254,28 @@ combineRule word ios = Right app
             , isCompatible phi r
             , left'' <- maybeToList $ safeConc left left'
             , let completed' = doubleInsert completed i j left' -- TODO Hier Double Insert
-            , let phi' = IMap.insert i r phi -- Overwriting doesn't matter
+                  phi' = IMap.insert i r phi -- Overwriting doesn't matter
+                  inside =  iws <.> (iwf </> fst (ios Map.! a))
+                  outside =  snd $ ios Map.! a
                 ] --TODO Fix Weights
                 where isCompatible phi r = case IMap.lookup i phi of
                         Just r' -> if r' == r then True else False -- used X_i with same rule?
                         Nothing -> True -- Not used X_i until now
 
-        consequences  finish@(Active _ r@(Rule ((a, _), _)) _ ri' left' [] _ _) searcher@(Active phi rule@(Rule ((_, as), _)) wt ri left ((Var i j):rights) completed inside)
-            = trace' ("Consequences - Secound Item searches Var\n Search Item:" ++ (show searcher) ++ "\n Finish Item: " ++(show finish)) [(Active phi' rule wt ri left'' rights (completed') inside, inside)
+        consequences  finish@(Active _ r@(Rule ((a, _), _)) _ ri' left' [] _ iwf) searcher@(Active phi rule@(Rule ((_, as), _)) wt ri left ((Var i j):rights) completed iws)
+            = trace' ("Consequences - Secound Item searches Var\n Search Item:" ++ (show searcher) ++ "\n Finish Item: " ++(show finish)) [(Active phi' rule wt ri left'' rights (completed') inside, inside <.> outside)
             | j == ri' -- Betrachte ich richtiges Ri? 
             , a == (as!!i)
              -- TODO Schau, dass Compatibel. Macht das evnt. completeKnownTokens?
             , isCompatible phi r
             , left'' <- maybeToList $ safeConc left left'
             , let completed' = doubleInsert completed i j left' -- TODO Hier Double Insert
-            , let phi' = IMap.insert i r phi -- Overwriting doesn't matter
+                  phi' = IMap.insert i r phi -- Overwriting doesn't matter
+                  inside =  iws <.> (iwf </> fst (ios Map.! a))
+                  outside =  snd $ ios Map.! a
                 ] --TODO Fix Weights
                 where isCompatible phi r = case IMap.lookup i phi of
-                        Just r' -> if r' == r then True else False -- used X_i with same rule?
+                        Just r' -> r' == r -- used X_i with same rule?
                         Nothing -> True -- Not used X_i until now
         consequences _ _ = trace' "Consequences - Not Matched"[]
 
