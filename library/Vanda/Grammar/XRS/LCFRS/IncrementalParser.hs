@@ -120,7 +120,6 @@ initialPrediction word srules ios
       , (left, right'') <- completeNextTerminals word Epsilon right'
       , let insides = IMap.fromList $ zip [0..] (map (fst . (ios Map.!)) as)
       , let heuristic = w <.> calcInsideWeight insides
-        --TODO Warum hier bei Act. Parser kein outside weight? Warum ist das also 1?
       ] )
 
 calcInsideWeight :: forall wt. (Semiring wt) => IMap.IntMap wt -> wt
@@ -233,7 +232,7 @@ combineRule word ios = Right app
             , isCompatible (IMap.toList $ fromMaybe IMap.empty (completeds IMap.!? i)) -- All Ranges that are used of this NT are in the current finished Item? If nothing used by now, than empty map instead of Nothing of Maybe
             , left'' <- maybeToList $ safeConc left left'
             , let completed' = doubleInsert completeds i j left' 
-                  insides' = IMap.insert i (wtf <.> calcInsideWeight insidesf) insidess --THOMAS so richtig?
+                  insides' = IMap.insert i (wtf <.> calcInsideWeight insidesf) insidess -- THOMAS so richtig?
                   outside =  snd $ ios Map.! a
                   heuristic = wt <.> (calcInsideWeight insides') <.> outside
                 ] 
