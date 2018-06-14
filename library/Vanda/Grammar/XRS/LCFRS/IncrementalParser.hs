@@ -38,7 +38,10 @@ prettyShowString :: (Show w) => w -> String
 prettyShowString s = '\"' : concatMap g (show s) ++ "\"" where
   g c    = [c]
 
-data Item nt t wt = Active (IMap.IntMap Range) (Rule nt t) wt Int Range [VarT t] [(Int, [VarT t])] (IMap.IntMap (IMap.IntMap Range)) wt  deriving (Show) 
+trace' :: (Show s) => String -> s -> s
+trace' prefix s = trace ("\n" ++ prefix ++": "++ (show s) ++ "\n") s
+
+data Item nt t wt = Active (IMap.IntMap Range) (Rule nt t) wt Int Range [VarT t] [(Int, [VarT t])] (IMap.IntMap (IMap.IntMap Range)) (IMap.IntMap wt) deriving (Show) 
 -- TODONew Gewichte als Map + in Combine aktulaisern
 
 instance (Eq nt, Eq t) => Eq (Item nt t wt) where
@@ -99,7 +102,7 @@ parse' (rmap, iow, s') bw tops w
             : predictionRule w (trace' "All Rules" (map snd $ MMap.toList (trace' "Map with all Rules" rmap))) iow -- Mache aus Rule Map eine Liste aller Rules
             : scanRule w iow -- Mache aus Rule Map eine Liste aller Rules
             : combineRule w iow
-            : [vervoll w iow]
+            : [complete w iow]
 
 -- | Prediction rule for rules of initial nonterminals.
 -- Predicted alles, bei dem Terminale am Anfang stehen und Startsymbol auf lhs hat
@@ -170,72 +173,32 @@ scanRule word iow = Right app
     where
         app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
         app (Active cr r@(Rule ((a, _), _)) wt ri left right fs completions inside) _ 
-            = trace' "Scan"[((Active cr r wt ri left' right' fs completions inside), inside)
+            = trace' "Scan"[((Active cr r wt ri left' right' fs completions inside), inside <.> outside)
             |(left', right')  <- completeNextTerminals word left right -- Klammer ist hier nur, damit ich das so mit <- schreiben kann
             , let outside = snd $ iow Map.! a -- Doesn't Change from Prediction
                 ]
         app _ _ = []
 
 
-trace' :: (Show s) => String -> s -> s
-trace' prefix s = trace ("\n" ++ prefix ++": "++ (show s) ++ "\n") s
 
---completeKnownTokensWithRI  :: (Eq t)
---                    => [t] 
---                    -> Function t -- alle Funktionen
---                    -> Int -- Current Rx, x number
---                    -> [(Range, [VarT t], Int)] -- Zusätzliches Int, da ich Ri mit übergebe, Erste Liste für Ranges, innere für singletons mehrere Ausgaben
---completeKnownTokensWithRI _ [] rx = []
---completeKnownTokensWithRI word (f:fs) rx = case (completeKnownTokens word IMap.empty Epsilon f) of
---  ([], _) -> completeKnownTokensWithRI word fs (rx + 1)
---  (lefts, right) -> [(left, right, rx)| left <- lefts] ++ (completeKnownTokensWithRI word fs (rx+1)) -- TODO ++ weg
---  where ri = length (fs) -- Deshalb erstes Ri = R0, wichtig für zuordnung in Consequences, da Vars0 0 auch bei 0 beginnt
- -- Betrachte immer nur die erste Range, 
- -- TODO Ris falschrum -> R0 hätte bei 3stelliger Funktion R2
---completeKnownTokens :: (Eq t)
---                    => [t] 
---                    -> IMap.IntMap (IMap.IntMap Range) -- Variablen, deren Ranges ich kenne
---                    -- -> IMap.IntMap Range -- Fertige Ranges, brauche ich nicht
---                    -> Range -- aktuelle Left,
---                    -> [VarT t]-- aktuelle Right
-----                    -> Function t -- Weitere Fkten., aktuelle right steht ganz vorne dran Brauch ich nicht
---                    -> ([Range], [VarT t]) -- Danach bekoannte, mit allen Funktionen außer Epsilon.  -- Maybe, da, falls saveConc failed, ich das gar nicht mehr nutze, da irgendetwas falsch predicted
--- Original aus akt. Parser geht auch über mehrere Funktionen, aber das wird wahrscheinlich zu umständlich, da ich da wieder Unteritems erzeugen würde, je nachdem, welches Ri ich als nächstes besuchen würde
---completeKnownTokens _ _ left [] = ([left], [])
---completeKnownTokens w m left (T t:rights)
- -- = mapMaybe (\ left' -> completeKnownTokens w m left' rights) $ mapMaybe (safeConc left) $ singletons t w -- TODO Weiter Hier kommen schon mehere raus
- -- = (\ts -> (ts >>= fst, snd $ head ts)) $ map (\left'' ->  completeKnownTokens w m left'' rights) 
-  --  [ left'
-   -- | left' <- mapMaybe (safeConc left) $ singletons t w
-    --]
-    -- TODO fs am Endealle gleich? oder mach ich da etwas falsch?
-    
---completeKnownTokens w m left (Var i j:rights)
---  = case i `IMap.lookup` m of
---         Just xi -> case j `IMap.lookup` xi of
---            Just r -> case safeConc left r of -- Range ist vorhanden
---                         Just left' -> completeKnownTokens w m left' rights
---                         Nothing -> ([], rights)
---            Nothing -> ([left], (Var i j):rights)
---         Nothing -> ([left], (Var i j):rights)
-
-
-vervoll :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq t, Eq wt, Weight wt)
+complete :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq t, Eq wt, Weight wt)
         => [t] -- Word
         -> Map.HashMap nt (wt, wt) -- weights
         -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
-vervoll word ios = Right app
+-- TODO Parameter von Ded-Regeln anpassen, brauche z.B. ios bei Scan nicht oder word bei complete
+complete word ios = Right app
     where
         app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
 --        app trigger@(Active cr r w ri left [] [] completions ios) _
  --               |found <- (findPassiveForAllRules' (trigger:allI) allR)
   --              , let cr' = IMap.insert ri left cr
    --             ]
-        app trigger@(Active cr r w ri left [] (f:fs) completions ios) _ -- If not f:fs, than finshed, than we add it to chart 
-            = trace' "Skip" [(Active cr' r w ri' left' right'' fs' completions ios, ios) -- TODO Fix weight
+        app trigger@(Active cr r@(Rule ((a,_), _)) w ri left [] (f:fs) completions inside) _ -- If item isn't f:fs, then it's finshed, so we add it to chart in update function
+            = trace' "Skip" [(Active cr' r w ri' left' right'' fs' completions inside, inside <.> outside) -- TODO Fix weight
                 | ((ri', right'), fs') <- allCombinations [] f fs
                 , (left', right'') <- completeNextTerminals word Epsilon right'
                 , let cr' = IMap.insert ri left cr
+                , let outside = snd $ ios Map.! a -- Doesn't Change from Prediction
                 ]
         app _ _ = []
 
