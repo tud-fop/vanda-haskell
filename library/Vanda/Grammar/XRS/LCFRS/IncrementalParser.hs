@@ -40,7 +40,7 @@ prettyShowString :: (Show w) => w -> String
 prettyShowString s = '\"' : concatMap g (show s) ++ "\"" where
   g c    = [c]
 
-data Item nt t wt = Active (IMap.IntMap (Rule nt t)) (Rule nt t) wt  Int Range [VarT t] (IMap.IntMap (IMap.IntMap Range)) wt  | Passive (IMap.IntMap (Rule nt t)) (Rule nt t) wt (IMap.IntMap Range) (IMap.IntMap (IMap.IntMap Range)) wt deriving (Show) 
+data Item nt t wt = Active (IMap.IntMap Range) (Rule nt t) wt Int Range [VarT t] (Function t) (IMap.IntMap (IMap.IntMap Range)) (IMap.IntMap wt)  | Passive (IMap.IntMap (Rule nt t)) (Rule nt t) wt (IMap.IntMap Range) (IMap.IntMap (IMap.IntMap Range)) wt deriving (Show) 
 -- Erste IMap sind Kompa Rules
 -- Erste IMap Pass für Komp
 -- Erstes wt in Pass ist Rule Weight für Backtrace
@@ -51,12 +51,14 @@ data Item nt t wt = Active (IMap.IntMap (Rule nt t)) (Rule nt t) wt  Int Range [
 -- 3. Elem Passive: Ranges aller NT -> Werden später noch zu RVs
 
 instance (Eq nt, Eq t) => Eq (Item nt t wt) where
-  (Active phi r _ ri left right completions _) == (Active phi' r' _ ri' left' right' completions' _) 
+  (Active phi zeta r _ ri left right nc completions _) == (Active phi' zeta' r' _ ri' left' right' nc' completions' _) 
     =  phi         == phi'
+    && zeta        == zeta'
     && r           == r' 
     && ri          == ri'
     && left        == left'
     && right       == right'
+    && nc          == nc'
     && completions == completions'
   (Passive phi r _ rhos nts _) == (Passive phi' r' _ rhos' nts' _)
     =  phi         == phi'
@@ -66,7 +68,7 @@ instance (Eq nt, Eq t) => Eq (Item nt t wt) where
 
 
 instance (Hashable nt, Hashable t) => Hashable (Item nt t wt) where
-  salt `hashWithSalt` (Active _ r _ _ left _ _ _) 
+  salt `hashWithSalt` (Active _ _ r _ _ left _ _ _ _) 
     = salt `hashWithSalt` r `hashWithSalt` left
   salt `hashWithSalt` (Passive _ r _ rhos nts _) 
     = salt `hashWithSalt` r
@@ -131,10 +133,16 @@ initialPrediction :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t, Sho
 initialPrediction word srules ios 
   = Left 
       (trace' "initPred" [ (Active IMap.empty r w ri left right IMap.empty inside, inside)  --TODO Darf fs theoretisch nicht durch [] ersetzen, aber da es sowieso bald wegkommt, ist das egal
-      | (r@(Rule ((_, as), fs)), w) <- (trace' "Rules" srules) -- TODO, was ist, wenn Rule nicht f:fs ist, sondern nur 1 ELement ist. Geht das überhaupt?
+      | (r@(Rule ((_, as), (f:fs))), w) <- (trace' "Rules" srules) -- TODO, was ist, wenn Rule nicht f:fs ist, sondern nur 1 ELement ist. Geht das überhaupt?
+      , (right', fs') <- allCombinations [] f fs
       , (left, right,ri) <- completeKnownTokensWithRI word fs 0 -- Jede Funktion einmal komplete known Tokens übegeben -> 1 Item für jedes Ri
       , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
       ] )
+
+-- Get all Componentens of a function with all remaining components
+allCombinations :: Function t -> [VarT t] -> Function t -> [([VarT t], Function t)]
+allCombinations xs x [] = [(x,xs)]
+allCombinations xs x y'@(y:ys) = (x, xs ++ ys) : (allCombinations (x:xs) y ys)
 
 -- | Prediction rule for rules of initial nonterminals.
 -- Predicted alles, bei dem Terminale am Anfang stehen 
