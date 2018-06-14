@@ -40,7 +40,7 @@ prettyShowString :: (Show w) => w -> String
 prettyShowString s = '\"' : concatMap g (show s) ++ "\"" where
   g c    = [c]
 
-data Item nt t wt = Active (IMap.IntMap Range) (Rule nt t) wt Int Range [VarT t] [(Int, [VarT t])] (IMap.IntMap (IMap.IntMap Range)) wt  | Passive (IMap.IntMap (Rule nt t)) (Rule nt t) wt (IMap.IntMap Range) (IMap.IntMap (IMap.IntMap Range)) wt deriving (Show) 
+data Item nt t wt = Active (IMap.IntMap Range) (Rule nt t) wt Int Range [VarT t] [(Int, [VarT t])] (IMap.IntMap (IMap.IntMap Range)) wt  deriving (Show) 
 --TODONew Gewichte als Map + in Combine aktulaisern
 -- Erste IMap sind Kompa Rules
 -- Erste IMap Pass für Komp
@@ -60,18 +60,11 @@ instance (Eq nt, Eq t) => Eq (Item nt t wt) where
     && right       == right'
     && nc          == nc'
     && completions == completions'
-  (Passive phi r _ rhos nts _) == (Passive phi' r' _ rhos' nts' _)
-    =  phi         == phi'
-    && r           == r' 
-    && rhos        == rhos' 
-    && nts          == nts'
 
 
 instance (Hashable nt, Hashable t) => Hashable (Item nt t wt) where
   salt `hashWithSalt` (Active _ r _ _ left _ _ _ _) 
     = salt `hashWithSalt` r `hashWithSalt` left
-  salt `hashWithSalt` (Passive _ r _ rhos nts _) 
-    = salt `hashWithSalt` r
 
 
 {-instance (Show nt, Show t) => Show (Item nt t wt) where
@@ -315,23 +308,8 @@ update (p, a, n, k, all, allRules) item@(Active cr r@(Rule ((nt, _), _)) wt ri l
             Nothing -> ((p, a, n, k, item:all, allRules), not $ item `elem` all)
         Nothing -> ((p, a, n, k, item:all, allRules), not $ item `elem` all) -- TODONew wirklich ok, oder das dann gar nicht erst aufzunehmen?
     where cr' = IMap.insert ri left cr
-update (p, a, n, k, all, allRules) item@(Passive _ r _ cr ntr wt) =
-    case convert (trace' "Update - Pass Item" item) of
-        Just (nt, crv, bt, ios) -> case C.insert p nt crv bt ios of
-            (p', isnew) -> ((p', a, n, k, all, allRules), isnew)
-        Nothing -> ((p, a, n, k, all, allRules), False)
 
 update (p, a, n, k, all, allRules) item = ((p,a,n, k, trace' ("Update - All Items Without New Passive" ++ (show $ not $ item `elem` all)) (addIfNew item all), allRules), not $ item `elem` all) -- Nicht neu
-
-convert :: (Hashable nt, Eq nt, Semiring wt, Eq t, Show nt, Show t, Show wt)
-            => Item nt t wt --Passive Item
-            -> Maybe (nt, Rangevector, C.Backtrace nt t wt, wt)
-convert (Passive _ rule@(Rule ((nt, _), _)) rw cr nts wt)
-    = case getRangevector cr of
-        Just crv -> case getBacktrace rule rw nts of
-            Just bt -> Just (nt, crv, bt, wt)
-            Nothing -> Nothing
-        Nothing -> Nothing
 
 getRangevector :: IMap.IntMap Range -> Maybe Rangevector
 getRangevector cr = fromList $ map snd $ IMap.toList cr --TODO New ist das dann geordnet? Was, wenn [(2,...), (1,...)]
