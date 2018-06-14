@@ -275,35 +275,41 @@ combineRule word ios = Right app
         consequences :: Item nt t wt -- trigger Item
                         -> Item nt t wt -- chart Item
                         -> [(Item nt t wt, wt)] -- Liste nur, damit ich [] zurückgeben kann
-        consequences searcher@(Active phi rule@(Rule ((_, as), _)) wt ri left ((Var i j):rights) completed iws) finished@(Active _ r@(Rule ((a, _), _)) _ ri' left' [] _ iwf)
+        consequences searcher@(Active cr rule@(Rule ((_, as), _)) wt ri left ((Var i j):rights) fs completeds iws) finished@(Active crf r@(Rule ((a, _), _)) _ ri' left' [] _ _ iwf)
             = trace' ("Consequences - First Item searches Var" ++ "\nSearch Item:" ++ (show searcher) ++ "\nFinish Item:"  ++ (show finished)) [(Active phi' rule wt ri left'' rights (completed') inside, inside)
             | j == ri' -- Betrachte ich richtiges Ri? 
             , a == (as!!i) -- Betrache ich richtiges NT?
-            , isCompatible phi r
+            , isCompatible (IMap.toList $ fromMaybe IMap.empty (i IMap.!? completeds)) -- All Ranges that are used of this NT are in the current finished Item? If nothing used by now, than empty map instead of Nothing of Maybe
             , left'' <- maybeToList $ safeConc left left'
             , let completed' = doubleInsert completed i j left' 
                   phi' = IMap.insert i r phi -- Overwriting doesn't matter
                   inside =  iws <.> (iwf </> fst (ios Map.! a))
                   outside =  snd $ ios Map.! a
                 ] 
-                where isCompatible phi r = case IMap.lookup i phi of
-                        Just r' -> r' == r  -- used X_i with same rule?
-                        Nothing -> True -- Not used X_i until now
+                where isCompatible used = 
+                        foldr (checkRange) True used
+                      checkRange (i, usedRange) acc = case i IMap.!? crf of
+                          Just foundRange -> ((usedRange == foundRange) && acc)
+                          Nothing -> acc
+-- TODO Hier irgendwie flip Funktion nutzen, damit ich FUunktion nicht 2x definiere
 
-        consequences  finish@(Active _ r@(Rule ((a, _), _)) _ ri' left' [] _ iwf) searcher@(Active phi rule@(Rule ((_, as), _)) wt ri left ((Var i j):rights) completed iws)
-            = trace' ("Consequences - Secound Item searches Var\n Search Item:" ++ (show searcher) ++ "\n Finish Item: " ++(show finish)) [(Active phi' rule wt ri left'' rights (completed') inside, inside <.> outside)
+
+        consequences finished@(Active crf r@(Rule ((a, _), _)) _ ri' left' [] _ _ iwf) searcher@(Active cr rule@(Rule ((_, as), _)) wt ri left ((Var i j):rights) fs completeds iws)
+            = trace' ("Consequences - Secound Item searches Var\n Search Item:" ++ (show searcher) ++ "\n Finish Item: " ++(show finished)) [(Active phi' rule wt ri left'' rights (completed') inside, inside <.> outside)
             | j == ri' -- Betrachte ich richtiges Ri? 
             , a == (as!!i)
-            , isCompatible phi r
+            , isCompatible (IMap.toList $ fromMaybe IMap.empty (i IMap.!? completeds)) -- All Ranges that are used of this NT are in the current finished Item? If nothing used by now, than empty map instead of Nothing of Maybe
             , left'' <- maybeToList $ safeConc left left'
             , let completed' = doubleInsert completed i j left'
                   phi' = IMap.insert i r phi -- Overwriting doesn't matter
                   inside =  iws <.> (iwf </> fst (ios Map.! a))
                   outside =  snd $ ios Map.! a
                 ]
-                where isCompatible phi r = case IMap.lookup i phi of
-                        Just r' -> r' == r -- used X_i with same rule?
-                        Nothing -> True -- Not used X_i until now
+                where isCompatible used = 
+                        foldr (checkRange) True used
+                      checkRange (i, usedRange) acc = case i IMap.!? crf of
+                          Just foundRange -> ((usedRange == foundRange) && acc)
+                          Nothing -> acc
         consequences _ _ = trace' "Consequences - Not Matched"[]
 
 
