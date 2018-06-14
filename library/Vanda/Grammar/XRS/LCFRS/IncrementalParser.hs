@@ -51,9 +51,8 @@ data Item nt t wt = Active (IMap.IntMap Range) (Rule nt t) wt Int Range [VarT t]
 -- 3. Elem Passive: Ranges aller NT -> Werden später noch zu RVs
 
 instance (Eq nt, Eq t) => Eq (Item nt t wt) where
-  (Active phi zeta r _ ri left right nc completions _) == (Active phi' zeta' r' _ ri' left' right' nc' completions' _) 
-    =  phi         == phi'
-    && zeta        == zeta'
+  (Active cr r _ ri left right nc completions _) == (Active cr' r' _ ri' left' right' nc' completions' _) 
+    =  cr          == cr'
     && r           == r' 
     && ri          == ri'
     && left        == left'
@@ -68,7 +67,7 @@ instance (Eq nt, Eq t) => Eq (Item nt t wt) where
 
 
 instance (Hashable nt, Hashable t) => Hashable (Item nt t wt) where
-  salt `hashWithSalt` (Active _ _ r _ _ left _ _ _ _) 
+  salt `hashWithSalt` (Active _ r _ _ left _ _ _ _) 
     = salt `hashWithSalt` r `hashWithSalt` left
   salt `hashWithSalt` (Passive _ r _ rhos nts _) 
     = salt `hashWithSalt` r
@@ -132,18 +131,34 @@ initialPrediction :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t, Sho
                   -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
 initialPrediction word srules ios 
   = Left 
-      (trace' "initPred" [ (Active IMap.empty r w ri left right IMap.empty inside, inside)  --TODO Darf fs theoretisch nicht durch [] ersetzen, aber da es sowieso bald wegkommt, ist das egal
+      (trace' "initPred" [ (Active IMap.empty r w ri left right'' fs' IMap.empty inside, inside)  --TODO Darf fs theoretisch nicht durch [] ersetzen, aber da es sowieso bald wegkommt, ist das egal
       | (r@(Rule ((_, as), (f:fs))), w) <- (trace' "Rules" srules) -- TODO, was ist, wenn Rule nicht f:fs ist, sondern nur 1 ELement ist. Geht das überhaupt?
-      , (right', fs') <- allCombinations [] f fs
-      , (left, right,ri) <- completeKnownTokensWithRI word fs 0 -- Jede Funktion einmal komplete known Tokens übegeben -> 1 Item für jedes Ri
+      , (ri, right', fs') <- allCombinations 0 [] f fs
+      , (left, right'') <- completeKnownTokens' word IMap.empty Epsilon right'
+      --, (left, right, ri) <- completeKnownTokensWithRI word fs 0 -- Jede Funktion einmal komplete known Tokens übegeben -> 1 Item für jedes Ri
       , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
+        --TODO Warum hier bei Act. Parser kein outside weight? Warum ist das also 1?
       ] )
 
 -- Get all Componentens of a function with all remaining components
-allCombinations :: Function t -> [VarT t] -> Function t -> [([VarT t], Function t)]
-allCombinations xs x [] = [(x,xs)]
-allCombinations xs x y'@(y:ys) = (x, xs ++ ys) : (allCombinations (x:xs) y ys)
+allCombinations :: Int -> Function t  -> [VarT t] -> Function t -> [(Int, [VarT t],  Function t)]
+allCombinations i xs x [] = [(i, x, xs)]
+allCombinations i xs x y'@(y:ys) = (i, x, xs ++ y') : (allCombinations (i+1) (x:xs) y ys)
 
+-- complete Terminals
+completeKnownTokens' :: (Eq t)
+                    => [t] 
+                    -> IMap.IntMap Rangevector 
+                    -> Range
+                    -> [VarT t]
+                    -> [(Range, [VarT t])]
+completeKnownTokens' _ _ r [] = [(rs, [])]
+completeKnownTokens' w m r (T t:fs)
+    = [ (r', fs)
+        | r' <- mapMaybe (safeConc r) $ singletons t w
+       ] >>= uncurry (completeKnownTokens' w m)
+--TODO Warum in Active Parser noch schauen nach Variablen?
+completeKnownTokens' _ _ _ _ = []
 -- | Prediction rule for rules of initial nonterminals.
 -- Predicted alles, bei dem Terminale am Anfang stehen 
 -- TODO Mit initPred zusammenwerfen?
@@ -154,9 +169,11 @@ predictionRule :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t, Show n
                   -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
 predictionRule word rules ios 
   = Left 
-      (trace' "Pred" [ (Active IMap.empty r w ri left right IMap.empty inside, inside <.> outside)  --TODO Darf fs theoretisch nicht durch [] ersetzen, aber da es sowieso bald wegkommt, ist das egal
-      | (r@(Rule ((a, as), fs)), w) <- (trace' "Rules" rules) -- TODO, was ist, wenn Rule nicht f:fs ist, sondern nur 1 ELement ist. Geht das überhaupt?
-      , (left, right,ri) <- completeKnownTokensWithRI word fs 0 -- Jede Funktion einmal komplete known Tokens übegeben -> 1 Item für jedes Ri
+      (trace' "Pred" [ (Active IMap.empty r w ri left right'' fs' IMap.empty inside, inside <.> outside)  --TODO Darf fs theoretisch nicht durch [] ersetzen, aber da es sowieso bald wegkommt, ist das egal
+      | (r@(Rule ((a, as), (f:fs))), w) <- (trace' "Rules" rules) -- TODO, was ist, wenn Rule nicht f:fs ist, sondern nur 1 ELement ist. Geht das überhaupt?
+      --, (left, right,ri) <- completeKnownTokensWithRI word fs 0 -- Jede Funktion einmal komplete known Tokens übegeben -> 1 Item für jedes Ri
+      , (ri, right', fs') <- allCombinations 0 [] f fs
+      , (left, right'') <- completeKnownTokens' word IMap.empty Epsilon right'
       , let inside = w <.> foldl (<.>) one (map (fst . (ios Map.!)) as)
             outside = snd $ ios Map.! a
       ] )
@@ -168,10 +185,9 @@ scanRule :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq t,
 scanRule word iow = Right app
     where
         app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
-        app (Active phi r@(Rule ((a, _), _)) wt ri left right completions inside) _ 
-            = [((Active phi r wt ri left' right' completions inside), inside)
-            |(lefts', right')  <- [completeKnownTokens word completions left right] -- Klammer ist hier nur, damit ich das so mit <- schreiben kann
-            , left' <- lefts'
+        app (Active cr r@(Rule ((a, _), _)) wt ri left right fs completions inside) _ 
+            = [((Active cr r wt ri left' right' fs completions inside), inside)
+            |(left', right')  <- completeKnownTokens word completions left right -- Klammer ist hier nur, damit ich das so mit <- schreiben kann
             , let outside = snd $ iow Map.! a -- Doesn't Change from Prediction
                 ]
         app _ _ = []
@@ -192,34 +208,35 @@ completeKnownTokensWithRI word (f:fs) rx = case (completeKnownTokens word IMap.e
 --  where ri = length (fs) -- Deshalb erstes Ri = R0, wichtig für zuordnung in Consequences, da Vars0 0 auch bei 0 beginnt
  -- Betrachte immer nur die erste Range, 
  -- TODO Ris falschrum -> R0 hätte bei 3stelliger Funktion R2
-completeKnownTokens :: (Eq t)
-                    => [t] 
-                    -> IMap.IntMap (IMap.IntMap Range) -- Variablen, deren Ranges ich kenne
-                    -- -> IMap.IntMap Range -- Fertige Ranges, brauche ich nicht
-                    -> Range -- aktuelle Left,
-                    -> [VarT t]-- aktuelle Right
---                    -> Function t -- Weitere Fkten., aktuelle right steht ganz vorne dran Brauch ich nicht
-                    -> ([Range], [VarT t]) -- Danach bekoannte, mit allen Funktionen außer Epsilon.  -- Maybe, da, falls saveConc failed, ich das gar nicht mehr nutze, da irgendetwas falsch predicted
+--completeKnownTokens :: (Eq t)
+--                    => [t] 
+--                    -> IMap.IntMap (IMap.IntMap Range) -- Variablen, deren Ranges ich kenne
+--                    -- -> IMap.IntMap Range -- Fertige Ranges, brauche ich nicht
+--                    -> Range -- aktuelle Left,
+--                    -> [VarT t]-- aktuelle Right
+----                    -> Function t -- Weitere Fkten., aktuelle right steht ganz vorne dran Brauch ich nicht
+--                    -> ([Range], [VarT t]) -- Danach bekoannte, mit allen Funktionen außer Epsilon.  -- Maybe, da, falls saveConc failed, ich das gar nicht mehr nutze, da irgendetwas falsch predicted
 -- Original aus akt. Parser geht auch über mehrere Funktionen, aber das wird wahrscheinlich zu umständlich, da ich da wieder Unteritems erzeugen würde, je nachdem, welches Ri ich als nächstes besuchen würde
-completeKnownTokens _ _ left [] = ([left], [])
-completeKnownTokens w m left (T t:rights)
+--completeKnownTokens _ _ left [] = ([left], [])
+--completeKnownTokens w m left (T t:rights)
  -- = mapMaybe (\ left' -> completeKnownTokens w m left' rights) $ mapMaybe (safeConc left) $ singletons t w -- TODO Weiter Hier kommen schon mehere raus
-  = (\ts -> (ts >>= fst, snd $ head ts)) $ map (\left'' ->  completeKnownTokens w m left'' rights) 
-    [ left'
-    | left' <- mapMaybe (safeConc left) $ singletons t w
-    ]
+ -- = (\ts -> (ts >>= fst, snd $ head ts)) $ map (\left'' ->  completeKnownTokens w m left'' rights) 
+  --  [ left'
+   -- | left' <- mapMaybe (safeConc left) $ singletons t w
+    --]
     -- TODO fs am Endealle gleich? oder mach ich da etwas falsch?
     
-completeKnownTokens w m left (Var i j:rights)
-  = case i `IMap.lookup` m of
-         Just xi -> case j `IMap.lookup` xi of
-            Just r -> case safeConc left r of -- Range ist vorhanden
-                         Just left' -> completeKnownTokens w m left' rights
-                         Nothing -> ([], rights)
-            Nothing -> ([left], (Var i j):rights)
-         Nothing -> ([left], (Var i j):rights)
+--completeKnownTokens w m left (Var i j:rights)
+--  = case i `IMap.lookup` m of
+--         Just xi -> case j `IMap.lookup` xi of
+--            Just r -> case safeConc left r of -- Range ist vorhanden
+--                         Just left' -> completeKnownTokens w m left' rights
+--                         Nothing -> ([], rights)
+--            Nothing -> ([left], (Var i j):rights)
+--         Nothing -> ([left], (Var i j):rights)
 
 
+--TODONEW Muss vervoll Item bei update auch speichern, da neue Komp-Range gefunden
 
 vervoll :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq t, Eq wt, Weight wt)
         => [t] -- Word
@@ -228,9 +245,16 @@ vervoll :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq t, 
 vervoll word ios = Right app
     where
         app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
-        app trigger@(Active _ _ _ _ _ _ _ ios) (_, _, _, _, allI, allR)
-            = trace' "Vervoll" [(found, ios) -- TODO Fix weight
+        app trigger@(Active cr r w ri left [] [] completions ios) _
+            = trace' "Vervoll" [(Active cr' r w ri left' right'' fs' completions ios, ios) -- TODO Fix weight -- ri hat dann keine Aussagekraft mehr, aber nur dafür das passive Item?...Wobei, muss ja für update wissen, ob das Item schon vervoll wurde oder nicht. Brauch ich die Regel überhaupt? Ich glaub fast nicht TODONew alles in Update, dort dann auch cr' berechnen. Dennoch in allItems aufnehmen
                 |found <- (findPassiveForAllRules' (trigger:allI) allR)
+                , let cr' = IMap.insert ri left cr
+                ]
+        app trigger@(Active cr r w ri left [] (f:fs) completions ios) _
+            = trace' "Skip" [(Active cr' r w ri' left' right'' fs' completions ios, ios) -- TODO Fix weight
+                | (ri', right', fs') <- allCombinations 0 [] f fs
+                , (left', right'') <- completeKnownTokens' word completions Epsilon right'
+                , let cr' = IMap.insert ri left cr
                 ]
         app _ _ = []
 
