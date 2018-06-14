@@ -295,7 +295,7 @@ combineRule word ios = Right app
                       checkRange :: (Int, Range) -> Bool -> Bool
                       checkRange (i, usedRange) acc = case crf  IMap.!? i of
                           Just foundRange -> ((usedRange == foundRange) && acc)
-                          Nothing -> acc
+                          Nothing -> False
 -- TODO Hier irgendwie flip Funktion nutzen, damit ich FUunktion nicht 2x definiere
 
 
