@@ -13,7 +13,7 @@ module Vanda.Grammar.XRS.LCFRS.IncrementalParser
 
 import Data.Hashable (Hashable(hashWithSalt))
 import Data.Converging (Converging)
-import Data.Maybe (mapMaybe, maybeToList,catMaybes, isNothing)
+import Data.Maybe (fromMaybe, mapMaybe, maybeToList,catMaybes, isNothing)
 import Data.Range
 import Data.Semiring
 import Data.Tree (Tree)
@@ -40,7 +40,8 @@ prettyShowString :: (Show w) => w -> String
 prettyShowString s = '\"' : concatMap g (show s) ++ "\"" where
   g c    = [c]
 
-data Item nt t wt = Active (IMap.IntMap Range) (Rule nt t) wt Int Range [VarT t] (Function t) (IMap.IntMap (IMap.IntMap Range)) (IMap.IntMap wt)  | Passive (IMap.IntMap (Rule nt t)) (Rule nt t) wt (IMap.IntMap Range) (IMap.IntMap (IMap.IntMap Range)) wt deriving (Show) 
+data Item nt t wt = Active (IMap.IntMap Range) (Rule nt t) wt Int Range [VarT t] (Function t) (IMap.IntMap (IMap.IntMap Range)) wt  | Passive (IMap.IntMap (Rule nt t)) (Rule nt t) wt (IMap.IntMap Range) (IMap.IntMap (IMap.IntMap Range)) wt deriving (Show) 
+--TODONew Gewichte als Map + in Combine aktulaisern
 -- Erste IMap sind Kompa Rules
 -- Erste IMap Pass für Komp
 -- Erstes wt in Pass ist Rule Weight für Backtrace
@@ -152,7 +153,7 @@ completeKnownTokens' :: (Eq t)
                     -> Range
                     -> [VarT t]
                     -> [(Range, [VarT t])]
-completeKnownTokens' _ _ r [] = [(rs, [])]
+completeKnownTokens' _ _ r [] = [(r, [])]
 completeKnownTokens' w m r (T t:fs)
     = [ (r', fs)
         | r' <- mapMaybe (safeConc r) $ singletons t w
@@ -187,7 +188,7 @@ scanRule word iow = Right app
         app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
         app (Active cr r@(Rule ((a, _), _)) wt ri left right fs completions inside) _ 
             = [((Active cr r wt ri left' right' fs completions inside), inside)
-            |(left', right')  <- completeKnownTokens word completions left right -- Klammer ist hier nur, damit ich das so mit <- schreiben kann
+            |(left', right')  <- completeKnownTokens' word IMap.empty left right -- Klammer ist hier nur, damit ich das so mit <- schreiben kann
             , let outside = snd $ iow Map.! a -- Doesn't Change from Prediction
                 ]
         app _ _ = []
@@ -196,15 +197,15 @@ scanRule word iow = Right app
 trace' :: (Show s) => String -> s -> s
 trace' prefix s = trace ("\n" ++ prefix ++": "++ (show s) ++ "\n") s
 
-completeKnownTokensWithRI  :: (Eq t)
-                    => [t] 
-                    -> Function t -- alle Funktionen
-                    -> Int -- Current Rx, x number
-                    -> [(Range, [VarT t], Int)] -- Zusätzliches Int, da ich Ri mit übergebe, Erste Liste für Ranges, innere für singletons mehrere Ausgaben
-completeKnownTokensWithRI _ [] rx = []
-completeKnownTokensWithRI word (f:fs) rx = case (completeKnownTokens word IMap.empty Epsilon f) of
-  ([], _) -> completeKnownTokensWithRI word fs (rx + 1)
-  (lefts, right) -> [(left, right, rx)| left <- lefts] ++ (completeKnownTokensWithRI word fs (rx+1)) -- TODO ++ weg
+--completeKnownTokensWithRI  :: (Eq t)
+--                    => [t] 
+--                    -> Function t -- alle Funktionen
+--                    -> Int -- Current Rx, x number
+--                    -> [(Range, [VarT t], Int)] -- Zusätzliches Int, da ich Ri mit übergebe, Erste Liste für Ranges, innere für singletons mehrere Ausgaben
+--completeKnownTokensWithRI _ [] rx = []
+--completeKnownTokensWithRI word (f:fs) rx = case (completeKnownTokens word IMap.empty Epsilon f) of
+--  ([], _) -> completeKnownTokensWithRI word fs (rx + 1)
+--  (lefts, right) -> [(left, right, rx)| left <- lefts] ++ (completeKnownTokensWithRI word fs (rx+1)) -- TODO ++ weg
 --  where ri = length (fs) -- Deshalb erstes Ri = R0, wichtig für zuordnung in Consequences, da Vars0 0 auch bei 0 beginnt
  -- Betrachte immer nur die erste Range, 
  -- TODO Ris falschrum -> R0 hätte bei 3stelliger Funktion R2
@@ -245,15 +246,15 @@ vervoll :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq t, 
 vervoll word ios = Right app
     where
         app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
-        app trigger@(Active cr r w ri left [] [] completions ios) _
-            = trace' "Vervoll" [(Active cr' r w ri left' right'' fs' completions ios, ios) -- TODO Fix weight -- ri hat dann keine Aussagekraft mehr, aber nur dafür das passive Item?...Wobei, muss ja für update wissen, ob das Item schon vervoll wurde oder nicht. Brauch ich die Regel überhaupt? Ich glaub fast nicht TODONew alles in Update, dort dann auch cr' berechnen. Dennoch in allItems aufnehmen
-                |found <- (findPassiveForAllRules' (trigger:allI) allR)
-                , let cr' = IMap.insert ri left cr
-                ]
-        app trigger@(Active cr r w ri left [] (f:fs) completions ios) _
+--        app trigger@(Active cr r w ri left [] [] completions ios) _
+--            = trace' "Vervoll" [(Active cr' r w ri left' right'' fs' completions ios, ios) -- TODO Fix weight -- ri hat dann keine Aussagekraft mehr, aber nur dafür das passive Item?...Wobei, muss ja für update wissen, ob das Item schon vervoll wurde oder nicht. Brauch ich die Regel überhaupt? Ich glaub fast nicht TODONew alles in Update, dort dann auch cr' berechnen. Dennoch in allItems aufnehmen
+ --               |found <- (findPassiveForAllRules' (trigger:allI) allR)
+  --              , let cr' = IMap.insert ri left cr
+   --             ]
+        app trigger@(Active cr r w ri left [] (f:fs) completions ios) _ -- If not f:fs, than finshed, than we add it to chart 
             = trace' "Skip" [(Active cr' r w ri' left' right'' fs' completions ios, ios) -- TODO Fix weight
                 | (ri', right', fs') <- allCombinations 0 [] f fs
-                , (left', right'') <- completeKnownTokens' word completions Epsilon right'
+                , (left', right'') <- completeKnownTokens' word IMap.empty Epsilon right'
                 , let cr' = IMap.insert ri left cr
                 ]
         app _ _ = []
@@ -268,49 +269,34 @@ combineRule word ios = Right app
         app trigger (_, _, _, _, all, _)
          = trace' "Combine" [consequence
            | chartItem <- trace' "all in Combine" all
-           , consequence <- consequences trigger chartItem
+           , consequence <- (consequences trigger chartItem)  ++ (consequences chartItem trigger)
          ] 
         app trigger _ = trace ("Combine - Not Matched " ++ show trigger) []
     
-        consequences :: Item nt t wt -- trigger Item
-                        -> Item nt t wt -- chart Item
+        consequences :: Item nt t wt -- first Item
+                        -> Item nt t wt -- second Item
                         -> [(Item nt t wt, wt)] -- Liste nur, damit ich [] zurückgeben kann
         consequences searcher@(Active cr rule@(Rule ((_, as), _)) wt ri left ((Var i j):rights) fs completeds iws) finished@(Active crf r@(Rule ((a, _), _)) _ ri' left' [] _ _ iwf)
-            = trace' ("Consequences - First Item searches Var" ++ "\nSearch Item:" ++ (show searcher) ++ "\nFinish Item:"  ++ (show finished)) [(Active phi' rule wt ri left'' rights (completed') inside, inside)
+            = trace' ("Consequences - First Item searches Var" ++ "\nSearch Item:" ++ (show searcher) ++ "\nFinish Item:"  ++ (show finished)) [(Active cr rule wt ri left'' rights fs completed' inside, inside <.> outside)
             | j == ri' -- Betrachte ich richtiges Ri? 
             , a == (as!!i) -- Betrache ich richtiges NT?
-            , isCompatible (IMap.toList $ fromMaybe IMap.empty (i IMap.!? completeds)) -- All Ranges that are used of this NT are in the current finished Item? If nothing used by now, than empty map instead of Nothing of Maybe
+            , isCompatible (IMap.toList $ fromMaybe IMap.empty (completeds IMap.!? i)) -- All Ranges that are used of this NT are in the current finished Item? If nothing used by now, than empty map instead of Nothing of Maybe
             , left'' <- maybeToList $ safeConc left left'
-            , let completed' = doubleInsert completed i j left' 
-                  phi' = IMap.insert i r phi -- Overwriting doesn't matter
+            , let completed' = doubleInsert completeds i j left' 
                   inside =  iws <.> (iwf </> fst (ios Map.! a))
                   outside =  snd $ ios Map.! a
                 ] 
-                where isCompatible used = 
+                where isCompatible :: [(Int, Range)] -> Bool
+                      isCompatible used = 
                         foldr (checkRange) True used
-                      checkRange (i, usedRange) acc = case i IMap.!? crf of
+                      checkRange :: (Int, Range) -> Bool -> Bool
+                      checkRange (i, usedRange) acc = case crf  IMap.!? i of
                           Just foundRange -> ((usedRange == foundRange) && acc)
                           Nothing -> acc
 -- TODO Hier irgendwie flip Funktion nutzen, damit ich FUunktion nicht 2x definiere
 
 
-        consequences finished@(Active crf r@(Rule ((a, _), _)) _ ri' left' [] _ _ iwf) searcher@(Active cr rule@(Rule ((_, as), _)) wt ri left ((Var i j):rights) fs completeds iws)
-            = trace' ("Consequences - Secound Item searches Var\n Search Item:" ++ (show searcher) ++ "\n Finish Item: " ++(show finished)) [(Active phi' rule wt ri left'' rights (completed') inside, inside <.> outside)
-            | j == ri' -- Betrachte ich richtiges Ri? 
-            , a == (as!!i)
-            , isCompatible (IMap.toList $ fromMaybe IMap.empty (i IMap.!? completeds)) -- All Ranges that are used of this NT are in the current finished Item? If nothing used by now, than empty map instead of Nothing of Maybe
-            , left'' <- maybeToList $ safeConc left left'
-            , let completed' = doubleInsert completed i j left'
-                  phi' = IMap.insert i r phi -- Overwriting doesn't matter
-                  inside =  iws <.> (iwf </> fst (ios Map.! a))
-                  outside =  snd $ ios Map.! a
-                ]
-                where isCompatible used = 
-                        foldr (checkRange) True used
-                      checkRange (i, usedRange) acc = case i IMap.!? crf of
-                          Just foundRange -> ((usedRange == foundRange) && acc)
-                          Nothing -> acc
-        consequences _ _ = trace' "Consequences - Not Matched"[]
+        consequences _ _ = trace' "Consequences - Not Matched (On One Combination)"[]
 
 
 doubleInsert :: IMap.IntMap (IMap.IntMap Range) -> Int -> Int -> Range -> IMap.IntMap (IMap.IntMap Range)
@@ -425,41 +411,41 @@ completeKnownTokens _ _ _ _ = []
 
 
 -- TODO Das optimieren, erst nur mit 1 Trigger Item + Allen Items + Nur 1 Rule, dann nur mit den entsprechend nützlichen Items aus Chart
-findPassiveForAllRules' :: (Eq nt, Eq t ,Eq wt, Show nt, Show t, Show wt, Semiring wt)
-    => [Item nt t wt] --All Items
-    -> [Rule nt t] -- All Rules
-    -> [Item nt t wt] -- All new passive Items that have Range R0...Rn
-findPassiveForAllRules' _ [] = []
-findPassiveForAllRules' items (rule:rules) = trace' "findPassiveForAllRules" ((findPassiveForOneRule' (filter (\(Active _ ruleItem _ _ _ right _ _) -> rule == ruleItem && right == []) items) (trace' ("fPFAL" ++ show items ++ show rule) rule)) ++ (findPassiveForAllRules' items rules))-- Nur die Items, die auch die aktuelle Rule beinhalten und fertig sind
+--findPassiveForAllRules' :: (Eq nt, Eq t ,Eq wt, Show nt, Show t, Show wt, Semiring wt)
+    -- => [Item nt t wt] --All Items
+    -- -> [Rule nt t] -- All Rules
+    -- -> [Item nt t wt] -- All new passive Items that have Range R0...Rn
+--findPassiveForAllRules' _ [] = []
+--findPassiveForAllRules' items (rule:rules) = trace' "findPassiveForAllRules" ((findPassiveForOneRule' (filter (\(Active _ ruleItem _ _ _ right _ _) -> rule == ruleItem && right == []) items) (trace' ("fPFAL" ++ show items ++ show rule) rule)) ++ (findPassiveForAllRules' items rules))-- Nur die Items, die auch die aktuelle Rule beinhalten und fertig sind
 --TODO ++ weg
-findPassiveForOneRule' :: (Eq nt, Eq t, Eq wt, Show nt, Show t, Show wt, Semiring wt)
-    => [Item nt t wt] -- All Items with that Rule
-    -> Rule nt t -- Current Rule
-    -> [Item nt t wt] -- Found new complete passive Items
-findPassiveForOneRule' items rule =  trace' ("findPassiveForOne' Rule" ++ show rule ++ show items) [fullConcatItem
-            | r0Item@(Active phi r rw _ left _ gamma inside) <- MMap.lookup 0 itemMap -- Liste aller r0-Items TODO schau, dass dieses auch komplett durchlaufen ist
-            , fullConcatItem <- {-TODO Rein(filter (\item@(Active (Rule ((_, _), f)) _ completed _ _ _ _ _ _) -> ((length f) ==  ((IMap.size completed) +1)))-} ( glueTogether'' (Passive phi r rw (IMap.singleton 0 left) gamma inside) 1 itemMap) -- Has Item as many finished Rx as Function has Komponentes? If so, it is full, +1, because left is still in Item itself -- Das Passive vor : ist wichtig für 1-komponentige Funktionen, die sonst nicht als Passives Item aufgenommenw erden. TODO Fix
-            ]
-    where itemMap = MMap.fromList ( map (\(item@(Active _ _ _ ri _ _ _ _)) -> (ri, item)) items) --Map of form Ri->All Items that are finished for Ri
+--findPassiveForOneRule' :: (Eq nt, Eq t, Eq wt, Show nt, Show t, Show wt, Semiring wt)
+ --   => [Item nt t wt] -- All Items with that Rule
+  --  -> Rule nt t -- Current Rule
+   -- -> [Item nt t wt] -- Found new complete passive Items
+--findPassiveForOneRule' items rule =  trace' ("findPassiveForOne' Rule" ++ show rule ++ show items) [fullConcatItem
+ --           | r0Item@(Active phi r rw _ left _ gamma inside) <- MMap.lookup 0 itemMap -- Liste aller r0-Items TODO schau, dass dieses auch komplett durchlaufen ist
+  --          , fullConcatItem <- {-TODO Rein(filter (\item@(Active (Rule ((_, _), f)) _ completed _ _ _ _ _ _) -> ((length f) ==  ((IMap.size completed) +1)))-} ( glueTogether'' (Passive phi r rw (IMap.singleton 0 left) gamma inside) 1 itemMap) -- Has Item as many finished Rx as Function has Komponentes? If so, it is full, +1, because left is still in Item itself -- Das Passive vor : ist wichtig für 1-komponentige Funktionen, die sonst nicht als Passives Item aufgenommenw erden. TODO Fix
+   --         ]
+    --where itemMap = MMap.fromList ( map (\(item@(Active _ _ _ ri _ _ _ _)) -> (ri, item)) items) --Map of form Ri->All Items that are finished for Ri
 
-glueTogether'' :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt, Semiring wt)
-        => Item nt t wt -- Current Item to complete, Passive
-        -> Int -- Ri to view next
-        -> MMap.MultiMap Int (Item nt t wt) -- All Items of Rule
-        -> [Item nt t wt] -- Can contain Unfinished Items, which where MMap is empty at some point. They will be filtered out in function above
-glueTogether'' curr@(Passive phi r rw cr gamma inside) ri itemMap =
-    case MMap.lookup ri itemMap of -- Get all Items that have ri completed TODO FIx here weights and compatibility check
-        [] -> [curr]
-        riItems -> [(Passive phi'' r rw cr' gamma'' inside'')
-            | (Active phi' _ _ _ left _ gamma' inside') <- riItems
-            , isCompatible phi (IMap.toList phi')
-            , let cr' = IMap.insert ri left cr -- Add component range for ri TODO Add Compatibility Check
-            , let gamma'' = IMap.unionWith (IMap.union) gamma gamma' -- Füge Tabellen der eingesetzten Komponenten zusammen
-            , let phi'' = IMap.union phi phi' -- Dont care if something gets lost, lost rules are always the same
-            , let inside'' = inside <.> inside'
-             ] >>= (\pass -> glueTogether'' pass (ri+1) itemMap)
-    where   isCompatible phi [] = True
-            isCompatible phi ((i, r'):xs) = 
-                case phi IMap.!? i of -- Was NT also in other component used
-                    Just r'' -> if r'' == r' then isCompatible phi xs else False
-                    Nothing -> isCompatible phi xs
+--glueTogether'' :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt, Semiring wt)
+ --       => Item nt t wt -- Current Item to complete, Passive
+  --      -> Int -- Ri to view next
+   --     -> MMap.MultiMap Int (Item nt t wt) -- All Items of Rule
+    --    -> [Item nt t wt] -- Can contain Unfinished Items, which where MMap is empty at some point. They will be filtered out in function above
+--glueTogether'' curr@(Passive phi r rw cr gamma inside) ri itemMap =
+ --   case MMap.lookup ri itemMap of -- Get all Items that have ri completed TODO FIx here weights and compatibility check
+  --      [] -> [curr]
+   --     riItems -> [(Passive phi'' r rw cr' gamma'' inside'')
+    --        | (Active phi' _ _ _ left _ gamma' inside') <- riItems
+     --       , isCompatible phi (IMap.toList phi')
+      --      , let cr' = IMap.insert ri left cr -- Add component range for ri TODO Add Compatibility Check
+       --     , let gamma'' = IMap.unionWith (IMap.union) gamma gamma' -- Füge Tabellen der eingesetzten Komponenten zusammen
+        --    , let phi'' = IMap.union phi phi' -- Dont care if something gets lost, lost rules are always the same
+         --   , let inside'' = inside <.> inside'
+--             ] >>= (\pass -> glueTogether'' pass (ri+1) itemMap)
+ --   where   isCompatible phi [] = True
+  --          isCompatible phi ((i, r'):xs) = 
+   --             case phi IMap.!? i of -- Was NT also in other component used
+    --                Just r'' -> if r'' == r' then isCompatible phi xs else False
+     --               Nothing -> isCompatible phi xs
