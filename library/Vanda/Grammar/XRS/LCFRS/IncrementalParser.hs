@@ -77,7 +77,7 @@ parse' (rmap, iow, s') bw tops w
       rules = (initialPrediction w (s' >>= (`MMap.lookup` rmap)) iow)
             : predictionRule w (map snd $ MMap.toList rmap) iow -- Mache aus Rule Map eine Liste aller Rules TODO Räume Regeln auf
             : scanRule w iow -- Mache aus Rule Map eine Liste aller Rules
-            : combineRule w iow
+            : combineRule iow
             : [complete w iow]
 
 -- | Prediction rule for rules of initial nonterminals.
@@ -87,13 +87,13 @@ initialPrediction :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t, Sho
                   -> [(Rule nt t, wt)]
                   -> Map.HashMap nt (wt, wt)
                   -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
-initialPrediction word srules ios 
+initialPrediction word srules iow 
   = Left [ (Active IMap.empty r w ri left right'' fs' IMap.empty insides, heuristic)  
       | (r@(Rule ((_, as), (f:fs))), w) <- srules -- TODO Was, wenn Variable Fan-Out 0?
       , let fsindex = prepareComps fs
       , ((ri, right'), fs') <- allCombinations [] (0, f) fsindex
       , (left, right'') <- completeNextTerminals word Epsilon right'
-      , let insides = IMap.fromList $ zip [0..] (map (fst . (ios Map.!)) as)
+      , let insides = IMap.fromList $ zip [0..] (map (fst . (iow Map.!)) as)
       , let heuristic = w <.> calcInsideWeight insides
       ]
 
@@ -130,7 +130,7 @@ predictionRule :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t, Show n
                   -> [(Rule nt t, wt)]
                   -> Map.HashMap nt (wt, wt)
                   -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
-predictionRule word rules ios 
+predictionRule word rules iow 
   = Left 
       [ (Active IMap.empty r w ri left right'' fs' IMap.empty insides, heuristic)  --TODO Darf fs theoretisch nicht durch [] ersetzen, aber da es sowieso bald wegkommt, ist das egal
       | (r@(Rule ((a, as), (f:fs))), w) <- rules -- TODO, was ist, wenn Rule nicht f:fs ist, sondern nur 1 ELement ist. Geht das überhaupt?
@@ -138,8 +138,8 @@ predictionRule word rules ios
       , ((ri, right'), fs') <- allCombinations [] (0, f) fsindex
       , (left, right'') <- completeNextTerminals word Epsilon right'
       --, (left, right,ri) <- completeKnownTokensWithRI word fs 0 -- Jede Funktion einmal komplete known Tokens übegeben -> 1 Item für jedes Ri
-      , let insides = IMap.fromList $ zip [0..] (map (fst . (ios Map.!)) as)
-            outside = snd $ ios Map.! a
+      , let insides = IMap.fromList $ zip [0..] (map (fst . (iow Map.!)) as)
+            outside = snd $ iow Map.! a
             heuristic = w <.> (calcInsideWeight insides) <.> outside
       ]
 
@@ -164,29 +164,24 @@ complete :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq t,
         -> Map.HashMap nt (wt, wt) -- weights
         -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
 -- TODO Parameter von Ded-Regeln anpassen, brauche z.B. ios bei Scan nicht oder word bei complete
-complete word ios = Right app
+complete word iow = Right app
     where
         app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
---        app trigger@(Active cr r w ri left [] [] completions ios) _
- --               |found <- (findPassiveForAllRules' (trigger:allI) allR)
-  --              , let cr' = IMap.insert ri left cr
-   --             ]
         app (Active cr r@(Rule ((a,_), _)) wt ri left [] (f:fs) completions insides) _ -- If item isn't f:fs, then it's finshed, so we add it to chart in update function
             =  [(Active cr' r wt ri' left' right'' fs' completions insides, heuristic)
                 | ((ri', right'), fs') <- allCombinations [] f fs
                 , (left', right'') <- completeNextTerminals word Epsilon right'
                 , let cr' = IMap.insert ri left cr
-                , let outside = snd $ ios Map.! a -- Doesn't Change from Prediction
+                , let outside = snd $ iow Map.! a -- Doesn't Change from Prediction
                       heuristic = wt <.> (calcInsideWeight insides) <.> outside
                 ]
         app _ _ = []
 
 
 combineRule :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq t, Weight wt)
-        => [t] -- Word
-        -> Map.HashMap nt (wt, wt) -- weights
+        => Map.HashMap nt (wt, wt) -- weights
         -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
-combineRule _ ios = Right app
+combineRule iow = Right app
     where
         app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
         app trigger (_, allItems)
@@ -206,7 +201,7 @@ combineRule _ ios = Right app
             , left'' <- maybeToList $ safeConc left left'
             , let completed' = doubleInsert completeds i j left' 
                   insides' = IMap.insert i (wtf <.> calcInsideWeight insidesf) insidess -- THOMAS so richtig?
-                  outside =  snd $ ios Map.! a
+                  outside =  snd $ iow Map.! a
                   heuristic = wt <.> (calcInsideWeight insides') <.> outside
                 ] 
                 where isCompatible :: [(Int, Range)] -> Bool
