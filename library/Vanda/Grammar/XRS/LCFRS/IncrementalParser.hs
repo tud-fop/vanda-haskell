@@ -1,10 +1,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Vanda.Grammar.XRS.LCFRS.IncrementalParser
-  ( testParse,
-    parse,
+  ( parse,
     parse',
-    exampleGrammar,
     Container
   ) where
 
@@ -19,31 +17,15 @@ import Data.Semiring
 import Data.Tree (Tree)
 import Data.Weight
 import Vanda.Grammar.PMCFG
-import Debug.Trace(trace)
 
 import qualified Data.HashMap.Lazy             as Map
 
 import qualified Data.MultiHashMap             as MMap
 import qualified Data.IntMap                   as IMap
-import qualified Data.HashSet                  as Set
 import qualified Vanda.Grammar.XRS.LCFRS.Chart as C
-
-testParse :: String
-testParse = "File Connected"
-
-
-exampleGrammar :: String
-exampleGrammar = prettyPrintWPMCFG prettyShowString prettyShowString exampleWPMCFG
-
-prettyShowString :: (Show w) => w -> String
-prettyShowString s = '\"' : concatMap g (show s) ++ "\"" where
-  g c    = [c]
-
-trace' :: (Show s) => String -> s -> s
-trace' prefix s = trace ("\n" ++ prefix ++": "++ (show s) ++ "\n") s
+--TODO Doch eine 2x HashMap nutzen
 
 data Item nt t wt = Active (IMap.IntMap Range) (Rule nt t) wt Int Range [VarT t] [(Int, [VarT t])] (IMap.IntMap (IMap.IntMap Range)) (IMap.IntMap wt) deriving (Show) 
--- TODONew Gewichte als Map + in Combine aktulaisern
 
 instance (Eq nt, Eq t) => Eq (Item nt t wt) where
   (Active cr r _ ri left right nc completions _) == (Active cr' r' _ ri' left' right' nc' completions' _) 
@@ -122,7 +104,7 @@ calcInsideWeight insides = foldl (<.>) one (map snd (IMap.toList insides ))
 prepareComps :: Function t -> [(Int, [VarT t])]
 prepareComps = zip [1..]
 
--- Get all Componentens of a function with all remaining components
+-- Get all Componentens of a function with all remaining componentsItems
 allCombinations :: [(Int, [VarT t])]  -> (Int, [VarT t]) -> [(Int, [VarT t])] -> [((Int, [VarT t]),  [(Int, [VarT t])])]
 allCombinations xs x [] = [(x, xs)]
 allCombinations xs x y'@(y:ys) = (x, xs ++ y') : (allCombinations (x:xs) y ys)
@@ -140,7 +122,6 @@ completeNextTerminals w r (T t:fs)
        ] >>= uncurry (completeNextTerminals w )
 --Warum in Active Parser noch schauen nach Variablen? -> Weil ich evnt. durch komplett eingesetzte NTs schon weitere Var-Ranges habe
 completeNextTerminals _ r fs@((Var _ _):_) = [(r, fs)]
-completeNextTerminals _ _ _ = []
 -- | Prediction rule for rules of initial nonterminals.
 -- Predicted alles, bei dem Terminale am Anfang stehen 
 -- TODO Mit initPred zusammenwerfen?
@@ -175,7 +156,6 @@ scanRule word iow = Right app
             , let outside = snd $ iow Map.! a -- Doesn't Change from Prediction
                   heuristic = wt <.> (calcInsideWeight insides) <.> outside
                 ]
-        app _ _ = []
 
 
 
@@ -191,8 +171,8 @@ complete word ios = Right app
  --               |found <- (findPassiveForAllRules' (trigger:allI) allR)
   --              , let cr' = IMap.insert ri left cr
    --             ]
-        app trigger@(Active cr r@(Rule ((a,_), _)) wt ri left [] (f:fs) completions insides) _ -- If item isn't f:fs, then it's finshed, so we add it to chart in update function
-            =  [(Active cr' r wt ri' left' right'' fs' completions insides, heuristic) -- TODO Fix weight
+        app (Active cr r@(Rule ((a,_), _)) wt ri left [] (f:fs) completions insides) _ -- If item isn't f:fs, then it's finshed, so we add it to chart in update function
+            =  [(Active cr' r wt ri' left' right'' fs' completions insides, heuristic)
                 | ((ri', right'), fs') <- allCombinations [] f fs
                 , (left', right'') <- completeNextTerminals word Epsilon right'
                 , let cr' = IMap.insert ri left cr
@@ -206,20 +186,19 @@ combineRule :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq
         => [t] -- Word
         -> Map.HashMap nt (wt, wt) -- weights
         -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
-combineRule word ios = Right app
+combineRule _ ios = Right app
     where
         app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
-        app trigger (_, all)
+        app trigger (_, allItems)
          =  [consequence
-           | chartItem <- all
+           | chartItem <- allItems
            , consequence <- (consequences trigger chartItem)  ++ (consequences chartItem trigger)
          ] 
-        app trigger _ = []
     
         consequences :: Item nt t wt -- first Item
                         -> Item nt t wt -- second Item
                         -> [(Item nt t wt, wt)] -- Liste nur, damit ich [] zurückgeben kann
-        consequences searcher@(Active cr rule@(Rule ((_, as), _)) wt ri left ((Var i j):rights) fs completeds insidess) finished@(Active crf r@(Rule ((a, _), _)) wtf ri' left' [] _ _ insidesf)
+        consequences (Active cr rule@(Rule ((_, as), _)) wt ri left ((Var i j):rights) fs completeds insidess) (Active crf (Rule ((a, _), _)) wtf ri' left' [] _ _ insidesf)
             = [(Active cr rule wt ri left'' rights fs completed' insides', heuristic) 
             | j == ri' -- Betrachte ich richtiges Ri? 
             , a == (as!!i) -- Betrache ich richtiges NT?
@@ -234,27 +213,27 @@ combineRule word ios = Right app
                       isCompatible used = 
                         foldr (checkRange) True used
                       checkRange :: (Int, Range) -> Bool -> Bool
-                      checkRange (i, usedRange) acc = case crf  IMap.!? i of
+                      checkRange (compi, usedRange) acc = case crf  IMap.!? compi of
                           Just foundRange -> ((usedRange == foundRange) && acc)
                           Nothing -> False
 
         consequences _ _ = []
 
 doubleInsert :: IMap.IntMap (IMap.IntMap Range) -> Int -> Int -> Range -> IMap.IntMap (IMap.IntMap Range)
-doubleInsert map i j r = IMap.insertWith IMap.union i (IMap.singleton j r) map
+doubleInsert m i j r = IMap.insertWith IMap.union i (IMap.singleton j r) m
    
 update :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt, Hashable nt, Semiring wt) => Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
 -- TODONew Chart kürzen + Optimieren (Zuerst Rules rausschmeißen, Dann AllItems in eine Map
-update (p, all) item@(Active cr r@(Rule ((nt, _), _)) wt ri left [] [] completed insides) =
+update (p, allItems) item@(Active cr r@(Rule ((nt, _), _)) wt ri left [] [] completed insides) =
     case getRangevector cr' of
         Just crv ->  case getBacktrace r wt completed of 
             Just bt -> case C.insert p nt crv bt (calcInsideWeight insides) of -- THOMAS richtig?
-                (p', isnew) -> ((p',  addIfNew item all), isnew || (not $ item `elem` all))
-            Nothing -> ((p, all), False)
-        Nothing -> ((p, all), False)
+                (p', isnew) -> ((p',  addIfNew item allItems), isnew || (not $ item `elem` allItems))
+            Nothing -> ((p, allItems), False)
+        Nothing -> ((p, allItems), False)
     where cr' = IMap.insert ri left cr
 
-update (p, all) item = ((p, (addIfNew item all)), not $ item `elem` all) -- Nicht neu
+update (p, allItems) item = ((p, (addIfNew item allItems)), not $ item `elem` allItems) -- Nicht neu
 
 getRangevector :: IMap.IntMap Range -> Maybe Rangevector
 getRangevector cr = fromList $ map snd $ IMap.toAscList cr 
