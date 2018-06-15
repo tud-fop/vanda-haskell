@@ -259,7 +259,24 @@ update (p, a, k, all) item@(Active cr r@(Rule ((nt, _), _)) wt ri left [] [] com
         Nothing -> ((p, a, k, item:all), False)
     where cr' = IMap.insert ri left cr
 
+--update (p, a, k, all) item = ((p, a, addNewKnown item k, all),  True) --TODO True anders
 update (p, a, k, all) item = ((p,a, k, trace' ("Update - All Items Without New Passive" ++ (show $ not $ item `elem` all)) (addIfNew item all)), not $ item `elem` all) -- Nicht neu
+
+addNewKnown :: (Eq nt, Hashable nt) => Item nt t wt -> MMap.MultiMap (nt, Int) (Item nt t wt) -> MMap.MultiMap (nt, Int) (Item nt t wt) -- Map Variablen onto List of Active Items, that need NT in the next Step
+addNewKnown item known = case getLastVarT item of
+    Just (nt, j) -> MMap.insert (nt,j) item known
+    Nothing -> known
+
+-- Get Last Completed Component
+getLastVarT :: (Eq nt, Hashable nt) => Item nt t wt -> Maybe (nt, Int)
+getLastVarT item@(Active _ (Rule ((a, as), fs)) _ ri _ right _ _ _ ) = case length fullComp == length right of
+        False -> case fromVar $ fullComp !! lastToken of
+            Just (i, j) -> Just ((as !! i) , j)
+            Nothing -> Nothing
+        True -> Nothing -- No Component completed
+    where   fullComp = fs !! ri
+            lastToken = (length fullComp) - (length right) - 1
+getLastVarT _ = Nothing
 
 getRangevector :: IMap.IntMap Range -> Maybe Rangevector
 getRangevector cr = fromList $ map snd $ IMap.toAscList cr 
