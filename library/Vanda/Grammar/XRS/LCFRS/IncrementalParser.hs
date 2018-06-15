@@ -87,14 +87,13 @@ parse' :: forall nt t wt.(Show nt, Show t, Show wt, Hashable nt, Hashable t, Eq 
        -> [t] -- Word
        -> [Tree (Rule nt t)]
 parse' (rmap, iow, s') bw tops w
-  = trace' "Trees" (C.parseTrees tops (trace' "Start Rules" s')
+  = C.parseTrees tops s'
     (singleton $ entire w) -- Goal Item 
-  $ (\ (e,  _) -> (trace' "Passive Items End" e)) -- parse Trees just needs passive Items from Container
-   $ (\container@(_,all) -> (trace ("\nAll Items End: " ++ ( show all) ++ "\n") container))
-  $ C.chartify (C.empty, []) update rules bw tops)
+  $ (\ (e,  _) -> e) -- parse Trees just needs passive Items from Container
+  $ C.chartify (C.empty, []) update rules bw tops
     where
       rules = (initialPrediction w (s' >>= (`MMap.lookup` rmap)) iow)
-            : predictionRule w (trace' "All Rules" (map snd $ MMap.toList (trace' "Map with all Rules" rmap))) iow -- Mache aus Rule Map eine Liste aller Rules
+            : predictionRule w (map snd $ MMap.toList rmap) iow -- Mache aus Rule Map eine Liste aller Rules TODO Räume Regeln auf
             : scanRule w iow -- Mache aus Rule Map eine Liste aller Rules
             : combineRule w iow
             : [complete w iow]
@@ -107,15 +106,14 @@ initialPrediction :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t, Sho
                   -> Map.HashMap nt (wt, wt)
                   -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
 initialPrediction word srules ios 
-  = Left 
-      (trace' "initPred" [ (Active IMap.empty r w ri left right'' fs' IMap.empty insides, heuristic)  
-      | (r@(Rule ((_, as), (f:fs))), w) <- (trace' "Rules" srules) -- TODO Was, wenn Variable Fan-Out 0?
+  = Left [ (Active IMap.empty r w ri left right'' fs' IMap.empty insides, heuristic)  
+      | (r@(Rule ((_, as), (f:fs))), w) <- srules -- TODO Was, wenn Variable Fan-Out 0?
       , let fsindex = prepareComps fs
-      , ((ri, right'), fs') <- trace' "allComb" (allCombinations [] (0, f) fsindex)
+      , ((ri, right'), fs') <- allCombinations [] (0, f) fsindex
       , (left, right'') <- completeNextTerminals word Epsilon right'
       , let insides = IMap.fromList $ zip [0..] (map (fst . (ios Map.!)) as)
       , let heuristic = w <.> calcInsideWeight insides
-      ] )
+      ]
 
 calcInsideWeight :: forall wt. (Semiring wt) => IMap.IntMap wt -> wt
 calcInsideWeight insides = foldl (<.>) one (map snd (IMap.toList insides ))
@@ -137,7 +135,7 @@ completeNextTerminals :: (Eq t, Show t)
                     -> [(Range, [VarT t])]
 completeNextTerminals _ r [] = [(r, [])]
 completeNextTerminals w r (T t:fs)
-    = trace' ("comT;" ++ show t ++ show fs) [ (r', fs)
+    = [ (r', fs)
         | r' <- mapMaybe (safeConc r) $ singletons t w
        ] >>= uncurry (completeNextTerminals w )
 --Warum in Active Parser noch schauen nach Variablen? -> Weil ich evnt. durch komplett eingesetzte NTs schon weitere Var-Ranges habe
@@ -153,16 +151,16 @@ predictionRule :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t, Show n
                   -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
 predictionRule word rules ios 
   = Left 
-      (trace' "Pred" [ (Active IMap.empty r w ri left right'' fs' IMap.empty insides, heuristic)  --TODO Darf fs theoretisch nicht durch [] ersetzen, aber da es sowieso bald wegkommt, ist das egal
-      | (r@(Rule ((a, as), (f:fs))), w) <- (trace' "Rules" rules) -- TODO, was ist, wenn Rule nicht f:fs ist, sondern nur 1 ELement ist. Geht das überhaupt?
+      [ (Active IMap.empty r w ri left right'' fs' IMap.empty insides, heuristic)  --TODO Darf fs theoretisch nicht durch [] ersetzen, aber da es sowieso bald wegkommt, ist das egal
+      | (r@(Rule ((a, as), (f:fs))), w) <- rules -- TODO, was ist, wenn Rule nicht f:fs ist, sondern nur 1 ELement ist. Geht das überhaupt?
       , let fsindex = prepareComps fs
-      , ((ri, right'), fs') <- trace' "allCombpR" (allCombinations [] (0, f) fsindex)
-      , (left, right'') <- trace' ("complTok" ++ show word ++ show right' ) (completeNextTerminals word Epsilon right')
+      , ((ri, right'), fs') <- allCombinations [] (0, f) fsindex
+      , (left, right'') <- completeNextTerminals word Epsilon right'
       --, (left, right,ri) <- completeKnownTokensWithRI word fs 0 -- Jede Funktion einmal komplete known Tokens übegeben -> 1 Item für jedes Ri
       , let insides = IMap.fromList $ zip [0..] (map (fst . (ios Map.!)) as)
             outside = snd $ ios Map.! a
             heuristic = w <.> (calcInsideWeight insides) <.> outside
-      ] )
+      ]
 
 scanRule :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq t, Weight wt)
         => [t] -- Word
@@ -172,7 +170,7 @@ scanRule word iow = Right app
     where
         app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
         app (Active cr r@(Rule ((a, _), _)) wt ri left right fs completions insides) _ 
-            = trace' "Scan"[((Active cr r wt ri left' right' fs completions insides), heuristic)
+            = [((Active cr r wt ri left' right' fs completions insides), heuristic)
             |(left', right')  <- completeNextTerminals word left right -- Klammer ist hier nur, damit ich das so mit <- schreiben kann
             , let outside = snd $ iow Map.! a -- Doesn't Change from Prediction
                   heuristic = wt <.> (calcInsideWeight insides) <.> outside
@@ -194,7 +192,7 @@ complete word ios = Right app
   --              , let cr' = IMap.insert ri left cr
    --             ]
         app trigger@(Active cr r@(Rule ((a,_), _)) wt ri left [] (f:fs) completions insides) _ -- If item isn't f:fs, then it's finshed, so we add it to chart in update function
-            = trace' "Skip" [(Active cr' r wt ri' left' right'' fs' completions insides, heuristic) -- TODO Fix weight
+            =  [(Active cr' r wt ri' left' right'' fs' completions insides, heuristic) -- TODO Fix weight
                 | ((ri', right'), fs') <- allCombinations [] f fs
                 , (left', right'') <- completeNextTerminals word Epsilon right'
                 , let cr' = IMap.insert ri left cr
@@ -212,17 +210,17 @@ combineRule word ios = Right app
     where
         app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
         app trigger (_, all)
-         = trace' "Combine" [consequence
-           | chartItem <- trace' "all in Combine" all
+         =  [consequence
+           | chartItem <- all
            , consequence <- (consequences trigger chartItem)  ++ (consequences chartItem trigger)
          ] 
-        app trigger _ = trace ("Combine - Not Matched " ++ show trigger) []
+        app trigger _ = []
     
         consequences :: Item nt t wt -- first Item
                         -> Item nt t wt -- second Item
                         -> [(Item nt t wt, wt)] -- Liste nur, damit ich [] zurückgeben kann
         consequences searcher@(Active cr rule@(Rule ((_, as), _)) wt ri left ((Var i j):rights) fs completeds insidess) finished@(Active crf r@(Rule ((a, _), _)) wtf ri' left' [] _ _ insidesf)
-            = trace' ("Consequences - First Item searches Var" ++ "\nSearch Item:" ++ (show searcher) ++ "\nFinish Item:"  ++ (show finished)) [(Active cr rule wt ri left'' rights fs completed' insides', heuristic) 
+            = [(Active cr rule wt ri left'' rights fs completed' insides', heuristic) 
             | j == ri' -- Betrachte ich richtiges Ri? 
             , a == (as!!i) -- Betrache ich richtiges NT?
             , isCompatible (IMap.toList $ fromMaybe IMap.empty (completeds IMap.!? i)) -- All Ranges that are used of this NT are in the current finished Item? If nothing used by now, than empty map instead of Nothing of Maybe
@@ -240,7 +238,7 @@ combineRule word ios = Right app
                           Just foundRange -> ((usedRange == foundRange) && acc)
                           Nothing -> False
 
-        consequences _ _ = trace' "Consequences - Not Matched (On One Combination)"[]
+        consequences _ _ = []
 
 doubleInsert :: IMap.IntMap (IMap.IntMap Range) -> Int -> Int -> Range -> IMap.IntMap (IMap.IntMap Range)
 doubleInsert map i j r = IMap.insertWith IMap.union i (IMap.singleton j r) map
@@ -256,7 +254,7 @@ update (p, all) item@(Active cr r@(Rule ((nt, _), _)) wt ri left [] [] completed
         Nothing -> ((p, all), False)
     where cr' = IMap.insert ri left cr
 
-update (p, all) item = ((p, trace' ("Update - All Items Without New Passive" ++ (show $ not $ item `elem` all)) (addIfNew item all)), not $ item `elem` all) -- Nicht neu
+update (p, all) item = ((p, (addIfNew item all)), not $ item `elem` all) -- Nicht neu
 
 getRangevector :: IMap.IntMap Range -> Maybe Rangevector
 getRangevector cr = fromList $ map snd $ IMap.toAscList cr 
@@ -268,10 +266,10 @@ getBacktrace ::
     -> Maybe (C.Backtrace nt t wt)
 getBacktrace rule iw completions = 
     case containsANothing rvs of
-        Just rvs' -> Just $ C.Backtrace rule iw (trace' "Backtrace" rvs')  -- Rangevectors von jedem NT  - Ist das so richtig?
+        Just rvs' -> Just $ C.Backtrace rule iw rvs'  -- Rangevectors von jedem NT  - Ist das so richtig?
         Nothing -> Nothing
     where rvs = [rv
-                | rangesOfOneNT <- trace' "Backtrace Completions" (IMap.elems completions)
+                | rangesOfOneNT <- (IMap.elems completions)
                 , let rv = fromList $ IMap.elems rangesOfOneNT
                 ]
 
