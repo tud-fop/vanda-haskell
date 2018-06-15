@@ -70,10 +70,8 @@ instance (Hashable nt, Hashable t) => Hashable (Item nt t wt) where
 
 type Container nt t wt = ( C.Chart nt t wt -- Passive Items
                          , MMap.MultiMap (nt, Int) (Item nt t wt) --Map Variablen onto List of Active Items, that need NT in the next Step
-                         , Set.HashSet nt -- All NTs, which are not init. right now
                          , MMap.MultiMap (nt, Int) (Item nt t wt) -- Map, welche zeigt, wer alles schon Variable aufgelöst hat (known)
                          , [Item nt t wt] -- All Items in Chart(all), TODO Optimize this
-                         , [Rule nt t]  --All Rules
                          )
 
 parse :: forall nt t wt.(Show nt, Show t, Show wt, Hashable nt, Hashable t, Eq t, Ord wt, Weight wt, Ord nt, Converging wt) 
@@ -93,9 +91,9 @@ parse' :: forall nt t wt.(Show nt, Show t, Show wt, Hashable nt, Hashable t, Eq 
 parse' (rmap, iow, s') bw tops w
   = trace' "Trees" (C.parseTrees tops (trace' "Start Rules" s')
     (singleton $ entire w) -- Goal Item 
-  $ (\ (e, _, _, _, _, _) -> (trace' "Passive Items End" e)) -- parse Trees just needs passive Items from Container
-   $ (\container@(_,_,_,_,all,_) -> (trace ("\nAll Items End: " ++ ( show all) ++ "\n") container))
-  $ C.chartify (C.empty, MMap.empty, nset, MMap.empty, [], (map fst $ map snd $ MMap.toList rmap)) update rules bw tops)
+  $ (\ (e,  _, _, _) -> (trace' "Passive Items End" e)) -- parse Trees just needs passive Items from Container
+   $ (\container@(_,_,_,all) -> (trace ("\nAll Items End: " ++ ( show all) ++ "\n") container))
+  $ C.chartify (C.empty, MMap.empty, MMap.empty, []) update rules bw tops)
     where
       nset = Set.fromList $ filter (not . (`elem` s')) $ Map.keys rmap
       
@@ -216,7 +214,7 @@ combineRule :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq
 combineRule word ios = Right app
     where
         app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
-        app trigger (_, _, _, _, all, _)
+        app trigger (_, _, _, all)
          = trace' "Combine" [consequence
            | chartItem <- trace' "all in Combine" all
            , consequence <- (consequences trigger chartItem)  ++ (consequences chartItem trigger)
@@ -252,16 +250,16 @@ doubleInsert map i j r = IMap.insertWith IMap.union i (IMap.singleton j r) map
    
 update :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt, Hashable nt, Semiring wt) => Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
 -- TODONew Chart kürzen + Optimieren (Zuerst Rules rausschmeißen, Dann AllItems in eine Map
-update (p, a, n, k, all, allRules) item@(Active cr r@(Rule ((nt, _), _)) wt ri left [] [] completed insides) =
+update (p, a, k, all) item@(Active cr r@(Rule ((nt, _), _)) wt ri left [] [] completed insides) =
     case getRangevector cr' of
         Just crv ->  case getBacktrace r wt completed of 
             Just bt -> case C.insert p nt crv bt (calcInsideWeight insides) of -- THOMAS richtig?
-                (p', isnew) -> ((p', a, n, k, item:all, allRules), isnew || (not $ item `elem` all))
-            Nothing -> ((p, a, n, k, all, allRules), False)
-        Nothing -> ((p, a, n, k, item:all, allRules), False)
+                (p', isnew) -> ((p', a, k, item:all), isnew || (not $ item `elem` all))
+            Nothing -> ((p, a, k, all), False)
+        Nothing -> ((p, a, k, item:all), False)
     where cr' = IMap.insert ri left cr
 
-update (p, a, n, k, all, allRules) item = ((p,a,n, k, trace' ("Update - All Items Without New Passive" ++ (show $ not $ item `elem` all)) (addIfNew item all), allRules), not $ item `elem` all) -- Nicht neu
+update (p, a, k, all) item = ((p,a, k, trace' ("Update - All Items Without New Passive" ++ (show $ not $ item `elem` all)) (addIfNew item all)), not $ item `elem` all) -- Nicht neu
 
 getRangevector :: IMap.IntMap Range -> Maybe Rangevector
 getRangevector cr = fromList $ map snd $ IMap.toAscList cr 
