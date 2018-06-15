@@ -3,6 +3,7 @@
 module Vanda.Grammar.XRS.LCFRS.IncrementalParser
   ( testParse,
     parse,
+    parse',
     exampleGrammar,
     Container
   ) where

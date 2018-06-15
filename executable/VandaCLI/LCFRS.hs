@@ -41,6 +41,7 @@ import           Vanda.Grammar.PMCFG (WPMCFG(..), integerize, deintegerize, pos,
 import qualified Vanda.Grammar.XRS.LCFRS.CYKParser    as CYK
 import qualified Vanda.Grammar.XRS.LCFRS.NaiveParser  as Naive
 import qualified Vanda.Grammar.XRS.LCFRS.ActiveParser as Active
+import qualified Vanda.Grammar.XRS.LCFRS.IncrementalParser as Incremental
 import           Control.Arrow (second)
 import           Control.Exception.Base (evaluate)
 import           Data.Interner
@@ -76,7 +77,7 @@ data Args
 
 data BinarizationStrategy = Naive | Optimal | Hybrid Int deriving (Eq, Show)
 
-data ParsingAlgorithm = CYK | NaiveActive | Active deriving (Eq, Show, Read)
+data ParsingAlgorithm = CYK | NaiveActive | Active | Incremental deriving (Eq, Show, Read)
 data ParsingOutput = POS | Derivation deriving (Eq, Show, Read)
 
 
@@ -126,7 +127,7 @@ cmdArgs
     flagArgGrammar
       = flagArg (\ a x -> Right x{argGrammar = a}) "GRAMMAR"
     flagAlgorithmOption
-      = flagReq ["algorithm", "a"] (\ a x -> Right x{flagAlgorithm = read a}) "CYK/NaiveActive/Active" "solution algorithm, default is 'Active'"
+      = flagReq ["algorithm", "a"] (\ a x -> Right x{flagAlgorithm = read a}) "CYK/NaiveActive/Active/Incremental" "solution algorithm, default is 'Active'"
     flagDisplayOption
       = flagReq ["print"] (\ a x -> Right x{flagOutput = read a}) "POS/Derivation" "display solutions POS tags or full derivation (default)"
     flagBeamwidth
@@ -186,12 +187,14 @@ mainArgs (Parse algorithm grFile uw display bw trees itime)
                                                             (filtertime', urs') <- timeItT (return $! prepare urs intSent)
                                                             return (filtertime', case algorithm of CYK -> CYK.parse' urs'
                                                                                                    NaiveActive -> Naive.parse' urs'
-                                                                                                   Active -> Active.parse' urs')
+                                                                                                   Active -> Active.parse' urs'
+                                                                                                   Incremental -> Incremental.parse' urs')
                                                     else do let wrs' = WPMCFG inits $ map (second probabilistic) wrs
                                                             (filtertime', wrs'') <- timeItT (return $! prepare wrs' intSent)
                                                             return (filtertime', case algorithm of CYK -> CYK.parse' wrs''
                                                                                                    NaiveActive -> Naive.parse' wrs''
-                                                                                                   Active -> Active.parse' wrs'')
+                                                                                                   Active -> Active.parse' wrs''
+                                                                                                   Incremental -> Incremental.parse' wrs'')
                            (parsetime, mParseTrees) <- timeItT $ timeout (itime*1000000) (return $! parse bw trees intSent)
                            let parseTrees = case mParseTrees of
                                                  Nothing -> []
