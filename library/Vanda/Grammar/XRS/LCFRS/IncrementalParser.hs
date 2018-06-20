@@ -70,8 +70,7 @@ parse' (rmap, iow, s') bw tops w
     where
       rules = (initialPrediction w (s' >>= (`MMap.lookup` rmap)) iow)
             : predictionRule w (map snd $ MMap.toList rmap) iow
-            : combineRule w iow
-            : [complete w iow]
+            : [combineRule w iow]
 
 -- Prediction rule for rules of initial nonterminals.
 initialPrediction :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t, Show nt, Show t, Show wt) 
@@ -80,11 +79,10 @@ initialPrediction :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t, Sho
                   -> Map.HashMap nt (wt, wt)
                   -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
 initialPrediction word srules iow 
-  = Left [ (Active IMap.empty r w ri left right'' fs' IMap.empty insides, heuristic)  
+  = Left [ (Active cr' r w ri' left' right' fs' IMap.empty insides, heuristic)  
       | (r@(Rule ((_, as), (f:fs))), w) <- srules -- TODO Was, wenn Variable Fan-Out 0?
       , let fsindex = prepareComps fs
-      , ((ri, right'), fs') <- allCombinations [] (0, f) fsindex
-      , (left, right'') <- completeNextTerminals word Epsilon right'
+      , (cr', ri', left', right', fs') <- completeNextTerminals word IMap.empty 0 Epsilon f fsindex
       , let insides = IMap.fromList $ zip [0..] (map (fst . (iow Map.!)) as)
       , let heuristic = w <.> calcInsideWeight insides
       ]
@@ -109,8 +107,8 @@ completeNextTerminals :: (Eq t, Show t)
                     -> Range -- Curr Left
                     -> [VarT t] -- Curr Right
                     -> [(Int, [VarT t])] -- Next Components
-                    -> [([(Int, Range)], Int, Range, [VarT t], [(Int, [VarT t])])] -- Completed Components with Index, curr Left, curr Index, next Functions
-completeNextTerminals _ cr ri left [] [] = [(cr, ri, r, [], [])]
+                    -> [(IMap.IntMap Range, Int, Range, [VarT t], [(Int, [VarT t])])] -- Completed Components with Index, curr Left, curr Index, next Functions
+completeNextTerminals _ cr ri left [] [] = [(cr, ri, left, [], [])]
 -- Complete Rule Part
 completeNextTerminals w cr ri left [] ((fi, f):fs) = [(cr', ri', Epsilon, right', fs')
     | ((ri', right'), fs') <- allCombinations [] (fi, f) fs
@@ -123,7 +121,7 @@ completeNextTerminals w cr ri left (T t:rights) fs
         | left' <- mapMaybe (safeConc left) $ singletons t w
        ] >>= (\left -> completeNextTerminals w cr ri left rights fs)
 -- Have to Complete in Next Step -> Stop this Method
-completeNextTerminals _ cr ri left right@((Var _ _):_) fs = [cr, ri, left, right, fs]
+completeNextTerminals _ cr ri left right@((Var _ _):_) fs = [(cr, ri, left, right, fs)]
 --NIKLAS Warum in Active Parser noch schauen nach Variablen? -> Weil ich evnt. durch komplett eingesetzte NTs schon weitere Var-Ranges habe
 --  Prediction rule for rules of not initial nonterminals.
 predictionRule :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t, Show nt, Show t, Show wt) 
@@ -133,32 +131,14 @@ predictionRule :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t, Show n
                   -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
 predictionRule word rules iow 
   = Left 
-      [ (Active IMap.empty r w ri left right'' fs' IMap.empty insides, heuristic)  
+      [ (Active cr' r w ri' left' right' fs' IMap.empty insides, heuristic)  
       | (r@(Rule ((a, as), (f:fs))), w) <- rules -- TODO, Was, wenn Fanout 0?
       , let fsindex = prepareComps fs
-      , ((ri, right'), fs') <- allCombinations [] (0, f) fsindex
-      , (left, right'') <- completeNextTerminals word Epsilon right'
+      , (cr', ri', left', right', fs') <- completeNextTerminals word IMap.empty 0 Epsilon f fsindex
       , let insides = IMap.fromList $ zip [0..] (map (fst . (iow Map.!)) as)
             outside = snd $ iow Map.! a
             heuristic = w <.> (calcInsideWeight insides) <.> outside
       ]
-
-complete :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq t, Eq wt, Weight wt)
-        => [t] -- Word
-        -> Map.HashMap nt (wt, wt) -- weights
-        -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
-complete word iow = Right app
-    where
-        app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
-        app (Active cr r@(Rule ((a,_), _)) wt ri left [] (f:fs) completions insides) _ -- If item isn't f:fs, then it's finshed and we add it to chart in update function
-            =  [(Active cr' r wt ri' left' right'' fs' completions insides, heuristic)
-                | ((ri', right'), fs') <- allCombinations [] f fs
-                , (left', right'') <- completeNextTerminals word Epsilon right'
-                , let cr' = IMap.insert ri left cr
-                , let outside = snd $ iow Map.! a 
-                      heuristic = wt <.> (calcInsideWeight insides) <.> outside
-                ]
-        app _ _ = []
 
 
 combineRule :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq t, Weight wt)
@@ -169,10 +149,10 @@ combineRule word iow = Right app
     where
         app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
         app trigger (_, allItems)
-         =  [(Active cr r wt ri left' right' fs completions insides, heu)
+         =  [(Active cr' r wt ri' left' right' fs' completions insides, heu)
            | chartItem <- allItems
            , ((Active cr r wt ri left right fs completions insides), heu) <- (consequences trigger chartItem)  ++ (consequences chartItem trigger)
-           , (left', right') <- completeNextTerminals word left right
+           , (cr', ri', left', right', fs') <- completeNextTerminals word cr ri left right fs
          ] 
     
         consequences :: Item nt t wt -- first Item
