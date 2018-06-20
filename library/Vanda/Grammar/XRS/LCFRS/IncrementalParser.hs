@@ -88,7 +88,7 @@ initialPrediction word srules iow
   = Left [ (Active cr' r w ri' left' right' fs' IMap.empty insides, heuristic)  
       | (r@(Rule ((_, as), (f:fs))), w) <- srules -- TODO Was, wenn Variable Fan-Out 0?
       , let fsindex = prepareComps fs
-      , (cr', ri', left', right', fs') <- completeNextTerminals word IMap.empty 0 Epsilon f fsindex
+      , (cr', ri', left', right', fs') <- completeComponentsAndNextTerminals word IMap.empty 0 Epsilon f fsindex
       , let insides = IMap.fromList $ zip [0..] (map (fst . (iow Map.!)) as)
       , let heuristic = w <.> calcInsideWeight insides
       ]
@@ -106,7 +106,7 @@ allCombinations xs x [] = [(x, xs)]
 allCombinations xs x y'@(y:ys) = (x, xs ++ y') : (allCombinations (x:xs) y ys)
 
 -- complete Terminals
-completeNextTerminals :: (Eq t, Show t)
+completeComponentsAndNextTerminals :: (Eq t, Show t)
                     => [t] -- Word
                     -> IMap.IntMap Range -- Already Completed TODO IntMap
                     -> Int -- Curr Index
@@ -114,21 +114,21 @@ completeNextTerminals :: (Eq t, Show t)
                     -> [VarT t] -- Curr Right
                     -> [(Int, [VarT t])] -- Next Components
                     -> [(IMap.IntMap Range, Int, Range, [VarT t], [(Int, [VarT t])])] -- Completed Components with Index, curr Left, curr Index, next Functions
-completeNextTerminals _ cr ri left [] [] = [(cr, ri, left, [], [])]
+completeComponentsAndNextTerminals _ cr ri left [] [] = [(cr, ri, left, [], [])]
 -- Complete Rule Part
-completeNextTerminals w cr ri left [] allfs@((fi, f):fs) = (cr, ri, left, [], allfs) : --Need this Item, because we cannot use it for combine otherwise
+completeComponentsAndNextTerminals w cr ri left [] allfs@((fi, f):fs) = (cr, ri, left, [], allfs) : --Need this Item, because we cannot use it for combine otherwise
     ([(cr', ri', Epsilon, right', fs') 
         | ((ri', right'), fs') <- allCombinations [] (fi, f) fs
-        ] >>= (\(cr'', ri'', left'', right'', fs'') -> completeNextTerminals w cr'' ri'' left'' right'' fs''))
+        ] >>= (\(cr'', ri'', left'', right'', fs'') -> completeComponentsAndNextTerminals w cr'' ri'' left'' right'' fs''))
     where cr' = IMap.insert ri left cr
 -- TODO Better Names Vars
 -- Scan Rule Part
-completeNextTerminals w cr ri left (T t:rights) fs
+completeComponentsAndNextTerminals w cr ri left (T t:rights) fs
     = [ left'
         | left' <- mapMaybe (safeConc left) $ singletons t w
-       ] >>= (\left'' -> completeNextTerminals w cr ri left'' rights fs)
+       ] >>= (\left'' -> completeComponentsAndNextTerminals w cr ri left'' rights fs)
 -- Have to Complete in Next Step -> Stop this Method
-completeNextTerminals _ cr ri left right@((Var _ _):_) fs = [(cr, ri, left, right, fs)]
+completeComponentsAndNextTerminals _ cr ri left right@((Var _ _):_) fs = [(cr, ri, left, right, fs)]
 --NIKLAS Warum in Active Parser noch schauen nach Variablen? -> Weil ich evnt. durch komplett eingesetzte NTs schon weitere Var-Ranges habe
 --  Prediction rule for rules of not initial nonterminals.
 predictionRule :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t, Show nt, Show t, Show wt) 
@@ -141,7 +141,7 @@ predictionRule word rules iow
       [ (Active cr' r w ri' left' right' fs' IMap.empty insides, heuristic)  
       | (r@(Rule ((a, as), (f:fs))), w) <- rules -- TODO, Was, wenn Fanout 0?
       , let fsindex = prepareComps fs
-      , (cr', ri', left', right', fs') <- completeNextTerminals word IMap.empty 0 Epsilon f fsindex
+      , (cr', ri', left', right', fs') <- completeComponentsAndNextTerminals word IMap.empty 0 Epsilon f fsindex
       , let insides = IMap.fromList $ zip [0..] (map (fst . (iow Map.!)) as)
             outside = snd $ iow Map.! a
             heuristic = w <.> (calcInsideWeight insides) <.> outside
@@ -159,7 +159,7 @@ combineRule word iow = Right app
          =  [(Active cr' r wt ri' left' right' fs' completions insides, heu)
            | chartItem <- allItems
            , ((Active cr r wt ri left right fs completions insides), heu) <- (consequences trigger chartItem)  ++ (consequences chartItem trigger)
-           , (cr', ri', left', right', fs') <- completeNextTerminals word cr ri left right fs
+           , (cr', ri', left', right', fs') <- completeComponentsAndNextTerminals word cr ri left right fs
          ] 
     
         consequences :: Item nt t wt -- first Item
