@@ -70,8 +70,7 @@ parse' (rmap, iow, s') bw tops w
     where
       rules = (initialPrediction w (s' >>= (`MMap.lookup` rmap)) iow)
             : predictionRule w (map snd $ MMap.toList rmap) iow
-            : scanRule w iow
-            : combineRule iow
+            : combineRule w iow
             : [complete w iow]
 
 -- Prediction rule for rules of initial nonterminals.
@@ -133,22 +132,6 @@ predictionRule word rules iow
             heuristic = w <.> (calcInsideWeight insides) <.> outside
       ]
 
-scanRule :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq t, Weight wt)
-        => [t] -- Word
-        -> Map.HashMap nt (wt, wt) -- weights
-        -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
-scanRule word iow = Right app
-    where
-        app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
-        app (Active cr r@(Rule ((a, _), _)) wt ri left right fs completions insides) _ 
-            = [((Active cr r wt ri left' right' fs completions insides), heuristic)
-            |(left', right')  <- completeNextTerminals word left right 
-            , let outside = snd $ iow Map.! a 
-                  heuristic = wt <.> (calcInsideWeight insides) <.> outside
-                ]
-
-
-
 complete :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq t, Eq wt, Weight wt)
         => [t] -- Word
         -> Map.HashMap nt (wt, wt) -- weights
@@ -168,15 +151,17 @@ complete word iow = Right app
 
 
 combineRule :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq t, Weight wt)
-        => Map.HashMap nt (wt, wt) -- weights
+        => [t]
+        -> Map.HashMap nt (wt, wt) -- weights
         -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
-combineRule iow = Right app
+combineRule word iow = Right app
     where
         app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
         app trigger (_, allItems)
-         =  [consequence
+         =  [(Active cr r wt ri left' right' fs completions insides, heu)
            | chartItem <- allItems
-           , consequence <- (consequences trigger chartItem)  ++ (consequences chartItem trigger)
+           , ((Active cr r wt ri left right fs completions insides), heu) <- (consequences trigger chartItem)  ++ (consequences chartItem trigger)
+           , (left', right') <- completeNextTerminals word left right
          ] 
     
         consequences :: Item nt t wt -- first Item
