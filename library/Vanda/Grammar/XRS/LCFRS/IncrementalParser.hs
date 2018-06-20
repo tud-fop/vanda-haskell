@@ -112,14 +112,14 @@ completeNextTerminals _ cr ri left [] [] = [(cr, ri, left, [], [])]
 -- Complete Rule Part
 completeNextTerminals w cr ri left [] ((fi, f):fs) = [(cr', ri', Epsilon, right', fs')
     | ((ri', right'), fs') <- allCombinations [] (fi, f) fs
-    ] >>= (\(cr, ri, left, right, fs) -> completeNextTerminals w cr ri left right fs)
+    ] >>= (\(cr'', ri'', left'', right'', fs'') -> completeNextTerminals w cr'' ri'' left'' right'' fs'')
     where cr' = IMap.insert ri left cr
 -- TODO Better Names Vars
 -- Scan Rule Part
 completeNextTerminals w cr ri left (T t:rights) fs
     = [ left'
         | left' <- mapMaybe (safeConc left) $ singletons t w
-       ] >>= (\left -> completeNextTerminals w cr ri left rights fs)
+       ] >>= (\left'' -> completeNextTerminals w cr ri left'' rights fs)
 -- Have to Complete in Next Step -> Stop this Method
 completeNextTerminals _ cr ri left right@((Var _ _):_) fs = [(cr, ri, left, right, fs)]
 --NIKLAS Warum in Active Parser noch schauen nach Variablen? -> Weil ich evnt. durch komplett eingesetzte NTs schon weitere Var-Ranges habe
