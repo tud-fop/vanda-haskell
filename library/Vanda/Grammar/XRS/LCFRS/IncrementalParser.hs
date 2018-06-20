@@ -14,6 +14,7 @@ import Data.Converging (Converging)
 import Data.Maybe (fromMaybe, mapMaybe, maybeToList,catMaybes, isNothing)
 import Data.Range
 import Data.Semiring
+import Debug.Trace(trace)
 import Data.Tree (Tree)
 import Data.Weight
 import Vanda.Grammar.PMCFG
@@ -72,6 +73,11 @@ parse' (rmap, iow, s') bw tops w
             : predictionRule w (map snd $ MMap.toList rmap) iow
             : [combineRule w iow]
 
+trace' :: (Show s) => String -> s -> s
+trace' pre st = trace ("\n" ++ pre ++ ": " ++ (show st) ++ "\n") st
+-- TODO trace' + import raus
+
+
 -- Prediction rule for rules of initial nonterminals.
 initialPrediction :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t, Show nt, Show t, Show wt) 
                   => [t]
@@ -110,9 +116,10 @@ completeNextTerminals :: (Eq t, Show t)
                     -> [(IMap.IntMap Range, Int, Range, [VarT t], [(Int, [VarT t])])] -- Completed Components with Index, curr Left, curr Index, next Functions
 completeNextTerminals _ cr ri left [] [] = [(cr, ri, left, [], [])]
 -- Complete Rule Part
-completeNextTerminals w cr ri left [] ((fi, f):fs) = [(cr', ri', Epsilon, right', fs')
-    | ((ri', right'), fs') <- allCombinations [] (fi, f) fs
-    ] >>= (\(cr'', ri'', left'', right'', fs'') -> completeNextTerminals w cr'' ri'' left'' right'' fs'')
+completeNextTerminals w cr ri left [] allfs@((fi, f):fs) = (cr, ri, left, [], allfs) : --Need this Item, because we cannot use it for combine otherwise
+    ([(cr', ri', Epsilon, right', fs') 
+        | ((ri', right'), fs') <- allCombinations [] (fi, f) fs
+        ] >>= (\(cr'', ri'', left'', right'', fs'') -> completeNextTerminals w cr'' ri'' left'' right'' fs''))
     where cr' = IMap.insert ri left cr
 -- TODO Better Names Vars
 -- Scan Rule Part
