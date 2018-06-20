@@ -103,17 +103,28 @@ allCombinations xs x y'@(y:ys) = (x, xs ++ y') : (allCombinations (x:xs) y ys)
 
 -- complete Terminals
 completeNextTerminals :: (Eq t, Show t)
-                    => [t] 
-                    -> Range
-                    -> [VarT t]
-                    -> [(Range, [VarT t])]
-completeNextTerminals _ r [] = [(r, [])]
-completeNextTerminals w r (T t:fs)
-    = [ (r', fs)
-        | r' <- mapMaybe (safeConc r) $ singletons t w
-       ] >>= uncurry (completeNextTerminals w )
+                    => [t] -- Word
+                    -> IMap.IntMap Range -- Already Completed TODO IntMap
+                    -> Int -- Curr Index
+                    -> Range -- Curr Left
+                    -> [VarT t] -- Curr Right
+                    -> [(Int, [VarT t])] -- Next Components
+                    -> [([(Int, Range)], Int, Range, [VarT t], [(Int, [VarT t])])] -- Completed Components with Index, curr Left, curr Index, next Functions
+completeNextTerminals _ cr ri left [] [] = [(cr, ri, r, [], [])]
+-- Complete Rule Part
+completeNextTerminals w cr ri left [] ((fi, f):fs) = [(cr', ri', Epsilon, right', fs')
+    | ((ri', right'), fs') <- allCombinations [] (fi, f) fs
+    ] >>= (\(cr, ri, left, right, fs) -> completeNextTerminals w cr ri left right fs)
+    where cr' = IMap.insert ri left cr
+-- TODO Better Names Vars
+-- Scan Rule Part
+completeNextTerminals w cr ri left (T t:rights) fs
+    = [ left'
+        | left' <- mapMaybe (safeConc left) $ singletons t w
+       ] >>= (\left -> completeNextTerminals w cr ri left rights fs)
+-- Have to Complete in Next Step -> Stop this Method
+completeNextTerminals _ cr ri left right@((Var _ _):_) fs = [cr, ri, left, right, fs]
 --NIKLAS Warum in Active Parser noch schauen nach Variablen? -> Weil ich evnt. durch komplett eingesetzte NTs schon weitere Var-Ranges habe
-completeNextTerminals _ r fs@((Var _ _):_) = [(r, fs)]
 --  Prediction rule for rules of not initial nonterminals.
 predictionRule :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t, Show nt, Show t, Show wt) 
                   => [t]
