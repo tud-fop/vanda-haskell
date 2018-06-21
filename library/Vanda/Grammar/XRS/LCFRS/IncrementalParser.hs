@@ -10,23 +10,25 @@
 --
 -- In this module, you can find a function for parsing words using the incremental
 -- parsing algorithm by Burden and Ljunglöf.
--- 'parse' uses a weighted 'PMCFG' and returns a list of derivation trees ordered by weight. Rules weights need to be instances of "Data.Semiring". The trees are ordered by minimal cost / maximum probability.
+-- 'parse' uses a weighted 'PMCFG' ('WPMCFG') and returns a list of derivation trees ordered by minimal cost or maximum probability. Rule weights need to be instances of "Data.Semiring". parse' uses the output of 'Vanda.Grammar.PMCFG.prepare' rather than a 'WPMCFG'.
+--
 --
 -- The parsing algorithm uses active items to represent
 -- parsed parts of a word. They represent unfinished and finished derivations. 
 -- To find all valid rule applications that generate a subword,
--- there are 3 different types of deductive rules applied until a
--- finished active item is generated of the grammar's rule:
+-- there are three different types of deductive rules applied until a
+-- finished active item of the grammar rule is generated:
 --
 -- * initial prediction: An empty active item is generated for every component of all grammar rules that have a start symbol on their left sides.
--- * prediction: If an item needs to replace a variable of a not seen NT in the next step, generated an empty active Item for every component of all grammar rules that have this NT on their left side.
--- * combine: An unknown variable is replaced by a range of a
--- generated range component of another active Item if its component range fits the
--- combine variable and the two items are compatible. For filling the chart later on, we store the range together with the variable.
+-- * prediction: If an item needs to replace a component of a not yet seen NT in the next step, generated an empty active Item for every component of all grammar rules that have this NT on their left side.
+-- * combine: An unknown variable is replaced by the range of the
+-- component of another active item if the variable and the current component of the other item match and the two items are compatible. For filling the chart later on, we store the range together with the variable's name. 
 --
--- After every application of one of the rules, the resulting items are processed (replace terminals with fitting ranges of the word, skip finished components). We stop when we find a Variable and therefore, it has to be combined with another item.
+-- After every application of one of these deduction rules, the resulting items are processed (replace terminals with fitting ranges of the word, skip finished components). We stop when we find a variable and therefore the item has to be combined with another item in the next step, or we finished all components.
 --
--- After a new processed item has been found, we look on its structure. If all components of the underlying rule have been completed, If all components of the underlying rule are completed, we store the left hand side of the rule together with it's weight and found ranges for the variables as a Backtrace structure in a Chart. This is used to generate the derivation trees afterwards.
+-- After a new processed item has been found, we look at its structure. We store the item in one "Data.MultiHashMap" if a component of the underlying rule has been completed and we store it in another "Data.MultiHashMap" if it needs a variable in the next step. This makes finding needed items easier when applying the deduction rules.  
+--
+-- If all components of the underlying rule have been completed, we store the 'Rangevector' of the components together with a 'Vanda.Grammar.XRS.LCFRS.Chart.Backtrace' consisting of the left hand side NT of the rule , the rule's weight and the 'Rangevector's of all NTs in a 'Vanda.Grammar.XRS.LCFRS.Chart'. This is used to generate the derivation trees afterwards by 'Vanda.Grammar.XRS.LCFRS.Chart.parseTrees'.
 --
 -----------------------------------------------------------------------------
 
@@ -36,7 +38,6 @@
 module Vanda.Grammar.XRS.LCFRS.IncrementalParser
   ( parse,
     parse',
-    Container
   ) where
 
 import Data.Hashable (Hashable(hashWithSalt))
@@ -86,6 +87,8 @@ type Container nt t wt = ( C.Chart nt t wt
                          , MMap.MultiMap (nt, Int) (Item nt t wt) -- Map of all Items that have the Component of the NT (Key) already completed (Known Map)
                          )
 
+-- | Main function in this module to parse a word using a 'WPMCFG'.
+-- Returns a given number of derivations trees, ordered by their weight.
 parse :: forall nt t wt.(Show nt, Show t, Show wt, Hashable nt, Hashable t, Eq t, Ord wt, Weight wt, Ord nt, Converging wt) 
       => WPMCFG nt wt t -- Grammar
       -> Int -- Beam Width
