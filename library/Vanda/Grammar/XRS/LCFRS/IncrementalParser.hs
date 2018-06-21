@@ -51,6 +51,7 @@ instance (Hashable nt, Hashable t) => Hashable (Item nt t wt) where
 type Container nt t wt = ( C.Chart nt t wt -- Passive Items
                          , [Item nt t wt] -- All Items in Chart
                          , Set.HashSet nt -- Not init. NTs
+                         , MMap.MultiMap (nt, Int) (Item nt t wt) -- Map of all Items that need the Component of the NT (Key) as the next Token for Combine
                          )
 
 parse :: forall nt t wt.(Show nt, Show t, Show wt, Hashable nt, Hashable t, Eq t, Ord wt, Weight wt, Ord nt, Converging wt) 
@@ -70,8 +71,8 @@ parse' :: forall nt t wt.(Show nt, Show t, Show wt, Hashable nt, Hashable t, Eq 
 parse' (rmap, iow, s') bw tops w
   = C.parseTrees tops s'
     (singleton $ entire w) -- Goal Item 
-  $ (\ (e,  _, _) -> e) -- parse Trees just needs passive Items from Container
-  $ C.chartify (C.empty, [], nset) update rules bw tops
+  $ (\ (e,  _, _, _) -> e) -- parse Trees just needs passive Items from Container
+  $ C.chartify (C.empty, [], nset, MMap.empty) update rules bw tops
     where
       nset = Set.fromList $ filter (not . (`elem` s')) $ Map.keys rmap
       rules = (initialPrediction w (s' >>= (`MMap.lookup` rmap)) iow)
@@ -146,7 +147,7 @@ predictionRule word rs iow = Right app
         app :: Item nt t wt
             -> Container nt t wt 
             -> [(Item nt t wt, wt)]
-        app (Active _ (Rule ((_, as), _)) _ _ _ (Var i _:_) _ _ _) (_, _, inits) -- TODO insides ändert sich
+        app (Active _ (Rule ((_, as), _)) _ _ _ (Var i _:_) _ _ _) (_, _, inits, _) -- TODO insides ändert sich
           = [ (Active cr' r w ri' left' right' fs' IMap.empty insides, heuristic) --TODO Anpassen
           | let a = as !! i
           , a `Set.member` inits
@@ -167,15 +168,23 @@ combineRule :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq
 combineRule word iow = Right app
     where
         app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
-        app trigger (_, allItems, _)
+        app trigger (_, allItems, _, s)
          =  [(Active cr' r wt ri' left' right' fs' completions insides, heu)
-           | chartItem <- allItems
-           , ((Active cr r wt ri left right fs completions insides), heu) <- (consequences trigger chartItem)  ++ (consequences chartItem trigger)
+           | (Active _ (Rule ((_, as), _)) _ _ _ (Var i j:_) _ _ _) <- [trigger] -- Just so that I can pattern match trigger two times
+           , chartItem <- allItems
+           , ((Active cr r wt ri left right fs completions insides), heu) <- consequences trigger (trace' "ChartItem" chartItem)
            , (cr', ri', left', right', fs') <- completeComponentsAndNextTerminals word cr ri left right fs
-         ] 
+         ] -- Trigger as searching Item
+         ++ [(Active cr' r wt ri' left' right' fs' completions insides, heu)
+           | (Active cr (Rule ((a, _), _)) _ currri _ [] _ _ _) <- [trigger] -- Just so that I can pattern match trigger two times
+    -- Finish all Items, that need the last completed Component of trigger as Var
+           , chartItem <- MMap.lookup (a , currri) s
+           , ((Active cr r wt ri left right fs completions insides), heu) <- (consequences chartItem trigger)
+           , (cr', ri', left', right', fs') <- completeComponentsAndNextTerminals word cr ri left right fs
+         ] -- Trigger as inserting Item
     
-        consequences :: Item nt t wt -- first Item
-                        -> Item nt t wt -- second Item
+        consequences :: Item nt t wt -- searching Item
+                        -> Item nt t wt -- insert Item
                         -> [(Item nt t wt, wt)] --NIKLAS Liste nur, damit ich [] zurückgeben kann
         consequences (Active cr rule@(Rule ((_, as), _)) wt ri left ((Var i j):rights) fs completeds insidess) (Active crf (Rule ((a, _), _)) wtf ri' left' [] _ _ insidesf)
             = [(Active cr rule wt ri left'' rights fs completed' insides', heuristic) 
@@ -202,17 +211,17 @@ doubleInsert :: IMap.IntMap (IMap.IntMap Range) -> Int -> Int -> Range -> IMap.I
 doubleInsert m i j r = IMap.insertWith IMap.union i (IMap.singleton j r) m
    
 update :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt, Hashable nt, Semiring wt) => Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
-update (p, allItems, n) item@(Active cr r@(Rule ((nt, _), _)) wt ri left [] [] completed insides) =
+update (p, allItems, n, s) item@(Active cr r@(Rule ((nt, _), _)) wt ri left [] [] completed insides) =
     case getRangevector cr' of
         Just crv ->  case getBacktrace r wt completed of 
             Just bt -> case C.insert p nt crv bt (calcInsideWeight insides) of 
-                (p', isnew) -> ((p',  addIfNew item allItems, n), isnew || (not $ item `elem` allItems))
-            Nothing -> ((p, allItems, n), False)
-        Nothing -> ((p, allItems, n), False)
+                (p', isnew) -> ((p',  addIfNew item allItems, n, s), isnew || (not $ item `elem` allItems))
+            Nothing -> ((p, allItems, n, s), False)
+        Nothing -> ((p, allItems, n, s), False)
     where cr' = IMap.insert ri left cr
-update (p, allItems, n) item@(Active _ (Rule ((_, as),_)) _ _ _ (Var i _:_) _ _ _)
-        = ((p, (addIfNew item allItems), (as !! i) `Set.delete` n), not $ item `elem` allItems) -- TODO Warum True überall?
-update (p, allItems, n) item = ((p, (addIfNew item allItems), n), not $ item `elem` allItems) 
+update (p, allItems, n, s) item@(Active _ (Rule ((_, as),_)) _ _ _ (Var i j:_) _ _ _)
+        = ((p, (addIfNew item allItems), (as !! i) `Set.delete` n, MMap.insert ((as !! i), j) item s) , not $ item `elem` allItems) -- TODO Warum True überall?
+update (p, allItems, n, s) item = ((p, (addIfNew item allItems), n, s), not $ item `elem` allItems) 
 
 getRangevector :: IMap.IntMap Range -> Maybe Rangevector
 getRangevector cr = fromList $ map snd $ IMap.toAscList cr 
