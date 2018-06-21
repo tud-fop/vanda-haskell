@@ -36,7 +36,6 @@ exampleRules' = [ Rule ((0, []), [[T 'a']]),
                   Rule ((0, [1]), [[T 'D', Var 0 0, T 'E' ]]),
                   Rule ((0, [1,3]), [[Var 0 0, Var 1 0, Var 1 1]]),
                   Rule ((0, [4]), [[T 'x', Var 0 0, T 'y']]),
- --                 Rule ((0, [0]), [[Var 0 0, Var 0 0]]),
                   Rule ((1, []), [[T 'A']]),
                   Rule ((2, [3]), [[Var 0 1]]),
                   Rule ((3, []), [[T 'B'], [T 'C']]),
@@ -64,26 +63,19 @@ first :: (x,y,z) -> x
 first (x,_,_) = x
 
 tests :: Test
-tests = TestList    [ 
---                        TestCase  $ assertEqual "ErrorMessage" "File Connected" testParse
---                        , TestCase $ assertEqual "Can't find item after init. Pred" Active (Rule ((2, []), [[], []])) 1 [Epsilon] ([[]]) IMap.empty 1 $ parse exampleWPMCFG 1000 100 "")
- --                       , TestCase $ assertEqual "Can't find item after init. Pred" ["a"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "a"
-  --                      , TestCase $ assertEqual "Can't find item after init. Pred" ["ab"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "ab"
-   --                     , TestCase $ assertEqual "Can't find item after init + Combine" ["A"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "A"
-                        TestCase $ assertEqual "Can't find item after init + Combine" ["ABC"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "ABC"
-                        ,TestCase $ assertEqual "Can't find item after init + Combine" ["A"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "A"
-                        ,TestCase $ assertEqual "Can't find item after init + Combine" ["a"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "a"
-                        , TestCase $ assertEqual "Scan doesn't work" ["DAE"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "DAE"
-                        ,TestCase $ assertEqual "Longer Parsing dosen't work" ["aabccd"] $ mapMaybe yield $ parse exampleWPMCFG' 100 1 "aabccd"
-                        ,TestCase $ assertEqual "Longer Parsing dosen't work" ["xqzy"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "xqzy"
-                        ,TestCase $ assertEqual "Longer Parsing dosen't work" ["xqqrztzty"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "xqqrztzty"
+tests = TestList    [
+                        TestCase $ assertEqual "Can't find item after Initial Prediction" ["a"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "a"
+                        ,TestCase $ assertEqual "Can't find item after Initial Prediction, Prediction and Combine" ["A"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "A"
+                        ,TestCase $ assertEqual "Can't find item after Initial Prediction, Prediction and Combine" ["ABC"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "ABC"
+                        , TestCase $ assertEqual "Can't find item if variable after Terminal" ["DAE"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "DAE"
+                        ,TestCase $ assertEqual "Longer Parsing doesn't work" ["aabccd"] $ mapMaybe yield $ parse exampleWPMCFG' 100 1 "aabccd"
+                        ,TestCase $ assertEqual "Longer Parsing doesn't work" ["xqzy"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "xqzy"
+                        ,TestCase $ assertEqual "Longer Parsing doesn't work" ["xqqrztzty"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "xqqrztzty"
                         ,TestCase $ assertEqual "Compatibility Combine doesn't work mn" [] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "mn"
-                        ,TestCase $ assertEqual "Compatibility Complete doesn't work gh" [] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "gh"
-                        ,TestCase $ assertEqual "DOesnt work" ["mm"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "mm"
---                        , TestCase $ assertEqual "Can't find item after init + Combine" ["aa"] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "aa"
---                      , TestCase $ not assertEqual "Wrong Pretty Printed Grammar" "Test" exampleGrammar
+                        ,TestCase $ assertEqual "Compatibility Check Complete fails" [] $ mapMaybe yield $ parse exampleWPMCFG''' 100 1 "gh"
+
                     ,TestCase $ assertEqual
-                      "Cannot reproduce exmaple derivation" 
+                      "Cannot reproduce example derivation" 
                       [exampleDerivation] 
                     $ parse 
                         exampleWPMCFG' 100 1 "aabccd"
@@ -94,6 +86,3 @@ tests = TestList    [
                     $ mapMaybe yield 
                       $ parse exampleWPMCFG' 100 1 "aabbccdd"
                      ]
-
---                        TestCase $ assertEquals "Active Item not in Chart after ",
---                       TestCase $ assertEqual "Chart Update doesn't work" 
