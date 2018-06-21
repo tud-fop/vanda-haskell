@@ -14,7 +14,6 @@ import Data.Converging (Converging)
 import Data.Maybe (fromMaybe, mapMaybe, maybeToList,catMaybes, isNothing)
 import Data.Range
 import Data.Semiring
-import Debug.Trace(trace)
 import Data.Tree (Tree)
 import Data.Weight
 import Vanda.Grammar.PMCFG
@@ -25,7 +24,6 @@ import qualified Data.MultiHashMap             as MMap
 import qualified Data.IntMap                   as IMap
 import qualified Data.HashSet                  as Set
 import qualified Vanda.Grammar.XRS.LCFRS.Chart as C
---TODO Doch eine 2x HashMap nutzen
 
 data Item nt t wt = Active (IMap.IntMap Range) (Rule nt t) wt Int Range [VarT t] [(Int, [VarT t])] (IMap.IntMap (IMap.IntMap Range)) (IMap.IntMap wt) deriving (Show) 
 
@@ -40,13 +38,10 @@ instance (Eq nt, Eq t) => Eq (Item nt t wt) where
     && nc          == nc'
     && completions == completions'
 
-
 -- TODO Besser?
 instance (Hashable nt, Hashable t) => Hashable (Item nt t wt) where
   salt `hashWithSalt` (Active _ r _ _ left _ _ _ _) 
     = salt `hashWithSalt` r `hashWithSalt` left
-
-
 
 type Container nt t wt = ( C.Chart nt t wt -- Passive Items
                          , Set.HashSet nt -- Not init. NTs
@@ -79,11 +74,6 @@ parse' (rmap, iow, s') bw tops w
             : predictionRule w rmap iow
             : [combineRule w iow]
 
-trace' :: (Show s) => String -> s -> s
-trace' pre st = trace ("\n" ++ pre ++ ": " ++ (show st) ++ "\n") st
--- TODO trace' + import raus
-
-
 -- Prediction rule for rules of initial nonterminals.
 initialPrediction :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t, Show nt, Show t, Show wt) 
                   => [t]
@@ -92,7 +82,7 @@ initialPrediction :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t, Sho
                   -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
 initialPrediction word srules iow 
   = Left [ (Active cr' r w ri' left' right' fs' IMap.empty insides, heuristic)  
-      | (r@(Rule ((_, as), fs)), w) <- srules -- TODO Was, wenn Variable Fan-Out 0?
+      | (r@(Rule ((_, as), fs)), w) <- srules
       , let fsindex = prepareComps fs
       , let (f0: fRest) = fsindex
       , ((firstri, firstright), firstfs) <- allCombinations [] f0 fRest
@@ -116,7 +106,7 @@ allCombinations xs x y'@(y:ys) = (x, xs ++ y') : (allCombinations (x:xs) y ys)
 -- complete Terminals
 completeComponentsAndNextTerminals :: (Eq t, Show t)
                     => [t] -- Word
-                    -> IMap.IntMap Range -- Already Completed TODO IntMap
+                    -> IMap.IntMap Range -- Already Completed
                     -> Int -- Curr Index
                     -> Range -- Curr Left
                     -> [VarT t] -- Curr Right
@@ -129,15 +119,13 @@ completeComponentsAndNextTerminals w cr ri left [] allfs@((fi, f):fs) = (cr, ri,
         | ((ri', right'), fs') <- allCombinations [] (fi, f) fs
         ] >>= (\(cr'', ri'', left'', right'', fs'') -> completeComponentsAndNextTerminals w cr'' ri'' left'' right'' fs''))
     where cr' = IMap.insert ri left cr
--- TODO Better Names Vars
 -- Scan Rule Part
 completeComponentsAndNextTerminals w cr ri left (T t:rights) fs
     = [ left'
         | left' <- mapMaybe (safeConc left) $ singletons t w
        ] >>= (\left'' -> completeComponentsAndNextTerminals w cr ri left'' rights fs)
--- Have to Complete in Next Step -> Stop this Method
+-- Item Has to be Combined in Next Step -> Stop this function
 completeComponentsAndNextTerminals _ cr ri left right@((Var _ _):_) fs = [(cr, ri, left, right, fs)]
---NIKLAS Warum in Active Parser noch schauen nach Variablen? -> Weil ich evnt. durch komplett eingesetzte NTs schon weitere Var-Ranges habe
 --  Prediction rule for rules of not initial nonterminals.
 predictionRule :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t, Show nt, Show t, Show wt) 
                   => [t]
@@ -150,7 +138,7 @@ predictionRule word rs iow = Right app
             -> Container nt t wt 
             -> [(Item nt t wt, wt)]
         app (Active _ (Rule ((_, as), _)) _ _ _ (Var i _:_) _ _ _) (_, inits, _, _) -- TODO insides ändert sich
-          = [ (Active cr' r w ri' left' right' fs' IMap.empty insides, heuristic) --TODO Anpassen
+          = [ (Active cr' r w ri' left' right' fs' IMap.empty insides, heuristic)
           | let a = as !! i
           , a `Set.member` inits
           , (r@(Rule ((a', as'), fs)), w) <- MMap.lookup a rs -- TODO, Was, wenn Fanout 0?
@@ -174,27 +162,27 @@ combineRule word iow = Right app
         app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
         app trigger (_, _, s, k)
          =  [(Active cr' r wt ri' left' right' fs' completions insides, heu)
-           | (Active _ (Rule ((_, as), _)) _ _ _ (Var i j:_) _ _ _) <- [trigger] -- Just so that I can pattern match trigger two times
+           | (Active _ (Rule ((_, as), _)) _ _ _ (Var i j:_) _ _ _) <- [trigger] -- Just so that I can pattern match different patterns in the two lists
            , chartItem <- MMap.lookup ((as !! i), j) k
-           , ((Active cr r wt ri left right fs completions insides), heu) <- consequences trigger (trace' "ChartItem" chartItem)
+           , ((Active cr r wt ri left right fs completions insides), heu) <- consequences trigger chartItem
            , (cr', ri', left', right', fs') <- completeComponentsAndNextTerminals word cr ri left right fs
-         ] -- Trigger as searching Item
+         ]
+    -- Finish all Items that need the last completed Component of trigger as Var
          ++ [(Active cr' r wt ri' left' right' fs' completions insides, heu)
-           | (Active _ (Rule ((a, _), _)) _ currri _ [] _ _ _) <- [trigger] -- Just so that I can pattern match trigger two times
-    -- Finish all Items, that need the last completed Component of trigger as Var
+           | (Active _ (Rule ((a, _), _)) _ currri _ [] _ _ _) <- [trigger] -- Just so that I can pattern match different patterns in the two lists
            , chartItem <- MMap.lookup (a , currri) s
            , ((Active cr r wt ri left right fs completions insides), heu) <- (consequences chartItem trigger)
            , (cr', ri', left', right', fs') <- completeComponentsAndNextTerminals word cr ri left right fs
-         ] -- Trigger as inserting Item
+         ]
     
         consequences :: Item nt t wt -- searching Item
                         -> Item nt t wt -- insert Item
-                        -> [(Item nt t wt, wt)] --NIKLAS Liste nur, damit ich [] zurückgeben kann
+                        -> [(Item nt t wt, wt)]
         consequences (Active cr rule@(Rule ((_, as), _)) wt ri left ((Var i j):rights) fs completeds insidess) (Active crf (Rule ((a, _), _)) wtf ri' left' [] _ _ insidesf)
             = [(Active cr rule wt ri left'' rights fs completed' insides', heuristic) 
-            | j == ri' -- Betrachte ich richtiges Ri? 
-            , a == (as!!i) -- Betrache ich richtiges NT?
-            , isCompatible (IMap.toList $ fromMaybe IMap.empty (completeds IMap.!? i)) -- All Ranges that are used of this NT are in the current finished Item? If nothing used by now, than empty map instead of Nothing of Maybe
+            | j == ri' -- Is component number right?
+            , a == (as!!i) -- Is NT right?
+            , isCompatible (IMap.toList $ fromMaybe IMap.empty (completeds IMap.!? i)) -- Are all Ranges for the insert NT that are used by the search Item  part of the insert Item? If no Ranges are used by the search Item right now then use empty map instead of Nothing
             , left'' <- maybeToList $ safeConc left left'
             , let completed' = doubleInsert completeds i j left' 
                   insides' = IMap.insert i (wtf <.> calcInsideWeight insidesf) insidess 
@@ -215,19 +203,19 @@ doubleInsert :: IMap.IntMap (IMap.IntMap Range) -> Int -> Int -> Range -> IMap.I
 doubleInsert m i j r = IMap.insertWith IMap.union i (IMap.singleton j r) m
    
 update :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt, Hashable nt, Semiring wt) => Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
-update (p, n, s, k) item@(Active cr r@(Rule ((nt, _), _)) wt ri left [] [] completed insides) =
+update (p, n, s, k) item@(Active cr r@(Rule ((nt, _), _)) wt ri left [] [] completed insides) = -- Active Item is completely gone through
     case getRangevector cr' of
         Just crv ->  case getBacktrace r wt completed of 
             Just bt -> case C.insert p nt crv bt (calcInsideWeight insides) of 
-                (p', isnew) -> ((p', n, s, MMap.insert (nt, ri) item k), isnew || (not $ item `elem` (MMap.lookup (nt, ri) k)))
+                (p', isnew) -> ((p', n, s, MMap.insert (nt, ri) item k), isnew || (not $ item `elem` (MMap.lookup (nt, ri) k))) -- look if new in chart or in known Items
             Nothing -> ((p, n, s, k), False)
         Nothing -> ((p, n, s, k), False)
     where cr' = IMap.insert ri left cr
-update (p, n, s, k) item@(Active _ (Rule ((nt, _), _)) _ ri _ [] _ _ _) -- New Finished Component, but still unfinshed components
-        = ((p, n, s, MMap.insert (nt, ri) item k), True) -- TODO Warum True überall?
+update (p, n, s, k) item@(Active _ (Rule ((nt, _), _)) _ ri _ [] _ _ _) -- New Finished Component, but still unfinished components
+        = ((p, n, s, MMap.insert (nt, ri) item k), (not $ item `elem` (MMap.lookup (nt, ri) k)))
 update (p, n, s, k) item@(Active _ (Rule ((_, as),_)) _ _ _ (Var i j:_) _ _ _)
-        = ((p, (as !! i) `Set.delete` n, MMap.insert((as !! i), j) item s, k), True) -- TODO Warum True überall?
-update (p, n, s, k) _ = ((p, n, s, k), True)  --TODO Wird diese Zeile überhaupt aufgerufen?
+        = ((p, (as !! i) `Set.delete` n, MMap.insert((as !! i), j) item s, k), (not $ item `elem` (MMap.lookup (as !!i, j) s)))
+update (p, n, s, k) _ = ((p, n, s, k), False)
 
 getRangevector :: IMap.IntMap Range -> Maybe Rangevector
 getRangevector cr = fromList $ map snd $ IMap.toAscList cr 
