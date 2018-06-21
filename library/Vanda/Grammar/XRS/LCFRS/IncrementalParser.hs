@@ -20,7 +20,7 @@
 -- finished active item of the grammar rule is generated:
 --
 -- * initial prediction: An empty active item is generated for every component of all grammar rules that have a start symbol on their left sides.
--- * prediction: If an item needs to replace a component of a not yet seen NT in the next step, generated an empty active Item for every component of all grammar rules that have this NT on their left side.
+-- * prediction: If an item needs to replace a component of a not yet seen nonterminal (NT) in the next step, generated an empty active Item for every component of all grammar rules that have this NT on their left side.
 -- * combine: An unknown variable is replaced by the range of the
 -- component of another active item if the variable and the current component of the other item match and the two items are compatible. For filling the chart later on, we store the range together with the variable's name. 
 --
