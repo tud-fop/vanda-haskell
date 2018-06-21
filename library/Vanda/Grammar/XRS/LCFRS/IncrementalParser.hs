@@ -23,11 +23,13 @@ import qualified Data.HashMap.Lazy             as Map
 
 import qualified Data.MultiHashMap             as MMap
 import qualified Data.IntMap                   as IMap
+import qualified Data.HashSet                  as Set
 import qualified Vanda.Grammar.XRS.LCFRS.Chart as C
 --TODO Doch eine 2x HashMap nutzen
 
 data Item nt t wt = Active (IMap.IntMap Range) (Rule nt t) wt Int Range [VarT t] [(Int, [VarT t])] (IMap.IntMap (IMap.IntMap Range)) (IMap.IntMap wt) deriving (Show) 
 
+--TODO Richtig?
 instance (Eq nt, Eq t) => Eq (Item nt t wt) where
   (Active cr r _ ri left right nc completions _) == (Active cr' r' _ ri' left' right' nc' completions' _) 
     =  cr          == cr'
@@ -39,6 +41,7 @@ instance (Eq nt, Eq t) => Eq (Item nt t wt) where
     && completions == completions'
 
 
+-- TODO Besser?
 instance (Hashable nt, Hashable t) => Hashable (Item nt t wt) where
   salt `hashWithSalt` (Active _ r _ _ left _ _ _ _) 
     = salt `hashWithSalt` r `hashWithSalt` left
@@ -47,6 +50,7 @@ instance (Hashable nt, Hashable t) => Hashable (Item nt t wt) where
 
 type Container nt t wt = ( C.Chart nt t wt -- Passive Items
                          , [Item nt t wt] -- All Items in Chart
+                         , Set.HashSet nt -- Not init. NTs
                          )
 
 parse :: forall nt t wt.(Show nt, Show t, Show wt, Hashable nt, Hashable t, Eq t, Ord wt, Weight wt, Ord nt, Converging wt) 
@@ -66,11 +70,12 @@ parse' :: forall nt t wt.(Show nt, Show t, Show wt, Hashable nt, Hashable t, Eq 
 parse' (rmap, iow, s') bw tops w
   = C.parseTrees tops s'
     (singleton $ entire w) -- Goal Item 
-  $ (\ (e,  _) -> e) -- parse Trees just needs passive Items from Container
-  $ C.chartify (C.empty, []) update rules bw tops
+  $ (\ (e,  _, _) -> e) -- parse Trees just needs passive Items from Container
+  $ C.chartify (C.empty, [], nset) update rules bw tops
     where
+      nset = Set.fromList $ filter (not . (`elem` s')) $ Map.keys rmap
       rules = (initialPrediction w (s' >>= (`MMap.lookup` rmap)) iow)
-            : predictionRule w (map snd $ MMap.toList rmap) iow
+            : predictionRule w rmap iow
             : [combineRule w iow]
 
 trace' :: (Show s) => String -> s -> s
@@ -88,7 +93,7 @@ initialPrediction word srules iow
   = Left [ (Active cr' r w ri' left' right' fs' IMap.empty insides, heuristic)  
       | (r@(Rule ((_, as), (f:fs))), w) <- srules -- TODO Was, wenn Variable Fan-Out 0?
       , let fsindex = prepareComps fs
-      , (cr', ri', left', right', fs') <- completeComponentsAndNextTerminals word IMap.empty 0 Epsilon f fsindex
+      , (cr', ri', left', right', fs') <- completeComponentsAndNextTerminals word IMap.empty 0 Epsilon f fsindex -- TODO Falsch, muss nicht bei 0 anfangen. Überall schauen, ob das falsch ist
       , let insides = IMap.fromList $ zip [0..] (map (fst . (iow Map.!)) as)
       , let heuristic = w <.> calcInsideWeight insides
       ]
@@ -133,19 +138,26 @@ completeComponentsAndNextTerminals _ cr ri left right@((Var _ _):_) fs = [(cr, r
 --  Prediction rule for rules of not initial nonterminals.
 predictionRule :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t, Show nt, Show t, Show wt) 
                   => [t]
-                  -> [(Rule nt t, wt)]
+                  -> MMap.MultiMap nt (Rule nt t, wt)
                   -> Map.HashMap nt (wt, wt)
                   -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
-predictionRule word rules iow 
-  = Left 
-      [ (Active cr' r w ri' left' right' fs' IMap.empty insides, heuristic)  
-      | (r@(Rule ((a, as), (f:fs))), w) <- rules -- TODO, Was, wenn Fanout 0?
-      , let fsindex = prepareComps fs
-      , (cr', ri', left', right', fs') <- completeComponentsAndNextTerminals word IMap.empty 0 Epsilon f fsindex
-      , let insides = IMap.fromList $ zip [0..] (map (fst . (iow Map.!)) as)
-            outside = snd $ iow Map.! a
-            heuristic = w <.> (calcInsideWeight insides) <.> outside
-      ]
+predictionRule word rs iow = Right app
+    where
+        app :: Item nt t wt
+            -> Container nt t wt 
+            -> [(Item nt t wt, wt)]
+        app (Active _ (Rule ((_, as), _)) _ _ _ (Var i _:_) _ _ _) (_, _, inits) -- TODO insides ändert sich
+          = [ (Active cr' r w ri' left' right' fs' IMap.empty insides, heuristic) --TODO Anpassen
+          | let a = as !! i
+          , a `Set.member` inits
+          , (r@(Rule ((a', as'), (f:fs))), w) <- MMap.lookup a rs -- TODO, Was, wenn Fanout 0?
+          , let fsindex = prepareComps fs
+          , (cr', ri', left', right', fs') <- completeComponentsAndNextTerminals word IMap.empty 0 Epsilon f fsindex
+          , let insides = IMap.fromList $ zip [0..] (map (fst . (iow Map.!)) as')
+                outside = snd $ iow Map.! a'
+                heuristic = w <.> (calcInsideWeight insides) <.> outside
+          ]
+        app _ _ = []
 
 
 combineRule :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq t, Weight wt)
@@ -155,7 +167,7 @@ combineRule :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq
 combineRule word iow = Right app
     where
         app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
-        app trigger (_, allItems)
+        app trigger (_, allItems, _)
          =  [(Active cr' r wt ri' left' right' fs' completions insides, heu)
            | chartItem <- allItems
            , ((Active cr r wt ri left right fs completions insides), heu) <- (consequences trigger chartItem)  ++ (consequences chartItem trigger)
@@ -190,16 +202,17 @@ doubleInsert :: IMap.IntMap (IMap.IntMap Range) -> Int -> Int -> Range -> IMap.I
 doubleInsert m i j r = IMap.insertWith IMap.union i (IMap.singleton j r) m
    
 update :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt, Hashable nt, Semiring wt) => Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
-update (p, allItems) item@(Active cr r@(Rule ((nt, _), _)) wt ri left [] [] completed insides) =
+update (p, allItems, n) item@(Active cr r@(Rule ((nt, _), _)) wt ri left [] [] completed insides) =
     case getRangevector cr' of
         Just crv ->  case getBacktrace r wt completed of 
             Just bt -> case C.insert p nt crv bt (calcInsideWeight insides) of 
-                (p', isnew) -> ((p',  addIfNew item allItems), isnew || (not $ item `elem` allItems))
-            Nothing -> ((p, allItems), False)
-        Nothing -> ((p, allItems), False)
+                (p', isnew) -> ((p',  addIfNew item allItems, n), isnew || (not $ item `elem` allItems))
+            Nothing -> ((p, allItems, n), False)
+        Nothing -> ((p, allItems, n), False)
     where cr' = IMap.insert ri left cr
-
-update (p, allItems) item = ((p, (addIfNew item allItems)), not $ item `elem` allItems) 
+update (p, allItems, n) item@(Active _ (Rule ((_, as),_)) _ _ _ (Var i _:_) _ _ _)
+        = ((p, (addIfNew item allItems), (as !! i) `Set.delete` n), not $ item `elem` allItems) -- TODO Warum True überall?
+update (p, allItems, n) item = ((p, (addIfNew item allItems), n), not $ item `elem` allItems) 
 
 getRangevector :: IMap.IntMap Range -> Maybe Rangevector
 getRangevector cr = fromList $ map snd $ IMap.toAscList cr 
