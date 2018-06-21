@@ -92,9 +92,11 @@ initialPrediction :: forall nt t wt. (Hashable nt, Eq nt, Semiring wt, Eq t, Sho
                   -> C.ChartRule (Item nt t wt) wt (Container nt t wt)
 initialPrediction word srules iow 
   = Left [ (Active cr' r w ri' left' right' fs' IMap.empty insides, heuristic)  
-      | (r@(Rule ((_, as), (f:fs))), w) <- srules -- TODO Was, wenn Variable Fan-Out 0?
+      | (r@(Rule ((_, as), fs)), w) <- srules -- TODO Was, wenn Variable Fan-Out 0?
       , let fsindex = prepareComps fs
-      , (cr', ri', left', right', fs') <- completeComponentsAndNextTerminals word IMap.empty 0 Epsilon f fsindex -- TODO Falsch, muss nicht bei 0 anfangen. Überall schauen, ob das falsch ist
+      , let (f0: fRest) = fsindex
+      , ((firstri, firstright), firstfs) <- allCombinations [] f0 fRest
+      , (cr', ri', left', right', fs') <- completeComponentsAndNextTerminals word IMap.empty firstri Epsilon firstright firstfs
       , let insides = IMap.fromList $ zip [0..] (map (fst . (iow Map.!)) as)
       , let heuristic = w <.> calcInsideWeight insides
       ]
@@ -104,7 +106,7 @@ calcInsideWeight insides = foldl (<.>) one (map snd (IMap.toList insides ))
 
 -- give every companent its index
 prepareComps :: Function t -> [(Int, [VarT t])]
-prepareComps = zip [1..]
+prepareComps = zip [0..]
 
 -- Get all Componentens of a function with all remaining componentsItems in the second Item
 allCombinations :: [(Int, [VarT t])]  -> (Int, [VarT t]) -> [(Int, [VarT t])] -> [((Int, [VarT t]),  [(Int, [VarT t])])]
@@ -151,9 +153,11 @@ predictionRule word rs iow = Right app
           = [ (Active cr' r w ri' left' right' fs' IMap.empty insides, heuristic) --TODO Anpassen
           | let a = as !! i
           , a `Set.member` inits
-          , (r@(Rule ((a', as'), (f:fs))), w) <- MMap.lookup a rs -- TODO, Was, wenn Fanout 0?
+          , (r@(Rule ((a', as'), fs)), w) <- MMap.lookup a rs -- TODO, Was, wenn Fanout 0?
           , let fsindex = prepareComps fs
-          , (cr', ri', left', right', fs') <- completeComponentsAndNextTerminals word IMap.empty 0 Epsilon f fsindex
+          , let (f0: fRest) = fsindex
+          , ((firstri, firstright), firstfs) <- allCombinations [] f0 fRest
+          , (cr', ri', left', right', fs') <- completeComponentsAndNextTerminals word IMap.empty firstri Epsilon firstright firstfs
           , let insides = IMap.fromList $ zip [0..] (map (fst . (iow Map.!)) as')
                 outside = snd $ iow Map.! a'
                 heuristic = w <.> (calcInsideWeight insides) <.> outside
