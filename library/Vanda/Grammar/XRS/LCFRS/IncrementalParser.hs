@@ -6,9 +6,6 @@ module Vanda.Grammar.XRS.LCFRS.IncrementalParser
     Container
   ) where
 
--- Prepare: 1. Regelsortieren (S -> [Rules, die mit S starten], A ->...),  2. NT -> (inputw, outputw), Alle Start-NT mit inputw >0
--- Default werte: Weight - 1, Beam Width - 10000, max number of ret. Trees -1 (!= Fanout)
-
 import Data.Hashable (Hashable(hashWithSalt))
 import Data.Converging (Converging)
 import Data.Maybe (fromMaybe, mapMaybe, maybeToList,catMaybes, isNothing)
@@ -19,7 +16,6 @@ import Data.Weight
 import Vanda.Grammar.PMCFG
 
 import qualified Data.HashMap.Lazy             as Map
-
 import qualified Data.MultiHashMap             as MMap
 import qualified Data.IntMap                   as IMap
 import qualified Data.HashSet                  as Set
@@ -27,7 +23,6 @@ import qualified Vanda.Grammar.XRS.LCFRS.Chart as C
 
 data Item nt t wt = Active (IMap.IntMap Range) (Rule nt t) wt Int Range [VarT t] [(Int, [VarT t])] (IMap.IntMap (IMap.IntMap Range)) (IMap.IntMap wt) deriving (Show) 
 
---TODO Richtig?
 instance (Eq nt, Eq t) => Eq (Item nt t wt) where
   (Active cr r _ ri left right nc completions _) == (Active cr' r' _ ri' left' right' nc' completions' _) 
     =  cr          == cr'
@@ -38,15 +33,14 @@ instance (Eq nt, Eq t) => Eq (Item nt t wt) where
     && nc          == nc'
     && completions == completions'
 
--- TODO Besser?
 instance (Hashable nt, Hashable t) => Hashable (Item nt t wt) where
   salt `hashWithSalt` (Active _ r _ _ left _ _ _ _) 
     = salt `hashWithSalt` r `hashWithSalt` left
 
 type Container nt t wt = ( C.Chart nt t wt -- Passive Items
-                         , Set.HashSet nt -- Not init. NTs
-                         , MMap.MultiMap (nt, Int) (Item nt t wt) -- Map of all Items that need the Component of the NT (Key) as the next Token for Combine
-                         , MMap.MultiMap (nt, Int) (Item nt t wt) -- Map of all Items that have the Component of the NT (Key) already completed
+                         , Set.HashSet nt -- Not initialized NTs
+                         , MMap.MultiMap (nt, Int) (Item nt t wt) -- Map of all Items that need the Component of the NT (Key) as the next Token for Combine (Search Map)
+                         , MMap.MultiMap (nt, Int) (Item nt t wt) -- Map of all Items that have the Component of the NT (Key) already completed (Known Map)
                          )
 
 parse :: forall nt t wt.(Show nt, Show t, Show wt, Hashable nt, Hashable t, Eq t, Ord wt, Weight wt, Ord nt, Converging wt) 
@@ -94,16 +88,16 @@ initialPrediction word srules iow
 calcInsideWeight :: forall wt. (Semiring wt) => IMap.IntMap wt -> wt
 calcInsideWeight insides = foldl (<.>) one (map snd (IMap.toList insides ))
 
--- give every companent its index
+-- give every component of a function its index
 prepareComps :: Function t -> [(Int, [VarT t])]
 prepareComps = zip [0..]
 
--- Get all Componentens of a function with all remaining componentsItems in the second Item
+-- Get all Components of a function with all remaining Components in the second Item
 allCombinations :: [(Int, [VarT t])]  -> (Int, [VarT t]) -> [(Int, [VarT t])] -> [((Int, [VarT t]),  [(Int, [VarT t])])]
 allCombinations xs x [] = [(x, xs)]
 allCombinations xs x y'@(y:ys) = (x, xs ++ y') : (allCombinations (x:xs) y ys)
 
--- complete Terminals
+-- If the next Token is a Terminal, replace it by all possible Ranges for the given word (Scan). Complete Components and take all Combinations of the remaining Components. Stop if next Token in Variable
 completeComponentsAndNextTerminals :: (Eq t, Show t)
                     => [t] -- Word
                     -> IMap.IntMap Range -- Already Completed
@@ -137,11 +131,11 @@ predictionRule word rs iow = Right app
         app :: Item nt t wt
             -> Container nt t wt 
             -> [(Item nt t wt, wt)]
-        app (Active _ (Rule ((_, as), _)) _ _ _ (Var i _:_) _ _ _) (_, inits, _, _) -- TODO insides ändert sich
+        app (Active _ (Rule ((_, as), _)) _ _ _ (Var i _:_) _ _ _) (_, inits, _, _)
           = [ (Active cr' r w ri' left' right' fs' IMap.empty insides, heuristic)
           | let a = as !! i
           , a `Set.member` inits
-          , (r@(Rule ((a', as'), fs)), w) <- MMap.lookup a rs -- TODO, Was, wenn Fanout 0?
+          , (r@(Rule ((a', as'), fs)), w) <- MMap.lookup a rs
           , let fsindex = prepareComps fs
           , let (f0: fRest) = fsindex
           , ((firstri, firstright), firstfs) <- allCombinations [] f0 fRest
@@ -207,14 +201,14 @@ update (p, n, s, k) item@(Active cr r@(Rule ((nt, _), _)) wt ri left [] [] compl
     case getRangevector cr' of
         Just crv ->  case getBacktrace r wt completed of 
             Just bt -> case C.insert p nt crv bt (calcInsideWeight insides) of 
-                (p', isnew) -> ((p', n, s, MMap.insert (nt, ri) item k), isnew || (not $ item `elem` (MMap.lookup (nt, ri) k))) -- look if new in chart or in known Items
+                (p', isnew) -> ((p', n, s, MMap.insert (nt, ri) item k), isnew || (not $ item `elem` (MMap.lookup (nt, ri) k))) -- look if new in chart or in Known Map
             Nothing -> ((p, n, s, k), False)
         Nothing -> ((p, n, s, k), False)
     where cr' = IMap.insert ri left cr
 update (p, n, s, k) item@(Active _ (Rule ((nt, _), _)) _ ri _ [] _ _ _) -- New Finished Component, but still unfinished components
         = ((p, n, s, MMap.insert (nt, ri) item k), (not $ item `elem` (MMap.lookup (nt, ri) k)))
 update (p, n, s, k) item@(Active _ (Rule ((_, as),_)) _ _ _ (Var i j:_) _ _ _)
-        = ((p, (as !! i) `Set.delete` n, MMap.insert((as !! i), j) item s, k), (not $ item `elem` (MMap.lookup (as !!i, j) s)))
+        = ((p, (as !! i) `Set.delete` n, MMap.insert((as !! i), j) item s, k), (not $ item `elem` (MMap.lookup (as !!i, j) s))) -- Is Item new in Search Map
 update (p, n, s, k) _ = ((p, n, s, k), False)
 
 getRangevector :: IMap.IntMap Range -> Maybe Rangevector
@@ -233,6 +227,7 @@ getBacktrace rule iw completions =
                 | rangesOfOneNT <- (IMap.elems completions)
                 , let rv = fromList $ IMap.elems rangesOfOneNT
                 ]
+
 --Could each RV of every NT be succesfully calculated
 containsANothing :: [Maybe Rangevector] -> Maybe [Rangevector]
 containsANothing xs = case null $ filter isNothing xs of 
