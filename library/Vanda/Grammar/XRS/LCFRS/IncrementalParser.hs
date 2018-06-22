@@ -223,8 +223,7 @@ combineRule word iow = Right app
             = [(Active cr rule wt ri left'' rights fs completed' insides', heuristic) 
             | j == ri' -- Is component number right?
             , a == (as!!i) -- Is NT right?
-            , isCompatible (IMap.toList $ fromMaybe IMap.empty (completeds IMap.!? i)) -- Are all Ranges for the insert NT that are used by the search Item part of the completed Item? 
--- If no Ranges of the completed Item are used by the search Item right now, use empty map instead of Nothing
+            , isCompatible (IMap.toList $ fromMaybe IMap.empty (completeds IMap.!? i)) -- Are all Ranges for the insert NT that are used by the search Item part of the completed Item? If no Ranges of the completed Item are used by the search Item right now, use empty map instead of Nothing
             , left'' <- maybeToList $ safeConc left left'
             , let completed' = doubleInsert i j left' completeds
                   insides' = IMap.insert i (wtf <.> calcInsideWeight insidesf) insidess -- Override old insert Weight for that NT with the new one in the now used Item
