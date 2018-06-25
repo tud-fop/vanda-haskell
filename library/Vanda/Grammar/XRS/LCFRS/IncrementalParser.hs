@@ -246,7 +246,7 @@ doubleInsert i j r m = IMap.insertWith IMap.union i (IMap.singleton j r) m
 -- Update Function for Container
 update :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt, Hashable nt, Semiring wt) => Container nt t wt -> Item nt t wt -> (Container nt t wt, Bool)
 update (p, n, s, k) item@(Active cr r@(Rule ((nt, _), _)) wt ri left [] [] completed insides) = -- Active Item is completely gone through -> Store it in chart if it is well formed
-    case getRangevector cr' of
+    case getRangevectors cr' of
         Just crv ->  case getBacktrace r wt completed of 
             Just bt -> case C.insert p nt crv bt (calcInsideWeight insides) of 
                 (p', isnew) -> ((p', n, s, MMap.insert (nt, ri) item k), isnew || (not $ item `elem` (MMap.lookup (nt, ri) k))) -- look if item is new in chart or in Known Map
@@ -260,8 +260,8 @@ update (p, n, s, k) item@(Active _ (Rule ((_, as),_)) _ _ _ (Var i j:_) _ _ _)
 update (p, n, s, k) _ = ((p, n, s, k), False)
 --
 -- Try to create a Rangevector out of all found component Ranges
-getRangevector :: IMap.IntMap Range -> Maybe Rangevector
-getRangevector cr = fromList $ map snd $ IMap.toAscList cr 
+getRangevectors :: IMap.IntMap Range -> Maybe Rangevector
+getRangevectors cr = fromList $ map snd $ IMap.toAscList cr 
 
 -- Try to create a Backtrace out of the used Rule, together with its weight and the Ranges of all used Variables
 getBacktrace :: 
