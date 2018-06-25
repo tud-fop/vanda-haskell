@@ -200,22 +200,22 @@ combineRule :: forall nt t wt. (Show nt, Show t, Show wt, Hashable nt, Eq nt, Eq
 combineRule word iow = Right app
     where
         app :: Item nt t wt -> Container nt t wt -> [(Item nt t wt, wt)]
-        app trigger (_, _, s, k)
-    -- Combine trigger Item with all Items that already have completed the next Token of the trigger Item
+    -- Combine trigger Item with all Items that already have completed the next variable of the trigger Item
+        app trigger@(Active _ (Rule ((_, as), _)) _ _ _ (Var i j:_) _ _ _) (_, _, _, k)
          =  [(Active cr' r wt ri' left' right' fs' completions insides, heu)
-           | (Active _ (Rule ((_, as), _)) _ _ _ (Var i j:_) _ _ _) <- [trigger] -- Just so that I can pattern match different patterns in the two lists
-           , chartItem <- MMap.lookup ((as !! i), j) k
+           | chartItem <- MMap.lookup ((as !! i), j) k
            , ((Active cr r wt ri left right fs completions insides), heu) <- consequences trigger chartItem
            , (cr', ri', left', right', fs') <- completeComponentsAndNextTerminals word cr ri left right fs
          ]
     -- Combine all Items that have the last completed component of the trigger Item as next Token
-         ++ [(Active cr' r wt ri' left' right' fs' completions insides, heu)
-           | (Active _ (Rule ((a, _), _)) _ currri _ [] _ _ _) <- [trigger] -- Just so that I can pattern match different patterns in the two lists
-           , chartItem <- MMap.lookup (a , currri) s
+        app trigger@(Active _ (Rule ((a, _), _)) _ currri _ [] _ _ _) (_, _, s, _)
+            = [(Active cr' r wt ri' left' right' fs' completions insides, heu)
+           | chartItem <- MMap.lookup (a , currri) s
            , ((Active cr r wt ri left right fs completions insides), heu) <- (consequences chartItem trigger)
            , (cr', ri', left', right', fs') <- completeComponentsAndNextTerminals word cr ri left right fs
          ]
-    
+        app _ _ = []
+
         consequences :: Item nt t wt -- searching Item
                         -> Item nt t wt -- completed Item
                         -> [(Item nt t wt, wt)]
