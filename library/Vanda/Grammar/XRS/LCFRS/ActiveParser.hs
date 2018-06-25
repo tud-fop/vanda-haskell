@@ -239,7 +239,7 @@ completionRule word ios = Right app
         | range' <- maybeToList $ safeConc range (rv ! j)
         , let c' = IMap.insert i rv c
               inside = aiw <.> (piw </> fst (ios Map.! a))
-              outside = snd $ ios Map.! a
+              outside = snd $ ios Map.! lhs r
         , (rho', f') <- completeKnownTokens word c' (range':rho) (fs:fss)
         ]
     consequences _ _ = []
