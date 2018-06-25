@@ -226,7 +226,7 @@ combineRule word iow = Right app
             , isCompatible (IMap.toList $ fromMaybe IMap.empty (completeds IMap.!? i)) -- Are all Ranges for the insert NT that are used by the search Item part of the completed Item? If no Ranges of the completed Item are used by the search Item right now, use empty map instead of Nothing
             , left'' <- maybeToList $ safeConc left left'
             , let completed' = doubleInsert i j left' completeds
-                  numberOfUsedComponentsNT = length $ IMap.toList $ fromMaybe IMap.empty (completeds IMap.!? i)
+                  numberOfUsedComponentsNT = length $ IMap.toList $ fromMaybe IMap.empty (completed' IMap.!? i)
                   numberOfAllComponentsNT = length $ filter (\(Var m _) -> i == m) $ filter isVar $ (concat fsNT)
                   insides' = if (numberOfUsedComponentsNT == numberOfAllComponentsNT) 
                     then IMap.delete i insidess -- Used all components of NT -> Remove Weight of this NT from Map
