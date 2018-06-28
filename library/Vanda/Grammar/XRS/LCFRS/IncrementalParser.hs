@@ -217,7 +217,7 @@ combineRule word iow = Right app
         app _ _ = []
 
         consequences :: Item nt t wt -- searching Item
-                        -> Item nt t wt -- completed Item
+                        -> Item nt t wt -- Item with finished component
                         -> [(Item nt t wt, wt)]
         consequences (Active cr rule@(Rule ((nts, as), fsNT)) wt ri left ((Var i j):rights) fs completeds insidess) (Active crf (Rule ((a, _), _)) wtf ri' left' [] _ _ insidesf)
             = [(Active cr rule wt ri left'' rights fs completed' insides', heuristic) 
@@ -226,12 +226,7 @@ combineRule word iow = Right app
             , isCompatible (IMap.toList $ fromMaybe IMap.empty (completeds IMap.!? i)) -- Are all Ranges for the insert NT that are used by the search Item part of the completed Item? If no Ranges of the completed Item are used by the search Item right now, use empty map instead of Nothing
             , left'' <- maybeToList $ safeConc left left'
             , let completed' = doubleInsert i j left' completeds
-                  numberOfUsedComponentsNT = length $ IMap.toList $ fromMaybe IMap.empty (completed' IMap.!? i)
-                  numberOfAllComponentsNT = length $ filter (\(Var m _) -> i == m) $ filter isVar $ (concat fsNT)
-                  insides' = if (numberOfUsedComponentsNT == numberOfAllComponentsNT) 
-                    then IMap.delete i insidess -- Used all components of NT -> Remove Weight of this NT from Map
-                    else IMap.insert i (wtf <.> calcInsideWeight insidesf) insidess -- Override old insert Weight for that NT with the new one in the now used Item
-
+                  insides' = IMap.insert i (wtf <.> calcInsideWeight insidesf) insidess -- Override old Insideweight for that NT with the newer one from the now used Item
                   outside =  snd $ iow Map.! nts
                   heuristic = wt <.> (calcInsideWeight insides') <.> outside
                 ] 
@@ -253,7 +248,7 @@ update :: (Show nt, Show t, Show wt, Eq nt, Eq t, Eq wt, Hashable nt, Semiring w
 update (p, n, s, k) item@(Active cr r@(Rule ((nt, _), _)) wt ri left [] [] completed insides) = -- Active Item is completely gone through -> Store it in chart if it is well formed
     case getRangevectors cr' of
         Just crv ->  case getBacktrace r wt completed of 
-            Just bt -> case C.insert p nt crv bt (calcInsideWeight insides) of 
+            Just bt -> case C.insert p nt crv bt (wt <.> calcInsideWeight insides) of 
                 (p', isnew) -> ((p', n, s, MMap.insert (nt, ri) item k), isnew || (not $ item `elem` (MMap.lookup (nt, ri) k))) -- look if item is new in chart or in Known Map
             Nothing -> ((p, n, s, k), False)
         Nothing -> ((p, n, s, k), False)
@@ -274,9 +269,9 @@ getBacktrace ::
     -> wt
     -> IMap.IntMap (IMap.IntMap Range) -- Completions
     -> Maybe (C.Backtrace nt t wt)
-getBacktrace rule iw completions = 
+getBacktrace rule rw completions = 
     case containsANothing rvs of
-        Just rvs' -> Just $ C.Backtrace rule iw rvs'  -- Rangevector of every NT
+        Just rvs' -> Just $ C.Backtrace rule rw rvs'  -- Rangevector of every NT
         Nothing -> Nothing
     where rvs -- List of Rangevectors of all NTs used in the Rule
             = [rv 
