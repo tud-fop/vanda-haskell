@@ -219,7 +219,7 @@ combineRule word iow = Right app
         consequences :: Item nt t wt -- searching Item
                         -> Item nt t wt -- completed Item
                         -> [(Item nt t wt, wt)]
-        consequences (Active cr rule@(Rule ((_, as), fsNT)) wt ri left ((Var i j):rights) fs completeds insidess) (Active crf (Rule ((a, _), _)) wtf ri' left' [] _ _ insidesf)
+        consequences (Active cr rule@(Rule ((nts, as), fsNT)) wt ri left ((Var i j):rights) fs completeds insidess) (Active crf (Rule ((a, _), _)) wtf ri' left' [] _ _ insidesf)
             = [(Active cr rule wt ri left'' rights fs completed' insides', heuristic) 
             | j == ri' -- Is component number right?
             , a == (as!!i) -- Is NT right?
@@ -232,7 +232,7 @@ combineRule word iow = Right app
                     then IMap.delete i insidess -- Used all components of NT -> Remove Weight of this NT from Map
                     else IMap.insert i (wtf <.> calcInsideWeight insidesf) insidess -- Override old insert Weight for that NT with the new one in the now used Item
 
-                  outside =  snd $ iow Map.! a
+                  outside =  snd $ iow Map.! nts
                   heuristic = wt <.> (calcInsideWeight insides') <.> outside
                 ] 
                 where isCompatible :: [(Int, Range)] -> Bool
