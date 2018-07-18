@@ -5,7 +5,7 @@ Module:      VandaCLI.NeGra
 Description: membership in /Dyck languages/ and /congruence multiple Dyck languages/
 Copyright:   to be discussed
 License:     BSD-style
-Maintainer:  Felix.Völker@tu-dresden.de
+Maintainer:  Felix.Voelker@tu-dresden.de
 Stability:   unknown
 
 TODO Documentaion
@@ -26,27 +26,27 @@ import           System.Console.CmdArgs.Explicit.Misc
 data Args
   = Help String
   | Filter
-    { by_length                 :: Intervals
-    , by_gap_degree             :: Intervals
-    , by_sentence_number        :: Intervals
-    , by_height                 :: Intervals
-    , by_allowed_words          :: FilePath
-    , by_disallowed_words       :: FilePath
-    , by_allowed_pos_tags       :: FilePath
-    , by_disallowed_pos_tags    :: FilePath
-    , by_allowed_inner_nodes    :: FilePath
-    , by_disallowed_inner_nodes :: FilePath
+    { byLength               :: Intervals
+    , byGapDegree            :: Intervals
+    , bySentenceNumber       :: Intervals
+    , byHeight               :: Intervals
+    , byAllowedWords         :: FilePath
+    , byDisallowedWords      :: FilePath
+    , byAllowedPosTags       :: FilePath
+    , byDisallowedPosTags    :: FilePath
+    , byAllowedInnerNodes    :: FilePath
+    , byDisallowedInnerNodes :: FilePath
     }
   | Transform
-    { delete_subtree_with_words :: FilePath
-    , replace_words_by_pos_tag  :: Bool
-    , renumber_sentences        :: Integer
+    { deleteSubtreeWithWords :: FilePath
+    , replaceWordsByPosTag   :: Bool
+    , renumberSentences      :: Integer
     }
   | Statistics
-    { stat_intervals            :: Intervals
-    , stat_length               :: Bool
-    , stat_gap_deg              :: Bool
-    , stat_height               :: Bool
+    { statIntervals :: Intervals
+    , statLength    :: Bool
+    , statGapDeg    :: Bool
+    , statHeight    :: Bool
     }
     deriving Show
 
@@ -90,73 +90,73 @@ cmdArgs
   where
     flagArgByLength
       = flagReq ["l", "by-length"]
-                (\ a x -> Right x{by_length = Intervals a})
+                (\ a x -> Right x{byLength = Intervals a})
                 "INTERVALS" ""
     flagArgByGapDegree
       = flagReq ["g", "by-gap-degree"]
-                (\ a x -> Right x{by_gap_degree = Intervals a})
+                (\ a x -> Right x{byGapDegree = Intervals a})
                 "INTERVALS" ""
     flagArgBySentenceNumber
       = flagReq ["n", "by-sentence-number"]
-                (\ a x -> Right x{by_sentence_number = Intervals a})
+                (\ a x -> Right x{bySentenceNumber = Intervals a})
                 "INTERVALS" ""
     flagArgByHeight
       = flagReq ["h", "by-height"]
-                (\ a x -> Right x{by_height = Intervals a})
+                (\ a x -> Right x{byHeight = Intervals a})
                 "INTERVALS" ""
     flagArgByAllowedWords
       = flagReq ["w", "by-allowed-words"]
-                (\ a x -> Right x{by_allowed_words = a})
+                (\ a x -> Right x{byAllowedWords = a})
                 "FILE" ""
     flagArgByDisallowedWords
       = flagReq ["by-disallowed-words"]
-                (\ a x -> Right x{by_disallowed_words = a})
+                (\ a x -> Right x{byDisallowedWords = a})
                 "FILE" ""
     flagArgByAllowedPosTags
       = flagReq ["p", "by-allowed-pos-tags"]
-                (\ a x -> Right x{by_allowed_pos_tags = a})
+                (\ a x -> Right x{byAllowedPosTags = a})
                 "FILE" ""
     flagArgByDisallowedPosTags
       = flagReq ["by-disallowed-pos-tags"]
-                (\ a x -> Right x{by_disallowed_pos_tags = a})
+                (\ a x -> Right x{byDisallowedPosTags = a})
                 "FILE"""
     flagArgByAllowedInnerNodes
       = flagReq ["i", "by-allowed-inner-nodes"]
-                (\ a x -> Right x{by_allowed_inner_nodes = a})
+                (\ a x -> Right x{byAllowedInnerNodes = a})
                 "FILE" ""
     flagArgByDisallowedInnerNodes
       = flagReq ["by-disallowed-inner-nodes"]
-                (\ a x -> Right x{by_disallowed_inner_nodes = a})
+                (\ a x -> Right x{byDisallowedInnerNodes = a})
                 "FILE" ""
     flagArgDelSubTreeWWords
       = flagReq ["d", "delete-subtree-with-words"]
-                (\ a x -> Right x{delete_subtree_with_words = a})
+                (\ a x -> Right x{deleteSubtreeWithWords = a})
                 "FILE" ""
     flagArgRepWordsByPosTag
       = flagBool ["r", "replace-words-by-pos-tag"]
-                 (\ b x -> x{replace_words_by_pos_tag = b})
+                 (\ b x -> x{replaceWordsByPosTag = b})
                  ""
     flagArgReNumSentence
       = flagReq ["n", "renumber-sentences"]
-                (\ a x -> Right x{renumber_sentences = toInteger $ read a})
+                (\ a x -> Right x{renumberSentences = toInteger $ read a})
                 "STARTINDEX" ""
     flagArgStatLength
       = flagBool ["l", "length"]
-                 (\ b x -> x{stat_length = b})
+                 (\ b x -> x{statLength = b})
                  ""
     flagArgStatGapDeg
       = flagBool ["g", "gap-degree"]
-                 (\ b x -> x{stat_gap_deg = b})
-                 ""             
+                 (\ b x -> x{statGapDeg = b})
+                 ""
     flagArgStatHeight
       = flagBool ["h", "height"]
-                 (\ b x -> x{stat_height = b})
+                 (\ b x -> x{statHeight = b})
                  ""
     flagArgStatIntervals
-      = flagArg (\ a x -> Right x{stat_intervals = Intervals a})
+      = flagArg (\ a x -> Right x{statIntervals = Intervals a})
                 "[INTERVALS]"
 
- 
+
 main :: IO ()
 main = processArgs (populateHelpMode Help cmdArgs) >>= mainArgs
 
