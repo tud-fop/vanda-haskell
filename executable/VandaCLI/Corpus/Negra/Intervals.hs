@@ -12,8 +12,25 @@ module VandaCLI.Corpus.Negra.Intervals (
     Intervals(..)
     ) where
 
-data Intervals = Intervals String deriving (Eq, Show)
+
+import           Data.List.Split
+
+type Intervals = String
 -- data Intervals = StringIntervals String | PredIntervals [[String]] deriving (Eq, Show)
+isInIntervals :: Int -> Intervals -> Bool
+isInIntervals x intervals = or $ map ($ x) (getPred intervals)
+-- isInIntervals x intervals = any ($ x) (getPred intervals)
 
-myfoo = 5
+getPred :: Intervals -> [Int->Bool]
+getPred intervals = map getSinglePred (getPredList intervals)
 
+getPredList :: Intervals -> [[String]]
+getPredList intervals = map (splitOn "-") (splitOn "," intervals)
+
+getSinglePred :: [String] -> Int->Bool
+getSinglePred [""]    = const True
+getSinglePred [x]     = \y -> y == read x
+getSinglePred ["",x]  = \y -> y <= read x
+getSinglePred [x, ""] = \y -> y >= read x
+getSinglePred [x,y]   = \z -> (z <= read y) && (z >= read x)
+getSinglePred _       = const True
