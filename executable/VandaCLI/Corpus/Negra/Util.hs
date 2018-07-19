@@ -28,7 +28,7 @@ readNegraFile fl = do
     -- parseNegra $ T.readFile fl
 
 putNegra :: Negra -> IO()
-putNegra corp = mapM_ (T.putStrLn . LT.pack . show) $ printNegra corp
+putNegra corp = mapM_ (T.putStrLn . LT.pack) $ printNegra corp
 
 printNegra :: Negra -> [String]
 printNegra negra = concatMap printSentence $ sentences negra

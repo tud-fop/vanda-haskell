@@ -57,8 +57,8 @@ data Args
 cmdArgs :: Mode Args
 cmdArgs
   = modes "negra" (Help $ defaultHelp cmdArgs) "tools for the NeGra export format"
-  -- [ (modeEmpty $ Filter (Intervals "0-") (Intervals "0-") (Intervals "0-") (Intervals "0-") "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null")
-  [ (modeEmpty $ Filter (Intervals "0-") (Intervals "0-") (Intervals "0-") (Intervals "0-") "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null")
+--    [ (modeEmpty $ Filter (Intervals "0-") (Intervals "0-") (Intervals "0-") (Intervals "0-") "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null")
+  [ (modeEmpty $ Filter "" "" "" "" "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null")
     { modeNames = ["filter"]
     , modeHelp = "filters a corpus according to specified predicates"
     -- , modeArgs = Nothing
@@ -82,7 +82,7 @@ cmdArgs
                                , flagArgReNumSentence
                                ]
                                }
-  , ( modeEmpty $ Statistics (Intervals "0-") False False False)
+  , ( modeEmpty $ Statistics "" False False False)
     { modeHelp = "outputs corpus statistics"
     , modeNames = ["statistics"]
     , modeArgs = ([ flagArgStatIntervals{argRequire = False}], Nothing)
@@ -95,19 +95,19 @@ cmdArgs
   where
     flagArgByLength
       = flagReq ["l", "by-length"]
-                (\ a x -> Right x{byLength = Intervals a})
+                (\ a x -> Right x{byLength = a})
                 "INTERVALS" ""
     flagArgByGapDegree
       = flagReq ["g", "by-gap-degree"]
-                (\ a x -> Right x{byGapDegree = Intervals a})
+                (\ a x -> Right x{byGapDegree = a})
                 "INTERVALS" ""
     flagArgBySentenceNumber
       = flagReq ["n", "by-sentence-number"]
-                (\ a x -> Right x{bySentenceNumber = Intervals a})
+                (\ a x -> Right x{bySentenceNumber = a})
                 "INTERVALS" ""
     flagArgByHeight
       = flagReq ["h", "by-height"]
-                (\ a x -> Right x{byHeight = Intervals a})
+                (\ a x -> Right x{byHeight = a})
                 "INTERVALS" ""
     flagArgByAllowedWords
       = flagReq ["w", "by-allowed-words"]
@@ -158,7 +158,7 @@ cmdArgs
                  (\ b x -> x{statHeight = b})
                  ""
     flagArgStatIntervals
-      = flagArg (\ a x -> Right x{statIntervals = Intervals a})
+      = flagArg (\ a x -> Right x{statIntervals = a})
                 "[INTERVALS]"
 
 
@@ -176,6 +176,3 @@ mainArgs (Transform delSubTWs_file isReplacWsbyPosTags startindex)
   = do putStrLn "We're transforming"
 mainArgs (Statistics interv lenght gap_deg height)
   = do putStrLn "Some Statistics"
-
-
--- data Intervals = Intervals String deriving (Eq, Show)

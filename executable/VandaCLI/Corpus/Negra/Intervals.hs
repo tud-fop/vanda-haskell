@@ -9,7 +9,10 @@ Stability:   unknown
 This program decides the membership of /Dyck languages/ and /congruence multiple Dyck languages/ [cf. <http://fsmnlp2015.phil.hhu.de/wp-content/uploads/2015/06/denkinger-chomsky-schuetzenberger.pdf Tobias Denkinger: A Chomsky-Schützenberger result for weighted multiple context-free languages, 2015>].
 -}
 module VandaCLI.Corpus.Negra.Intervals (
-    Intervals(..)
+    Intervals,
+    isInIntervals,
+    isInPred,
+    getPred
     ) where
 
 
@@ -20,6 +23,10 @@ type Intervals = String
 isInIntervals :: Int -> Intervals -> Bool
 isInIntervals x intervals = or $ map ($ x) (getPred intervals)
 -- isInIntervals x intervals = any ($ x) (getPred intervals)
+
+isInPred :: Int -> [Int->Bool] -> Bool
+isInPred x ps = or $ map ($ x) ps
+
 
 getPred :: Intervals -> [Int->Bool]
 getPred intervals = map getSinglePred (getPredList intervals)
