@@ -21,9 +21,12 @@ module VandaCLI.NeGra
 import qualified Data.Text.Lazy.IO                    as T
 import           System.Console.CmdArgs.Explicit
 import           System.Console.CmdArgs.Explicit.Misc
+import qualified Vanda.Corpus.Negra                   as N
 import           Vanda.Corpus.Negra.Text              as NT
 import           VandaCLI.Corpus.Negra.Intervals
 import qualified VandaCLI.Corpus.Negra.Util           as NU
+
+
 
 
 
@@ -57,7 +60,6 @@ data Args
 cmdArgs :: Mode Args
 cmdArgs
   = modes "negra" (Help $ defaultHelp cmdArgs) "tools for the NeGra export format"
---    [ (modeEmpty $ Filter (Intervals "0-") (Intervals "0-") (Intervals "0-") (Intervals "0-") "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null")
   [ (modeEmpty $ Filter "" "" "" "" "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null")
     { modeNames = ["filter"]
     , modeHelp = "filters a corpus according to specified predicates"
@@ -169,10 +171,48 @@ mainArgs :: Args -> IO ()
 mainArgs (Help cs) = putStr cs
 mainArgs (Filter length_interval gap_degree_inteval sen_numebTestr_interval height_inteval alw_ws_file dis_ws_file alw_pos_file dis_pos_file alw_inn_file dis_inn_file)
   = do
-    putStrLn "We're filtering"
     expContent <- T.getContents
-    NU.putNegra $ NT.parseNegra expContent
+    let negra = NT.parseNegra expContent in
+      NU.putNegra $ filterNegra negra (Filter length_interval gap_degree_inteval sen_numebTestr_interval height_inteval alw_ws_file dis_ws_file alw_pos_file dis_pos_file alw_inn_file dis_inn_file)
+
+
 mainArgs (Transform delSubTWs_file isReplacWsbyPosTags startindex)
   = do putStrLn "We're transforming"
+
+
 mainArgs (Statistics interv lenght gap_deg height)
   = do putStrLn "Some Statistics"
+
+
+filterNegra :: N.Negra -> Args -> N.Negra
+filterNegra (N.Negra x y) f = N.Negra x (filterSentences y f)
+
+filterSentences :: [N.Sentence] -> Args -> [N.Sentence]
+filterSentences x (Filter
+  length_interval
+  gap_degree_inteval
+  sen_numebTestr_interval
+  height_inteval
+  alw_ws_file
+  dis_ws_file
+  alw_pos_file
+  dis_pos_file
+  alw_inn_file
+  dis_inn_file)
+    = filterByLength length_interval x
+filterSentences x _ = x
+
+filterByLength :: Intervals -> [N.Sentence] -> [N.Sentence]
+filterByLength _ [] = []
+filterByLength i (x:xs) = if isInIntervals (lengthNegraSentence (N.sData x)) i
+  then x : filterByLength i xs
+  else filterByLength i xs
+
+lengthNegraSentence :: [N.SentenceData] -> Int
+lengthNegraSentence []                    = 0
+lengthNegraSentence (N.SentenceWord{}:xs) = 1 + lengthNegraSentence xs
+lengthNegraSentence (N.SentenceNode{}:xs) = lengthNegraSentence xs
+lengthNegraSentence _                     = 0
+
+-- lengthNegra x (Filter length_interval gap_degree_inteval sen_numebTestr_interval height_inteval alw_ws_file dis_ws_file alw_pos_file dis_pos_file alw_inn_file dis_inn_file) = x
+-- lengthNegra x y = N.Negra (N.wordtags x) (filterSentences (N.sentences x) y)

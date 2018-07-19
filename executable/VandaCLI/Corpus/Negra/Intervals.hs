@@ -21,11 +21,11 @@ import           Data.List.Split
 type Intervals = String
 -- data Intervals = StringIntervals String | PredIntervals [[String]] deriving (Eq, Show)
 isInIntervals :: Int -> Intervals -> Bool
-isInIntervals x intervals = or $ map ($ x) (getPred intervals)
+isInIntervals x intervals = any ($ x) (getPred intervals)
 -- isInIntervals x intervals = any ($ x) (getPred intervals)
 
 isInPred :: Int -> [Int->Bool] -> Bool
-isInPred x ps = or $ map ($ x) ps
+isInPred x = any ($ x)
 
 
 getPred :: Intervals -> [Int->Bool]
