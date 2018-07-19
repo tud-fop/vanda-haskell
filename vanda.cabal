@@ -248,6 +248,7 @@ executable vanda
     , VandaCLI.PDTA.CmdArgs
     , VandaCLI.PMCFG
     , VandaCLI.XRSNGrams
+    , VandaCLI.NeGra
   if flag(gtk)
     other-modules:
       VandaCLI.MATLearner

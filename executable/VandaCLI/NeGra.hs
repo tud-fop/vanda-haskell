@@ -18,8 +18,12 @@ module VandaCLI.NeGra
 ) where
 
 
+import qualified Data.Text.Lazy.IO                    as T
 import           System.Console.CmdArgs.Explicit
 import           System.Console.CmdArgs.Explicit.Misc
+import           Vanda.Corpus.Negra.Text              as NT
+import           VandaCLI.Corpus.Negra.Intervals
+import qualified VandaCLI.Corpus.Negra.Util           as NU
 
 
 
@@ -53,6 +57,7 @@ data Args
 cmdArgs :: Mode Args
 cmdArgs
   = modes "negra" (Help $ defaultHelp cmdArgs) "tools for the NeGra export format"
+  -- [ (modeEmpty $ Filter (Intervals "0-") (Intervals "0-") (Intervals "0-") (Intervals "0-") "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null")
   [ (modeEmpty $ Filter (Intervals "0-") (Intervals "0-") (Intervals "0-") (Intervals "0-") "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null")
     { modeNames = ["filter"]
     , modeHelp = "filters a corpus according to specified predicates"
@@ -162,11 +167,15 @@ main = processArgs (populateHelpMode Help cmdArgs) >>= mainArgs
 
 mainArgs :: Args -> IO ()
 mainArgs (Help cs) = putStr cs
-mainArgs (Filter length_interval gap_degree_inteval sen_numebr_interval height_inteval alw_ws_file dis_ws_file alw_pos_file dis_pos_file alw_inn_file dis_inn_file)
-  = do putStrLn "We're filtering"
+mainArgs (Filter length_interval gap_degree_inteval sen_numebTestr_interval height_inteval alw_ws_file dis_ws_file alw_pos_file dis_pos_file alw_inn_file dis_inn_file)
+  = do
+    putStrLn "We're filtering"
+    expContent <- T.getContents
+    NU.putNegra $ NT.parseNegra expContent
 mainArgs (Transform delSubTWs_file isReplacWsbyPosTags startindex)
   = do putStrLn "We're transforming"
 mainArgs (Statistics interv lenght gap_deg height)
   = do putStrLn "Some Statistics"
 
-data Intervals = Intervals String deriving (Eq, Show)
+
+-- data Intervals = Intervals String deriving (Eq, Show)
