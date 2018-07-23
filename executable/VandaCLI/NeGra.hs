@@ -19,6 +19,7 @@ module VandaCLI.NeGra
 
 
 import qualified Data.Text.Lazy.IO                    as T
+import           Data.Tree
 import           System.Console.CmdArgs.Explicit
 import           System.Console.CmdArgs.Explicit.Misc
 import qualified Vanda.Corpus.Negra                   as N
@@ -188,7 +189,8 @@ filterNegra :: N.Negra -> Args -> N.Negra
 filterNegra (N.Negra x y) f = N.Negra x (filterSentences y f)
 
 filterSentences :: [N.Sentence] -> Args -> [N.Sentence]
-filterSentences x (Filter
+filterSentences [] _ = []
+filterSentences (x:xs) (Filter
   length_interval
   gap_degree_inteval
   sen_numebTestr_interval
@@ -199,20 +201,44 @@ filterSentences x (Filter
   dis_pos_file
   alw_inn_file
   dis_inn_file)
-    = filterByLength length_interval x
+    = if isInIntervals (lengthNegraSentence (N.sData x)) length_interval
+        -- && True
+        && isInIntervals (N.sId x) sen_numebTestr_interval
+        && isInIntervals (heightNegraSentence x) height_inteval
+        -- && True
+      then x : filterSentences xs (Filter
+        length_interval
+        gap_degree_inteval
+        sen_numebTestr_interval
+        height_inteval
+        alw_ws_file
+        dis_ws_file
+        alw_pos_file
+        dis_pos_file
+        alw_inn_file
+        dis_inn_file)
+      else filterSentences xs (Filter
+        length_interval
+        gap_degree_inteval
+        sen_numebTestr_interval
+        height_inteval
+        alw_ws_file
+        dis_ws_file
+        alw_pos_file
+        dis_pos_file
+        alw_inn_file
+        dis_inn_file)
 filterSentences x _ = x
-
-filterByLength :: Intervals -> [N.Sentence] -> [N.Sentence]
-filterByLength _ [] = []
-filterByLength i (x:xs) = if isInIntervals (lengthNegraSentence (N.sData x)) i
-  then x : filterByLength i xs
-  else filterByLength i xs
 
 lengthNegraSentence :: [N.SentenceData] -> Int
 lengthNegraSentence []                    = 0
 lengthNegraSentence (N.SentenceWord{}:xs) = 1 + lengthNegraSentence xs
 lengthNegraSentence (N.SentenceNode{}:xs) = lengthNegraSentence xs
-lengthNegraSentence _                     = 0
 
--- lengthNegra x (Filter length_interval gap_degree_inteval sen_numebTestr_interval height_inteval alw_ws_file dis_ws_file alw_pos_file dis_pos_file alw_inn_file dis_inn_file) = x
--- lengthNegra x y = N.Negra (N.wordtags x) (filterSentences (N.sentences x) y)
+heightOfTree :: Tree a -> Int
+heightOfTree (Node _ []) = 1
+heightOfTree (Node _ x)  = 1 + maximum (map heightOfTree x)
+
+heightNegraSentence :: N.Sentence -> Int
+heightNegraSentence x = heightOfTree $ N.negraToCrossedTree (N.sData x)
+
