@@ -18,6 +18,7 @@ module VandaCLI.NeGra
 ) where
 
 
+import           Data.List
 import qualified Data.Text.Lazy.IO                    as T
 import           Data.Tree
 import           System.Console.CmdArgs.Explicit
@@ -173,7 +174,6 @@ mainArgs (Help cs) = putStr cs
 mainArgs (Filter length_interval gap_degree_inteval sen_numebTestr_interval height_inteval alw_ws_file dis_ws_file alw_pos_file dis_pos_file alw_inn_file dis_inn_file)
   = do
     expContent <- T.getContents
-    -- if not
     let negra = NT.parseNegra expContent in
       NU.putNegra $ filterNegra negra (Filter length_interval gap_degree_inteval sen_numebTestr_interval height_inteval alw_ws_file dis_ws_file alw_pos_file dis_pos_file alw_inn_file dis_inn_file)
 
@@ -182,7 +182,71 @@ mainArgs (Transform delSubTWs_file isReplacWsbyPosTags startindex)
 
 
 mainArgs (Statistics interv lenght gap_deg height)
-  = do putStrLn "Some Statistics"
+  = do
+    expContent <- T.getContents
+    let negra = NT.parseNegra expContent in
+      do
+      if lenght
+        then printLengthStats negra
+        else return ()
+      if gap_deg
+        then printGapStats negra
+        else return ()
+      if height
+        then printHeightStats negra
+        else return ()
+
+getSentenceData :: N.Negra -> [[N.SentenceData]]
+getSentenceData n = map N.sData (N.sentences n)
+
+printLengthStats :: N.Negra -> IO()
+printLengthStats n
+  = let histo = map (\l@(x:xs) -> (x,length l)) . group . sort $ map lengthNegraSentence (getSentenceData n) in do
+      putStrLn "Statistic by length:"
+      putStrLn "Mean:"
+      putStrLn (show (getMean histo))
+      putStrLn "Avg.:"
+      putStrLn (show (getAvg histo))
+      putStrLn "Hist.:"
+      putStrLn (show histo)
+      putStrLn ""
+
+
+printGapStats :: N.Negra -> IO()
+printGapStats n
+  = let histo = map (\l@(x:xs) -> (x,length l)) . group . sort $ map gapDegree (N.sentences n) in do
+      putStrLn "Statistic by gap degree:"
+      putStrLn "Mean:"
+      putStrLn (show (getMean histo))
+      putStrLn "Avg.:"
+      putStrLn (show (getAvg histo))
+      putStrLn "Hist.:"
+      putStrLn (show histo)
+      putStrLn ""
+
+
+printHeightStats :: N.Negra -> IO()
+printHeightStats n
+  = let histo = map (\l@(x:xs) -> (x,length l)) . group . sort $ map heightNegraSentence (N.sentences n) in do
+      putStrLn "Statistic by height:"
+      putStrLn "Mean:"
+      putStrLn (show (getMean histo))
+      putStrLn "Avg.:"
+      putStrLn (show (getAvg histo))
+      putStrLn "Hist.:"
+      putStrLn (show histo)
+      putStrLn ""
+
+
+
+getMean :: [(Int,Int)] -> Float
+getMean x = fromIntegral (sum (map (\y -> fst y * snd y) x)) / fromIntegral (sum (map snd x))
+
+getAvg :: [(Int,Int)] -> Int
+getAvg x = concatMap (\(y,z) -> replicate z y) x !! (sum (map snd x) `div` 2)
+
+
+
 
 
 filterNegra :: N.Negra -> Args -> N.Negra

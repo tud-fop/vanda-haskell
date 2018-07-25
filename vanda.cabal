@@ -249,6 +249,8 @@ executable vanda
     , VandaCLI.PMCFG
     , VandaCLI.XRSNGrams
     , VandaCLI.NeGra
+    , VandaCLI.Corpus.Negra.Intervals
+    , VandaCLI.Corpus.Negra.Util
   if flag(gtk)
     other-modules:
       VandaCLI.MATLearner
