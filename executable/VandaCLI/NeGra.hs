@@ -208,7 +208,15 @@ shiftId :: Int -> N.Sentence -> N.Sentence
 shiftId n (N.Sentence id ed date orig com sdata) = N.Sentence (id + n) ed date orig com sdata
 
 replaceWdByPOS :: N.Negra -> N.Negra
-replaceWdByPOS x = x
+replaceWdByPOS (N.Negra wt st) =  N.Negra wt (map repWdPos st)
+
+repWdPos :: N.Sentence -> N.Sentence
+repWdPos (N.Sentence id ed date orig com sdata) = N.Sentence id ed date orig com (map wdToPOS sdata)
+
+wdToPOS :: N.SentenceData -> N.SentenceData
+wdToPOS (N.SentenceNode nd pos mt ed sed cm) = N.SentenceNode nd pos mt ed sed cm
+wdToPOS (N.SentenceWord wd pos mt ed sed cm) = N.SentenceWord pos pos mt ed sed cm
+
 
 
 getSentenceData :: N.Negra -> [[N.SentenceData]]
@@ -259,9 +267,6 @@ getMean x = fromIntegral (sum (map (\y -> fst y * snd y) x)) / fromIntegral (sum
 
 getAvg :: [(Int,Int)] -> Int
 getAvg x = concatMap (\(y,z) -> replicate z y) x !! (sum (map snd x) `div` 2)
-
-
-
 
 
 filterNegra :: N.Negra -> Args -> N.Negra
