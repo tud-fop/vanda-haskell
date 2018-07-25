@@ -49,7 +49,7 @@ data Args
   | Transform
     { deleteSubtreeWithWords :: FilePath
     , replaceWordsByPosTag   :: Bool
-    , renumberSentences      :: Integer
+    , renumberSentences      :: Int
     }
   | Statistics
     { statIntervals :: Intervals
@@ -147,7 +147,7 @@ cmdArgs
                  ""
     flagArgReNumSentence
       = flagReq ["n", "renumber-sentences"]
-                (\ a x -> Right x{renumberSentences = toInteger $ read a})
+                (\ a x -> Right x{renumberSentences = read a})
                 "STARTINDEX" ""
     flagArgStatLength
       = flagBool ["l", "length"]
@@ -178,8 +178,12 @@ mainArgs (Filter length_interval gap_degree_inteval sen_numebTestr_interval heig
       NU.putNegra $ filterNegra negra (Filter length_interval gap_degree_inteval sen_numebTestr_interval height_inteval alw_ws_file dis_ws_file alw_pos_file dis_pos_file alw_inn_file dis_inn_file)
 
 mainArgs (Transform delSubTWs_file isReplacWsbyPosTags startindex)
-  = do putStrLn "We're transforming"
-
+  = do
+    expContent <- T.getContents
+    let negra = NT.parseNegra expContent in
+      NU.putNegra $ if isReplacWsbyPosTags
+        then shiftIndex startindex (replaceWdByPOS negra)
+        else shiftIndex startindex negra
 
 mainArgs (Statistics interv lenght gap_deg height)
   = do
@@ -195,6 +199,17 @@ mainArgs (Statistics interv lenght gap_deg height)
       if height
         then printHeightStats negra
         else return ()
+
+
+shiftIndex :: Int -> N.Negra -> N.Negra
+shiftIndex n (N.Negra wt st) = N.Negra wt (map (shiftId n) st)
+
+shiftId :: Int -> N.Sentence -> N.Sentence
+shiftId n (N.Sentence id ed date orig com sdata) = N.Sentence (id + n) ed date orig com sdata
+
+replaceWdByPOS :: N.Negra -> N.Negra
+replaceWdByPOS x = x
+
 
 getSentenceData :: N.Negra -> [[N.SentenceData]]
 getSentenceData n = map N.sData (N.sentences n)
