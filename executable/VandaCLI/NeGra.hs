@@ -173,9 +173,9 @@ mainArgs (Help cs) = putStr cs
 mainArgs (Filter length_interval gap_degree_inteval sen_numebTestr_interval height_inteval alw_ws_file dis_ws_file alw_pos_file dis_pos_file alw_inn_file dis_inn_file)
   = do
     expContent <- T.getContents
+    -- if not
     let negra = NT.parseNegra expContent in
       NU.putNegra $ filterNegra negra (Filter length_interval gap_degree_inteval sen_numebTestr_interval height_inteval alw_ws_file dis_ws_file alw_pos_file dis_pos_file alw_inn_file dis_inn_file)
-
 
 mainArgs (Transform delSubTWs_file isReplacWsbyPosTags startindex)
   = do putStrLn "We're transforming"
@@ -190,7 +190,7 @@ filterNegra (N.Negra x y) f = N.Negra x (filterSentences y f)
 
 filterSentences :: [N.Sentence] -> Args -> [N.Sentence]
 filterSentences [] _ = []
-filterSentences (x:xs) (Filter
+filterSentences (x:xs) f@(Filter
   length_interval
   gap_degree_inteval
   sen_numebTestr_interval
@@ -202,33 +202,30 @@ filterSentences (x:xs) (Filter
   alw_inn_file
   dis_inn_file)
     = if isInIntervals (lengthNegraSentence (N.sData x)) length_interval
-        -- && True
+        && isInIntervals (gapDegree x) gap_degree_inteval
         && isInIntervals (N.sId x) sen_numebTestr_interval
         && isInIntervals (heightNegraSentence x) height_inteval
-        -- && True
-      then x : filterSentences xs (Filter
-        length_interval
-        gap_degree_inteval
-        sen_numebTestr_interval
-        height_inteval
-        alw_ws_file
-        dis_ws_file
-        alw_pos_file
-        dis_pos_file
-        alw_inn_file
-        dis_inn_file)
-      else filterSentences xs (Filter
-        length_interval
-        gap_degree_inteval
-        sen_numebTestr_interval
-        height_inteval
-        alw_ws_file
-        dis_ws_file
-        alw_pos_file
-        dis_pos_file
-        alw_inn_file
-        dis_inn_file)
+        -- && hasWds alw_ws_file x
+      then x : filterSentences xs f
+      else filterSentences xs f
 filterSentences x _ = x
+
+onlyWords :: [N.SentenceData] -> [N.SentenceData]
+onlyWords x = [y | y@N.SentenceWord{} <- x]
+
+getWords :: N.Sentence -> [String]
+getWords x = map N.sdWord (onlyWords (N.sData x))
+
+
+
+
+{- hasWds :: FilePath -> N.Sentence -> Bool
+hasWds "/dev/null" _ = True
+hasWds f x = do
+  alw_wd <- readFile f
+  all (`elem` (words alw_wd) getWords x -}
+
+
 
 lengthNegraSentence :: [N.SentenceData] -> Int
 lengthNegraSentence []                    = 0
@@ -242,3 +239,8 @@ heightOfTree (Node _ x)  = 1 + maximum (map heightOfTree x)
 heightNegraSentence :: N.Sentence -> Int
 heightNegraSentence x = heightOfTree $ N.negraToCrossedTree (N.sData x)
 
+gapDegree :: N.Sentence -> Int
+gapDegree x = gapDegTree $ N.negraToCrossedTree (N.sData x)
+
+gapDegTree :: Tree (Maybe N.SentenceData, [N.Span]) -> Int
+gapDegTree x = maximum (map gapDegTree (subForest x) ++ [length (snd (rootLabel x)) - 1])
