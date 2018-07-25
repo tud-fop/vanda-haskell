@@ -234,6 +234,13 @@ mainArgs (Query dowd dopos donod)
       if dowd
         then mapM_ putStrLn (sort $ nub (concatMap getWords (N.sentences negra)))
         else return ()
+      if dopos
+        then mapM_ putStrLn (sort $ nub (concatMap getPos (N.sentences negra)))
+        else return ()
+      if donod
+        then mapM_ putStrLn (sort $ nub (concatMap getNodes (N.sentences negra)))
+        else return ()
+
 
 shiftIndex :: Int -> N.Negra -> N.Negra
 shiftIndex n (N.Negra wt st) = N.Negra wt (map (shiftId n) st)
@@ -334,6 +341,14 @@ onlyWords x = [y | y@N.SentenceWord{} <- x]
 getWords :: N.Sentence -> [String]
 getWords x = map N.sdWord (onlyWords (N.sData x))
 
+getPos :: N.Sentence -> [String]
+getPos x = map N.sdPostag (N.sData x)
+
+onlyNodes :: [N.SentenceData] -> [N.SentenceData]
+onlyNodes x = [y | y@N.SentenceNode{} <- x]
+
+getNodes :: N.Sentence -> [String]
+getNodes x = map (show . N.sdNum) (onlyNodes (N.sData x))
 
 
 
