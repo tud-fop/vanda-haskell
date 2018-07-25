@@ -57,6 +57,11 @@ data Args
     , statGapDeg    :: Bool
     , statHeight    :: Bool
     }
+  | Query
+    { exVoc :: Bool
+    , exPos :: Bool
+    , exNod :: Bool
+    }
     deriving Show
 
 cmdArgs :: Mode Args
@@ -93,6 +98,15 @@ cmdArgs
     , modeGroupFlags = toGroup [ flagArgStatLength
                                , flagArgStatGapDeg
                                , flagArgStatHeight
+                               ]
+                               }
+  , ( modeEmpty $ Query False False False)
+    { modeHelp = "extract data from the corpus"
+    , modeNames = ["query"]
+    , modeArgs = ([ flagArgStatIntervals{argRequire = False}], Nothing)
+    , modeGroupFlags = toGroup [ flagArgExVoc
+                               , flagArgExPos
+                               , flagArgExNod
                                ]
                                }
                                ]
@@ -164,6 +178,18 @@ cmdArgs
     flagArgStatIntervals
       = flagArg (\ a x -> Right x{statIntervals = a})
                 "[INTERVALS]"
+    flagArgExVoc
+      = flagBool ["exvoc"]
+                 (\ b x -> x{exVoc = b})
+                 "outputs a newline separated sorted list of words"
+    flagArgExPos
+      = flagBool ["expos"]
+                 (\ b x -> x{exPos = b})
+                 "outputs a newline separated sorted list of POS - tags"
+    flagArgExNod
+      = flagBool ["exnod"]
+                  (\ b x -> x{exNod = b})
+                  "outputs a newline separated sorted list of inner node labels"
 
 
 main :: IO ()
@@ -200,6 +226,14 @@ mainArgs (Statistics interv lenght gap_deg height)
         then printHeightStats negra
         else return ()
 
+mainArgs (Query dowd dopos donod)
+  = do
+    expContent <- T.getContents
+    let negra = NT.parseNegra expContent in
+      do
+      if dowd
+        then mapM_ putStrLn (sort $ nub (concatMap getWords (N.sentences negra)))
+        else return ()
 
 shiftIndex :: Int -> N.Negra -> N.Negra
 shiftIndex n (N.Negra wt st) = N.Negra wt (map (shiftId n) st)
