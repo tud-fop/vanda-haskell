@@ -116,7 +116,7 @@ type ChartRule it wt ct = Either [(it, wt)] (it -> ct -> [(it, wt)])
 -- | Builds a chart using a list of rules. Executes modified Knuth algorithm
 -- using the container for the set of explored items, an update function for it,
 -- the set of deduction rules and approximation parameters.
-chartify :: (Eq it, Ord wt, Semiring wt, Hashable it) 
+chartify :: (Ord wt, Semiring wt) 
       => ct                       -- ^ initial contianer
       -> (ct -> it -> (ct, Bool)) -- ^ update container
       -> [ChartRule it wt ct]     -- ^ deduction rules
@@ -129,7 +129,7 @@ chartify container update rules beam _
                        (Q.fromList beam initialitems, container)
 
 
-chartIteration :: (Eq it, Ord wt, Semiring wt, Hashable it) 
+chartIteration :: (Ord wt, Semiring wt) 
                => [it -> ct -> [(it, wt)]]
                -> (ct -> it -> (ct, Bool))
                -> State (Q.Queue it wt, ct) ()

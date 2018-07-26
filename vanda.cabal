@@ -54,6 +54,7 @@ library
     , unix
     , unordered-containers
     , vector
+    , vector-algorithms
     , weighted-search
     , zlib
   if flag(gtk)
@@ -62,6 +63,7 @@ library
   exposed-modules:
       CodingConventions
     , Control.Error
+    , Data.BitMap
     , Data.Converging
     , Control.Monad.Extra
     , Data.Interner
@@ -262,7 +264,7 @@ Test-Suite HUnitTests
   build-depends:
       base
     , binary >= 0.6.4
-    , containers >= 0.5.0
+    , containers >= 0.5.9.1
     , hashable
     , HUnit
     , log-domain

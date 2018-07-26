@@ -41,22 +41,20 @@ import Prelude hiding(null)
 -- the currently highest priority (i.e. the worst!) in the queue,
 -- the current number of items
 -- and the maximum possible amount of items in the queue.
-data Queue v p = LPQ (M.Map p [v]) (S.HashSet v) p Int Int
+data Queue v p = LPQ (M.Map p [v]) p Int Int
 
 instance (Show v, Show p) => Show (Queue v p) where
-  show (LPQ _ known _ 0 limit) 
-    = "Empty queue (0 of " ++ show limit ++ " elements)\n" 
-    ++ "already visited: " ++ unlines (map show $ S.toList known)
-  show (LPQ q known _ current limit) 
+  show (LPQ _ _ 0 limit) 
+    = "Empty queue (0 of " ++ show limit ++ " elements)"
+  show (LPQ q _ current limit) 
     = "Queue (" ++ show current ++ " of " ++ show limit ++ " elements)\n"
-    ++ "currently contains " ++ show q ++ "\n"
-    ++ "already visited: " ++ unlines (map show $ S.toList known)
+    ++ "currently contains " ++ show q
 
 
 -- | Initializes an empty priority queue that is limited to a certain bound.
 empty :: Int        -- ^ maximum elements simultanously contained in queue
       -> Queue v p  -- ^ empty queue
-empty = LPQ M.empty S.empty undefined 0
+empty = LPQ M.empty undefined 0
 
 
 removeMax :: (Ord k) => k -> M.Map k [a] -> (Maybe k, M.Map k [a])
@@ -83,44 +81,39 @@ addSingle m key val = M.insertWith prepend key [val] m
 
 -- | Enqueue a /(value, priority)/ tuple. 
 -- If the queue reached its size limit in a previous step, the element with least priority is thrown away. 
-enq :: (Ord p, Hashable v, Eq v)
+enq :: (Ord p)
     => Queue v p
     -> (v, p) 
     -> Queue v p
-enq (LPQ q known _ 0 lmt) (value, prio)
-  | not $ value `S.member` known = LPQ (M.singleton prio [value]) (S.insert value known) prio 1 lmt
-  | otherwise = LPQ q known undefined 0 lmt
-enq (LPQ q known least current limit) (value, prio)
-  | current < limit && unknown = LPQ (addSingle q prio value) known' (min least prio) (current + 1) limit
-  | least < prio && unknown = case removeMax least q of
-                                   (Just least', q') -> LPQ (addSingle q' prio value) known' (min least' prio) limit limit
-                                   (Nothing, q') -> LPQ (addSingle q' prio value) known' prio limit limit
-  | otherwise = LPQ q known least current limit
-    where 
-      unknown = not $ value `S.member` known
-      known' = S.insert value known
+enq (LPQ q _ 0 lmt) (value, prio)=  LPQ (M.singleton prio [value]) prio 1 lmt
+enq (LPQ q least current limit) (value, prio)
+  | current < limit = LPQ (addSingle q prio value) (min least prio) (current + 1) limit
+  | least < prio = case removeMax least q of
+                        (Just least', q') -> LPQ (addSingle q' prio value) (min least' prio) limit limit
+                        (Nothing, q') -> LPQ (addSingle q' prio value) prio limit limit
+  | otherwise = LPQ q least current limit
 
 
 -- | Enqueue a list of elements from left to right.
-enqList :: (Ord p, Hashable v, Eq v) => Queue v p -> [(v, p)] -> Queue v p
+enqList :: (Ord p) => Queue v p -> [(v, p)] -> Queue v p
 enqList = foldl enq
 
 
 -- | Initializes a queue from a list of (value, priority) tuples from left to right.
-fromList :: (Ord p, Hashable v, Eq v) => Int -> [(v, p)] -> Queue v p
+fromList :: (Ord p) => Int -> [(v, p)] -> Queue v p
 fromList limit = foldl enq (empty limit)
 
 
 -- | Dequeue the element with greatest priority.
 -- Throws an error if the queue is empty.
 deq :: (Ord p) => Queue v p -> (Queue v p, v)
-deq (LPQ _ _ _ 0 _) = error "empty q"
-deq (LPQ q known _ 1 limit) = (LPQ M.empty known undefined 0 limit, fst $ removeMin q)
-deq (LPQ q known least current limit) = case removeMin q of
-                                             (e, q') -> (LPQ q' known least (current-1) limit, e)
+deq (LPQ _ _ 0 _) = error "empty q"
+deq (LPQ q _ 1 limit) = (LPQ M.empty undefined 0 limit, fst $ removeMin q)
+deq (LPQ q least current limit) = case removeMin q of
+                                       (e, q') -> (LPQ q' least (current-1) limit, e)
 
 
 -- | Returns true if the queue is empty.
 null :: Queue v p -> Bool
-null (LPQ _ _ _ 0 _) = True
+null (LPQ _ _ 0 _) = True
 null _ = False
