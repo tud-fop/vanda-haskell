@@ -140,7 +140,7 @@ chartIteration rules update
                  (container', isnew) = update container item
              if isnew
                 then do let agenda'' = Q.enqList agenda'
-                                     $ filter ((< zero) . snd) 
+                                     $ filter ((/= zero) . snd) 
                                      $ chartStep item container rules
                         put (agenda'', container')
                         chartIteration rules update
