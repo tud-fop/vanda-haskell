@@ -1,0 +1,8 @@
+resolver: lts-12.2
+
+packages:
+- programs
+- .
+
+extra-deps:
+- weighted-search-0.1.0.1

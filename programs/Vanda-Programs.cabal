@@ -22,7 +22,7 @@ executable PennToSentenceCorpus
       base
     , containers
     , text
-    , Vanda
+    , vanda
   Main-Is: PennToSentenceCorpus.hs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind
   ghc-prof-options: -fprof-auto -fprof-cafs -fprof-auto-calls -O2 -funbox-strict-fields
@@ -38,7 +38,7 @@ executable XRSToHypergraph
     , deepseq
     , directory
     , text
-    , Vanda
+    , vanda
     , vector
     , zlib
   Main-Is:  XRSToHypergraph.hs
@@ -52,7 +52,7 @@ executable XRSTranslate
     , array
     , containers
     , text
-    , Vanda
+    , vanda
     , vector
   Main-Is:  XRSTranslate.hs
   GHC-Options:  -O2 -funbox-strict-fields -rtsopts -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-unused-do-bind

@@ -10,7 +10,7 @@
 build/
 dist/
 report.html
-stack.yaml
 .stack-work
 out.txt
 *.swp
+*.prof
