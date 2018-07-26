@@ -147,6 +147,7 @@ library
     , Vanda.Grammar.XRS.LCFRS.CYKParser
     , Vanda.Grammar.XRS.LCFRS.Evaluation
     , Vanda.Grammar.XRS.LCFRS.Extraction
+    , Vanda.Grammar.XRS.LCFRS.IncrementalParser
     , Vanda.Grammar.XRS.LCFRS.NaiveParser
     , Vanda.Grammar.XRS.Text
     , Vanda.GrammaticalInference.PDTA.Inference
@@ -288,3 +289,5 @@ Test-Suite HUnitTests
   GHC-Options: -main-is HUnitTests
   main-is: HUnitTests.hs
   type: exitcode-stdio-1.0
+
+
