@@ -224,14 +224,40 @@ mainArgs (Transform _ isReplacWsbyPosTags startindex)
       replaceWdByPOS :: N.Negra -> N.Negra
       replaceWdByPOS (N.Negra wt st) =  N.Negra wt (map repWdPos st)
 
+      repWdPos :: N.Sentence -> N.Sentence
+      repWdPos (N.Sentence id ed date orig com sdata) = N.Sentence id ed date orig com (map wdToPOS sdata)
+
+      wdToPOS :: N.SentenceData -> N.SentenceData
+      wdToPOS (N.SentenceNode nd pos mt ed sed cm) = N.SentenceNode nd pos mt ed sed cm
+      wdToPOS (N.SentenceWord wd pos mt ed sed cm) = N.SentenceWord pos pos mt ed sed cm
+
 mainArgs (Statistics _ lenght gap_deg height)
   = do
     expContent <- T.getContents
     let negra = NT.parseNegra expContent in
       do
-      when lenght (printLengthStats negra)
-      when gap_deg (printGapStats negra)
-      when height (printHeightStats negra)
+      when lenght (printStats negra (lengthNegraSentence . N.sData) "length")
+      when gap_deg (printStats negra gapDegree "gap degree")
+      when height (printStats negra heightNegraSentence "height")
+  where
+    printStats :: N.Negra -> (N.Sentence -> Int) -> String ->  IO()
+    printStats n f name
+      = let histo = map (\l@(x:xs) -> (x,length l)) . group . sort $ map f (N.sentences n) in
+          do
+            putStrLn ("Statistic by " ++ name)
+            putStrLn "Mean:"
+            print (getMean histo)
+            putStrLn "Avg.:"
+            print (getAvg histo)
+            putStrLn "Hist.:"
+            print histo
+            putStrLn ""
+
+    getAvg :: [(Int,Int)] -> Float
+    getAvg x = fromIntegral (sum (map (\y -> fst y * snd y) x)) / fromIntegral (sum (map snd x))
+
+    getMean :: [(Int,Int)] -> Int
+    getMean x = concatMap (\(y,z) -> replicate z y) x !! (sum (map snd x) `div` 2)
 
 mainArgs (Query queryArg)
   = queryArgs queryArg
@@ -247,68 +273,6 @@ queryArgs x = queryIt $ case x of ExVoc -> getWords
       expContent <- T.getContents
       let negra = NT.parseNegra expContent in
         mapM_ putStrLn (sort $ nub (concatMap f (N.sentences negra)))
-
-
-
-repWdPos :: N.Sentence -> N.Sentence
-repWdPos (N.Sentence id ed date orig com sdata) = N.Sentence id ed date orig com (map wdToPOS sdata)
-
-wdToPOS :: N.SentenceData -> N.SentenceData
-wdToPOS (N.SentenceNode nd pos mt ed sed cm) = N.SentenceNode nd pos mt ed sed cm
-wdToPOS (N.SentenceWord wd pos mt ed sed cm) = N.SentenceWord pos pos mt ed sed cm
-
-
-
-getSentenceData :: N.Negra -> [[N.SentenceData]]
-getSentenceData n = map N.sData (N.sentences n)
-
-printLengthStats :: N.Negra -> IO()
-printLengthStats n
-  = let histo = map (\l@(x:xs) -> (x,length l)) . group . sort $ map lengthNegraSentence (getSentenceData n) in
-      do
-        putStrLn "Statistic by length:"
-        putStrLn "Mean:"
-        putStrLn (show (getMean histo))
-        putStrLn "Avg.:"
-        putStrLn (show (getAvg histo))
-        putStrLn "Hist.:"
-        putStrLn (show histo)
-        putStrLn ""
-
-
-printGapStats :: N.Negra -> IO()
-printGapStats n
-  = let histo = map (\l@(x:xs) -> (x,length l)) . group . sort $ map gapDegree (N.sentences n) in do
-      putStrLn "Statistic by gap degree:"
-      putStrLn "Mean:"
-      putStrLn (show (getMean histo))
-      putStrLn "Avg.:"
-      putStrLn (show (getAvg histo))
-      putStrLn "Hist.:"
-      putStrLn (show histo)
-      putStrLn ""
-
-
-printHeightStats :: N.Negra -> IO()
-printHeightStats n
-  = let histo = map (\l@(x:xs) -> (x,length l)) . group . sort $ map heightNegraSentence (N.sentences n) in do
-      putStrLn "Statistic by height:"
-      putStrLn "Mean:"
-      putStrLn (show (getMean histo))
-      putStrLn "Avg.:"
-      putStrLn (show (getAvg histo))
-      putStrLn "Hist.:"
-      putStrLn (show histo)
-      putStrLn ""
-
-
-
-getAvg :: [(Int,Int)] -> Float
-getAvg x = fromIntegral (sum (map (\y -> fst y * snd y) x)) / fromIntegral (sum (map snd x))
-
-getMean :: [(Int,Int)] -> Int
-getMean x = concatMap (\(y,z) -> replicate z y) x !! (sum (map snd x) `div` 2)
-
 
 filterNegra :: N.Negra -> Args -> N.Negra
 filterNegra (N.Negra x y) f = N.Negra x (filterSentences y f)
@@ -357,7 +321,6 @@ hasWds "/dev/null" _ = True
 hasWds f x = do
   alw_wd <- readFile f
   all (`elem` (words alw_wd) getWords x -}
-
 
 
 lengthNegraSentence :: [N.SentenceData] -> Int
