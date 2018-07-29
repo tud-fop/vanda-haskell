@@ -73,9 +73,21 @@ queryMode :: Mode QueryArgs
 queryMode
   = modes "query" (HelpQ $ defaultHelp queryMode) "extract data from the corpus"
   [ (modeEmpty ExVoc)
-    { modeNames = ["extract-vocabulary"]
-    , modeHelp = "outputs a newline separated sorted list of words"
-    , modeGroupFlags = toGroup []}]
+     { modeNames = ["extract-vocabulary"]
+     , modeHelp = "outputs a newline separated sorted list of words"
+     , modeGroupFlags = toGroup []
+     }
+    , (modeEmpty ExPos)
+     { modeNames = ["extract-pos-tags"]
+    , modeHelp = "outputs a newline separated sorted list of POS-tags"
+    , modeGroupFlags = toGroup []
+    }
+    ,(modeEmpty ExNod)
+    { modeNames = ["extract-inner-nodes"]
+    , modeHelp = "outputs a newline separated sorted list of inner node labels"
+    , modeGroupFlags = toGroup []
+    }
+  ]
 
 cmdArgs :: Mode Args
 cmdArgs
