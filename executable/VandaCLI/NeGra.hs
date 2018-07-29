@@ -55,12 +55,27 @@ data Args
     , statGapDeg    :: Bool
     , statHeight    :: Bool
     }
-  | Query
-    { exVoc :: Bool
+  | Query QueryArgs
+    {-{ exVoc :: Bool
     , exPos :: Bool
     , exNod :: Bool
-    }
+    }-}
     deriving Show
+
+data QueryArgs
+  = HelpQ String
+  | ExVoc
+  | ExPos
+  | ExNod
+  deriving Show
+
+queryMode :: Mode QueryArgs
+queryMode
+  = modes "query" (HelpQ $ defaultHelp queryMode) "extract data from the corpus"
+  [ (modeEmpty ExVoc)
+    { modeNames = ["extract-vocabulary"]
+    , modeHelp = "outputs a newline separated sorted list of words"
+    , modeGroupFlags = toGroup []}]
 
 cmdArgs :: Mode Args
 cmdArgs
@@ -72,8 +87,7 @@ cmdArgs
     , modeGroupFlags = toGroup [ flagArgByLength
                                , flagArgByGapDegree
                                , flagArgBySentenceNumber
-                               , flagArgByHeight
-                               , flagArgByAllowedWords
+                               , flagArgByHeight                               , flagArgByAllowedWords
                                , flagArgByDisallowedWords
                                , flagArgByAllowedPosTags
                                , flagArgByDisallowedPosTags
@@ -89,6 +103,7 @@ cmdArgs
                                , flagArgReNumSentence
                                ]
                                }
+  , remap2 Query (\ (Query x) -> x) queryMode
   , ( modeEmpty $ Statistics "" False False False)
     { modeHelp = "outputs corpus statistics"
     , modeNames = ["statistics"]
@@ -96,15 +111,6 @@ cmdArgs
     , modeGroupFlags = toGroup [ flagArgStatLength
                                , flagArgStatGapDeg
                                , flagArgStatHeight
-                               ]
-                               }
-  , ( modeEmpty $ Query False False False)
-    { modeHelp = "extract data from the corpus"
-    , modeNames = ["query"]
-    , modeArgs = ([ flagArgStatIntervals{argRequire = False}], Nothing)
-    , modeGroupFlags = toGroup [ flagArgExVoc
-                               , flagArgExPos
-                               , flagArgExNod
                                ]
                                }
                                ]
@@ -176,18 +182,6 @@ cmdArgs
     flagArgStatIntervals
       = flagArg (\ a x -> Right x{statIntervals = a})
                 "[INTERVALS]"
-    flagArgExVoc
-      = flagBool ["exvoc"]
-                 (\ b x -> x{exVoc = b})
-                 "outputs a newline separated sorted list of words"
-    flagArgExPos
-      = flagBool ["expos"]
-                 (\ b x -> x{exPos = b})
-                 "outputs a newline separated sorted list of POS - tags"
-    flagArgExNod
-      = flagBool ["exnod"]
-                  (\ b x -> x{exNod = b})
-                  "outputs a newline separated sorted list of inner node labels"
 
 
 main :: IO ()
@@ -227,20 +221,21 @@ mainArgs (Statistics _ lenght gap_deg height)
       when gap_deg (printGapStats negra)
       when height (printHeightStats negra)
 
-mainArgs (Query dowd dopos donod)
-  = do
-    expContent <- T.getContents
-    let negra = NT.parseNegra expContent in
-      do
-      if dowd
-        then mapM_ putStrLn (sort $ nub (concatMap getWords (N.sentences negra)))
-        else return ()
-      if dopos
-        then mapM_ putStrLn (sort $ nub (concatMap getPos (N.sentences negra)))
-        else return ()
-      if donod
-        then mapM_ putStrLn (sort $ nub (concatMap getNodes (N.sentences negra)))
-        else return ()
+mainArgs (Query queryArg)
+  = queryArgs queryArg
+
+queryArgs :: QueryArgs -> IO ()
+queryArgs (HelpQ cs) = putStr cs
+queryArgs x = queryIt $ case x of ExVoc -> getWords
+                                  ExPos -> getPos
+                                  ExNod -> getNodes
+  where
+    queryIt :: (N.Sentence -> [String]) -> IO()
+    queryIt f = do
+      expContent <- T.getContents
+      let negra = NT.parseNegra expContent in
+        mapM_ putStrLn (sort $ nub (concatMap f (N.sentences negra)))
+
 
 
 repWdPos :: N.Sentence -> N.Sentence
