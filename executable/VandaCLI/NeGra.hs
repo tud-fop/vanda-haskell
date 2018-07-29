@@ -18,6 +18,7 @@ module VandaCLI.NeGra
 ) where
 
 
+import           Control.Monad
 import           Data.List
 import qualified Data.Text.Lazy.IO                    as T
 import           Data.Tree
@@ -27,9 +28,6 @@ import qualified Vanda.Corpus.Negra                   as N
 import           Vanda.Corpus.Negra.Text              as NT
 import           VandaCLI.Corpus.Negra.Intervals
 import qualified VandaCLI.Corpus.Negra.Util           as NU
-
-
-
 
 
 data Args
@@ -203,7 +201,7 @@ mainArgs (Filter length_interval gap_degree_inteval sen_numebTestr_interval heig
     let negra = NT.parseNegra expContent in
       NU.putNegra $ filterNegra negra (Filter length_interval gap_degree_inteval sen_numebTestr_interval height_inteval alw_ws_file dis_ws_file alw_pos_file dis_pos_file alw_inn_file dis_inn_file)
 
-mainArgs (Transform delSubTWs_file isReplacWsbyPosTags startindex)
+mainArgs (Transform _ isReplacWsbyPosTags startindex)
   = do
     expContent <- T.getContents
     let negra = NT.parseNegra expContent in
@@ -211,20 +209,14 @@ mainArgs (Transform delSubTWs_file isReplacWsbyPosTags startindex)
         then shiftIndex startindex (replaceWdByPOS negra)
         else shiftIndex startindex negra
 
-mainArgs (Statistics interv lenght gap_deg height)
+mainArgs (Statistics _ lenght gap_deg height)
   = do
     expContent <- T.getContents
     let negra = NT.parseNegra expContent in
       do
-      if lenght
-        then printLengthStats negra
-        else return ()
-      if gap_deg
-        then printGapStats negra
-        else return ()
-      if height
-        then printHeightStats negra
-        else return ()
+      when lenght (printLengthStats negra)
+      when gap_deg (printGapStats negra)
+      when height (printHeightStats negra)
 
 mainArgs (Query dowd dopos donod)
   = do
@@ -265,15 +257,16 @@ getSentenceData n = map N.sData (N.sentences n)
 
 printLengthStats :: N.Negra -> IO()
 printLengthStats n
-  = let histo = map (\l@(x:xs) -> (x,length l)) . group . sort $ map lengthNegraSentence (getSentenceData n) in do
-      putStrLn "Statistic by length:"
-      putStrLn "Mean:"
-      putStrLn (show (getMean histo))
-      putStrLn "Avg.:"
-      putStrLn (show (getAvg histo))
-      putStrLn "Hist.:"
-      putStrLn (show histo)
-      putStrLn ""
+  = let histo = map (\l@(x:xs) -> (x,length l)) . group . sort $ map lengthNegraSentence (getSentenceData n) in
+      do
+        putStrLn "Statistic by length:"
+        putStrLn "Mean:"
+        putStrLn (show (getMean histo))
+        putStrLn "Avg.:"
+        putStrLn (show (getAvg histo))
+        putStrLn "Hist.:"
+        putStrLn (show histo)
+        putStrLn ""
 
 
 printGapStats :: N.Negra -> IO()
@@ -303,11 +296,11 @@ printHeightStats n
 
 
 
-getMean :: [(Int,Int)] -> Float
-getMean x = fromIntegral (sum (map (\y -> fst y * snd y) x)) / fromIntegral (sum (map snd x))
+getAvg :: [(Int,Int)] -> Float
+getAvg x = fromIntegral (sum (map (\y -> fst y * snd y) x)) / fromIntegral (sum (map snd x))
 
-getAvg :: [(Int,Int)] -> Int
-getAvg x = concatMap (\(y,z) -> replicate z y) x !! (sum (map snd x) `div` 2)
+getMean :: [(Int,Int)] -> Int
+getMean x = concatMap (\(y,z) -> replicate z y) x !! (sum (map snd x) `div` 2)
 
 
 filterNegra :: N.Negra -> Args -> N.Negra
