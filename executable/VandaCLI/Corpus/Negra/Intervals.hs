@@ -20,12 +20,12 @@ import           Data.List.Split
 
 type Intervals = String
 -- data Intervals = StringIntervals String | PredIntervals [[String]] deriving (Eq, Show)
-isInIntervals :: Int -> Intervals -> Bool
-isInIntervals x intervals = any ($ x) (getPred intervals)
+isInIntervals :: Intervals -> Int -> Bool
+isInIntervals intervals x = any ($ x) (getPred intervals)
 -- isInIntervals x intervals = any ($ x) (getPred intervals)
 
-isInPred :: Int -> [Int->Bool] -> Bool
-isInPred x = any ($ x)
+isInPred :: [Int->Bool] -> Int -> Bool
+isInPred p x = any ($ x) p
 
 
 getPred :: Intervals -> [Int->Bool]

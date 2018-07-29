@@ -18,6 +18,7 @@ module VandaCLI.NeGra
 ) where
 
 
+import           Control.Monad
 import           Data.List
 import qualified Data.Text.Lazy.IO                    as T
 import           Data.Tree
@@ -27,9 +28,6 @@ import qualified Vanda.Corpus.Negra                   as N
 import           Vanda.Corpus.Negra.Text              as NT
 import           VandaCLI.Corpus.Negra.Intervals
 import qualified VandaCLI.Corpus.Negra.Util           as NU
-
-
-
 
 
 data Args
@@ -57,12 +55,35 @@ data Args
     , statGapDeg    :: Bool
     , statHeight    :: Bool
     }
-  | Query
-    { exVoc :: Bool
-    , exPos :: Bool
-    , exNod :: Bool
-    }
+  | Query QueryArgs
     deriving Show
+
+data QueryArgs
+  = HelpQ String
+  | ExVoc
+  | ExPos
+  | ExNod
+  deriving Show
+
+queryMode :: Mode QueryArgs
+queryMode
+  = modes "query" (HelpQ $ defaultHelp queryMode) "extract data from the corpus"
+  [ (modeEmpty ExVoc)
+     { modeNames = ["extract-vocabulary"]
+     , modeHelp = "outputs a newline separated sorted list of words"
+     , modeGroupFlags = toGroup []
+     }
+    , (modeEmpty ExPos)
+     { modeNames = ["extract-pos-tags"]
+    , modeHelp = "outputs a newline separated sorted list of POS-tags"
+    , modeGroupFlags = toGroup []
+    }
+    ,(modeEmpty ExNod)
+    { modeNames = ["extract-inner-nodes"]
+    , modeHelp = "outputs a newline separated sorted list of inner node labels"
+    , modeGroupFlags = toGroup []
+    }
+  ]
 
 cmdArgs :: Mode Args
 cmdArgs
@@ -70,7 +91,6 @@ cmdArgs
   [ (modeEmpty $ Filter "" "" "" "" "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null")
     { modeNames = ["filter"]
     , modeHelp = "filters a corpus according to specified predicates"
-    -- , modeArgs = Nothing
     , modeGroupFlags = toGroup [ flagArgByLength
                                , flagArgByGapDegree
                                , flagArgBySentenceNumber
@@ -91,6 +111,7 @@ cmdArgs
                                , flagArgReNumSentence
                                ]
                                }
+  , remap2 Query (\ (Query x) -> x) queryMode
   , ( modeEmpty $ Statistics "" False False False)
     { modeHelp = "outputs corpus statistics"
     , modeNames = ["statistics"]
@@ -98,15 +119,6 @@ cmdArgs
     , modeGroupFlags = toGroup [ flagArgStatLength
                                , flagArgStatGapDeg
                                , flagArgStatHeight
-                               ]
-                               }
-  , ( modeEmpty $ Query False False False)
-    { modeHelp = "extract data from the corpus"
-    , modeNames = ["query"]
-    , modeArgs = ([ flagArgStatIntervals{argRequire = False}], Nothing)
-    , modeGroupFlags = toGroup [ flagArgExVoc
-                               , flagArgExPos
-                               , flagArgExNod
                                ]
                                }
                                ]
@@ -178,18 +190,6 @@ cmdArgs
     flagArgStatIntervals
       = flagArg (\ a x -> Right x{statIntervals = a})
                 "[INTERVALS]"
-    flagArgExVoc
-      = flagBool ["exvoc"]
-                 (\ b x -> x{exVoc = b})
-                 "outputs a newline separated sorted list of words"
-    flagArgExPos
-      = flagBool ["expos"]
-                 (\ b x -> x{exPos = b})
-                 "outputs a newline separated sorted list of POS - tags"
-    flagArgExNod
-      = flagBool ["exnod"]
-                  (\ b x -> x{exNod = b})
-                  "outputs a newline separated sorted list of inner node labels"
 
 
 main :: IO ()
@@ -197,143 +197,99 @@ main = processArgs (populateHelpMode Help cmdArgs) >>= mainArgs
 
 mainArgs :: Args -> IO ()
 mainArgs (Help cs) = putStr cs
-mainArgs (Filter length_interval gap_degree_inteval sen_numebTestr_interval height_inteval alw_ws_file dis_ws_file alw_pos_file dis_pos_file alw_inn_file dis_inn_file)
+mainArgs fil@Filter{}
   = do
     expContent <- T.getContents
-    let negra = NT.parseNegra expContent in
-      NU.putNegra $ filterNegra negra (Filter length_interval gap_degree_inteval sen_numebTestr_interval height_inteval alw_ws_file dis_ws_file alw_pos_file dis_pos_file alw_inn_file dis_inn_file)
+    let negra = NT.parseNegra expContent
+        preds = generatePreds fil in
+      NU.putNegra $ filterNegra negra preds
+  where
+    filterNegra :: N.Negra -> [N.Sentence -> Bool] -> N.Negra
+    filterNegra (N.Negra x y) f = N.Negra x (filterSentences y f)
 
-mainArgs (Transform delSubTWs_file isReplacWsbyPosTags startindex)
+    filterSentences :: [N.Sentence] -> [N.Sentence -> Bool] -> [N.Sentence]
+    filterSentences [] _         = []
+    filterSentences (x:xs) preds =
+      if all ($ x) preds
+        then x: filterSentences xs preds
+        else filterSentences xs preds
+
+
+    generatePreds :: Args -> [N.Sentence -> Bool]
+    generatePreds (Filter l gd id h aw dw apos dpos anod dnod) =
+      [ isInPred (getPred l) . lengthNegraSentence
+      , isInPred (getPred gd) . gapDegree
+      , isInPred (getPred id) . N.sId
+      , isInPred (getPred h) . heightNegraSentence]
+    generatePreds _ = []
+
+mainArgs (Transform _ isReplacWsbyPosTags startindex)
   = do
     expContent <- T.getContents
     let negra = NT.parseNegra expContent in
       NU.putNegra $ if isReplacWsbyPosTags
         then shiftIndex startindex (replaceWdByPOS negra)
         else shiftIndex startindex negra
+    where
+      shiftIndex :: Int -> N.Negra -> N.Negra
+      shiftIndex n (N.Negra wt st) = N.Negra wt (map (shiftId n) st)
 
-mainArgs (Statistics interv lenght gap_deg height)
+      shiftId :: Int -> N.Sentence -> N.Sentence
+      shiftId n (N.Sentence sId ed date orig com sdata) = N.Sentence (sId + n) ed date orig com sdata
+
+      replaceWdByPOS :: N.Negra -> N.Negra
+      replaceWdByPOS (N.Negra wt st) =  N.Negra wt (map repWdPos st)
+
+      repWdPos :: N.Sentence -> N.Sentence
+      repWdPos (N.Sentence sid ed date orig com sdata) = N.Sentence sid ed date orig com (map wdToPOS sdata)
+
+      wdToPOS :: N.SentenceData -> N.SentenceData
+      wdToPOS (N.SentenceNode nd pos mt ed sed cm) = N.SentenceNode nd pos mt ed sed cm
+      wdToPOS (N.SentenceWord _ pos mt ed sed cm) = N.SentenceWord pos pos mt ed sed cm
+
+mainArgs (Statistics _ lenght gap_deg height)
   = do
     expContent <- T.getContents
     let negra = NT.parseNegra expContent in
       do
-      if lenght
-        then printLengthStats negra
-        else return ()
-      if gap_deg
-        then printGapStats negra
-        else return ()
-      if height
-        then printHeightStats negra
-        else return ()
+      when lenght (printStats negra (lengthNegraSentenceData . N.sData) "length")
+      when gap_deg (printStats negra gapDegree "gap degree")
+      when height (printStats negra heightNegraSentence "height")
+  where
+    printStats :: N.Negra -> (N.Sentence -> Int) -> String ->  IO()
+    printStats n f name
+      = let histo = map (\l@(x:_) -> (x,length l)) . group . sort $ map f (N.sentences n) in
+          do
+            putStrLn ("Statistic by " ++ name)
+            putStrLn "Mean:"
+            print (getMean histo)
+            putStrLn "Avg.:"
+            print (getAvg histo)
+            putStrLn "Hist.:"
+            print histo
+            putStrLn ""
 
-mainArgs (Query dowd dopos donod)
-  = do
-    expContent <- T.getContents
-    let negra = NT.parseNegra expContent in
-      do
-      if dowd
-        then mapM_ putStrLn (sort $ nub (concatMap getWords (N.sentences negra)))
-        else return ()
-      if dopos
-        then mapM_ putStrLn (sort $ nub (concatMap getPos (N.sentences negra)))
-        else return ()
-      if donod
-        then mapM_ putStrLn (sort $ nub (concatMap getNodes (N.sentences negra)))
-        else return ()
+    getAvg :: [(Int,Int)] -> Float
+    getAvg x = fromIntegral (sum (map (uncurry (*)) x)) / fromIntegral (sum (map snd x))
 
+    getMean :: [(Int,Int)] -> Int
+    getMean x = concatMap (\(y,z) -> replicate z y) x !! (sum (map snd x) `div` 2)
 
-shiftIndex :: Int -> N.Negra -> N.Negra
-shiftIndex n (N.Negra wt st) = N.Negra wt (map (shiftId n) st)
+mainArgs (Query queryArg)
+  = queryArgs queryArg
 
-shiftId :: Int -> N.Sentence -> N.Sentence
-shiftId n (N.Sentence id ed date orig com sdata) = N.Sentence (id + n) ed date orig com sdata
-
-replaceWdByPOS :: N.Negra -> N.Negra
-replaceWdByPOS (N.Negra wt st) =  N.Negra wt (map repWdPos st)
-
-repWdPos :: N.Sentence -> N.Sentence
-repWdPos (N.Sentence id ed date orig com sdata) = N.Sentence id ed date orig com (map wdToPOS sdata)
-
-wdToPOS :: N.SentenceData -> N.SentenceData
-wdToPOS (N.SentenceNode nd pos mt ed sed cm) = N.SentenceNode nd pos mt ed sed cm
-wdToPOS (N.SentenceWord wd pos mt ed sed cm) = N.SentenceWord pos pos mt ed sed cm
-
-
-
-getSentenceData :: N.Negra -> [[N.SentenceData]]
-getSentenceData n = map N.sData (N.sentences n)
-
-printLengthStats :: N.Negra -> IO()
-printLengthStats n
-  = let histo = map (\l@(x:xs) -> (x,length l)) . group . sort $ map lengthNegraSentence (getSentenceData n) in do
-      putStrLn "Statistic by length:"
-      putStrLn "Mean:"
-      putStrLn (show (getMean histo))
-      putStrLn "Avg.:"
-      putStrLn (show (getAvg histo))
-      putStrLn "Hist.:"
-      putStrLn (show histo)
-      putStrLn ""
-
-
-printGapStats :: N.Negra -> IO()
-printGapStats n
-  = let histo = map (\l@(x:xs) -> (x,length l)) . group . sort $ map gapDegree (N.sentences n) in do
-      putStrLn "Statistic by gap degree:"
-      putStrLn "Mean:"
-      putStrLn (show (getMean histo))
-      putStrLn "Avg.:"
-      putStrLn (show (getAvg histo))
-      putStrLn "Hist.:"
-      putStrLn (show histo)
-      putStrLn ""
-
-
-printHeightStats :: N.Negra -> IO()
-printHeightStats n
-  = let histo = map (\l@(x:xs) -> (x,length l)) . group . sort $ map heightNegraSentence (N.sentences n) in do
-      putStrLn "Statistic by height:"
-      putStrLn "Mean:"
-      putStrLn (show (getMean histo))
-      putStrLn "Avg.:"
-      putStrLn (show (getAvg histo))
-      putStrLn "Hist.:"
-      putStrLn (show histo)
-      putStrLn ""
-
-
-
-getMean :: [(Int,Int)] -> Float
-getMean x = fromIntegral (sum (map (\y -> fst y * snd y) x)) / fromIntegral (sum (map snd x))
-
-getAvg :: [(Int,Int)] -> Int
-getAvg x = concatMap (\(y,z) -> replicate z y) x !! (sum (map snd x) `div` 2)
-
-
-filterNegra :: N.Negra -> Args -> N.Negra
-filterNegra (N.Negra x y) f = N.Negra x (filterSentences y f)
-
-filterSentences :: [N.Sentence] -> Args -> [N.Sentence]
-filterSentences [] _ = []
-filterSentences (x:xs) f@(Filter
-  length_interval
-  gap_degree_inteval
-  sen_numebTestr_interval
-  height_inteval
-  alw_ws_file
-  dis_ws_file
-  alw_pos_file
-  dis_pos_file
-  alw_inn_file
-  dis_inn_file)
-    = if isInIntervals (lengthNegraSentence (N.sData x)) length_interval
-        && isInIntervals (gapDegree x) gap_degree_inteval
-        && isInIntervals (N.sId x) sen_numebTestr_interval
-        && isInIntervals (heightNegraSentence x) height_inteval
-        -- && hasWds alw_ws_file x
-      then x : filterSentences xs f
-      else filterSentences xs f
-filterSentences x _ = x
+queryArgs :: QueryArgs -> IO ()
+queryArgs (HelpQ cs) = putStr cs
+queryArgs x = queryIt $ case x of ExVoc -> getWords
+                                  ExPos -> getPos
+                                  ExNod -> getNodes
+                                  _     -> const []
+  where
+    queryIt :: (N.Sentence -> [String]) -> IO()
+    queryIt f = do
+      expContent <- T.getContents
+      let negra = NT.parseNegra expContent in
+        mapM_ putStrLn (sort $ nub (concatMap f (N.sentences negra)))
 
 onlyWords :: [N.SentenceData] -> [N.SentenceData]
 onlyWords x = [y | y@N.SentenceWord{} <- x]
@@ -350,20 +306,19 @@ onlyNodes x = [y | y@N.SentenceNode{} <- x]
 getNodes :: N.Sentence -> [String]
 getNodes x = map (show . N.sdNum) (onlyNodes (N.sData x))
 
-
-
 {- hasWds :: FilePath -> N.Sentence -> Bool
 hasWds "/dev/null" _ = True
 hasWds f x = do
   alw_wd <- readFile f
   all (`elem` (words alw_wd) getWords x -}
 
+lengthNegraSentence :: N.Sentence -> Int
+lengthNegraSentence = lengthNegraSentenceData . N.sData
 
-
-lengthNegraSentence :: [N.SentenceData] -> Int
-lengthNegraSentence []                    = 0
-lengthNegraSentence (N.SentenceWord{}:xs) = 1 + lengthNegraSentence xs
-lengthNegraSentence (N.SentenceNode{}:xs) = lengthNegraSentence xs
+lengthNegraSentenceData :: [N.SentenceData] -> Int
+lengthNegraSentenceData []                    = 0
+lengthNegraSentenceData (N.SentenceWord{}:xs) = 1 + lengthNegraSentenceData xs
+lengthNegraSentenceData (N.SentenceNode{}:xs) = lengthNegraSentenceData xs
 
 heightOfTree :: Tree a -> Int
 heightOfTree (Node _ []) = 1
