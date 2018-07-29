@@ -208,6 +208,15 @@ mainArgs (Transform _ isReplacWsbyPosTags startindex)
       NU.putNegra $ if isReplacWsbyPosTags
         then shiftIndex startindex (replaceWdByPOS negra)
         else shiftIndex startindex negra
+    where
+      shiftIndex :: Int -> N.Negra -> N.Negra
+      shiftIndex n (N.Negra wt st) = N.Negra wt (map (shiftId n) st)
+
+      shiftId :: Int -> N.Sentence -> N.Sentence
+      shiftId n (N.Sentence sId ed date orig com sdata) = N.Sentence (sId + n) ed date orig com sdata
+
+      replaceWdByPOS :: N.Negra -> N.Negra
+      replaceWdByPOS (N.Negra wt st) =  N.Negra wt (map repWdPos st)
 
 mainArgs (Statistics _ lenght gap_deg height)
   = do
@@ -233,15 +242,6 @@ mainArgs (Query dowd dopos donod)
         then mapM_ putStrLn (sort $ nub (concatMap getNodes (N.sentences negra)))
         else return ()
 
-
-shiftIndex :: Int -> N.Negra -> N.Negra
-shiftIndex n (N.Negra wt st) = N.Negra wt (map (shiftId n) st)
-
-shiftId :: Int -> N.Sentence -> N.Sentence
-shiftId n (N.Sentence id ed date orig com sdata) = N.Sentence (id + n) ed date orig com sdata
-
-replaceWdByPOS :: N.Negra -> N.Negra
-replaceWdByPOS (N.Negra wt st) =  N.Negra wt (map repWdPos st)
 
 repWdPos :: N.Sentence -> N.Sentence
 repWdPos (N.Sentence id ed date orig com sdata) = N.Sentence id ed date orig com (map wdToPOS sdata)
