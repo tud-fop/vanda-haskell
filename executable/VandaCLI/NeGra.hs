@@ -56,10 +56,6 @@ data Args
     , statHeight    :: Bool
     }
   | Query QueryArgs
-    {-{ exVoc :: Bool
-    , exPos :: Bool
-    , exNod :: Bool
-    }-}
     deriving Show
 
 data QueryArgs
@@ -95,11 +91,11 @@ cmdArgs
   [ (modeEmpty $ Filter "" "" "" "" "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null" "/dev/null")
     { modeNames = ["filter"]
     , modeHelp = "filters a corpus according to specified predicates"
-    -- , modeArgs = Nothing
     , modeGroupFlags = toGroup [ flagArgByLength
                                , flagArgByGapDegree
                                , flagArgBySentenceNumber
-                               , flagArgByHeight                               , flagArgByAllowedWords
+                               , flagArgByHeight
+                               , flagArgByAllowedWords
                                , flagArgByDisallowedWords
                                , flagArgByAllowedPosTags
                                , flagArgByDisallowedPosTags
@@ -201,11 +197,31 @@ main = processArgs (populateHelpMode Help cmdArgs) >>= mainArgs
 
 mainArgs :: Args -> IO ()
 mainArgs (Help cs) = putStr cs
-mainArgs (Filter length_interval gap_degree_inteval sen_numebTestr_interval height_inteval alw_ws_file dis_ws_file alw_pos_file dis_pos_file alw_inn_file dis_inn_file)
+mainArgs fil@Filter{}
   = do
     expContent <- T.getContents
-    let negra = NT.parseNegra expContent in
-      NU.putNegra $ filterNegra negra (Filter length_interval gap_degree_inteval sen_numebTestr_interval height_inteval alw_ws_file dis_ws_file alw_pos_file dis_pos_file alw_inn_file dis_inn_file)
+    let negra = NT.parseNegra expContent
+        preds = generatePreds fil in
+      NU.putNegra $ filterNegra negra preds
+  where
+    filterNegra :: N.Negra -> [N.Sentence -> Bool] -> N.Negra
+    filterNegra (N.Negra x y) f = N.Negra x (filterSentences y f)
+
+    filterSentences :: [N.Sentence] -> [N.Sentence -> Bool] -> [N.Sentence]
+    filterSentences [] _         = []
+    filterSentences (x:xs) preds =
+      if all ($ x) preds
+        then x: filterSentences xs preds
+        else filterSentences xs preds
+
+
+    generatePreds :: Args -> [N.Sentence -> Bool]
+    generatePreds (Filter l gd id h aw dw apos dpos anod dnod) =
+      [ isInPred (getPred l) . lengthNegraSentence
+      , isInPred (getPred gd) . gapDegree
+      , isInPred (getPred id) . N.sId
+      , isInPred (getPred h) . heightNegraSentence]
+    generatePreds _ = []
 
 mainArgs (Transform _ isReplacWsbyPosTags startindex)
   = do
@@ -225,24 +241,24 @@ mainArgs (Transform _ isReplacWsbyPosTags startindex)
       replaceWdByPOS (N.Negra wt st) =  N.Negra wt (map repWdPos st)
 
       repWdPos :: N.Sentence -> N.Sentence
-      repWdPos (N.Sentence id ed date orig com sdata) = N.Sentence id ed date orig com (map wdToPOS sdata)
+      repWdPos (N.Sentence sid ed date orig com sdata) = N.Sentence sid ed date orig com (map wdToPOS sdata)
 
       wdToPOS :: N.SentenceData -> N.SentenceData
       wdToPOS (N.SentenceNode nd pos mt ed sed cm) = N.SentenceNode nd pos mt ed sed cm
-      wdToPOS (N.SentenceWord wd pos mt ed sed cm) = N.SentenceWord pos pos mt ed sed cm
+      wdToPOS (N.SentenceWord _ pos mt ed sed cm) = N.SentenceWord pos pos mt ed sed cm
 
 mainArgs (Statistics _ lenght gap_deg height)
   = do
     expContent <- T.getContents
     let negra = NT.parseNegra expContent in
       do
-      when lenght (printStats negra (lengthNegraSentence . N.sData) "length")
+      when lenght (printStats negra (lengthNegraSentenceData . N.sData) "length")
       when gap_deg (printStats negra gapDegree "gap degree")
       when height (printStats negra heightNegraSentence "height")
   where
     printStats :: N.Negra -> (N.Sentence -> Int) -> String ->  IO()
     printStats n f name
-      = let histo = map (\l@(x:xs) -> (x,length l)) . group . sort $ map f (N.sentences n) in
+      = let histo = map (\l@(x:_) -> (x,length l)) . group . sort $ map f (N.sentences n) in
           do
             putStrLn ("Statistic by " ++ name)
             putStrLn "Mean:"
@@ -254,7 +270,7 @@ mainArgs (Statistics _ lenght gap_deg height)
             putStrLn ""
 
     getAvg :: [(Int,Int)] -> Float
-    getAvg x = fromIntegral (sum (map (\y -> fst y * snd y) x)) / fromIntegral (sum (map snd x))
+    getAvg x = fromIntegral (sum (map (uncurry (*)) x)) / fromIntegral (sum (map snd x))
 
     getMean :: [(Int,Int)] -> Int
     getMean x = concatMap (\(y,z) -> replicate z y) x !! (sum (map snd x) `div` 2)
@@ -267,37 +283,13 @@ queryArgs (HelpQ cs) = putStr cs
 queryArgs x = queryIt $ case x of ExVoc -> getWords
                                   ExPos -> getPos
                                   ExNod -> getNodes
+                                  _     -> const []
   where
     queryIt :: (N.Sentence -> [String]) -> IO()
     queryIt f = do
       expContent <- T.getContents
       let negra = NT.parseNegra expContent in
         mapM_ putStrLn (sort $ nub (concatMap f (N.sentences negra)))
-
-filterNegra :: N.Negra -> Args -> N.Negra
-filterNegra (N.Negra x y) f = N.Negra x (filterSentences y f)
-
-filterSentences :: [N.Sentence] -> Args -> [N.Sentence]
-filterSentences [] _ = []
-filterSentences (x:xs) f@(Filter
-  length_interval
-  gap_degree_inteval
-  sen_numebTestr_interval
-  height_inteval
-  alw_ws_file
-  dis_ws_file
-  alw_pos_file
-  dis_pos_file
-  alw_inn_file
-  dis_inn_file)
-    = if isInIntervals (lengthNegraSentence (N.sData x)) length_interval
-        && isInIntervals (gapDegree x) gap_degree_inteval
-        && isInIntervals (N.sId x) sen_numebTestr_interval
-        && isInIntervals (heightNegraSentence x) height_inteval
-        -- && hasWds alw_ws_file x
-      then x : filterSentences xs f
-      else filterSentences xs f
-filterSentences x _ = x
 
 onlyWords :: [N.SentenceData] -> [N.SentenceData]
 onlyWords x = [y | y@N.SentenceWord{} <- x]
@@ -314,19 +306,19 @@ onlyNodes x = [y | y@N.SentenceNode{} <- x]
 getNodes :: N.Sentence -> [String]
 getNodes x = map (show . N.sdNum) (onlyNodes (N.sData x))
 
-
-
 {- hasWds :: FilePath -> N.Sentence -> Bool
 hasWds "/dev/null" _ = True
 hasWds f x = do
   alw_wd <- readFile f
   all (`elem` (words alw_wd) getWords x -}
 
+lengthNegraSentence :: N.Sentence -> Int
+lengthNegraSentence = lengthNegraSentenceData . N.sData
 
-lengthNegraSentence :: [N.SentenceData] -> Int
-lengthNegraSentence []                    = 0
-lengthNegraSentence (N.SentenceWord{}:xs) = 1 + lengthNegraSentence xs
-lengthNegraSentence (N.SentenceNode{}:xs) = lengthNegraSentence xs
+lengthNegraSentenceData :: [N.SentenceData] -> Int
+lengthNegraSentenceData []                    = 0
+lengthNegraSentenceData (N.SentenceWord{}:xs) = 1 + lengthNegraSentenceData xs
+lengthNegraSentenceData (N.SentenceNode{}:xs) = lengthNegraSentenceData xs
 
 heightOfTree :: Tree a -> Int
 heightOfTree (Node _ []) = 1
