@@ -36,6 +36,9 @@ import qualified VandaCLI.NGrams
 import qualified VandaCLI.PDTA
 import qualified VandaCLI.XRSNGrams
 import qualified VandaCLI.PCFG
+import qualified VandaCLI.PennToSentenceCorpus
+import qualified VandaCLI.XRSToHypergraph
+import qualified VandaCLI.XRSTranslate
 
 #ifdef VERSION_gtk
 import qualified VandaCLI.MATLearner
@@ -53,7 +56,10 @@ data Args
   | PCFGs VandaCLI.PCFG.Args
   | PDTA VandaCLI.PDTA.Args
   | PMCFG VandaCLI.PMCFG.Args
+  | PTSC VandaCLI.PennToSentenceCorpus.Args
   | XRSNGrams VandaCLI.XRSNGrams.Args
+  | XRSTH VandaCLI.XRSToHypergraph.Args
+  | XRST VandaCLI.XRSTranslate.Args
 #ifdef VERSION_gtk
   | MATLearner VandaCLI.MATLearner.Args
 #endif
@@ -70,7 +76,10 @@ cmdArgs
   , remap2 PCFGs (\ (PCFGs x) -> x) VandaCLI.PCFG.cmdArgs
   , remap2 PDTA (\ (PDTA x) -> x) VandaCLI.PDTA.cmdArgs
   , remap2 PMCFG (\ (PMCFG x) -> x) VandaCLI.PMCFG.cmdArgs
+  , remap2 PTSC (\ (PTSC x) -> x) VandaCLI.PennToSentenceCorpus.cmdArgs
   , remap2 XRSNGrams (\ (XRSNGrams x) -> x) VandaCLI.XRSNGrams.cmdArgs
+  , remap2 XRSTH (\ (XRSTH x) -> x) VandaCLI.XRSToHypergraph.cmdArgs
+  , remap2 XRST (\ (XRST x) -> x) VandaCLI.XRSTranslate.cmdArgs
 #ifdef VERSION_gtk
   , remap2 MATLearner (\ (MATLearner x) -> x) VandaCLI.MATLearner.cmdArgs
 #endif
@@ -90,7 +99,10 @@ mainArgs (NGrams    x ) = VandaCLI.NGrams.mainArgs x
 mainArgs (PCFGs     x ) = VandaCLI.PCFG.mainArgs x
 mainArgs (PDTA      x ) = VandaCLI.PDTA.mainArgs x
 mainArgs (PMCFG     x ) = VandaCLI.PMCFG.mainArgs x
+mainArgs (PTSC      x ) = VandaCLI.PennToSentenceCorpus.mainArgs x
 mainArgs (XRSNGrams x ) = VandaCLI.XRSNGrams.mainArgs x
+mainArgs (XRSTH     x ) = VandaCLI.XRSToHypergraph.mainArgs x
+mainArgs (XRST      x ) = VandaCLI.XRSTranslate.mainArgs x
 #ifdef VERSION_gtk
 mainArgs (MATLearner x) = VandaCLI.MATLearner.mainArgs x
 #endif

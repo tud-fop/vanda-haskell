@@ -8,38 +8,42 @@
     , FlexibleContexts
     , BangPatterns
     #-}
-module Main where
+{-# OPTIONS_GHC -Wno-incomplete-record-updates #-}
+
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  VandaCLI.XRSToHypergraph
+-- Copyright   :  (c) Technische Universität Dresden 2018
+-- License     :  BSD-style
+--
+-- Stability   :  unknown
+-- Portability :  portable
+-----------------------------------------------------------------------------
+
+module VandaCLI.XRSToHypergraph where
 
 import Codec.Compression.GZip ( compress, decompress )
-import Control.DeepSeq ( NFData )
 import Control.Monad.ST
-import qualified Data.Array as A
 import qualified Data.Array.IArray as IA
 import qualified Data.Array.MArray as MA
 import qualified Data.Array.ST as STA
 import qualified Data.Binary as B
 import qualified Data.ByteString.Lazy as B
-import Data.List ( foldl', intersperse, elemIndex )
 import Data.Maybe ( catMaybes )
-import qualified Data.Map as M
-import qualified Data.Set as S
-import qualified Data.Text as TS
 import qualified Data.Text.Lazy as T
 import qualified Data.Text.Lazy.IO as TIO
 import qualified Data.Vector as V
 import System.Directory ( doesFileExist, renameFile )
-import System.Environment ( getArgs )
 
 import Vanda.Algorithms.IntEarley
-import qualified Vanda.Algorithms.Earley.WSA as WSA
--- import Vanda.Grammar.XRS.Functions
 import Vanda.Grammar.XRS.IRTG
 import Vanda.Grammar.XRS.Text
 import Vanda.Hypergraph.IntHypergraph
-import qualified Vanda.Hypergraph.Tree as T
 import Vanda.Token
 
-import Debug.Trace ( traceShow )
+import System.Console.CmdArgs.Explicit
+import System.Console.CmdArgs.Explicit.Misc
+
 
 compute :: [Hyperedge l i] -> [Int]
 compute _es =
@@ -85,11 +89,12 @@ type PrettyPredicate = IRTG Int -> Hyperedge StrictIntPair Int -> Bool
 
 type PrettyExtra = IRTG Int -> TokenArray -> [T.Text] -> [T.Text]
 
-
+predJoshua :: IRTG i1 -> Hyperedge StrictIntPair i2 -> Bool
 predJoshua IRTG{ .. } e
   = arity e <= 2 && V.toList (h2 V.! _snd (label e)) /= [NT 0]
 
-peJoshua IRTG{ .. } nm
+peJoshua :: IRTG i -> p -> [T.Text] -> [T.Text]
+peJoshua IRTG{ .. } _
   = let si = show initial
     in (T.pack ("[S] ||| [" ++ si ++ ",1] ||| [" ++ si ++ ",1] ||| 1.0") :)
 
@@ -113,49 +118,40 @@ bin2text eMapFile fMapFile zhgFile pretty pe pp = do
     $ filter (pp irtg) $ edges $ rtg irtg
 
 
-main :: IO ()
-main = do
-  args <- getArgs
-  case args of
-    ["-z", zhgFile, "-s", statFile] -> do
-      IRTG{ .. } :: IRTG Int
-        <- fmap (B.decode . decompress) $ B.readFile (zhgFile ++ ".bhg.gz")
-      ws :: V.Vector Double
-        <- fmap (V.fromList . B.decode . decompress)
-           $ B.readFile (zhgFile ++ ".weights.gz")
-      print (nodes rtg)
-      print (length (edges rtg))
-      print (V.length h1)
-      print (V.length h2)
-      print (V.length ws)
-      let stat = compute (edges rtg)
-      TIO.writeFile statFile $ T.unlines $ map (T.pack . show) $ stat
-    ["-z", zhgFile, "-s2", statFile] -> do
-      IRTG{ .. } :: IRTG Int
-        <- fmap (B.decode . decompress) $ B.readFile (zhgFile ++ ".bhg.gz")
-      TIO.writeFile statFile $ T.unlines $ concat
-        $ [ map (T.pack . show) (edges rtg)
-          , map (T.pack . show) (V.toList h1)
-          , map (T.pack . show) (V.toList h2)
-          ]
-    ["b2j", "-e", eMapFile, "-f", fMapFile, "-z", zhgFile] ->
-      bin2text eMapFile fMapFile zhgFile prettyPrintJoshua peJoshua predJoshua
-    ["b2t", "-e", eMapFile, "-f", fMapFile, "-z", zhgFile] ->
-      bin2text eMapFile fMapFile zhgFile prettyPrint (\ _ _ -> id) (\ _ _ -> True)
-    ["t2b", "-e", eMapFile, "-f", fMapFile, "-z", zhgFile] -> do
-      em <- loadTokenMap eMapFile
-      fm <- loadTokenMap fMapFile
-      gf <- TIO.getContents
-      -- TODO mit ghc deutlich schneller als mit runghc, untersuchen!
-      case mkIRTG (em, fm, emptyTS) (catMaybes . map parseXRSRule . filter (not . T.null) $ T.lines gf) of
-        (irtg, ws, em', fm', nm) -> do
-          B.writeFile (zhgFile ++ ".bhg.gz") $ compress $ B.encode irtg 
-          B.writeFile (zhgFile ++ ".weights.gz") $ compress $ B.encode ws
-          saveTokenMap eMapFile em'
-          saveTokenMap fMapFile fm'
-          TIO.writeFile (zhgFile ++ ".nodes") (toText nm)
-    _ -> putStr $ "Usage:\n\n"
-                 ++ "  text to binary: XRSToHypergraph t2b "
-                 ++ "-e eMapFile -f fMapFile -z zhgFile < grammarFile\n"
-                 ++ "  binary to text: XRSToHypergraph b2t "
-                 ++ "-e eMapFile -f fMapFile -z zhgFile > grammarFile\n"
+data Args = Help { help :: String }
+          | ToBinary { eFile :: String, fFile :: String, zFile :: String}
+          | ToText { eFile :: String, fFile :: String, zFile :: String} deriving Show
+
+cmdArgs :: Mode Args
+cmdArgs = (modes ""
+                (Help $ defaultHelp cmdArgs)
+                "Transformations between hypergraph formats"
+                [ (modeEmpty $ ToBinary undefined undefined undefined)
+                  { modeNames = ["t2b", "text-to-binary"]
+                  , modeGroupFlags = toGroup flags
+                  }
+                , (modeEmpty $ ToText undefined undefined undefined)
+                  { modeNames = ["b2t", "binary-to-text"]
+                  , modeGroupFlags = toGroup flags
+                  }
+                ]){ modeNames = ["xrs-to-hypergraph", "XRSToHypergraph"] }
+  where
+    flags = [ flagReq ["e"] (\ s x -> Right x{ eFile = s }) "FILE" "eMapFile"
+            , flagReq ["f"] (\ s x -> Right x{ fFile = s }) "FILE" "fMapFile"
+            , flagReq ["z"] (\ s x -> Right x{ zFile = s }) "FILE" "zhgFile"
+            ]
+
+mainArgs :: Args -> IO ()
+mainArgs (Help cs) = putStr cs
+mainArgs (ToText e f z) = bin2text e f z prettyPrint (\ _ _ -> id) (\ _ _ -> True)
+mainArgs (ToBinary e f z) = 
+  do em <- loadTokenMap e
+     fm <- loadTokenMap f
+     gf <- TIO.getContents
+     case mkIRTG (em, fm, emptyTS) (catMaybes . map parseXRSRule . filter (not . T.null) $ T.lines gf) of
+          (irtg, ws, em', fm', nm) -> do
+            B.writeFile (z ++ ".bhg.gz") $ compress $ B.encode irtg 
+            B.writeFile (z ++ ".weights.gz") $ compress $ B.encode ws
+            saveTokenMap e em'
+            saveTokenMap f fm'
+            TIO.writeFile (z ++ ".nodes") (toText nm)
