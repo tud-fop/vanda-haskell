@@ -1,5 +1,16 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wno-incomplete-record-updates #-}
+
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  VandaCLI.XRSTranslate
+-- Copyright   :  (c) Technische Universität Dresden 2018
+-- License     :  BSD-style
+--
+-- Stability   :  unknown
+-- Portability :  portable
+-----------------------------------------------------------------------------
+
 module VandaCLI.XRSTranslate where
 
 import qualified Data.Array as A

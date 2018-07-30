@@ -9,6 +9,17 @@
     , BangPatterns
     #-}
 {-# OPTIONS_GHC -Wno-incomplete-record-updates #-}
+
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  VandaCLI.XRSToHypergraph
+-- Copyright   :  (c) Technische Universität Dresden 2018
+-- License     :  BSD-style
+--
+-- Stability   :  unknown
+-- Portability :  portable
+-----------------------------------------------------------------------------
+
 module VandaCLI.XRSToHypergraph where
 
 import Codec.Compression.GZip ( compress, decompress )
