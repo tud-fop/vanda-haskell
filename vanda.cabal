@@ -247,8 +247,11 @@ executable vanda
     , VandaCLI.PCFG
     , VandaCLI.PDTA
     , VandaCLI.PDTA.CmdArgs
+    , VandaCLI.PennToSentenceCorpus
     , VandaCLI.PMCFG
     , VandaCLI.XRSNGrams
+    , VandaCLI.XRSToHypergraph
+    , VandaCLI.XRSTranslate
   if flag(gtk)
     other-modules:
       VandaCLI.MATLearner
@@ -283,6 +286,7 @@ Test-Suite HUnitTests
     , Vanda.Corpus.BinarizationTests
     , Vanda.Grammar.LCFRS.ActiveParserTest
     , Vanda.Grammar.LCFRS.CYKParserTest
+    , Vanda.Grammar.LCFRS.IncrementalParserTest
     , Vanda.Grammar.LCFRS.NaiveParserTest
   default-language: Haskell2010
   hs-source-dirs: tests
