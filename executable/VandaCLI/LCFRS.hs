@@ -49,6 +49,7 @@ import           Data.Maybe (catMaybes)
 import           Data.Tree (drawTree)
 import           Data.Weight (probabilistic, cost)
 
+import		 System.IO (stderr, hPutStrLn)
 import           System.TimeIt
 import           System.Timeout
 import           Numeric (showFFloat)
@@ -199,6 +200,6 @@ mainArgs (Parse algorithm grFile uw display bw trees itime)
                            let parseTrees = case mParseTrees of
                                                  Nothing -> []
                                                  Just ts -> ts
-                           putStrLn $ showFFloat Nothing filtertime ""
-                           putStrLn $ showFFloat Nothing parsetime ""
+                           hPutStrLn stderr ("filtering grammar rules took " ++ showFFloat Nothing filtertime "" ++ "s")
+                           hPutStrLn stderr ("parsing took " ++ showFFloat Nothing parsetime "" ++ "s")
                            (putStrLn . pok show' . map (deintegerize (nti, ti))) $ parseTrees
