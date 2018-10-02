@@ -26,6 +26,7 @@ import qualified Vanda.Corpus.BinarizationTests
 import qualified Vanda.Grammar.LCFRS.CYKParserTest
 import qualified Vanda.Grammar.LCFRS.NaiveParserTest
 import qualified Vanda.Grammar.LCFRS.ActiveParserTest
+import qualified Vanda.Grammar.LCFRS.IncrementalParserTest
 
 main :: IO ()
 main = do
@@ -61,4 +62,6 @@ tests = TestList
     ~: Vanda.Grammar.LCFRS.NaiveParserTest.tests
   ,   "Vanda.Grammar.LCFRS.ActiveParser"
     ~: Vanda.Grammar.LCFRS.ActiveParserTest.tests
+  ,   "Vanda.Grammar.LCFRS.IncrementalParserTest"
+    ~: Vanda.Grammar.LCFRS.IncrementalParserTest.tests
   ]

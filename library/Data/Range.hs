@@ -15,6 +15,7 @@
 module Data.Range 
   ( -- * types and constructors
     Range(Epsilon)
+  , RvMem
   , Rangevector
     -- * ranges
   , singletons
@@ -26,9 +27,15 @@ module Data.Range
   , fromList
   , (!)
   , vectorLength
+  -- * range memory
+  , withCapacity
+  , (//)
+  , intoRangevector
+  , subsetEq
   ) where
 
 import qualified Data.Vector.Unboxed as V
+import qualified Data.Vector.Algorithms.Intro as Alg
 import Data.Hashable (Hashable(hashWithSalt))
 import Data.List (elemIndices)
 import Data.Maybe (fromMaybe)
@@ -143,3 +150,31 @@ isNonOverlapping = isNonOverlapping' []
       | otherwise                                   = isNonOverlapping' ((i, j):cache) rs
     isNonOverlapping' cache (Epsilon : rs)          = isNonOverlapping' cache rs
 
+newtype RvMem = RvMem (V.Vector (Int, Int)) deriving (Eq, Show)
+
+withCapacity :: Int -> RvMem
+withCapacity n = RvMem $ V.replicate n (-1, -1)
+
+(//) :: RvMem -> (Int, Range) -> RvMem
+(RvMem v) // (i, Range x y) = RvMem $ v V.// [(i, (x, y))]
+(RvMem v) // (i, Epsilon) = RvMem $ v V.// [(i, (0, 0))]
+
+subsetEq :: RvMem -> RvMem -> Bool
+(RvMem v) `subsetEq` (RvMem v') = V.and $ V.zipWith go v v'
+    where
+        go (-1, -1) _ = True
+        go a a' = a == a'
+
+intoRangevector :: RvMem -> Maybe Rangevector
+intoRangevector (RvMem v)
+  | isNonOverlappingAndFull v = Just $ Rangevector v
+  | otherwise = Nothing
+
+isNonOverlappingAndFull :: V.Vector (Int, Int) -> Bool
+isNonOverlappingAndFull = go 0 . V.toList . V.modify Alg.sort
+  where
+    go _ [] = True
+    go r1 ((l2, r2) : v) = r1 <= l2 && go r2 v
+
+instance Hashable RvMem where
+  salt `hashWithSalt` (RvMem v) = V.foldl' hashWithSalt salt v

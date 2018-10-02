@@ -37,6 +37,10 @@ import qualified VandaCLI.PCFG
 import qualified VandaCLI.PDTA
 import qualified VandaCLI.PMCFG
 import qualified VandaCLI.XRSNGrams
+import qualified VandaCLI.PCFG
+import qualified VandaCLI.PennToSentenceCorpus
+import qualified VandaCLI.XRSToHypergraph
+import qualified VandaCLI.XRSTranslate
 
 #ifdef VERSION_gtk
 import qualified VandaCLI.MATLearner
@@ -50,12 +54,15 @@ data Args
   | Brackets VandaCLI.Brackets.Args
   | CBSM VandaCLI.CBSM.Args
   | LCFRS VandaCLI.LCFRS.Args
+  | NeGra VandaCLI.NeGra.Args
   | NGrams VandaCLI.NGrams.Args
   | PCFGs VandaCLI.PCFG.Args
   | PDTA VandaCLI.PDTA.Args
   | PMCFG VandaCLI.PMCFG.Args
+  | PTSC VandaCLI.PennToSentenceCorpus.Args
   | XRSNGrams VandaCLI.XRSNGrams.Args
-  | NeGra VandaCLI.NeGra.Args
+  | XRSTH VandaCLI.XRSToHypergraph.Args
+  | XRST VandaCLI.XRSTranslate.Args
 #ifdef VERSION_gtk
   | MATLearner VandaCLI.MATLearner.Args
 #endif
@@ -68,12 +75,15 @@ cmdArgs
   [ remap2 Brackets (\ (Brackets x) -> x) VandaCLI.Brackets.cmdArgs
   , remap2 CBSM (\ (CBSM x) -> x) VandaCLI.CBSM.cmdArgs
   , remap2 LCFRS (\ (LCFRS x) -> x) VandaCLI.LCFRS.cmdArgs
+  , remap2 NeGra (\ (NeGra x) -> x) VandaCLI.NeGra.cmdArgs
   , remap2 NGrams (\ (NGrams x) -> x) VandaCLI.NGrams.cmdArgs
   , remap2 PCFGs (\ (PCFGs x) -> x) VandaCLI.PCFG.cmdArgs
   , remap2 PDTA (\ (PDTA x) -> x) VandaCLI.PDTA.cmdArgs
   , remap2 PMCFG (\ (PMCFG x) -> x) VandaCLI.PMCFG.cmdArgs
+  , remap2 PTSC (\ (PTSC x) -> x) VandaCLI.PennToSentenceCorpus.cmdArgs
   , remap2 XRSNGrams (\ (XRSNGrams x) -> x) VandaCLI.XRSNGrams.cmdArgs
-  , remap2 NeGra (\ (NeGra x) -> x) VandaCLI.NeGra.cmdArgs
+  , remap2 XRSTH (\ (XRSTH x) -> x) VandaCLI.XRSToHypergraph.cmdArgs
+  , remap2 XRST (\ (XRST x) -> x) VandaCLI.XRSTranslate.cmdArgs
 #ifdef VERSION_gtk
   , remap2 MATLearner (\ (MATLearner x) -> x) VandaCLI.MATLearner.cmdArgs
 #endif
@@ -89,12 +99,15 @@ mainArgs (Help      cs) = putStrLn cs
 mainArgs (Brackets  x ) = VandaCLI.Brackets.mainArgs x
 mainArgs (CBSM      x ) = VandaCLI.CBSM.mainArgs x
 mainArgs (LCFRS     x ) = VandaCLI.LCFRS.mainArgs x
+mainArgs (NeGra     x ) = VandaCLI.NeGra.mainArgs x
 mainArgs (NGrams    x ) = VandaCLI.NGrams.mainArgs x
 mainArgs (PCFGs     x ) = VandaCLI.PCFG.mainArgs x
 mainArgs (PDTA      x ) = VandaCLI.PDTA.mainArgs x
 mainArgs (PMCFG     x ) = VandaCLI.PMCFG.mainArgs x
+mainArgs (PTSC      x ) = VandaCLI.PennToSentenceCorpus.mainArgs x
 mainArgs (XRSNGrams x ) = VandaCLI.XRSNGrams.mainArgs x
-mainArgs (NeGra     x ) = VandaCLI.NeGra.mainArgs x
+mainArgs (XRSTH     x ) = VandaCLI.XRSToHypergraph.mainArgs x
+mainArgs (XRST      x ) = VandaCLI.XRSTranslate.mainArgs x
 #ifdef VERSION_gtk
 mainArgs (MATLearner x) = VandaCLI.MATLearner.mainArgs x
 #endif

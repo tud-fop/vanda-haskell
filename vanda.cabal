@@ -54,6 +54,7 @@ library
     , unix
     , unordered-containers
     , vector
+    , vector-algorithms
     , weighted-search
     , zlib
   if flag(gtk)
@@ -62,6 +63,7 @@ library
   exposed-modules:
       CodingConventions
     , Control.Error
+    , Data.BitMap
     , Data.Converging
     , Control.Monad.Extra
     , Data.Interner
@@ -147,6 +149,7 @@ library
     , Vanda.Grammar.XRS.LCFRS.CYKParser
     , Vanda.Grammar.XRS.LCFRS.Evaluation
     , Vanda.Grammar.XRS.LCFRS.Extraction
+    , Vanda.Grammar.XRS.LCFRS.IncrementalParser
     , Vanda.Grammar.XRS.LCFRS.NaiveParser
     , Vanda.Grammar.XRS.Text
     , Vanda.GrammaticalInference.PDTA.Inference
@@ -240,17 +243,20 @@ executable vanda
     , VandaCLI.CBSM
     , VandaCLI.CBSM.CmdArgs
     , VandaCLI.Corpus.Binarization.CmdArgs
+    , VandaCLI.Corpus.Negra.Intervals
+    , VandaCLI.Corpus.Negra.Util
     , VandaCLI.Corpus.SExpression.CmdArgs
     , VandaCLI.LCFRS
+    , VandaCLI.NeGra
     , VandaCLI.NGrams
     , VandaCLI.PCFG
     , VandaCLI.PDTA
     , VandaCLI.PDTA.CmdArgs
+    , VandaCLI.PennToSentenceCorpus
     , VandaCLI.PMCFG
     , VandaCLI.XRSNGrams
-    , VandaCLI.NeGra
-    , VandaCLI.Corpus.Negra.Intervals
-    , VandaCLI.Corpus.Negra.Util
+    , VandaCLI.XRSToHypergraph
+    , VandaCLI.XRSTranslate
   if flag(gtk)
     other-modules:
       VandaCLI.MATLearner
@@ -264,7 +270,7 @@ Test-Suite HUnitTests
   build-depends:
       base
     , binary >= 0.6.4
-    , containers >= 0.5.0
+    , containers >= 0.5.9.1
     , hashable
     , HUnit
     , log-domain
@@ -285,9 +291,12 @@ Test-Suite HUnitTests
     , Vanda.Corpus.BinarizationTests
     , Vanda.Grammar.LCFRS.ActiveParserTest
     , Vanda.Grammar.LCFRS.CYKParserTest
+    , Vanda.Grammar.LCFRS.IncrementalParserTest
     , Vanda.Grammar.LCFRS.NaiveParserTest
   default-language: Haskell2010
   hs-source-dirs: tests
   GHC-Options: -main-is HUnitTests
   main-is: HUnitTests.hs
   type: exitcode-stdio-1.0
+
+
