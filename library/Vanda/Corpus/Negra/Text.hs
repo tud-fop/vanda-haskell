@@ -119,6 +119,7 @@ parseSentenceV3 s
       Just (w : postag : morphtag : edge : parent : ws, comment) ->
         let (sd, s') = parseSentenceV3 (nextState s)
             ctor = case w of
+                    ['#']    -> SentenceWord w
                     '#' : cs -> SentenceNode (read cs)
                     _        -> SentenceWord w
         in  ( ctor
@@ -142,6 +143,7 @@ parseSentenceV4 s
       Just (w : _{-TODO-} : postag : morphtag : edge : parent : ws, comment) ->
         let (sd, s') = parseSentenceV4 (nextState s)
             ctor = case w of
+                    ['#']    -> SentenceWord w
                     '#' : cs -> SentenceNode (read cs)
                     _        -> SentenceWord w
         in  ( ctor
