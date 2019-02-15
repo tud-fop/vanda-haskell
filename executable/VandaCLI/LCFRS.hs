@@ -37,7 +37,7 @@ import           System.Console.CmdArgs.Explicit
 import           System.Console.CmdArgs.Explicit.Misc
 
 import           Vanda.Grammar.PMCFG.Functions (fromPLCFRS)
-import           Vanda.Grammar.PMCFG (WPMCFG(..), integerize, deintegerize, pos, posTab, prepare)
+import           Vanda.Grammar.PMCFG (WPMCFG(..), integerize, deintegerize, pos, posTab, prepare, printAsLcfrsRule)
 import qualified Vanda.Grammar.XRS.LCFRS.CYKParser    as CYK
 import qualified Vanda.Grammar.XRS.LCFRS.NaiveParser  as Naive
 import qualified Vanda.Grammar.XRS.LCFRS.ActiveParser as Active
@@ -179,7 +179,7 @@ mainArgs (Parse algorithm grFile uw display bw trees itime)
                         POS -> let prefix splitchar = T.unpack . head . T.split (== splitchar) . T.pack
                                    showtabline (h, vs) = h  ++ foldl (\ s  v -> s ++ "\t" ++ prefix '_' v) "" vs
                               in unlines . fmap showtabline . posTab . catMaybes . fmap pos
-                        Derivation -> concatMap (drawTree . fmap show)
+                        Derivation -> concatMap (drawTree . fmap printAsLcfrsRule)
       
       flip mapM_ (T.lines corpus)
         $ \ sentence -> do let intSent = (snd . internListPreserveOrder ti . map T.unpack . T.words) $ sentence

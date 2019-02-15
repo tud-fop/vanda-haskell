@@ -18,6 +18,7 @@ module Vanda.Grammar.PMCFG
   , fromT
   , isVar
   , fromVar
+  , printAsLcfrsRule
   -- * Parallel multiple context-free grammars
   , PMCFG (PMCFG)
   , fromRules
@@ -63,7 +64,7 @@ import Data.Converging (Converging(converged))
 import Data.Hashable
 import Data.Interner (Interner, internList, intern, emptyInterner, internListPreserveOrder, internerToArray)
 import Data.List (intercalate)
-import Data.Maybe (listToMaybe, mapMaybe)
+import Data.Maybe (listToMaybe, mapMaybe, fromJust)
 import Data.Range (Range(Epsilon), safeConc, singletons)
 import Data.Semiring
 import Data.Tree
@@ -422,3 +423,15 @@ posTab (pos:poss) = let tokens = fst <$> pos
                         nts' = foldr (zipWith (:)) (repeat []) nts
                     in zip tokens nts'
 posTab [] = []
+
+printAsLcfrsRule :: Rule String String -> String
+printAsLcfrsRule (Rule ((a, bs), composition))
+  = a ++ " -> ⟨" 
+      ++ intercalate (',' : thinspace)
+                     (map (intercalate thinspace . map ppCompEle) composition)
+      ++ "⟩(" ++ unwords bs ++ ")"
+  where
+    ppCompEle v@(Var _ _) = show $ fromJust $ S.lookupIndex v orderedVariables
+    ppCompEle (T s) = s
+    orderedVariables = S.fromList $ filter isVar $ concat composition
+    thinspace = [' ']
