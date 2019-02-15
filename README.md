@@ -1,21 +1,21 @@
 # Vanda-Haskell
 Vanda-Haskell is a toolkit that contains various proof-of-concept implementations of algorithms from natural language processing.
 
-## Install Vanda-Haskell
+## Install Vanda-Haskell using cabal
 * you need to have `ghc` and `cabal` installed
 * change to the project’s root directory
 * (optionally) create a sandbox via `cabal sandbox init`
 * install via `cabal install --enable-documentation`
 
-The installation provides the command line tool `Vanda` and a Haskell library.
+The installation provides the command line tool `vanda` and a Haskell library.
 
 ## Usage of the command line tool
-* You can run the tool via `cabal exec -- Vanda` from the project’s root directory.
-  Alternatively you can locate the binary via `cabal exec which Vanda` and run it directly or add the containing directory to your `PATH`.
+* You can run the tool via `cabal exec -- vanda` from the project’s root directory.
+  Alternatively you can locate the binary via `cabal exec which vanda` and run it directly or add the containing directory to your `PATH`.
 * Algorithms are called via git-style subcommands, e.g.,
-  `cabal exec -- Vanda brackets mdyck '[(,{' ']),}' '{([])[()]}'`.
-* Each subcommand has its own `help` subcommand that provides further information, e.g., `cabal exec -- Vanda brackets help`.
-* Running `Vanda` without arguments shows you the following list of available top-level subcommands:
+  `cabal exec -- vanda brackets mdyck '[(,{' ']),}' '{([])[()]}'`.
+* Each subcommand has its own `help` subcommand that provides further information, e.g., `cabal exec -- vanda brackets help`.
+* Running `vanda` without arguments shows you the following list of available top-level subcommands:
 
     ```
     vanda [COMMAND] ...
@@ -35,6 +35,14 @@ The installation provides the command line tool `Vanda` and a Haskell library.
     Every mode provides a sub-mode help, which displays only help concerning this
     mode. Every help mode has an optional argument which defines the help format.
     ```
+
+## Install and Usage with stack
+* You need to have `stack` installed.
+* Change to the project’s root directory and
+* install via `stack build --copy-bins`.
+
+* You can run the tool via `stack exec -- vanda` from any directory.
+  Alternatively you can locate the binary via `stack exec which vanda` and run it directly or add the containing directory to your `PATH`.
 
 ## The Vanda Haskell library
 Currently, the library just exposes nearly every module there is in the project.
