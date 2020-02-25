@@ -37,7 +37,7 @@ library
     , hashable
     , heap
     , JuicyPixels
-    , log-domain
+    , log-domain >= 0.10.2 && < 0.13
     , MissingH
     , parallel >= 3.2
     , parsec >= 3.1.2
@@ -216,7 +216,7 @@ executable vanda
     , hashable
     , heap
     , JuicyPixels
-    , log-domain >= 0.10.2
+    , log-domain >= 0.10.2 && < 0.13
     , MissingH
     , parallel >= 3.2
     , parsec >= 3.1.2
